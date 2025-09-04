@@ -1,253 +1,357 @@
-// In-memory storage implementation
-import type { ClassType, Instructor, YogaClass, User, Booking, InsertClassType, InsertInstructor, InsertYogaClass, InsertUser, InsertBooking } from '@shared/schema';
-
-interface ScheduleDay {
-  day: string;
-  date: Date;
-  classes: Array<{
-    id: string;
-    date: Date;
-    classType: ClassType;
-    instructor: Instructor;
-    currentBookings: number;
-    maxCapacity: number;
-  }>;
-}
+import { 
+  type User, 
+  type InsertUser,
+  type ClassType,
+  type InsertClassType,
+  type Instructor,
+  type InsertInstructor,
+  type Class,
+  type InsertClass,
+  type Booking,
+  type InsertBooking,
+  type ContactMessage,
+  type InsertContactMessage
+} from "@shared/schema";
+import { randomUUID } from "crypto";
 
 export interface IStorage {
+  // Users
+  getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  
   // Class Types
   getAllClassTypes(): Promise<ClassType[]>;
-  getClassTypeById(id: string): Promise<ClassType | null>;
+  getClassType(id: string): Promise<ClassType | undefined>;
   createClassType(classType: InsertClassType): Promise<ClassType>;
-
+  
   // Instructors
   getAllInstructors(): Promise<Instructor[]>;
-  getInstructorById(id: string): Promise<Instructor | null>;
+  getInstructor(id: string): Promise<Instructor | undefined>;
   createInstructor(instructor: InsertInstructor): Promise<Instructor>;
-
-  // Yoga Classes
-  getAllYogaClasses(): Promise<YogaClass[]>;
-  getYogaClassById(id: string): Promise<YogaClass | null>;
-  createYogaClass(yogaClass: InsertYogaClass): Promise<YogaClass>;
-  getWeeklySchedule(): Promise<ScheduleDay[]>;
-
-  // Users
-  getUserById(id: string): Promise<User | null>;
-  getUserByEmail(email: string): Promise<User | null>;
-  createUser(user: InsertUser): Promise<User>;
-
+  
+  // Classes
+  getAllClasses(): Promise<Class[]>;
+  getClass(id: string): Promise<Class | undefined>;
+  getClassesByDate(date: Date): Promise<Class[]>;
+  createClass(classData: InsertClass): Promise<Class>;
+  updateClassBookingCount(id: string, count: number): Promise<Class | undefined>;
+  
   // Bookings
-  getBookingsByUserId(userId: string): Promise<Booking[]>;
+  getAllBookings(): Promise<Booking[]>;
+  getBooking(id: string): Promise<Booking | undefined>;
+  getBookingsByClass(classId: string): Promise<Booking[]>;
   createBooking(booking: InsertBooking): Promise<Booking>;
+  
+  // Contact Messages
+  getAllContactMessages(): Promise<ContactMessage[]>;
+  createContactMessage(message: InsertContactMessage): Promise<ContactMessage>;
 }
 
-// In-memory storage implementation
 export class MemStorage implements IStorage {
-  private classTypes: ClassType[] = [];
-  private instructors: Instructor[] = [];
-  private yogaClasses: YogaClass[] = [];
-  private users: User[] = [];
-  private bookings: Booking[] = [];
+  private users: Map<string, User>;
+  private classTypes: Map<string, ClassType>;
+  private instructors: Map<string, Instructor>;
+  private classes: Map<string, Class>;
+  private bookings: Map<string, Booking>;
+  private contactMessages: Map<string, ContactMessage>;
 
   constructor() {
+    this.users = new Map();
+    this.classTypes = new Map();
+    this.instructors = new Map();
+    this.classes = new Map();
+    this.bookings = new Map();
+    this.contactMessages = new Map();
+    
     this.initializeData();
   }
 
   private initializeData() {
-    // Initialize with sample data
-    const classTypesData = [
-      { id: '1', name: 'Hatha Yoga', description: 'Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques.', duration: 60, price: 500, createdAt: new Date() },
-      { id: '2', name: 'Hyyocross', description: 'A dynamic hybrid fitness experience combining yoga with cross-training elements.', duration: 60, price: 600, createdAt: new Date() },
-      { id: '3', name: 'Meditation', description: 'Find inner peace and mental clarity through guided meditation practices.', duration: 45, price: 400, createdAt: new Date() },
-      { id: '4', name: 'Sound Therapy', description: 'Experience the healing power of sound through therapeutic vibrations.', duration: 60, price: 800, createdAt: new Date() }
+    // Initialize class types
+    const classTypesData: InsertClassType[] = [
+      {
+        name: "Hatha Yoga",
+        description: "Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques. This gentle practice emphasizes alignment, flexibility, and mindfulness. Each pose is held for several breaths, allowing you to build strength and stability while learning proper form. Our certified instructors provide personalized guidance to ensure you feel comfortable and supported throughout your practice.",
+        price: "500.00",
+        duration: 60,
+        imageUrl: "/attached_assets/hatha%20yoga_1756809174781.jpg"
+      },
+      {
+        name: "Hyyocross",
+        description: "A dynamic hybrid fitness experience combining yoga with cross-training elements including weights, aerobics, Zumba, and Bhangra. Yoga remains the foundation, but each class varies based on participant demographics and energy levels. This high-energy session builds strength, improves cardiovascular health, and enhances flexibility while keeping you engaged with diverse movement patterns.",
+        price: "600.00",
+        duration: 60,
+        imageUrl: "/attached_assets/Hyyocross_1756809174781.jpg"
+      },
+      {
+        name: "Meditation",
+        description: "Find inner peace and mental clarity through guided meditation practices. These sessions focus on various techniques including mindfulness, breathwork, and visualization to reduce stress and enhance emotional well-being. Whether you're a beginner or experienced meditator, our tranquil environment and expert guidance will help you develop a deeper connection with yourself.",
+        price: "400.00",
+        duration: 45,
+        imageUrl: "/attached_assets/meditation_1756809174781.jpg"
+      },
+      {
+        name: "Sound Therapy",
+        description: "Experience the healing power of sound through therapeutic vibrations using singing bowls, gongs, and crystal instruments. These sessions promote deep relaxation, stress recovery, and emotional healing. The resonant frequencies help balance your energy centers and create a meditative state that supports overall wellness and mental clarity.",
+        price: "800.00",
+        duration: 60,
+        imageUrl: "/attached_assets/soundtherapy_1756809174781.jpg"
+      }
     ];
 
-    const instructorsData = [
-      { id: '1', name: 'Priya Sharma', bio: 'Certified yoga instructor with 10+ years experience', createdAt: new Date() },
-      { id: '2', name: 'Ankit Patel', bio: 'Meditation and mindfulness expert', createdAt: new Date() },
-      { id: '3', name: 'Meera Singh', bio: 'Sound therapy specialist', createdAt: new Date() }
+    classTypesData.forEach(data => {
+      const id = randomUUID();
+      this.classTypes.set(id, { ...data, id, imageUrl: data.imageUrl || null });
+    });
+
+    // Initialize instructors
+    const instructorsData: InsertInstructor[] = [
+      {
+        name: "Sarah Johnson",
+        bio: "Certified yoga instructor with 8 years of experience specializing in Hatha Yoga and traditional practices.",
+        imageUrl: "https://images.unsplash.com/photo-1494790108755-2616c78ec4e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150",
+        specialties: ["Hatha Yoga"]
+      },
+      {
+        name: "Michael Chen",
+        bio: "Dynamic fitness instructor passionate about hybrid training, combining yoga with various athletic disciplines.",
+        imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150",
+        specialties: ["Hyyocross"]
+      },
+      {
+        name: "David Kumar",
+        bio: "Meditation teacher and mindfulness coach with a focus on stress relief and mental wellness through contemplative practices.",
+        imageUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150",
+        specialties: ["Meditation"]
+      },
+      {
+        name: "Lisa Rodriguez",
+        bio: "Sound therapy specialist and certified practitioner in vibrational healing using singing bowls and therapeutic instruments.",
+        imageUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&h=150",
+        specialties: ["Sound Therapy"]
+      }
     ];
 
-    this.classTypes = classTypesData;
-    this.instructors = instructorsData;
+    instructorsData.forEach(data => {
+      const id = randomUUID();
+      this.instructors.set(id, { 
+        ...data, 
+        id, 
+        imageUrl: data.imageUrl || null,
+        bio: data.bio || null,
+        specialties: data.specialties || null
+      });
+    });
 
-    // Create weekly schedule
-    this.createWeeklyClasses();
+    // Initialize some sample classes for the current week
+    this.initializeWeeklyClasses();
   }
 
-  private createWeeklyClasses() {
-    const startOfWeek = new Date();
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  private initializeWeeklyClasses() {
+    const instructorIds = Array.from(this.instructors.keys());
+    const classTypeIds = Array.from(this.classTypes.keys());
+    
+    // Create classes for this week
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Start from Sunday
+    
+    const weeklySchedule = [
+      // Monday
+      { day: 1, time: "09:00", classTypeIndex: 0, instructorIndex: 0 }, // Hatha Yoga with Sarah
+      { day: 1, time: "18:30", classTypeIndex: 1, instructorIndex: 1 }, // Hyyocross with Michael
+      
+      // Tuesday  
+      { day: 2, time: "07:00", classTypeIndex: 1, instructorIndex: 1 }, // Hyyocross with Michael
+      { day: 2, time: "19:00", classTypeIndex: 2, instructorIndex: 2 }, // Meditation with David
+      
+      // Wednesday
+      { day: 3, time: "10:00", classTypeIndex: 0, instructorIndex: 0 }, // Hatha Yoga with Sarah
+      { day: 3, time: "17:30", classTypeIndex: 3, instructorIndex: 3 }, // Sound Therapy with Lisa
+      
+      // Thursday
+      { day: 4, time: "08:00", classTypeIndex: 2, instructorIndex: 2 }, // Meditation with David
+      { day: 4, time: "19:30", classTypeIndex: 0, instructorIndex: 0 }, // Hatha Yoga with Sarah
+      
+      // Friday
+      { day: 5, time: "09:30", classTypeIndex: 1, instructorIndex: 1 }, // Hyyocross with Michael
+      { day: 5, time: "18:00", classTypeIndex: 3, instructorIndex: 3 }, // Sound Therapy with Lisa
+      
+      // Saturday
+      { day: 6, time: "10:00", classTypeIndex: 3, instructorIndex: 3 }, // Sound Therapy with Lisa
+      { day: 6, time: "16:00", classTypeIndex: 2, instructorIndex: 2 }, // Meditation with David
+      
+      // Sunday
+      { day: 0, time: "11:00", classTypeIndex: 0, instructorIndex: 0 }, // Hatha Yoga with Sarah
+      { day: 0, time: "17:00", classTypeIndex: 1, instructorIndex: 1 }, // Hyyocross with Michael
+    ];
 
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    weeklySchedule.forEach(schedule => {
       const classDate = new Date(startOfWeek);
-      classDate.setDate(startOfWeek.getDate() + dayOffset);
+      classDate.setDate(startOfWeek.getDate() + schedule.day);
+      
+      const [hours, minutes] = schedule.time.split(':');
+      classDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      
+      const classData: InsertClass = {
+        classTypeId: classTypeIds[schedule.classTypeIndex],
+        instructorId: instructorIds[schedule.instructorIndex],
+        date: classDate,
+        maxCapacity: 20,
+      };
+      
+      const id = randomUUID();
+      this.classes.set(id, { 
+        ...classData, 
+        id, 
+        currentBookings: Math.floor(Math.random() * 10),
+        maxCapacity: classData.maxCapacity || 20
+      });
+    });
+  }
 
-      // Morning classes
-      const morningClass = new Date(classDate);
-      morningClass.setHours(8, 0, 0, 0);
+  // Users
+  async getUser(id: string): Promise<User | undefined> {
+    return this.users.get(id);
+  }
 
-      // Evening classes
-      const eveningClass = new Date(classDate);
-      eveningClass.setHours(18, 30, 0, 0);
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.username === username);
+  }
 
-      this.yogaClasses.push(
-        {
-          id: `class-${dayOffset}-morning`,
-          classTypeId: this.classTypes[dayOffset % this.classTypes.length].id,
-          instructorId: this.instructors[dayOffset % this.instructors.length].id,
-          date: morningClass,
-          maxCapacity: 15,
-          currentBookings: Math.floor(Math.random() * 10),
-          createdAt: new Date()
-        },
-        {
-          id: `class-${dayOffset}-evening`,
-          classTypeId: this.classTypes[(dayOffset + 1) % this.classTypes.length].id,
-          instructorId: this.instructors[(dayOffset + 1) % this.instructors.length].id,
-          date: eveningClass,
-          maxCapacity: 15,
-          currentBookings: Math.floor(Math.random() * 12),
-          createdAt: new Date()
-        }
-      );
-    }
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user: User = { ...insertUser, id };
+    this.users.set(id, user);
+    return user;
   }
 
   // Class Types
   async getAllClassTypes(): Promise<ClassType[]> {
-    return this.classTypes;
+    return Array.from(this.classTypes.values());
   }
 
-  async getClassTypeById(id: string): Promise<ClassType | null> {
-    return this.classTypes.find(ct => ct.id === id) || null;
+  async getClassType(id: string): Promise<ClassType | undefined> {
+    return this.classTypes.get(id);
   }
 
   async createClassType(classType: InsertClassType): Promise<ClassType> {
-    const newClassType: ClassType = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...classType,
-      createdAt: new Date()
-    };
-    this.classTypes.push(newClassType);
+    const id = randomUUID();
+    const newClassType: ClassType = { ...classType, id, imageUrl: classType.imageUrl || null };
+    this.classTypes.set(id, newClassType);
     return newClassType;
   }
 
   // Instructors
   async getAllInstructors(): Promise<Instructor[]> {
-    return this.instructors;
+    return Array.from(this.instructors.values());
   }
 
-  async getInstructorById(id: string): Promise<Instructor | null> {
-    return this.instructors.find(i => i.id === id) || null;
+  async getInstructor(id: string): Promise<Instructor | undefined> {
+    return this.instructors.get(id);
   }
 
   async createInstructor(instructor: InsertInstructor): Promise<Instructor> {
-    const newInstructor: Instructor = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...instructor,
-      createdAt: new Date()
+    const id = randomUUID();
+    const newInstructor: Instructor = { 
+      ...instructor, 
+      id,
+      imageUrl: instructor.imageUrl || null,
+      bio: instructor.bio || null,
+      specialties: instructor.specialties || null
     };
-    this.instructors.push(newInstructor);
+    this.instructors.set(id, newInstructor);
     return newInstructor;
   }
 
-  // Yoga Classes
-  async getAllYogaClasses(): Promise<YogaClass[]> {
-    return this.yogaClasses;
+  // Classes
+  async getAllClasses(): Promise<Class[]> {
+    return Array.from(this.classes.values());
   }
 
-  async getYogaClassById(id: string): Promise<YogaClass | null> {
-    return this.yogaClasses.find(yc => yc.id === id) || null;
+  async getClass(id: string): Promise<Class | undefined> {
+    return this.classes.get(id);
   }
 
-  async createYogaClass(yogaClass: InsertYogaClass): Promise<YogaClass> {
-    const newYogaClass: YogaClass = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...yogaClass,
-      createdAt: new Date()
+  async getClassesByDate(date: Date): Promise<Class[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return Array.from(this.classes.values()).filter(
+      cls => cls.date >= startOfDay && cls.date <= endOfDay
+    );
+  }
+
+  async createClass(classData: InsertClass): Promise<Class> {
+    const id = randomUUID();
+    const newClass: Class = { 
+      ...classData, 
+      id, 
+      currentBookings: 0,
+      maxCapacity: classData.maxCapacity || 20
     };
-    this.yogaClasses.push(newYogaClass);
-    return newYogaClass;
+    this.classes.set(id, newClass);
+    return newClass;
   }
 
-  async getWeeklySchedule(): Promise<ScheduleDay[]> {
-    const startOfWeek = new Date();
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-
-    const schedule: ScheduleDay[] = [];
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-      const currentDate = new Date(startOfWeek);
-      currentDate.setDate(startOfWeek.getDate() + dayOffset);
-
-      const dayClasses = this.yogaClasses
-        .filter(yc => {
-          const classDate = new Date(yc.date);
-          return classDate.getDate() === currentDate.getDate() &&
-                 classDate.getMonth() === currentDate.getMonth() &&
-                 classDate.getFullYear() === currentDate.getFullYear();
-        })
-        .map(yc => ({
-          id: yc.id,
-          date: yc.date,
-          classType: this.classTypes.find(ct => ct.id === yc.classTypeId)!,
-          instructor: this.instructors.find(i => i.id === yc.instructorId)!,
-          currentBookings: yc.currentBookings || 0,
-          maxCapacity: yc.maxCapacity
-        }));
-
-      schedule.push({
-        day: dayNames[dayOffset],
-        date: currentDate,
-        classes: dayClasses
-      });
+  async updateClassBookingCount(id: string, count: number): Promise<Class | undefined> {
+    const cls = this.classes.get(id);
+    if (cls) {
+      cls.currentBookings = count;
+      this.classes.set(id, cls);
+      return cls;
     }
-
-    return schedule;
-  }
-
-  // Users
-  async getUserById(id: string): Promise<User | null> {
-    return this.users.find(u => u.id === id) || null;
-  }
-
-  async getUserByEmail(email: string): Promise<User | null> {
-    return this.users.find(u => u.email === email) || null;
-  }
-
-  async createUser(user: InsertUser): Promise<User> {
-    const newUser: User = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...user,
-      createdAt: new Date()
-    };
-    this.users.push(newUser);
-    return newUser;
+    return undefined;
   }
 
   // Bookings
-  async getBookingsByUserId(userId: string): Promise<Booking[]> {
-    return this.bookings.filter(b => b.userId === userId);
+  async getAllBookings(): Promise<Booking[]> {
+    return Array.from(this.bookings.values());
+  }
+
+  async getBooking(id: string): Promise<Booking | undefined> {
+    return this.bookings.get(id);
+  }
+
+  async getBookingsByClass(classId: string): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).filter(booking => booking.classId === classId);
   }
 
   async createBooking(booking: InsertBooking): Promise<Booking> {
-    const newBooking: Booking = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...booking,
-      bookingDate: new Date(),
-      status: 'confirmed'
+    const id = randomUUID();
+    const newBooking: Booking = { 
+      ...booking, 
+      id, 
+      createdAt: new Date(),
+      customerPhone: booking.customerPhone || null
     };
-    this.bookings.push(newBooking);
+    this.bookings.set(id, newBooking);
 
-    // Update current bookings count
-    const yogaClass = this.yogaClasses.find(yc => yc.id === booking.classId);
-    if (yogaClass) {
-      yogaClass.currentBookings = (yogaClass.currentBookings || 0) + 1;
-    }
+    // Update class booking count
+    const classBookings = await this.getBookingsByClass(booking.classId);
+    await this.updateClassBookingCount(booking.classId, classBookings.length);
 
     return newBooking;
+  }
+
+  // Contact Messages
+  async getAllContactMessages(): Promise<ContactMessage[]> {
+    return Array.from(this.contactMessages.values());
+  }
+
+  async createContactMessage(message: InsertContactMessage): Promise<ContactMessage> {
+    const id = randomUUID();
+    const newMessage: ContactMessage = { 
+      ...message, 
+      id, 
+      createdAt: new Date(),
+      phone: message.phone || null
+    };
+    this.contactMessages.set(id, newMessage);
+    return newMessage;
   }
 }
 
