@@ -57,7 +57,7 @@ export default function ContactSection() {
               rel="noopener noreferrer"
               className="text-purple-600 text-sm hover:text-purple-800 transition-colors"
             >
-              @muditbeing
+              @andweyoga
             </a>
           </div>
         </div>
