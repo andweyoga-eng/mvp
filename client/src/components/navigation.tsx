@@ -64,53 +64,21 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             </button>
           </div>
 
-          {/* Auth & Book Session Buttons - Right side */}
+          {/* Book Session Button - Right side */}
           <div className="flex-shrink-0 flex items-center gap-2">
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-purple-600 font-medium hidden lg:inline">
-                  {user.name}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={logout}
-                  className="text-purple-600 hover:text-primary hover:bg-purple-50 p-2"
-                  data-testid="nav-logout"
-                >
-                  <LogOut className="h-4 w-4" />
-                </Button>
-                <Button 
-                  onClick={onBookingClick}
-                  className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
-                  data-testid="nav-book-session"
-                >
-                  <span className="hidden sm:inline">Book Session</span>
-                  <span className="sm:hidden">Book</span>
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAuthModal(true)}
-                  className="text-purple-600 hover:text-primary hover:bg-purple-50 px-2 py-1 text-xs sm:text-sm font-bold"
-                  data-testid="nav-signin"
-                >
-                  <User className="h-4 w-4 mr-1" />
-                  <span className="hidden sm:inline">Sign In</span>
-                </Button>
-                <Button 
-                  onClick={onBookingClick}
-                  className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
-                  data-testid="nav-book-session"
-                >
-                  <span className="hidden sm:inline">Book Session</span>
-                  <span className="sm:hidden">Book</span>
-                </Button>
-              </div>
+            {user && (
+              <span className="text-sm text-purple-600 font-medium hidden lg:inline">
+                {user.name}
+              </span>
             )}
+            <Button 
+              onClick={onBookingClick}
+              className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+              data-testid="nav-book-session"
+            >
+              <span className="hidden sm:inline">Book Session</span>
+              <span className="sm:hidden">Book</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -171,17 +139,38 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           >
             and We Meet Yogis
           </button>
-          <div className="pt-4 border-t border-border/30">
-            <Button 
-              onClick={() => {
-                onBookingClick();
-                setIsMobileMenuOpen(false);
-              }}
-              className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary hover:text-white"
-              data-testid="mobile-nav-sign-in-up"
-            >
-              Sign In / Sign Up
-            </Button>
+          <div className="pt-4 border-t border-border/30 space-y-2">
+            {user ? (
+              <>
+                <p className="text-sm text-purple-600 font-bold text-center">
+                  Welcome, {user.name}!
+                </p>
+                <Button 
+                  onClick={() => {
+                    logout();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  variant="outline"
+                  className="w-full border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-full text-sm font-bold"
+                  data-testid="mobile-nav-logout"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Button 
+                onClick={() => {
+                  setShowAuthModal(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
+                data-testid="mobile-nav-sign-in-up"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Sign In / Sign Up
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -250,17 +239,38 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         >
           and We Meet Yogis
         </button>
-        <div className="pt-4 border-t border-border/30">
-          <Button 
-            onClick={() => {
-              onBookingClick();
-              setIsMobileMenuOpen(false);
-            }}
-            className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary hover:text-white"
-            data-testid="mobile-nav-sign-in-up"
-          >
-            Sign In / Sign Up
-          </Button>
+        <div className="pt-4 border-t border-border/30 space-y-2">
+          {user ? (
+            <>
+              <p className="text-sm text-purple-600 font-bold text-center">
+                Welcome, {user.name}!
+              </p>
+              <Button 
+                onClick={() => {
+                  logout();
+                  setIsMobileMenuOpen(false);
+                }}
+                variant="outline"
+                className="w-full border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-full text-sm font-bold"
+                data-testid="mobile-nav-logout"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </>
+          ) : (
+            <Button 
+              onClick={() => {
+                setShowAuthModal(true);
+                setIsMobileMenuOpen(false);
+              }}
+              className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
+              data-testid="mobile-nav-sign-in-up"
+            >
+              <User className="h-4 w-4 mr-2" />
+              Sign In / Sign Up
+            </Button>
+          )}
         </div>
       </div>
     </div>

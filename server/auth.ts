@@ -8,7 +8,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 const SALT_ROUNDS = 12;
 
 export interface AuthRequest extends Request {
-  user?: User;
+  user?: { id: string };
 }
 
 export async function hashPassword(password: string): Promise<string> {

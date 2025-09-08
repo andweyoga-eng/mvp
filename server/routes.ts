@@ -14,8 +14,12 @@ import {
 } from "@shared/schema";
 import { hashPassword, verifyPassword, generateToken, generateVerificationToken, requireAuth, optionalAuth, type AuthRequest } from "./auth";
 import { sendEmail, createVerificationEmailHTML } from "./email";
+import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup Google OAuth
+  setupGoogleAuth(app);
+  
   // Authentication Routes
   app.post("/api/auth/register", async (req, res) => {
     try {
@@ -183,6 +187,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Google OAuth token verification endpoint
+  app.post("/api/auth/google-signin", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token) {
+        return res.status(400).json({ message: "Google token is required" });
+      }
+      
+      // Verify Google token
+      const payload = await verifyGoogleToken(token);
+      if (!payload || !payload.email) {
+        return res.status(401).json({ message: "Invalid Google token" });
+      }
+      
+      // Check if user exists
+      let user = await storage.getUserByEmail(payload.email);
+      
+      if (!user) {
+        // Create new user from Google profile
+        const userData = {
+          email: payload.email,
+          name: payload.name || '',
+          password: '', // No password needed for OAuth users
+          primaryMobile: '', // Will need to be filled later
+          emergencyMobile: '', // Will need to be filled later
+          primaryMobileCountryCode: '+91',
+          emergencyMobileCountryCode: '+91',
+          secondaryMobile: null,
+          secondaryMobileCountryCode: null,
+        };
+        
+        user = await storage.createUser(userData);
+        // Mark email as verified since it comes from Google
+        await storage.verifyUserEmail(user.id);
+      }
+      
+      // Generate JWT token
+      const authToken = generateToken(user.id);
+      
+      res.json({ 
+        message: "Google sign-in successful",
+        token: authToken,
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name, 
+          emailVerified: user.emailVerified,
+          needsMobileInfo: !user.primaryMobile || !user.emergencyMobile
+        }
+      });
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      res.status(500).json({ message: error.message || "Google sign-in failed" });
     }
   });
   // Class Types
