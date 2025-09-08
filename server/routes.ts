@@ -21,7 +21,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/google', (req, res) => {
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-      `redirect_uri=${req.protocol}://${req.get('host')}/api/auth/google/callback&` +
+      `redirect_uri=${req.protocol}://${req.get('host')}/oauth2callback&` +
       `response_type=code&` +
       `scope=openid%20email%20profile&` +
       `access_type=offline&` +
@@ -30,7 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.redirect(googleAuthUrl);
   });
 
-  app.get('/api/auth/google/callback', async (req, res) => {
+  app.get('/oauth2callback', async (req, res) => {
     const { code } = req.query;
     
     if (!code) {
@@ -49,7 +49,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           code: code as string,
           grant_type: 'authorization_code',
-          redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`,
+          redirect_uri: `${req.protocol}://${req.get('host')}/oauth2callback`,
         }),
       });
 
