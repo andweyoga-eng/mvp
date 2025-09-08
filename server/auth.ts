@@ -49,9 +49,8 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
 
-    // Here you would typically fetch the user from database
-    // For now, we'll add this to storage interface
-    req.user = { id: decoded.userId } as User;
+    // Set user ID from decoded token
+    req.user = { id: decoded.userId };
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Authentication failed' });
@@ -66,7 +65,7 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
     if (token) {
       const decoded = verifyToken(token);
       if (decoded) {
-        req.user = { id: decoded.userId } as User;
+        req.user = { id: decoded.userId };
       }
     }
     next();

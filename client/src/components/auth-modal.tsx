@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/lib/auth';
+import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff } from 'lucide-react';
-import { GoogleSignInButton } from './google-signin-button';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -38,7 +38,9 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { login, register } = useAuth();
+  const { toast } = useToast();
 
   const [loginData, setLoginData] = useState({
     email: '',
@@ -94,6 +96,30 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     }
   };
 
+  // Google Sign-In handler
+  const handleGoogleSignIn = () => {
+    setGoogleLoading(true);
+    // Redirect to Google OAuth
+    window.location.href = '/api/auth/google';
+  };
+
+  // Handle URL parameters on component mount (for OAuth redirect)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const loginSuccess = urlParams.get('loginSuccess');
+    
+    if (token && loginSuccess === 'true') {
+      // Store the token
+      localStorage.setItem('authToken', token);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Close modal and refresh auth state
+      onClose();
+      window.location.reload();
+    }
+  }, [onClose]);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -114,7 +140,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {/* TODO: Add Google Sign In */}}
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
                 className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold flex items-center justify-center gap-2"
                 data-testid="google-signin-button"
               >
@@ -136,7 +163,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Continue with Google
+{googleLoading ? 'Signing in...' : 'Continue with Google'}
               </Button>
               
               <div className="relative">
@@ -201,7 +228,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {/* TODO: Add Google Sign In */}}
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
                 className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 font-bold flex items-center justify-center gap-2"
                 data-testid="google-signup-button"
               >
@@ -223,7 +251,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                Continue with Google
+{googleLoading ? 'Signing in...' : 'Continue with Google'}
               </Button>
               
               <div className="relative">

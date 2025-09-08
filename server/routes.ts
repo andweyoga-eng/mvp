@@ -17,7 +17,94 @@ import { sendEmail, createVerificationEmailHTML } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Setup Google OAuth
+  // Google OAuth Routes (redirect-based)
+  app.get('/api/auth/google', (req, res) => {
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+      `redirect_uri=${req.protocol}://${req.get('host')}/api/auth/google/callback&` +
+      `response_type=code&` +
+      `scope=openid%20email%20profile&` +
+      `access_type=offline&` +
+      `prompt=consent`;
+    
+    res.redirect(googleAuthUrl);
+  });
+
+  app.get('/api/auth/google/callback', async (req, res) => {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.redirect('/?error=google_auth_failed');
+    }
+
+    try {
+      // Exchange code for tokens
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: process.env.GOOGLE_CLIENT_ID!,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+          code: code as string,
+          grant_type: 'authorization_code',
+          redirect_uri: `${req.protocol}://${req.get('host')}/api/auth/google/callback`,
+        }),
+      });
+
+      const tokens = await tokenResponse.json();
+      
+      if (!tokens.access_token) {
+        throw new Error('Failed to get access token');
+      }
+
+      // Get user info from Google
+      const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`,
+        },
+      });
+
+      const googleUser = await userResponse.json();
+      
+      if (!googleUser.email) {
+        throw new Error('Failed to get user email');
+      }
+
+      // Check if user exists
+      let user = await storage.getUserByEmail(googleUser.email);
+      
+      if (!user) {
+        // Create new user
+        const userData = {
+          name: googleUser.name || googleUser.email.split('@')[0],
+          email: googleUser.email,
+          password: '', // OAuth users don't need password
+          primaryMobile: '',
+          primaryMobileCountryCode: '+91',
+          secondaryMobile: '',
+          secondaryMobileCountryCode: '+91',
+          emergencyMobile: '',
+          emergencyMobileCountryCode: '+91',
+        };
+        user = await storage.createUser(userData);
+        // Mark email as verified for Google users
+        await storage.verifyUserEmail(user.id);
+      }
+
+      // Generate JWT token
+      const token = generateToken(user.id);
+      
+      // Redirect to home with token
+      res.redirect(`/?token=${token}&loginSuccess=true`);
+    } catch (error) {
+      console.error('Google OAuth callback error:', error);
+      res.redirect('/?error=google_auth_failed');
+    }
+  });
+
+  // Setup Google OAuth (existing token verification)
   setupGoogleAuth(app);
   
   // Authentication Routes
