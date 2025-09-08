@@ -1,0 +1,177 @@
+import nodemailer from 'nodemailer';
+import path from 'path';
+
+if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+  throw new Error("Gmail credentials not found. Please set GMAIL_USER and GMAIL_APP_PASSWORD environment variables.");
+}
+
+// Create Gmail SMTP transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
+
+export interface EmailOptions {
+  to: string;
+  subject: string;
+  html: string;
+  from?: string;
+}
+
+export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  try {
+    const info = await transporter.sendMail({
+      from: options.from || `"andWeYoga" <${process.env.GMAIL_USER}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+    });
+
+    console.log('Email sent successfully:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('Failed to send email:', error);
+    return false;
+  }
+}
+
+export function createVerificationEmailHTML(name: string, verificationUrl: string, logoUrl: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Welcome to andWeYoga</title>
+      <style>
+        body {
+          font-family: 'Arial', sans-serif;
+          line-height: 1.6;
+          color: #333;
+          background-color: #f8f9fa;
+          margin: 0;
+          padding: 20px;
+        }
+        .container {
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: white;
+          border-radius: 15px;
+          overflow: hidden;
+          box-shadow: 0 10px 30px rgba(64, 30, 156, 0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, hsl(267, 84%, 40%) 0%, hsl(25, 95%, 60%) 100%);
+          padding: 40px 20px;
+          text-align: center;
+          color: white;
+        }
+        .logo {
+          max-width: 150px;
+          height: auto;
+          margin-bottom: 20px;
+        }
+        .content {
+          padding: 40px 30px;
+        }
+        .welcome-text {
+          color: #401e9c;
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        .message {
+          color: #6b46c1;
+          font-size: 16px;
+          margin-bottom: 30px;
+          line-height: 1.8;
+        }
+        .cta-button {
+          display: inline-block;
+          background-color: #401e9c;
+          color: white;
+          padding: 15px 30px;
+          text-decoration: none;
+          border-radius: 50px;
+          font-weight: bold;
+          text-align: center;
+          margin: 20px 0;
+          transition: background-color 0.3s;
+        }
+        .cta-button:hover {
+          background-color: #5b2bbf;
+        }
+        .footer {
+          background-color: #f8f9fa;
+          padding: 30px;
+          text-align: center;
+          color: #6b46c1;
+          font-size: 14px;
+        }
+        .inspiration {
+          background-color: #f3f0ff;
+          padding: 20px;
+          border-left: 4px solid #401e9c;
+          margin: 20px 0;
+          font-style: italic;
+          color: #6b46c1;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <img src="${logoUrl}" alt="andWeYoga Logo" class="logo">
+          <h1 style="margin: 0; font-size: 28px;">Welcome to andWeYoga</h1>
+        </div>
+        
+        <div class="content">
+          <div class="welcome-text">Namaste, ${name}!</div>
+          
+          <div class="message">
+            Welcome to your transformative yoga journey! We are absolutely thrilled to have you join our vibrant community of yogis.
+          </div>
+          
+          <div class="message">
+            Taking this first step towards embracing yoga is truly beautiful. You're not just signing up for classes – you're embarking on a path of self-discovery, growth, and inner transformation.
+          </div>
+          
+          <div class="inspiration">
+            "We meet, we greet, we do what we like, and we yoga too." 
+            <br><br>
+            Our philosophy embraces the journey of finding your best self through yoga, mindfulness, and community. We believe that yoga isn't just about poses – it's about evolving into the most authentic version of yourself, one breath at a time.
+          </div>
+          
+          <div class="message">
+            Please confirm your email address to complete your registration and start your journey with us:
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${verificationUrl}" class="cta-button">Confirm Your Email</a>
+          </div>
+          
+          <div class="message">
+            Once verified, you'll have full access to book your favorite classes, manage your profile, and connect with our amazing community of practitioners.
+          </div>
+          
+          <div class="message">
+            We're here to support you every step of the way as you elevate your being and discover the incredible transformation that awaits you.
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Ready to begin?</strong></p>
+          <p>Visit us at andWeYoga.com | Email: mudit@andweyoga.com | Call: +91 9513022331</p>
+          <p style="margin-top: 20px; font-size: 12px;">
+            If you didn't create an account with andWeYoga, please ignore this email.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}

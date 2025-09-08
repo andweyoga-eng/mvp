@@ -7,10 +7,184 @@ import {
   insertInstructorSchema, 
   insertClassSchema, 
   insertBookingSchema, 
-  insertContactMessageSchema 
+  insertContactMessageSchema,
+  registerUserSchema,
+  loginUserSchema,
+  updateProfileSchema
 } from "@shared/schema";
+import { hashPassword, verifyPassword, generateToken, generateVerificationToken, requireAuth, optionalAuth, type AuthRequest } from "./auth";
+import { sendEmail, createVerificationEmailHTML } from "./email";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Authentication Routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const validatedData = registerUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(validatedData.email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists with this email" });
+      }
+      
+      // Hash password
+      const hashedPassword = await hashPassword(validatedData.password);
+      
+      // Generate verification token
+      const verificationToken = generateVerificationToken();
+      
+      // Create user
+      const { confirmPassword, ...userData } = validatedData;
+      const user = await storage.createUser({
+        ...userData,
+        password: hashedPassword
+      });
+      
+      // Set verification token
+      await storage.updateUser(user.id, { emailVerificationToken: verificationToken } as any);
+      
+      // Send verification email
+      const logoUrl = `${req.protocol}://${req.get('host')}/attached_assets/Logo%20Transperent%20TM_1756454893432.png`;
+      const verificationUrl = `${req.protocol}://${req.get('host')}/api/auth/verify-email?token=${verificationToken}`;
+      const emailHTML = createVerificationEmailHTML(user.name, verificationUrl, logoUrl);
+      
+      const emailSent = await sendEmail({
+        to: user.email,
+        subject: "Welcome to andWeYoga - Verify Your Email",
+        html: emailHTML
+      });
+      
+      if (!emailSent) {
+        console.error('Failed to send verification email to:', user.email);
+      }
+      
+      res.status(201).json({ 
+        message: "Registration successful! Please check your email to verify your account.",
+        user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      console.error('Registration error:', error);
+      res.status(500).json({ message: "Failed to register user" });
+    }
+  });
+  
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const validatedData = loginUserSchema.parse(req.body);
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(validatedData.email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Verify password
+      const isValidPassword = await verifyPassword(validatedData.password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Invalid email or password" });
+      }
+      
+      // Check if email is verified
+      if (!user.emailVerified) {
+        return res.status(401).json({ message: "Please verify your email before logging in" });
+      }
+      
+      // Generate JWT token
+      const token = generateToken(user.id);
+      
+      res.json({ 
+        message: "Login successful",
+        token,
+        user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to login" });
+    }
+  });
+  
+  app.get("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ message: "Invalid verification token" });
+      }
+      
+      // Find user by verification token
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired verification token" });
+      }
+      
+      // Verify email
+      await storage.verifyUserEmail(user.id);
+      
+      res.redirect(`/?verified=true`);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+  
+  app.get("/api/auth/me", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({ 
+        id: user.id, 
+        email: user.email, 
+        name: user.name, 
+        emailVerified: user.emailVerified,
+        primaryMobile: user.primaryMobile,
+        primaryMobileCountryCode: user.primaryMobileCountryCode,
+        secondaryMobile: user.secondaryMobile,
+        secondaryMobileCountryCode: user.secondaryMobileCountryCode,
+        emergencyMobile: user.emergencyMobile,
+        emergencyMobileCountryCode: user.emergencyMobileCountryCode
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get user profile" });
+    }
+  });
+  
+  app.put("/api/auth/profile", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const validatedData = updateProfileSchema.parse(req.body);
+      
+      const updatedUser = await storage.updateUser(req.user!.id, validatedData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      res.json({ 
+        message: "Profile updated successfully",
+        user: { 
+          id: updatedUser.id, 
+          email: updatedUser.email, 
+          name: updatedUser.name,
+          primaryMobile: updatedUser.primaryMobile,
+          primaryMobileCountryCode: updatedUser.primaryMobileCountryCode,
+          secondaryMobile: updatedUser.secondaryMobile,
+          secondaryMobileCountryCode: updatedUser.secondaryMobileCountryCode,
+          emergencyMobile: updatedUser.emergencyMobile,
+          emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode
+        }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
   // Class Types
   app.get("/api/class-types", async (req, res) => {
     try {
@@ -227,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", async (req, res) => {
+  app.post("/api/bookings", requireAuth, async (req: AuthRequest, res) => {
     try {
       const validatedData = insertBookingSchema.parse(req.body);
       
@@ -241,7 +415,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Class is fully booked" });
       }
       
-      const booking = await storage.createBooking(validatedData);
+      // Create booking with authenticated user's ID
+      const booking = await storage.createBooking({
+        userId: req.user!.id,
+        classId: validatedData.classId
+      });
+      
       res.status(201).json(booking);
     } catch (error) {
       if (error instanceof z.ZodError) {

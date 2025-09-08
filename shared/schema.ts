@@ -1,12 +1,23 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  name: text("name").notNull(),
+  primaryMobile: text("primary_mobile").notNull(),
+  primaryMobileCountryCode: text("primary_mobile_country_code").notNull().default("+91"),
+  secondaryMobile: text("secondary_mobile"),
+  secondaryMobileCountryCode: text("secondary_mobile_country_code").default("+91"),
+  emergencyMobile: text("emergency_mobile").notNull(),
+  emergencyMobileCountryCode: text("emergency_mobile_country_code").notNull().default("+91"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classTypes = pgTable("class_types", {
@@ -38,9 +49,7 @@ export const classes = pgTable("classes", {
 export const bookings = pgTable("bookings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   classId: varchar("class_id").notNull().references(() => classes.id),
-  customerName: text("customer_name").notNull(),
-  customerEmail: text("customer_email").notNull(),
-  customerPhone: text("customer_phone"),
+  userId: varchar("user_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -53,9 +62,34 @@ export const contactMessages = pgTable("contact_messages", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  emailVerified: true,
+  emailVerificationToken: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const registerUserSchema = insertUserSchema.extend({
+  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
+
+export const loginUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export const updateProfileSchema = createInsertSchema(users).pick({
+  name: true,
+  primaryMobile: true,
+  primaryMobileCountryCode: true,
+  secondaryMobile: true,
+  secondaryMobileCountryCode: true,
+  emergencyMobile: true,
+  emergencyMobileCountryCode: true,
 });
 
 export const insertClassTypeSchema = createInsertSchema(classTypes).omit({
@@ -83,6 +117,9 @@ export const insertContactMessageSchema = createInsertSchema(contactMessages).om
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type RegisterUser = z.infer<typeof registerUserSchema>;
+export type LoginUser = z.infer<typeof loginUserSchema>;
+export type UpdateProfile = z.infer<typeof updateProfileSchema>;
 export type ClassType = typeof classTypes.$inferSelect;
 export type InsertClassType = z.infer<typeof insertClassTypeSchema>;
 export type Instructor = typeof instructors.$inferSelect;

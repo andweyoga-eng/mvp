@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { AuthModal } from "@/components/auth-modal";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -9,6 +11,8 @@ interface NavigationProps {
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const { user, logout } = useAuth();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -60,16 +64,53 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             </button>
           </div>
 
-          {/* Book Session Button - Right side with responsive sizing */}
-          <div className="flex-shrink-0">
-            <Button 
-              onClick={onBookingClick}
-              className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
-              data-testid="nav-book-session"
-            >
-              <span className="hidden sm:inline">Book Session</span>
-              <span className="sm:hidden">Book</span>
-            </Button>
+          {/* Auth & Book Session Buttons - Right side */}
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-purple-600 font-medium hidden lg:inline">
+                  {user.name}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="text-purple-600 hover:text-primary hover:bg-purple-50 p-2"
+                  data-testid="nav-logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+                <Button 
+                  onClick={onBookingClick}
+                  className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+                  data-testid="nav-book-session"
+                >
+                  <span className="hidden sm:inline">Book Session</span>
+                  <span className="sm:hidden">Book</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAuthModal(true)}
+                  className="text-purple-600 hover:text-primary hover:bg-purple-50 px-2 py-1 text-xs sm:text-sm font-bold"
+                  data-testid="nav-signin"
+                >
+                  <User className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">Sign In</span>
+                </Button>
+                <Button 
+                  onClick={onBookingClick}
+                  className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+                  data-testid="nav-book-session"
+                >
+                  <span className="hidden sm:inline">Book Session</span>
+                  <span className="sm:hidden">Book</span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -281,6 +322,11 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         </div>
       </div>
     </nav>
+      <AuthModal 
+        isOpen={showAuthModal} 
+        onClose={() => setShowAuthModal(false)}
+        defaultTab="login"
+      />
     </>
   );
 }
