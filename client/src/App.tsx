@@ -5,12 +5,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/auth-provider";
 import Home from "@/pages/home";
+import MyAccount from "@/pages/my-account";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/my-account" component={MyAccount} />
       <Route component={NotFound} />
     </Switch>
   );

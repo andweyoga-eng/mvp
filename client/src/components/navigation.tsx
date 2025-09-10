@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Menu, X, User, LogOut } from "lucide-react";
+import { Menu, X, User, LogOut, Settings } from "lucide-react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { AuthModal } from "@/components/auth-modal";
@@ -13,6 +14,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { user, logout } = useAuth();
+  const [, setLocation] = useLocation();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -147,6 +149,18 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 </p>
                 <Button 
                   onClick={() => {
+                    setLocation('/my-account');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  variant="outline"
+                  className="w-full border-primary text-primary hover:bg-primary/10 px-6 py-3 rounded-full text-sm font-bold"
+                  data-testid="mobile-nav-my-account"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  My Account
+                </Button>
+                <Button 
+                  onClick={() => {
                     logout();
                     setIsMobileMenuOpen(false);
                   }}
@@ -245,6 +259,18 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               <p className="text-sm text-purple-600 font-bold text-center">
                 Welcome, {user.name}!
               </p>
+              <Button 
+                onClick={() => {
+                  setLocation('/my-account');
+                  setIsMobileMenuOpen(false);
+                }}
+                variant="outline"
+                className="w-full border-primary text-primary hover:bg-primary/10 px-6 py-3 rounded-full text-sm font-bold"
+                data-testid="mobile-nav-my-account"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                My Account
+              </Button>
               <Button 
                 onClick={() => {
                   logout();
