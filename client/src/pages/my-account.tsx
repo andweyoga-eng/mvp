@@ -7,21 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Phone, Mail, Shield } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, Shield, Check, AlertTriangle } from 'lucide-react';
 import Navigation from '@/components/navigation';
-
-const countryCodeOptions = [
-  { value: '+91', label: '+91 (India)', flag: '🇮🇳' },
-  { value: '+1', label: '+1 (USA/Canada)', flag: '🇺🇸' },
-  { value: '+44', label: '+44 (UK)', flag: '🇬🇧' },
-  { value: '+61', label: '+61 (Australia)', flag: '🇦🇺' },
-  { value: '+81', label: '+81 (Japan)', flag: '🇯🇵' },
-  { value: '+49', label: '+49 (Germany)', flag: '🇩🇪' },
-  { value: '+33', label: '+33 (France)', flag: '🇫🇷' },
-  { value: '+86', label: '+86 (China)', flag: '🇨🇳' },
-  { value: '+65', label: '+65 (Singapore)', flag: '🇸🇬' },
-  { value: '+971', label: '+971 (UAE)', flag: '🇦🇪' },
-];
+import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
 
 export default function MyAccount() {
   const { user, updateProfile, logout } = useAuth();
@@ -37,6 +25,18 @@ export default function MyAccount() {
     secondaryMobileCountryCode: '+91',
     emergencyMobile: '',
     emergencyMobileCountryCode: '+91',
+  });
+
+  const [mobileValidation, setMobileValidation] = useState({
+    primaryMobile: { isValid: true, error: '' },
+    secondaryMobile: { isValid: true, error: '' },
+    emergencyMobile: { isValid: true, error: '' },
+  });
+
+  const [mobileVerification, setMobileVerification] = useState({
+    primaryMobile: false,
+    secondaryMobile: false,
+    emergencyMobile: false,
   });
 
   // Redirect if not logged in
@@ -62,10 +62,73 @@ export default function MyAccount() {
   }, [user]);
 
   const handleInputChange = (field: string, value: string) => {
+    // Format mobile numbers to only contain digits
+    if (field.includes('Mobile') && field !== 'primaryMobileCountryCode' && field !== 'secondaryMobileCountryCode' && field !== 'emergencyMobileCountryCode') {
+      value = formatMobileNumber(value);
+    }
+
     setProfileData(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // Validate mobile numbers in real-time
+    if (field === 'primaryMobile' || field === 'secondaryMobile' || field === 'emergencyMobile') {
+      const countryCodeField = field + 'CountryCode';
+      const countryCode = profileData[countryCodeField as keyof typeof profileData] as string;
+      const validation = validateMobileNumber(value, countryCode);
+      
+      setMobileValidation(prev => ({
+        ...prev,
+        [field]: validation
+      }));
+      
+      // Reset verification status when number changes
+      if (value !== (user as any)?.[field]) {
+        setMobileVerification(prev => ({
+          ...prev,
+          [field]: false
+        }));
+      }
+    }
+  };
+
+  const handleCountryCodeChange = (field: string, value: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // Re-validate mobile number with new country code
+    const mobileField = field.replace('CountryCode', '');
+    const mobileNumber = profileData[mobileField as keyof typeof profileData] as string;
+    if (mobileNumber) {
+      const validation = validateMobileNumber(mobileNumber, value);
+      setMobileValidation(prev => ({
+        ...prev,
+        [mobileField]: validation
+      }));
+    }
+  };
+
+  const handleVerifyMobile = async (field: 'primaryMobile' | 'secondaryMobile' | 'emergencyMobile') => {
+    // Mock verification - in real app this would send SMS and verify
+    toast({
+      title: "Verification Sent",
+      description: `A verification code has been sent to your ${field.replace('Mobile', '').toLowerCase()} mobile number.`,
+    });
+    
+    // Simulate verification after 2 seconds
+    setTimeout(() => {
+      setMobileVerification(prev => ({
+        ...prev,
+        [field]: true
+      }));
+      toast({
+        title: "Mobile Verified",
+        description: `Your ${field.replace('Mobile', '').toLowerCase()} mobile number has been verified successfully.`,
+      });
+    }, 2000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,6 +157,34 @@ export default function MyAccount() {
       toast({
         title: "Validation Error",
         description: "Emergency mobile number is required", 
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate mobile numbers
+    if (!mobileValidation.primaryMobile.isValid) {
+      toast({
+        title: "Validation Error",
+        description: `Primary mobile: ${mobileValidation.primaryMobile.error}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!mobileValidation.emergencyMobile.isValid) {
+      toast({
+        title: "Validation Error", 
+        description: `Emergency mobile: ${mobileValidation.emergencyMobile.error}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (profileData.secondaryMobile && !mobileValidation.secondaryMobile.isValid) {
+      toast({
+        title: "Validation Error",
+        description: `Secondary mobile: ${mobileValidation.secondaryMobile.error}`,
         variant: "destructive",
       });
       return;
@@ -211,31 +302,57 @@ export default function MyAccount() {
                   <div className="flex gap-2">
                     <Select
                       value={profileData.primaryMobileCountryCode}
-                      onValueChange={(value) => handleInputChange('primaryMobileCountryCode', value)}
+                      onValueChange={(value) => handleCountryCodeChange('primaryMobileCountryCode', value)}
                     >
-                      <SelectTrigger className="w-32" data-testid="primary-mobile-country-select">
+                      <SelectTrigger className="w-40" data-testid="primary-mobile-country-select">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         {countryCodeOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             <span className="flex items-center gap-2">
                               <span>{option.flag}</span>
-                              <span>{option.value}</span>
+                              <span className="text-xs">{option.label}</span>
                             </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input
-                      type="tel"
-                      value={profileData.primaryMobile}
-                      onChange={(e) => handleInputChange('primaryMobile', e.target.value)}
-                      placeholder="Enter mobile number"
-                      className="flex-1"
-                      required
-                      data-testid="primary-mobile-input"
-                    />
+                    <div className="flex-1 relative">
+                      <Input
+                        type="tel"
+                        value={profileData.primaryMobile}
+                        onChange={(e) => handleInputChange('primaryMobile', e.target.value)}
+                        placeholder="Enter mobile number"
+                        className={`${!mobileValidation.primaryMobile.isValid ? 'border-red-500' : ''}`}
+                        required
+                        data-testid="primary-mobile-input"
+                      />
+                      {!mobileValidation.primaryMobile.isValid && (
+                        <div className="absolute -bottom-5 left-0 text-xs text-red-500 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {mobileValidation.primaryMobile.error}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleVerifyMobile('primaryMobile')}
+                      disabled={!profileData.primaryMobile || !mobileValidation.primaryMobile.isValid || mobileVerification.primaryMobile}
+                      variant={mobileVerification.primaryMobile ? "outline" : "default"}
+                      className={`px-4 py-2 text-sm font-bold ${
+                        mobileVerification.primaryMobile 
+                          ? 'border-green-500 text-green-600 bg-green-50' 
+                          : 'bg-primary text-white hover:bg-primary/90'
+                      }`}
+                      data-testid="verify-primary-mobile"
+                    >
+                      {mobileVerification.primaryMobile ? (
+                        <><Check className="h-4 w-4 mr-1" />Verified</>
+                      ) : (
+                        'Verify'
+                      )}
+                    </Button>
                   </div>
                 </div>
 
@@ -247,30 +364,56 @@ export default function MyAccount() {
                   <div className="flex gap-2">
                     <Select
                       value={profileData.secondaryMobileCountryCode}
-                      onValueChange={(value) => handleInputChange('secondaryMobileCountryCode', value)}
+                      onValueChange={(value) => handleCountryCodeChange('secondaryMobileCountryCode', value)}
                     >
-                      <SelectTrigger className="w-32" data-testid="secondary-mobile-country-select">
+                      <SelectTrigger className="w-40" data-testid="secondary-mobile-country-select">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         {countryCodeOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             <span className="flex items-center gap-2">
                               <span>{option.flag}</span>
-                              <span>{option.value}</span>
+                              <span className="text-xs">{option.label}</span>
                             </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input
-                      type="tel"
-                      value={profileData.secondaryMobile}
-                      onChange={(e) => handleInputChange('secondaryMobile', e.target.value)}
-                      placeholder="Enter secondary mobile number"
-                      className="flex-1"
-                      data-testid="secondary-mobile-input"
-                    />
+                    <div className="flex-1 relative">
+                      <Input
+                        type="tel"
+                        value={profileData.secondaryMobile}
+                        onChange={(e) => handleInputChange('secondaryMobile', e.target.value)}
+                        placeholder="Enter secondary mobile number"
+                        className={`${!mobileValidation.secondaryMobile.isValid ? 'border-red-500' : ''}`}
+                        data-testid="secondary-mobile-input"
+                      />
+                      {!mobileValidation.secondaryMobile.isValid && profileData.secondaryMobile && (
+                        <div className="absolute -bottom-5 left-0 text-xs text-red-500 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {mobileValidation.secondaryMobile.error}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleVerifyMobile('secondaryMobile')}
+                      disabled={!profileData.secondaryMobile || !mobileValidation.secondaryMobile.isValid || mobileVerification.secondaryMobile}
+                      variant={mobileVerification.secondaryMobile ? "outline" : "default"}
+                      className={`px-4 py-2 text-sm font-bold ${
+                        mobileVerification.secondaryMobile 
+                          ? 'border-green-500 text-green-600 bg-green-50' 
+                          : 'bg-primary text-white hover:bg-primary/90'
+                      }`}
+                      data-testid="verify-secondary-mobile"
+                    >
+                      {mobileVerification.secondaryMobile ? (
+                        <><Check className="h-4 w-4 mr-1" />Verified</>
+                      ) : (
+                        'Verify'
+                      )}
+                    </Button>
                   </div>
                 </div>
 
@@ -283,31 +426,57 @@ export default function MyAccount() {
                   <div className="flex gap-2">
                     <Select
                       value={profileData.emergencyMobileCountryCode}
-                      onValueChange={(value) => handleInputChange('emergencyMobileCountryCode', value)}
+                      onValueChange={(value) => handleCountryCodeChange('emergencyMobileCountryCode', value)}
                     >
-                      <SelectTrigger className="w-32" data-testid="emergency-mobile-country-select">
+                      <SelectTrigger className="w-40" data-testid="emergency-mobile-country-select">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60">
                         {countryCodeOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             <span className="flex items-center gap-2">
                               <span>{option.flag}</span>
-                              <span>{option.value}</span>
+                              <span className="text-xs">{option.label}</span>
                             </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Input
-                      type="tel"
-                      value={profileData.emergencyMobile}
-                      onChange={(e) => handleInputChange('emergencyMobile', e.target.value)}
-                      placeholder="Enter emergency contact number"
-                      className="flex-1"
-                      required
-                      data-testid="emergency-mobile-input"
-                    />
+                    <div className="flex-1 relative">
+                      <Input
+                        type="tel"
+                        value={profileData.emergencyMobile}
+                        onChange={(e) => handleInputChange('emergencyMobile', e.target.value)}
+                        placeholder="Enter emergency contact number"
+                        className={`${!mobileValidation.emergencyMobile.isValid ? 'border-red-500' : ''}`}
+                        required
+                        data-testid="emergency-mobile-input"
+                      />
+                      {!mobileValidation.emergencyMobile.isValid && (
+                        <div className="absolute -bottom-5 left-0 text-xs text-red-500 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {mobileValidation.emergencyMobile.error}
+                        </div>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleVerifyMobile('emergencyMobile')}
+                      disabled={!profileData.emergencyMobile || !mobileValidation.emergencyMobile.isValid || mobileVerification.emergencyMobile}
+                      variant={mobileVerification.emergencyMobile ? "outline" : "default"}
+                      className={`px-4 py-2 text-sm font-bold ${
+                        mobileVerification.emergencyMobile 
+                          ? 'border-green-500 text-green-600 bg-green-50' 
+                          : 'bg-primary text-white hover:bg-primary/90'
+                      }`}
+                      data-testid="verify-emergency-mobile"
+                    >
+                      {mobileVerification.emergencyMobile ? (
+                        <><Check className="h-4 w-4 mr-1" />Verified</>
+                      ) : (
+                        'Verify'
+                      )}
+                    </Button>
                   </div>
                 </div>
 
