@@ -103,22 +103,12 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     window.location.href = '/api/auth/google';
   };
 
-  // Handle URL parameters on component mount (for OAuth redirect)
+  // Reset google loading state when modal closes
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    const loginSuccess = urlParams.get('loginSuccess');
-    
-    if (token && loginSuccess === 'true') {
-      // Store the token
-      localStorage.setItem('authToken', token);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // Close modal and refresh auth state
-      onClose();
-      window.location.reload();
+    if (!isOpen) {
+      setGoogleLoading(false);
     }
-  }, [onClose]);
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

@@ -14,15 +14,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Check if user is authenticated on app load
   useEffect(() => {
-    const token = getAuthToken();
-    if (token) {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Handle Google OAuth redirect with token
+    const oauthToken = urlParams.get('token');
+    const loginSuccess = urlParams.get('loginSuccess');
+    
+    if (oauthToken && loginSuccess === 'true') {
+      // Store the OAuth token
+      setAuthToken(oauthToken);
+      // Clean up URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Fetch user data with the new token
       fetchUser();
-    } else {
-      setIsLoading(false);
+      toast({
+        title: "Login successful!",
+        description: "Welcome to andWeYoga!",
+      });
+      return;
     }
     
     // Check if user just verified their email
-    const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('verified') === 'true') {
       toast({
         title: "Email verified!",
@@ -30,6 +42,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
       // Remove the parameter from URL
       window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    
+    // Normal token check for existing sessions
+    const token = getAuthToken();
+    if (token) {
+      fetchUser();
+    } else {
+      setIsLoading(false);
     }
   }, [toast]);
 
