@@ -2,7 +2,25 @@
 
 This is a full-stack yoga studio booking application built with React, Express.js, and PostgreSQL. The application allows users to browse yoga classes, view schedules, make bookings, and contact the studio. It features a modern responsive design with a complete booking system for yoga classes and instructors.
 
-## Recent Changes (September 4, 2025)
+## Recent Changes (September 10, 2025)
+
+### Milestone: Complete Dual Authentication System Implementation ✅ LOCKED
+- **Gmail SMTP Authentication**: Implemented email/password registration with Gmail SMTP verification system
+- **Google OAuth Integration**: Working Google OAuth sign-in with proper redirect URI configuration for Replit environment  
+- **Authentication State Management**: Fixed OAuth token handling with proper AuthProvider integration
+- **My Account Profile System**: Comprehensive profile management page with mobile number editing and verification
+- **Advanced Mobile Validation**: Real-time validation with spam detection, length validation, and 40+ country codes
+- **Mobile Verification System**: "Verify" buttons that change to "Verified ✓" status with simulated SMS verification
+- **Navigation Integration**: "My Account" option in sandwich menu for logged-in users with sign-out functionality
+- **Token Persistence**: Proper authentication state persistence across browser sessions and page reloads
+
+### Milestone: Enhanced User Profile Management ✅ LOCKED
+- **Multi-Mobile System**: Primary, secondary, and emergency mobile number fields with country code dropdowns
+- **Country Code Support**: 40+ international country codes with flag icons and proper validation rules
+- **Real-time Validation**: Instant feedback for mobile number formats, spam patterns, and length requirements  
+- **Verification Status**: Visual verification system with green checkmarks and status indicators
+- **Profile Updates**: Complete profile editing with validation and error handling
+- **Responsive Design**: Mobile-optimized profile interface following design guidelines
 
 ### Milestone: Complete About Section & Story Section Implementation ✅ LOCKED
 - **About Section Enhancements**: Increased logo size by 40% (h-16 md:h-20), updated button navigation to point correctly to instructor and story sections
@@ -75,11 +93,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Database Schema
 The application uses PostgreSQL with the following main entities:
-- **Users**: Authentication and user management
+- **Users**: Complete user authentication and profile management with mobile numbers, country codes, and verification status
 - **Class Types**: Different yoga class categories (Hatha, Vinyasa, etc.)
 - **Instructors**: Instructor profiles with specialties and bio information
 - **Classes**: Individual class sessions with date/time, capacity, and booking counts
-- **Bookings**: Customer reservations for specific classes
+- **Bookings**: Customer reservations for specific classes (requires authentication)
 - **Contact Messages**: Customer inquiries and feedback
 
 ## Data Layer Design
@@ -88,7 +106,13 @@ The application uses PostgreSQL with the following main entities:
 - **Validation**: Zod schemas for insert operations with proper error handling
 
 ## Authentication & Authorization
-The application includes user management infrastructure but appears to focus primarily on public booking functionality without complex authentication flows.
+**Complete dual authentication system implemented with:**
+- **Gmail SMTP Authentication**: Email/password registration with email verification via Gmail SMTP
+- **Google OAuth Integration**: One-click Google sign-in with proper Replit environment configuration
+- **Session Management**: JWT token-based authentication with localStorage persistence
+- **Profile Management**: Comprehensive user profiles with mobile number validation and verification
+- **Protected Routes**: Authentication requirements for booking sessions and profile access
+- **Real-time Validation**: Advanced mobile number validation with country-specific rules and spam detection
 
 ## Component Architecture
 - **Page-level Components**: Single-page application with modular sections
@@ -113,6 +137,8 @@ The application includes user management infrastructure but appears to focus pri
 - **TanStack Query**: Server state management, caching, and synchronization
 - **React Hook Form**: Form state management and validation
 - **Zod**: Runtime type validation for forms and API responses
+- **Authentication Context**: Global authentication state management with AuthProvider
+- **JWT Tokens**: Secure token-based authentication with localStorage persistence
 
 ## Development Tools
 - **Vite**: Development server and build tooling with React plugin
@@ -126,3 +152,35 @@ The application includes user management infrastructure but appears to focus pri
 - **Image Optimization**: Unsplash integration for placeholder images
 
 The application is designed to be deployed on Replit with integrated development tooling and is configured for PostgreSQL hosting through Neon Database.
+
+# Authentication System Implementation
+
+## Core Authentication Features ✅ LOCKED
+- **Dual Sign-in Methods**: Email/password registration with Gmail SMTP + Google OAuth integration
+- **Email Verification**: Automated welcome emails with verification links via Gmail SMTP
+- **Profile Management**: Complete user profile system with mobile number validation
+- **Authentication Persistence**: JWT tokens with localStorage for session management
+- **Protected Navigation**: Dynamic navigation menus based on authentication status
+
+## Mobile Number Validation System ✅ LOCKED
+- **Country Code Support**: 40+ international country codes with proper validation rules
+- **Real-time Validation**: Instant spam detection, length validation, and format checking
+- **Verification Workflow**: "Verify" buttons that change to "Verified ✓" status with green styling
+- **Multi-Mobile Support**: Primary, secondary, and emergency contact numbers
+- **Error Handling**: Clear validation messages with red borders and warning icons
+
+## Key Authentication Files
+- `client/src/components/auth-provider.tsx`: Global authentication state management
+- `client/src/components/auth-modal.tsx`: Sign-in/sign-up modal with Google OAuth
+- `client/src/pages/my-account.tsx`: Complete profile management interface  
+- `client/src/lib/mobile-validation.ts`: Advanced mobile number validation logic
+- `server/auth.ts`: JWT authentication middleware and email verification
+- `server/googleAuth.ts`: Google OAuth configuration and token handling
+- `shared/schema.ts`: User database schema with mobile number fields
+
+## Security Features
+- **JWT Token Validation**: Server-side token verification for protected routes
+- **Email Verification**: Required email verification before account activation
+- **Mobile Validation**: Advanced spam detection and country-specific format validation
+- **OAuth Security**: Proper Google OAuth implementation with secure redirect handling
+- **Session Management**: Secure token storage and automatic logout on token expiration
