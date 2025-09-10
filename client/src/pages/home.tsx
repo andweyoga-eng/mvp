@@ -31,8 +31,8 @@ export default function Home() {
   const scrollToSchedule = () => {
     const element = document.getElementById('schedule');
     if (element) {
-      // Calculate offset to account for navigation header
-      const headerHeight = window.innerWidth >= 768 ? 80 : 60; // Adjust based on device
+      // Calculate offset to account for navigation header and ensure no hero carousel is visible
+      const headerHeight = window.innerWidth >= 768 ? 120 : 100; // Increased offset to eliminate hero carousel
       const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
       const offsetPosition = elementPosition - headerHeight;
 
