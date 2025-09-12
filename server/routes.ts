@@ -615,8 +615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find user by email
       const existingUser = await storage.findUserByEmail(email);
       if (!existingUser) {
-        // Don't reveal if email exists or not for security
-        return res.status(200).send('If an account with that email exists, we have sent a password reset link.');
+        return res.status(404).json({ message: 'No account found with this email address. Please check your email or register for a new account.' });
       }
 
       // Generate password reset token
@@ -640,7 +639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).send('Failed to send password reset email');
       }
 
-      res.status(200).send('If an account with that email exists, we have sent a password reset link.');
+      res.status(200).json({ message: 'Password reset link has been sent to your email address.' });
     } catch (error) {
       console.error('Forgot password error:', error);
       res.status(500).send('Server error');

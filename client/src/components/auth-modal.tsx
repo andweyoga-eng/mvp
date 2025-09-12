@@ -109,17 +109,18 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
       });
 
       if (response.ok) {
+        const data = await response.json();
         toast({
           title: "Password Reset Email Sent",
-          description: "Check your email for password reset instructions.",
+          description: data.message || "Check your email for password reset instructions.",
         });
         setShowForgotPassword(false);
         setForgotPasswordEmail('');
       } else {
-        const error = await response.text();
+        const errorData = await response.json().catch(() => ({}));
         toast({
           title: "Error",
-          description: error || "Failed to send password reset email",
+          description: errorData.message || "Failed to send password reset email",
           variant: "destructive",
         });
       }
