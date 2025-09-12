@@ -83,11 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: googleUser.name || googleUser.email.split('@')[0],
           email: googleUser.email,
           password: '', // OAuth users don't need password
-          primaryMobile: '',
+          primaryMobile: null,
           primaryMobileCountryCode: '+91',
-          secondaryMobile: '',
+          secondaryMobile: null,
           secondaryMobileCountryCode: '+91',
-          emergencyMobile: '',
+          emergencyMobile: null,
           emergencyMobileCountryCode: '+91',
         };
         user = await storage.createUser(userData);
