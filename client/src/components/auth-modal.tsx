@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
+import { formatMobileNumber } from '@/lib/mobile-validation';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface AuthModalProps {
@@ -349,7 +350,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                   <Input
                     type="tel"
                     value={registerData.primaryMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, primaryMobile: e.target.value }))}
+                    onChange={(e) => setRegisterData(prev => ({ ...prev, primaryMobile: formatMobileNumber(e.target.value) }))}
                     placeholder="Mobile number"
                     required
                     data-testid="input-register-primary-mobile"
@@ -378,7 +379,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                   <Input
                     type="tel"
                     value={registerData.secondaryMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, secondaryMobile: e.target.value }))}
+                    onChange={(e) => setRegisterData(prev => ({ ...prev, secondaryMobile: formatMobileNumber(e.target.value) }))}
                     placeholder="Mobile number"
                     data-testid="input-register-secondary-mobile"
                   />
@@ -406,7 +407,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                   <Input
                     type="tel"
                     value={registerData.emergencyMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, emergencyMobile: e.target.value }))}
+                    onChange={(e) => setRegisterData(prev => ({ ...prev, emergencyMobile: formatMobileNumber(e.target.value) }))}
                     placeholder="Mobile number"
                     required
                     data-testid="input-register-emergency-mobile"

@@ -89,27 +89,24 @@ export function validateMobileNumber(number: string, countryCode: string): Valid
     };
   }
   
-  // Find country configuration
-  const country = countryCodeOptions.find(c => c.value === countryCode);
-  if (!country) {
+  // Enforce 10-digit limit for all mobile numbers
+  if (cleanNumber.length > 10) {
     return {
       isValid: false,
-      error: 'Invalid country code'
+      error: 'Max 10 digits are allowed'
     };
   }
   
-  // Check length
-  if (cleanNumber.length < country.minLength) {
-    return {
-      isValid: false,
-      error: `Mobile number must be at least ${country.minLength} digits`
-    };
+  // Empty number is valid (not required)
+  if (cleanNumber.length === 0) {
+    return { isValid: true };
   }
   
-  if (cleanNumber.length > country.maxLength) {
+  // Check minimum length (must be at least 10 digits if entered)
+  if (cleanNumber.length < 10) {
     return {
       isValid: false,
-      error: `Mobile number cannot exceed ${country.maxLength} digits`
+      error: 'Mobile number must be 10 digits'
     };
   }
   
@@ -166,6 +163,7 @@ function isSequential(number: string): boolean {
 }
 
 export function formatMobileNumber(number: string): string {
-  // Remove all non-digit characters and format consistently
-  return number.replace(/\D/g, '');
+  // Remove all non-digit characters and limit to 10 digits
+  const cleanNumber = number.replace(/\D/g, '');
+  return cleanNumber.slice(0, 10); // Limit to maximum 10 digits
 }
