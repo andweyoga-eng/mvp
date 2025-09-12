@@ -36,12 +36,12 @@ export function setupGoogleAuth(app: Express) {
           email: profile.emails?.[0]?.value || '',
           name: profile.displayName || '',
           password: '', // No password needed for OAuth users
-          primaryMobile: '', // Will need to be filled later
-          emergencyMobile: '', // Will need to be filled later
+          primaryMobile: null, // Will need to be filled later
+          emergencyMobile: null, // Will need to be filled later
           primaryMobileCountryCode: '+91',
           emergencyMobileCountryCode: '+91',
           secondaryMobile: null,
-          secondaryMobileCountryCode: null,
+          secondaryMobileCountryCode: '+91',
         };
         
         user = await storage.createUser(userData);
