@@ -39,6 +39,9 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
   const { login, register } = useAuth();
   const { toast } = useToast();
 
@@ -188,6 +191,18 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                </div>
+                
+                <div className="text-right">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto text-purple-600 font-bold hover:text-purple-700"
+                    onClick={() => setShowForgotPassword(true)}
+                    data-testid="button-forgot-password"
+                  >
+                    Forgot Password?
+                  </Button>
                 </div>
                 
                 <Button 

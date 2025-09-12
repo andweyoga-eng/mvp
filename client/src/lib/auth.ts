@@ -27,12 +27,12 @@ export interface RegisterData {
   email: string;
   password: string;
   confirmPassword: string;
-  primaryMobile: string;
-  primaryMobileCountryCode: string;
+  primaryMobile?: string;
+  primaryMobileCountryCode?: string;
   secondaryMobile?: string;
   secondaryMobileCountryCode?: string;
-  emergencyMobile: string;
-  emergencyMobileCountryCode: string;
+  emergencyMobile?: string;
+  emergencyMobileCountryCode?: string;
 }
 
 export interface ProfileData {
