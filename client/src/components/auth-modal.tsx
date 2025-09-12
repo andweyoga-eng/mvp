@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { formatMobileNumber } from '@/lib/mobile-validation';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface AuthModalProps {
@@ -53,12 +52,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     email: '',
     password: '',
     confirmPassword: '',
-    primaryMobile: '',
-    primaryMobileCountryCode: '+91',
-    secondaryMobile: '',
-    secondaryMobileCountryCode: '+91',
-    emergencyMobile: '',
-    emergencyMobileCountryCode: '+91',
   });
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -85,12 +78,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
         email: '',
         password: '',
         confirmPassword: '',
-        primaryMobile: '',
-        primaryMobileCountryCode: '+91',
-        secondaryMobile: '',
-        secondaryMobileCountryCode: '+91',
-        emergencyMobile: '',
-        emergencyMobileCountryCode: '+91',
       });
     } catch (error) {
       // Error handled in AuthProvider
@@ -329,91 +316,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <Label className="font-bold text-purple-600">Primary Mobile (Required)</Label>
-                <div className="flex gap-2">
-                  <Select 
-                    value={registerData.primaryMobileCountryCode} 
-                    onValueChange={(value) => setRegisterData(prev => ({ ...prev, primaryMobileCountryCode: value }))}
-                  >
-                    <SelectTrigger className="w-20" data-testid="select-primary-country-code">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countryCodes.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          {country.code}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="tel"
-                    value={registerData.primaryMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, primaryMobile: formatMobileNumber(e.target.value) }))}
-                    placeholder="Mobile number"
-                    required
-                    data-testid="input-register-primary-mobile"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="font-bold text-purple-600">Secondary Mobile (Optional)</Label>
-                <div className="flex gap-2">
-                  <Select 
-                    value={registerData.secondaryMobileCountryCode} 
-                    onValueChange={(value) => setRegisterData(prev => ({ ...prev, secondaryMobileCountryCode: value }))}
-                  >
-                    <SelectTrigger className="w-20" data-testid="select-secondary-country-code">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countryCodes.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          {country.code}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="tel"
-                    value={registerData.secondaryMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, secondaryMobile: formatMobileNumber(e.target.value) }))}
-                    placeholder="Mobile number"
-                    data-testid="input-register-secondary-mobile"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label className="font-bold text-purple-600">Emergency Mobile (Required)</Label>
-                <div className="flex gap-2">
-                  <Select 
-                    value={registerData.emergencyMobileCountryCode} 
-                    onValueChange={(value) => setRegisterData(prev => ({ ...prev, emergencyMobileCountryCode: value }))}
-                  >
-                    <SelectTrigger className="w-20" data-testid="select-emergency-country-code">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {countryCodes.map((country) => (
-                        <SelectItem key={country.code} value={country.code}>
-                          {country.code}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="tel"
-                    value={registerData.emergencyMobile}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, emergencyMobile: formatMobileNumber(e.target.value) }))}
-                    placeholder="Mobile number"
-                    required
-                    data-testid="input-register-emergency-mobile"
-                  />
-                </div>
-              </div>
               
               <Button 
                 type="submit" 
