@@ -13,7 +13,7 @@ import {
   updateProfileSchema
 } from "@shared/schema";
 import { hashPassword, verifyPassword, generateToken, generateVerificationToken, requireAuth, optionalAuth, type AuthRequest } from "./auth";
-import { sendEmail, createVerificationEmailHTML } from "./email";
+import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -600,6 +600,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+  // Forgot Password Route
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).send('Email is required');
+      }
+
+      // Find user by email
+      const existingUser = await storage.findUserByEmail(email);
+      if (!existingUser) {
+        // Don't reveal if email exists or not for security
+        return res.status(200).send('If an account with that email exists, we have sent a password reset link.');
+      }
+
+      // Generate password reset token
+      const resetToken = generateVerificationToken();
+      const resetExpiry = new Date(Date.now() + 3600000); // 1 hour from now
+
+      // Save reset token to user
+      await storage.updateUserResetToken(existingUser.id, resetToken, resetExpiry);
+
+      // Send password reset email using Gmail SMTP
+      const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${resetToken}`;
+      
+      const emailSent = await sendEmail({
+        to: email,
+        subject: "Reset Your andWeYoga Password",
+        html: createPasswordResetEmailHTML(resetUrl, existingUser.name),
+        from: `"andWeYoga" <mudit@andweyoga.com>`
+      });
+
+      if (!emailSent) {
+        return res.status(500).send('Failed to send password reset email');
+      }
+
+      res.status(200).send('If an account with that email exists, we have sent a password reset link.');
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).send('Server error');
+    }
+  });
+
+  // Reset Password Route
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).send('Token and password are required');
+      }
+
+      // Find user by reset token
+      const user = await storage.findUserByResetToken(token);
+      if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
+        return res.status(400).send('Invalid or expired reset token');
+      }
+
+      // Hash new password
+      const hashedPassword = await hashPassword(password);
+
+      // Update user password and clear reset token
+      await storage.updateUserPassword(user.id, hashedPassword);
+      await storage.clearUserResetToken(user.id);
+
+      res.status(200).send('Password reset successfully');
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).send('Server error');
     }
   });
 

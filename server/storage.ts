@@ -24,6 +24,11 @@ export interface IStorage {
   updateUser(id: string, updates: Partial<UpdateProfile>): Promise<User | undefined>;
   verifyUserEmail(id: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
+  findUserByEmail(email: string): Promise<User | undefined>;
+  updateUserResetToken(id: string, token: string, expiry: Date): Promise<User | undefined>;
+  findUserByResetToken(token: string): Promise<User | undefined>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
+  clearUserResetToken(id: string): Promise<User | undefined>;
   
   // Class Types
   getAllClassTypes(): Promise<ClassType[]>;
@@ -247,6 +252,63 @@ export class MemStorage implements IStorage {
 
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(user => user.emailVerificationToken === token);
+  }
+
+  async findUserByEmail(email: string): Promise<User | undefined> {
+    return this.getUserByEmail(email);
+  }
+
+  async updateUserResetToken(id: string, token: string, expiry: Date): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+
+    const updatedUser = {
+      ...user,
+      resetToken: token,
+      resetTokenExpiry: expiry,
+      updatedAt: new Date(),
+    };
+
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async findUserByResetToken(token: string): Promise<User | undefined> {
+    for (const user of this.users.values()) {
+      if (user.resetToken === token) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+
+    const updatedUser = {
+      ...user,
+      password: hashedPassword,
+      updatedAt: new Date(),
+    };
+
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  async clearUserResetToken(id: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+
+    const updatedUser = {
+      ...user,
+      resetToken: null,
+      resetTokenExpiry: null,
+      updatedAt: new Date(),
+    };
+
+    this.users.set(id, updatedUser);
+    return updatedUser;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {

@@ -175,3 +175,131 @@ export function createVerificationEmailHTML(name: string, verificationUrl: strin
     </html>
   `;
 }
+
+export function createPasswordResetEmailHTML(resetUrl: string, name: string): string {
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Reset Your andWeYoga Password</title>
+      <style>
+        body {
+          font-family: 'Arial', sans-serif;
+          line-height: 1.6;
+          color: #333;
+          background-color: #f8f9fa;
+          margin: 0;
+          padding: 20px;
+        }
+        .container {
+          max-width: 600px;
+          margin: 0 auto;
+          background-color: white;
+          border-radius: 15px;
+          overflow: hidden;
+          box-shadow: 0 10px 30px rgba(64, 30, 156, 0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, hsl(267, 84%, 40%) 0%, hsl(25, 95%, 60%) 100%);
+          padding: 40px 20px;
+          text-align: center;
+          color: white;
+        }
+        .content {
+          padding: 40px 30px;
+        }
+        .title {
+          color: #401e9c;
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+        .message {
+          color: #6b46c1;
+          font-size: 16px;
+          margin-bottom: 30px;
+          line-height: 1.8;
+        }
+        .cta-button {
+          display: inline-block;
+          background-color: #401e9c;
+          color: white;
+          padding: 15px 30px;
+          text-decoration: none;
+          border-radius: 50px;
+          font-weight: bold;
+          text-align: center;
+          margin: 20px 0;
+          transition: background-color 0.3s;
+        }
+        .cta-button:hover {
+          background-color: #5b2bbf;
+        }
+        .footer {
+          background-color: #f8f9fa;
+          padding: 30px;
+          text-align: center;
+          color: #6b46c1;
+          font-size: 14px;
+        }
+        .warning {
+          background-color: #fff3cd;
+          padding: 15px;
+          border-left: 4px solid #e36b16;
+          margin: 20px 0;
+          color: #856404;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="margin: 0; font-size: 28px;">andWeYoga</h1>
+          <p style="margin: 0; font-size: 16px; margin-top: 10px;">Password Reset Request</p>
+        </div>
+        
+        <div class="content">
+          <div class="title">Reset Your Password</div>
+          
+          <div class="message">
+            Hello ${name},
+          </div>
+          
+          <div class="message">
+            We received a request to reset your password for your andWeYoga account. If you didn't make this request, you can safely ignore this email.
+          </div>
+          
+          <div class="message">
+            To reset your password, click the button below:
+          </div>
+          
+          <div style="text-align: center;">
+            <a href="${resetUrl}" class="cta-button">Reset My Password</a>
+          </div>
+          
+          <div class="warning">
+            <strong>Important:</strong> This link will expire in 1 hour for security reasons. If the link expires, you'll need to request a new password reset.
+          </div>
+          
+          <div class="message">
+            If the button doesn't work, you can copy and paste this link into your browser:
+            <br><br>
+            <a href="${resetUrl}" style="color: #401e9c; word-break: break-all;">${resetUrl}</a>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Need help?</strong></p>
+          <p>Email: mudit@andweyoga.com | Call: +91 9513022331</p>
+          <p style="margin-top: 20px; font-size: 12px;">
+            If you didn't request this password reset, please contact us immediately.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
