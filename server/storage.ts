@@ -274,12 +274,7 @@ export class MemStorage implements IStorage {
   }
 
   async findUserByResetToken(token: string): Promise<User | undefined> {
-    for (const user of this.users.values()) {
-      if (user.resetToken === token) {
-        return user;
-      }
-    }
-    return undefined;
+    return Array.from(this.users.values()).find(user => user.resetToken === token);
   }
 
   async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
@@ -319,6 +314,8 @@ export class MemStorage implements IStorage {
       id,
       emailVerified: false,
       emailVerificationToken: null,
+      resetToken: null,
+      resetTokenExpiry: null,
       createdAt: now,
       updatedAt: now,
       primaryMobileCountryCode: insertUser.primaryMobileCountryCode || "+91",
