@@ -330,7 +330,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
     )}
     
     {/* Mobile Navigation - Bottom */}
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border" style={{background: 'var(--gradient-hero)'}}>
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-t border-border">
       <div className="container mx-auto px-2">
         <div className="flex items-center justify-between h-16">
           {/* Sandwich Menu Button - Left */}
@@ -343,9 +343,9 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               data-testid="mobile-menu-toggle-bottom"
             >
               {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-white stroke-2" />
+                <X className="h-6 w-6 text-primary" />
               ) : (
-                <Menu className="h-6 w-6 text-white stroke-2" />
+                <Menu className="h-6 w-6 text-primary" />
               )}
             </Button>
           </div>
@@ -359,8 +359,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           <div className="flex-shrink-0">
             <Button 
               onClick={onBookingClick}
-              className="text-white px-3 py-2 rounded-full transition-all duration-200 text-xs font-bold shadow-lg border-2 border-white hover:opacity-90"
-              style={{background: 'var(--gradient-hero)'}}
+              className="bg-primary text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
               data-testid="nav-book-session-mobile"
             >
               Book Session
