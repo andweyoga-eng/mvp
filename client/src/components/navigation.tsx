@@ -30,6 +30,25 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
 
   return (
     <>
+    {/* Mobile Header - Top with 60% transparent white background and centered logo */}
+    <nav className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white/60 backdrop-blur-sm">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-center h-16">
+          <button 
+            onClick={() => scrollToSection('teach')}
+            data-testid="mobile-header-logo-link"
+          >
+            <img 
+              src={logoPath} 
+              alt="andWeYoga" 
+              className="h-12 w-auto max-w-[140px]"
+              data-testid="mobile-header-logo"
+            />
+          </button>
+        </div>
+      </div>
+    </nav>
+
     {/* Desktop/Tablet Navigation - Top */}
     <nav className="hidden md:block fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border">
       <div className="container mx-auto px-2 sm:px-4">
@@ -311,7 +330,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
     )}
     
     {/* Mobile Navigation - Bottom */}
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-t border-border">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border" style={{background: 'var(--gradient-hero)'}}>
       <div className="container mx-auto px-2">
         <div className="flex items-center justify-between h-16">
           {/* Sandwich Menu Button - Left */}
@@ -324,32 +343,23 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               data-testid="mobile-menu-toggle-bottom"
             >
               {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-primary" />
+                <X className="h-6 w-6 text-white stroke-2" />
               ) : (
-                <Menu className="h-6 w-6 text-primary" />
+                <Menu className="h-6 w-6 text-white stroke-2" />
               )}
             </Button>
           </div>
 
-          {/* Logo - Center */}
+          {/* Spacer - No logo in bottom nav anymore */}
           <div className="absolute left-1/2 transform -translate-x-1/2">
-            <button 
-              onClick={() => scrollToSection('teach')}
-              data-testid="mobile-logo-link"
-            >
-              <img 
-                src={logoPath} 
-                alt="andWeYoga" 
-                className="h-12 w-auto max-w-[140px]"
-              />
-            </button>
+            {/* Logo moved to top header */}
           </div>
 
           {/* Book Session Button - Right */}
           <div className="flex-shrink-0">
             <Button 
               onClick={onBookingClick}
-              className="bg-primary text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
+              className="bg-white text-primary px-3 py-2 rounded-full hover:bg-white/90 transition-all duration-200 text-xs font-bold shadow-lg border border-primary"
               data-testid="nav-book-session-mobile"
             >
               Book

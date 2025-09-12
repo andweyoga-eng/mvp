@@ -10,14 +10,15 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-primary text-primary-foreground py-12">
+    <footer className="footer-mobile-gradient py-12 text-primary-foreground">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
+            {/* Logo hidden on mobile, shown on desktop/tablet */}
             <img 
               src={logoPath} 
               alt="andWeYoga" 
-              className="h-8 w-auto mb-4 brightness-0 invert"
+              className="hidden md:block h-8 w-auto mb-4 brightness-0 invert"
               data-testid="footer-logo"
             />
             <p className="text-primary-foreground/80">

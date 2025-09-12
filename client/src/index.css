@@ -116,6 +116,17 @@
   display: block;
 }
 
+/* Mobile footer gradient */
+.footer-mobile-gradient {
+  background: var(--gradient-hero);
+}
+
+@media (min-width: 768px) {
+  .footer-mobile-gradient {
+    background: hsl(var(--primary));
+  }
+}
+
 /* Enhanced mobile menu animations */
 .navbar-menu {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

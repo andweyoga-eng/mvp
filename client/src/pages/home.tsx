@@ -58,7 +58,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-0">
+    <div className="min-h-screen bg-background pb-24 md:pb-0 pt-16 md:pt-0">
       <Navigation onBookingClick={scrollToSchedule} />
       <HeroCarousel onBookingClick={scrollToSchedule} />
       <ScheduleSection onBookingClick={handleBookingOpen} />
