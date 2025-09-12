@@ -94,6 +94,46 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     window.location.href = '/api/auth/google';
   };
 
+  // Forgot Password handler
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotPasswordLoading(true);
+    
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: forgotPasswordEmail }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Password Reset Email Sent",
+          description: "Check your email for password reset instructions.",
+        });
+        setShowForgotPassword(false);
+        setForgotPasswordEmail('');
+      } else {
+        const error = await response.text();
+        toast({
+          title: "Error",
+          description: error || "Failed to send password reset email",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Network error. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
   // Reset google loading state when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -345,5 +385,54 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    {/* Forgot Password Modal */}
+    <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-bold text-purple-600">Reset Password</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleForgotPassword} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="forgot-password-email" className="font-bold text-purple-600">
+              Email Address
+            </Label>
+            <Input
+              id="forgot-password-email"
+              type="email"
+              value={forgotPasswordEmail}
+              onChange={(e) => setForgotPasswordEmail(e.target.value)}
+              placeholder="Enter your email address"
+              required
+              data-testid="input-forgot-password-email"
+            />
+            <p className="text-sm text-purple-500">
+              We'll send you a link to reset your password
+            </p>
+          </div>
+          
+          <div className="flex gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowForgotPassword(false)}
+              className="flex-1"
+              data-testid="button-forgot-password-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={forgotPasswordLoading}
+              className="flex-1 bg-primary text-white font-bold hover:bg-primary/90"
+              data-testid="button-forgot-password-submit"
+            >
+              {forgotPasswordLoading ? 'Sending...' : 'Send Reset Link'}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
