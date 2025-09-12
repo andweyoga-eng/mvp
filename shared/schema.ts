@@ -8,12 +8,12 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
-  primaryMobile: text("primary_mobile").notNull(),
-  primaryMobileCountryCode: text("primary_mobile_country_code").notNull().default("+91"),
+  primaryMobile: text("primary_mobile"),
+  primaryMobileCountryCode: text("primary_mobile_country_code").default("+91"),
   secondaryMobile: text("secondary_mobile"),
   secondaryMobileCountryCode: text("secondary_mobile_country_code").default("+91"),
-  emergencyMobile: text("emergency_mobile").notNull(),
-  emergencyMobileCountryCode: text("emergency_mobile_country_code").notNull().default("+91"),
+  emergencyMobile: text("emergency_mobile"),
+  emergencyMobileCountryCode: text("emergency_mobile_country_code").default("+91"),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
   resetToken: text("reset_token"),
@@ -72,8 +72,11 @@ export const insertUserSchema = createInsertSchema(users).omit({
   updatedAt: true,
 });
 
-export const registerUserSchema = insertUserSchema.extend({
+export const registerUserSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "Name is required"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
