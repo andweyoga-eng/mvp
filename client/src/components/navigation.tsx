@@ -359,10 +359,11 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           <div className="flex-shrink-0">
             <Button 
               onClick={onBookingClick}
-              className="bg-white text-primary px-3 py-2 rounded-full hover:bg-white/90 transition-all duration-200 text-xs font-bold shadow-lg border border-primary"
+              className="text-white px-3 py-2 rounded-full transition-all duration-200 text-xs font-bold shadow-lg border-2 border-white hover:opacity-90"
+              style={{background: 'var(--gradient-hero)'}}
               data-testid="nav-book-session-mobile"
             >
-              Book
+              Book Session
             </Button>
           </div>
         </div>
