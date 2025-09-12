@@ -79,7 +79,7 @@ export default function HeroCarousel({ onBookingClick }: HeroCarouselProps) {
                 background: 'var(--gradient-hero)'
               }}></div>
             </div>
-            <div className="relative z-10 h-full flex items-end justify-center text-center pb-20">
+            <div className="relative z-10 h-full flex items-end justify-center text-center pb-32 md:pb-20">
               <div className="max-w-4xl mx-auto px-4">
                 <h1 className="text-5xl md:text-7xl font-bold text-white mb-6">
                   {slide.title}
@@ -103,7 +103,7 @@ export default function HeroCarousel({ onBookingClick }: HeroCarouselProps) {
       </div>
 
       {/* Carousel Navigation */}
-      <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
+      <div className="absolute bottom-16 md:bottom-8 left-1/2 transform -translate-x-1/2 flex space-x-2">
         {slides.map((_, index) => (
           <button
             key={index}
