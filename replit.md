@@ -47,6 +47,13 @@ Preferred communication style: Simple, everyday language.
 ### Typography
 - **All fonts in headings, CTA buttons, and menu items must be BOLD** - This is a standard reference for current and all future development
 
+### Scroll Behavior Standards (DEVELOPMENT STANDARD)
+- **All Book button clicks must align carousel end with header bottom across all devices** - Standard 64px offset for mobile, tablet, and desktop
+- **Mobile**: Top header height = 64px (h-16)
+- **Desktop/Tablet**: Top navigation height = 64px (h-16)
+- **Implementation**: `const headerHeight = 64;` in scrollToSchedule functions
+- **This applies to all Book buttons site-wide from any page or location**
+
 ### CTA Button Standards
 - **All CTA buttons will be purple (#401e9c) background with white text** - This is frozen as the design guideline for now and all future development
 - Buttons should use `font-bold` class

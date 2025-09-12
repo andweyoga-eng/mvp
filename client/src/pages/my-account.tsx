@@ -11,6 +11,12 @@ import { ArrowLeft, User, Phone, Mail, Shield, Check, AlertTriangle } from 'luci
 import Navigation from '@/components/navigation';
 import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
 
+// Standard scroll function - aligns carousel end with header bottom (64px) across all devices
+const scrollToSchedule = () => {
+  const targetUrl = '/?openBooking=true';
+  window.location.href = targetUrl;
+};
+
 export default function MyAccount() {
   const { user, updateProfile, logout } = useAuth();
   const [, setLocation] = useLocation();
@@ -212,9 +218,7 @@ export default function MyAccount() {
     setLocation('/');
   };
 
-  const handleBookingClick = () => {
-    setLocation('/?openBooking=true');
-  };
+  const handleBookingClick = scrollToSchedule;
 
   if (!user) {
     return null; // Will redirect in useEffect

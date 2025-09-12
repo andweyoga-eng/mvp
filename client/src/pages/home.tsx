@@ -31,8 +31,10 @@ export default function Home() {
   const scrollToSchedule = () => {
     const element = document.getElementById('schedule');
     if (element) {
-      // Calculate offset to account for navigation header and ensure no hero carousel is visible
-      const headerHeight = window.innerWidth >= 768 ? 120 : 100; // Increased offset to eliminate hero carousel
+      // DEVELOPMENT STANDARD: Align carousel end with header bottom across all devices
+      // Mobile: Top header height (64px), Desktop/Tablet: Top navigation height (64px)  
+      // This is the standard behavior for all Book button clicks site-wide
+      const headerHeight = 64; // Consistent 64px header height for all devices (h-16 = 4rem = 64px)
       const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
       const offsetPosition = elementPosition - headerHeight;
 
