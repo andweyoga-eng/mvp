@@ -362,7 +362,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               className="bg-primary text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
               data-testid="nav-book-session-mobile"
             >
-              Book Session
+              Book
             </Button>
           </div>
         </div>
