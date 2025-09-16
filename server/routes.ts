@@ -19,16 +19,33 @@ import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Google OAuth Routes (redirect-based)
   app.get('/api/auth/google', (req, res) => {
-    // Force HTTPS for OAuth callback
-    const protocol = req.get('host')?.includes('replit.dev') ? 'https' : req.protocol;
+    // Force HTTPS for OAuth callback - fix for .replit.app domains
+    const host = req.get('host') || '';
+    const protocol = host.includes('replit.dev') || host.includes('replit.app') ? 'https' : req.protocol;
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    
+    // Debug logging for OAuth configuration
+    console.log('=== Google OAuth Debug Info ===');
+    console.log('Host:', host);
+    console.log('Protocol:', protocol);
+    console.log('Client ID:', clientId ? `${clientId.substring(0, 12)}...` : 'MISSING');
+    console.log('Redirect URI:', `${protocol}://${host}/oauth2callback`);
+    console.log('===============================');
+    
+    if (!clientId) {
+      console.error('GOOGLE_CLIENT_ID environment variable is missing!');
+      return res.redirect('/?error=oauth_config_error');
+    }
+    
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
-      `redirect_uri=${protocol}://${req.get('host')}/oauth2callback&` +
+      `client_id=${clientId}&` +
+      `redirect_uri=${protocol}://${host}/oauth2callback&` +
       `response_type=code&` +
       `scope=openid%20email%20profile&` +
       `access_type=offline&` +
       `prompt=consent`;
     
+    console.log('Redirecting to Google OAuth URL');
     res.redirect(googleAuthUrl);
   });
 
@@ -51,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           code: code as string,
           grant_type: 'authorization_code',
-          redirect_uri: `${req.get('host')?.includes('replit.dev') ? 'https' : req.protocol}://${req.get('host')}/oauth2callback`,
+          redirect_uri: `${(req.get('host')?.includes('replit.dev') || req.get('host')?.includes('replit.app')) ? 'https' : req.protocol}://${req.get('host')}/oauth2callback`,
         }),
       });
 
