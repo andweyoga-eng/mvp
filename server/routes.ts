@@ -19,33 +19,16 @@ import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Google OAuth Routes (redirect-based)
   app.get('/api/auth/google', (req, res) => {
-    // Force HTTPS for OAuth callback - fix for .replit.app domains
-    const host = req.get('host') || '';
-    const protocol = host.includes('replit.dev') || host.includes('replit.app') ? 'https' : req.protocol;
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    
-    // Debug logging for OAuth configuration
-    console.log('=== Google OAuth Debug Info ===');
-    console.log('Host:', host);
-    console.log('Protocol:', protocol);
-    console.log('Client ID:', clientId ? `${clientId.substring(0, 12)}...` : 'MISSING');
-    console.log('Redirect URI:', `${protocol}://${host}/oauth2callback`);
-    console.log('===============================');
-    
-    if (!clientId) {
-      console.error('GOOGLE_CLIENT_ID environment variable is missing!');
-      return res.redirect('/?error=oauth_config_error');
-    }
-    
+    // Force HTTPS for OAuth callback
+    const protocol = req.get('host')?.includes('replit.dev') ? 'https' : req.protocol;
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${clientId}&` +
-      `redirect_uri=${protocol}://${host}/oauth2callback&` +
+      `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
+      `redirect_uri=${protocol}://${req.get('host')}/oauth2callback&` +
       `response_type=code&` +
       `scope=openid%20email%20profile&` +
       `access_type=offline&` +
       `prompt=consent`;
     
-    console.log('Redirecting to Google OAuth URL');
     res.redirect(googleAuthUrl);
   });
 
@@ -68,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           code: code as string,
           grant_type: 'authorization_code',
-          redirect_uri: `${(req.get('host')?.includes('replit.dev') || req.get('host')?.includes('replit.app')) ? 'https' : req.protocol}://${req.get('host')}/oauth2callback`,
+          redirect_uri: `${req.get('host')?.includes('replit.dev') ? 'https' : req.protocol}://${req.get('host')}/oauth2callback`,
         }),
       });
 
@@ -241,10 +224,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/auth/me", requireAuth, async (req, res) => {
+  app.get("/api/auth/me", requireAuth, async (req: AuthRequest, res) => {
     try {
-      const userId = (req as AuthRequest).user!.id;
-      const user = await storage.getUser(userId);
+      const user = await storage.getUser(req.user!.id);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -266,12 +248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.put("/api/auth/profile", requireAuth, async (req, res) => {
+  app.put("/api/auth/profile", requireAuth, async (req: AuthRequest, res) => {
     try {
       const validatedData = updateProfileSchema.parse(req.body);
       
-      const userId = (req as AuthRequest).user!.id;
-      const updatedUser = await storage.updateUser(userId, validatedData);
+      const updatedUser = await storage.updateUser(req.user!.id, validatedData);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -570,7 +551,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", requireAuth, async (req, res) => {
+  app.post("/api/bookings", requireAuth, async (req: AuthRequest, res) => {
     try {
       const validatedData = insertBookingSchema.parse(req.body);
       
@@ -585,9 +566,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create booking with authenticated user's ID
-      const userId = (req as AuthRequest).user!.id;
       const booking = await storage.createBooking({
-        userId,
+        userId: req.user!.id,
         classId: validatedData.classId
       });
       
@@ -633,7 +613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find user by email
-      const existingUser = await storage.getUserByEmail(email);
+      const existingUser = await storage.findUserByEmail(email);
       if (!existingUser) {
         return res.status(404).json({ message: 'No account found with this email address. Please check your email or register for a new account.' });
       }

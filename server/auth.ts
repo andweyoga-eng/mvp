@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import type { Request, Response, NextFunction, RequestHandler } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import type { User } from '@shared/schema';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -35,7 +35,7 @@ export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-export const requireAuth: RequestHandler = async (req, res, next) => {
+export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -50,14 +50,14 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     }
 
     // Set user ID from decoded token
-    (req as AuthRequest).user = { id: decoded.userId };
+    req.user = { id: decoded.userId };
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Authentication failed' });
   }
-};
+}
 
-export const optionalAuth: RequestHandler = (req, res, next) => {
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -65,11 +65,11 @@ export const optionalAuth: RequestHandler = (req, res, next) => {
     if (token) {
       const decoded = verifyToken(token);
       if (decoded) {
-        (req as AuthRequest).user = { id: decoded.userId };
+        req.user = { id: decoded.userId };
       }
     }
     next();
   } catch {
     next();
   }
-};
+}

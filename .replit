@@ -19,7 +19,7 @@ localPort = 34783
 externalPort = 3000
 
 [[ports]]
-localPort = 40779
+localPort = 42797
 externalPort = 3001
 
 [env]
@@ -38,12 +38,13 @@ task = "workflow.run"
 args = "Start application"
 
 [[workflows.workflow]]
-name = "npm run dev"
+name = "Start application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
 
 [agent]
 integrations = ["javascript_sendgrid==1.0.0", "javascript_mem_db==1.0.0==1.0.0", "javascript_database==1.0.0", "javascript_log_in_with_replit==1.0.0", "javascript_mem_db==1.0.0"]
