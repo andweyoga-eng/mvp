@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/lib/auth';
@@ -16,33 +15,15 @@ interface AuthModalProps {
   defaultTab?: 'login' | 'register';
 }
 
-const countryCodes = [
-  { code: '+1', country: 'United States' },
-  { code: '+44', country: 'United Kingdom' },
-  { code: '+91', country: 'India' },
-  { code: '+86', country: 'China' },
-  { code: '+81', country: 'Japan' },
-  { code: '+49', country: 'Germany' },
-  { code: '+33', country: 'France' },
-  { code: '+39', country: 'Italy' },
-  { code: '+34', country: 'Spain' },
-  { code: '+7', country: 'Russia' },
-  { code: '+61', country: 'Australia' },
-  { code: '+55', country: 'Brazil' },
-  { code: '+52', country: 'Mexico' },
-  { code: '+82', country: 'South Korea' },
-  { code: '+65', country: 'Singapore' },
-];
 
 export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const { toast } = useToast();
 
   const [loginData, setLoginData] = useState({
@@ -50,12 +31,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     password: '',
   });
 
-  const [registerData, setRegisterData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,24 +43,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (registerData.password !== registerData.confirmPassword) {
-      return;
-    }
-    try {
-      await register(registerData);
-      onClose();
-      setRegisterData({
-        name: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-      });
-    } catch (error) {
-      // Error handled in AuthProvider
-    }
-  };
 
   // Google Sign-In handler
   const handleGoogleSignIn = () => {
@@ -260,6 +217,13 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           
           <TabsContent value="register" className="space-y-4">
             <div className="space-y-4">
+              <div className="text-center space-y-2 mb-6">
+                <h3 className="text-lg font-bold text-purple-600">Join andWeYoga</h3>
+                <p className="text-sm text-purple-500">
+                  Sign up with Google to start your yoga journey with us
+                </p>
+              </div>
+              
               <Button
                 type="button"
                 variant="outline"
@@ -286,102 +250,12 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-{googleLoading ? 'Signing in...' : 'Continue with Google'}
+                {googleLoading ? 'Signing up...' : 'Continue with Google'}
               </Button>
               
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <Separator className="w-full" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground font-bold">Or continue with email</span>
-                </div>
+              <div className="text-center text-xs text-purple-500 mt-4">
+                By signing up, you agree to our Terms of Service and Privacy Policy
               </div>
-              
-              <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="register-name" className="font-bold text-purple-600">Full Name</Label>
-                <Input
-                  id="register-name"
-                  type="text"
-                  value={registerData.name}
-                  onChange={(e) => setRegisterData(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  data-testid="input-register-name"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="register-email" className="font-bold text-purple-600">Email</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  value={registerData.email}
-                  onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
-                  required
-                  data-testid="input-register-email"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="register-password" className="font-bold text-purple-600">Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="register-password"
-                      type={showPassword ? "text" : "password"}
-                      value={registerData.password}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
-                      required
-                      data-testid="input-register-password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                      data-testid="button-toggle-register-password"
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="register-confirm-password" className="font-bold text-purple-600">Confirm Password</Label>
-                  <div className="relative">
-                    <Input
-                      id="register-confirm-password"
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={registerData.confirmPassword}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      required
-                      data-testid="input-register-confirm-password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      data-testid="button-toggle-confirm-password"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-              
-              
-              <Button 
-                type="submit" 
-                className="w-full bg-primary text-white font-bold hover:bg-primary/90"
-                data-testid="button-register-submit"
-              >
-                Sign Up
-              </Button>
-              </form>
             </div>
           </TabsContent>
         </Tabs>
