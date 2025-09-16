@@ -3,7 +3,7 @@ import { Menu, X, User, LogOut, Settings } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { AuthSlideout } from "@/components/auth-slideout";
+import { AuthHoverPopup } from "@/components/auth-hover-popup";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -12,7 +12,6 @@ interface NavigationProps {
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showAuthSlideout, setShowAuthSlideout] = useState(false);
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -192,17 +191,15 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 </Button>
               </>
             ) : (
-              <Button 
-                onClick={() => {
-                  setShowAuthSlideout(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
-                data-testid="mobile-nav-sign-in-up"
-              >
-                <User className="h-4 w-4 mr-2" />
-                Sign In / Sign Up
-              </Button>
+              <AuthHoverPopup>
+                <Button 
+                  className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
+                  data-testid="mobile-nav-sign-in-up"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Sign In / Sign Up
+                </Button>
+              </AuthHoverPopup>
             )}
           </div>
         </div>
@@ -304,17 +301,15 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               </Button>
             </>
           ) : (
-            <Button 
-              onClick={() => {
-                setShowAuthSlideout(true);
-                setIsMobileMenuOpen(false);
-              }}
-              className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
-              data-testid="mobile-nav-sign-in-up"
-            >
-              <User className="h-4 w-4 mr-2" />
-              Sign In / Sign Up
-            </Button>
+            <AuthHoverPopup>
+              <Button 
+                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
+                data-testid="mobile-nav-sign-in-up"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Sign In / Sign Up
+              </Button>
+            </AuthHoverPopup>
           )}
         </div>
       </div>
@@ -368,10 +363,6 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         </div>
       </div>
     </nav>
-      <AuthSlideout 
-        isOpen={showAuthSlideout} 
-        onClose={() => setShowAuthSlideout(false)}
-      />
     </>
   );
 }

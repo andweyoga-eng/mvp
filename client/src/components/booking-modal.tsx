@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth, getAuthHeaders } from "@/lib/auth";
-import { AuthSlideout } from "@/components/auth-slideout";
+import { AuthHoverPopup } from "@/components/auth-hover-popup";
 import type { ClassType, Class } from "@shared/schema";
 
 interface BookingModalProps {
@@ -28,7 +28,6 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   const [formData, setFormData] = useState({
     classId: selectedClassId || ''
   });
-  const [showAuthSlideout, setShowAuthSlideout] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -87,7 +86,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
     
     // Check if user is authenticated
     if (!user) {
-      setShowAuthSlideout(true);
+      // For booking modal, we don't need to handle the slideout since hover handles it
       return;
     }
     
@@ -103,13 +102,6 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
     bookingMutation.mutate(formData);
   };
 
-  const handleAuthSuccess = () => {
-    setShowAuthSlideout(false);
-    // User is now authenticated, proceed with booking
-    if (formData.classId) {
-      bookingMutation.mutate(formData);
-    }
-  };
 
   const formatClassOption = (cls: EnrichedClass) => {
     const date = new Date(cls.date);
@@ -140,13 +132,14 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
               <p className="text-purple-600 font-medium">
                 Please sign in to book your yoga session
               </p>
-              <Button
-                onClick={() => setShowAuthSlideout(true)}
-                className="bg-primary text-white font-bold hover:bg-primary/90"
-                data-testid="show-auth-slideout"
-              >
-                Sign In / Sign Up
-              </Button>
+              <AuthHoverPopup>
+                <Button
+                  className="bg-primary text-white font-bold hover:bg-primary/90"
+                  data-testid="show-auth-hover"
+                >
+                  Sign In / Sign Up
+                </Button>
+              </AuthHoverPopup>
             </div>
           )}
           
@@ -230,10 +223,6 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
         </DialogContent>
       </Dialog>
       
-      <AuthSlideout 
-        isOpen={showAuthSlideout} 
-        onClose={() => setShowAuthSlideout(false)}
-      />
     </>
   );
 }
