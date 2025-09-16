@@ -241,9 +241,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/auth/me", requireAuth, async (req: AuthRequest, res) => {
+  app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.user!.id);
+      const userId = (req as AuthRequest).user!.id;
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -265,11 +266,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.put("/api/auth/profile", requireAuth, async (req: AuthRequest, res) => {
+  app.put("/api/auth/profile", requireAuth, async (req, res) => {
     try {
       const validatedData = updateProfileSchema.parse(req.body);
       
-      const updatedUser = await storage.updateUser(req.user!.id, validatedData);
+      const userId = (req as AuthRequest).user!.id;
+      const updatedUser = await storage.updateUser(userId, validatedData);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
@@ -568,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", requireAuth, async (req: AuthRequest, res) => {
+  app.post("/api/bookings", requireAuth, async (req, res) => {
     try {
       const validatedData = insertBookingSchema.parse(req.body);
       
@@ -583,8 +585,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Create booking with authenticated user's ID
+      const userId = (req as AuthRequest).user!.id;
       const booking = await storage.createBooking({
-        userId: req.user!.id,
+        userId,
         classId: validatedData.classId
       });
       
@@ -630,7 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find user by email
-      const existingUser = await storage.findUserByEmail(email);
+      const existingUser = await storage.getUserByEmail(email);
       if (!existingUser) {
         return res.status(404).json({ message: 'No account found with this email address. Please check your email or register for a new account.' });
       }

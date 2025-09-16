@@ -42,9 +42,8 @@ name = "Start application"
 author = "agent"
 
 [[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+task = "workflow.run"
+args = "Start application"
 
 [agent]
 integrations = ["javascript_sendgrid==1.0.0", "javascript_mem_db==1.0.0==1.0.0", "javascript_database==1.0.0", "javascript_log_in_with_replit==1.0.0", "javascript_mem_db==1.0.0"]
