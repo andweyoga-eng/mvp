@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth, getAuthHeaders } from "@/lib/auth";
-import { AuthModal } from "@/components/auth-modal";
+import { AuthSlideout } from "@/components/auth-slideout";
 import type { ClassType, Class } from "@shared/schema";
 
 interface BookingModalProps {
@@ -28,7 +28,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   const [formData, setFormData] = useState({
     classId: selectedClassId || ''
   });
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAuthSlideout, setShowAuthSlideout] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -87,7 +87,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
     
     // Check if user is authenticated
     if (!user) {
-      setShowAuthModal(true);
+      setShowAuthSlideout(true);
       return;
     }
     
@@ -104,7 +104,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   };
 
   const handleAuthSuccess = () => {
-    setShowAuthModal(false);
+    setShowAuthSlideout(false);
     // User is now authenticated, proceed with booking
     if (formData.classId) {
       bookingMutation.mutate(formData);
@@ -141,9 +141,9 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
                 Please sign in to book your yoga session
               </p>
               <Button
-                onClick={() => setShowAuthModal(true)}
+                onClick={() => setShowAuthSlideout(true)}
                 className="bg-primary text-white font-bold hover:bg-primary/90"
-                data-testid="show-auth-modal"
+                data-testid="show-auth-slideout"
               >
                 Sign In / Sign Up
               </Button>
@@ -230,10 +230,9 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
         </DialogContent>
       </Dialog>
       
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)}
-        defaultTab="register"
+      <AuthSlideout 
+        isOpen={showAuthSlideout} 
+        onClose={() => setShowAuthSlideout(false)}
       />
     </>
   );

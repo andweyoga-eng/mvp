@@ -3,7 +3,7 @@ import { Menu, X, User, LogOut, Settings } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
-import { AuthModal } from "@/components/auth-modal";
+import { AuthSlideout } from "@/components/auth-slideout";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -12,7 +12,7 @@ interface NavigationProps {
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAuthSlideout, setShowAuthSlideout] = useState(false);
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
 
@@ -194,7 +194,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             ) : (
               <Button 
                 onClick={() => {
-                  setShowAuthModal(true);
+                  setShowAuthSlideout(true);
                   setIsMobileMenuOpen(false);
                 }}
                 className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
@@ -306,7 +306,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           ) : (
             <Button 
               onClick={() => {
-                setShowAuthModal(true);
+                setShowAuthSlideout(true);
                 setIsMobileMenuOpen(false);
               }}
               className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
@@ -368,10 +368,9 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         </div>
       </div>
     </nav>
-      <AuthModal 
-        isOpen={showAuthModal} 
-        onClose={() => setShowAuthModal(false)}
-        defaultTab="login"
+      <AuthSlideout 
+        isOpen={showAuthSlideout} 
+        onClose={() => setShowAuthSlideout(false)}
       />
     </>
   );
