@@ -38,7 +38,7 @@ task = "workflow.run"
 args = "Start application"
 
 [[workflows.workflow]]
-name = "Start application"
+name = "npm run dev"
 author = "agent"
 
 [[workflows.workflow.tasks]]
