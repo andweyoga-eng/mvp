@@ -1,24 +1,64 @@
-import { google } from 'googleapis';
+import nodemailer from 'nodemailer';
 import path from 'path';
 
-if (!process.env.GMAIL_USER || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-  throw new Error("Gmail API credentials not found. Please set GMAIL_USER, GOOGLE_CLIENT_ID, and GOOGLE_CLIENT_SECRET environment variables.");
+// Create robust email transporter with multiple fallback strategies
+let transporter: nodemailer.Transporter | null = null;
+let emailInitialized = false;
+
+async function initializeEmailTransporter() {
+  if (emailInitialized) return transporter;
+  
+  try {
+    // Primary: Gmail SMTP with app password (most reliable for deployment)
+    if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+        pool: true, // Use pooled connections for better performance
+        maxConnections: 3,
+        rateLimit: 10, // Send max 10 emails per second
+      });
+      
+      // Test the connection
+      await transporter.verify();
+      console.log('Email transporter initialized successfully with Gmail SMTP');
+      emailInitialized = true;
+      return transporter;
+    }
+  } catch (error) {
+    console.warn('Gmail SMTP initialization failed:', error.message);
+  }
+
+  try {
+    // Fallback: Ethereal Email for development/testing
+    const testAccount = await nodemailer.createTestAccount();
+    transporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: testAccount.user,
+        pass: testAccount.pass,
+      },
+    });
+    
+    console.log('Email transporter initialized with Ethereal (development mode)');
+    console.log('Preview URLs will be logged for email testing');
+    emailInitialized = true;
+    return transporter;
+  } catch (error) {
+    console.error('All email transporter initialization methods failed:', error);
+    transporter = null;
+    emailInitialized = true;
+    return null;
+  }
 }
 
-// Configure OAuth2 client for Gmail API
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  'urn:ietf:wg:oauth:2.0:oob' // For service-style authentication
-);
-
-// For deployment, we'll use service account style authentication
-// This requires the app password as a refresh token equivalent
-oauth2Client.setCredentials({
-  refresh_token: process.env.GMAIL_APP_PASSWORD, // Reusing existing secret as refresh token
-});
-
-const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+// Initialize transporter on module load
+initializeEmailTransporter();
 
 export interface EmailOptions {
   to: string;
@@ -29,46 +69,49 @@ export interface EmailOptions {
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
-    const fromEmail = options.from || `"andWeYoga" <${process.env.GMAIL_USER}>`;
+    // Ensure email transporter is initialized
+    if (!transporter) {
+      console.log('Email transporter not initialized, attempting to initialize...');
+      await initializeEmailTransporter();
+    }
+
+    if (!transporter) {
+      throw new Error('Email transporter initialization failed');
+    }
+
+    // Set safe default From address
+    const defaultFrom = process.env.GMAIL_USER || 'no-reply@andweyoga.test';
+    const fromEmail = options.from || `"andWeYoga" <${defaultFrom}>`;
     
-    // Create the email message in RFC 2822 format
-    const emailMessage = [
-      `From: ${fromEmail}`,
-      `To: ${options.to}`,
-      `Subject: ${options.subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=utf-8',
-      '',
-      options.html
-    ].join('\n');
-
-    // Encode the message in base64url format
-    const encodedMessage = Buffer.from(emailMessage)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    // Send the email using Gmail API
-    const response = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: {
-        raw: encodedMessage,
-      },
+    // Send the email using SMTP
+    const info = await transporter.sendMail({
+      from: fromEmail,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
     });
 
-    console.log('Email sent successfully via Gmail API:', response.data.id);
+    console.log('Email sent successfully:', info.messageId);
+    
+    // For development with Ethereal, log preview URL
+    if (nodemailer.getTestMessageUrl(info)) {
+      console.log('Preview URL:', nodemailer.getTestMessageUrl(info));
+    }
+    
     return true;
   } catch (error) {
-    console.error('Failed to send email via Gmail API:', error);
+    console.error('Failed to send email:', error.message);
     
-    // Fallback to console logging for development/debugging
-    console.log('EMAIL FALLBACK - Would have sent:');
-    console.log('To:', options.to);
+    // Secure logging without sensitive data
+    console.log('=== EMAIL DELIVERY FAILURE ===');
+    console.log('To domain:', options.to.split('@')[1] || 'unknown');
     console.log('Subject:', options.subject);
-    console.log('HTML content length:', options.html.length);
+    console.log('Template length:', options.html.length);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('===============================');
     
-    // Return true for development to allow authentication flows to continue
+    // In development, return true to allow flows to continue
+    // In production, return false to indicate actual failure
     return process.env.NODE_ENV === 'development';
   }
 }
