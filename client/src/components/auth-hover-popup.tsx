@@ -27,7 +27,10 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
   };
 
   const handleLeave = () => {
-    setShowPopup(false);
+    // Add delay to allow user to move to popup
+    setTimeout(() => {
+      setShowPopup(false);
+    }, 200);
   };
 
   return (
@@ -42,14 +45,14 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
       {/* Hover Popup */}
       {showPopup && (
         <div 
-          className="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] p-5 max-w-[calc(100vw-20px)]"
+          className="absolute bottom-full right-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)]"
           style={{ 
             transform: 'translateX(20px)',
             left: 'auto',
             right: '0'
           }}
           onMouseEnter={() => setShowPopup(true)}
-          onMouseLeave={handleLeave}
+          onMouseLeave={() => setShowPopup(false)}
         >
           <Button
             type="button"
