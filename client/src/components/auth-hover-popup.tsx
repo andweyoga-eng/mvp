@@ -21,6 +21,11 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
     setShowPopup(true);
   };
 
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowPopup(!showPopup);
+  };
+
   const handleLeave = () => {
     setShowPopup(false);
   };
@@ -30,15 +35,19 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
       className="relative inline-block"
       onMouseEnter={handleInteraction}
       onMouseLeave={handleLeave}
-      onClick={handleInteraction}
+      onClick={handleToggle}
     >
       {children}
       
       {/* Hover Popup */}
       {showPopup && (
         <div 
-          className="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-5"
-          style={{ transform: 'translateX(-20px)' }}
+          className="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] p-5 max-w-[calc(100vw-20px)]"
+          style={{ 
+            transform: 'translateX(20px)',
+            left: 'auto',
+            right: '0'
+          }}
           onMouseEnter={() => setShowPopup(true)}
           onMouseLeave={handleLeave}
         >
