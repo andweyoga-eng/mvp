@@ -231,7 +231,8 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
     
     {/* Mobile Navigation Menu */}
     <div 
-      className={`md:hidden fixed left-0 right-0 bottom-16 z-40 bg-white border-t border-border shadow-2xl transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}
+      className={`md:hidden fixed left-1/2 bottom-16 z-40 bg-white border border-border rounded-t-2xl shadow-2xl transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-y-0 opacity-100 translate-x-[-50%]' : 'translate-y-full opacity-0 translate-x-[-50%]'}`}
+      style={{ width: 'max-content', minWidth: '280px', maxWidth: '90vw' }}
     >
       <div className="px-6 py-6 space-y-4 text-center">
         <button 
@@ -332,17 +333,17 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
     {/* Mobile Overlay when menu is open */}
     {isMobileMenuOpen && (
       <div 
-        className="md:hidden fixed inset-0 bottom-16 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
+        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
         onClick={() => setIsMobileMenuOpen(false)}
         data-testid="mobile-menu-overlay"
       />
     )}
     
     {/* Mobile Navigation - Bottom */}
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-t border-border">
-      <div className="container mx-auto px-2">
-        <div className="flex items-center justify-between h-16">
-          {/* Sandwich Menu Button - Left */}
+    <nav className="md:hidden fixed bottom-0 left-1/2 transform -translate-x-1/2 z-50 bg-white/95 backdrop-blur-sm border-t border-l border-r border-border rounded-t-lg">
+      <div className="px-4">
+        <div className="flex items-center justify-center gap-8 h-16">
+          {/* Sandwich Menu Button */}
           <div className="flex-shrink-0">
             <Button
               variant="ghost"
@@ -359,12 +360,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             </Button>
           </div>
 
-          {/* Spacer - No logo in bottom nav anymore */}
-          <div className="absolute left-1/2 transform -translate-x-1/2">
-            {/* Logo moved to top header */}
-          </div>
-
-          {/* Book Session Button - Right */}
+          {/* Book Session Button */}
           <div className="flex-shrink-0">
             <Button 
               onClick={onBookingClick}
