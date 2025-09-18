@@ -194,7 +194,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             ) : (
               <AuthHoverPopup>
                 <Button 
-                  className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90 hover:text-orange-500"
+                  className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90 hover:text-white"
                   data-testid="desktop-sidebar-sign-in-up"
                 >
                   <User className="h-4 w-4 mr-2" />
@@ -305,7 +305,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           ) : (
             <AuthHoverPopup>
               <Button 
-                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90 hover:text-orange-500"
+                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90 hover:text-white"
                 data-testid="mobile-nav-sign-in-up"
               >
                 <User className="h-4 w-4 mr-2" />
