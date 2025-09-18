@@ -29,27 +29,8 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
 
   return (
     <>
-    {/* Mobile Header - Top with 60% transparent white background and centered logo */}
-    <nav className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white/60 backdrop-blur-sm">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-center h-16">
-          <button 
-            onClick={() => scrollToSection('teach')}
-            data-testid="mobile-header-logo-link"
-          >
-            <img 
-              src={logoPath} 
-              alt="andWeYoga" 
-              className="h-12 w-auto max-w-[140px]"
-              data-testid="mobile-header-logo"
-            />
-          </button>
-        </div>
-      </div>
-    </nav>
-
-    {/* Desktop/Tablet Navigation - Top */}
-    <nav className="hidden md:block fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border">
+    {/* Unified Navigation - All Devices */}
+    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border">
       <div className="container mx-auto px-2 sm:px-4">
         <div className="flex items-center justify-between h-16 relative">
           {/* Sandwich Menu Button - Leftmost corner */}
@@ -106,7 +87,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
 
       {/* Desktop Mobile Navigation Menu */}
       <div 
-        className={`hidden md:block fixed top-16 left-0 z-40 bg-white border-r border-b border-border shadow-2xl transition-all duration-300 ease-in-out mobile-nav-menu ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
+        className={`fixed top-16 left-0 z-40 bg-white border-r border-b border-border shadow-2xl transition-all duration-300 ease-in-out mobile-nav-menu ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
         style={{ width: '220px' }}
         onMouseLeave={() => setIsMobileMenuOpen(false)}
       >
@@ -206,159 +187,14 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         </div>
       </div>
       
-      {/* Desktop Overlay when menu is open */}
+      {/* Unified Overlay when menu is open */}
       {isMobileMenuOpen && (
         <div 
-          className="hidden md:block fixed inset-0 top-16 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
+          className="fixed inset-0 top-16 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
           onClick={() => setIsMobileMenuOpen(false)}
-          data-testid="mobile-menu-overlay"
+          data-testid="menu-overlay"
         />
       )}
-    </nav>
-    
-    {/* Mobile Navigation Menu */}
-    <div 
-      className={`md:hidden fixed left-1/2 bottom-16 z-40 bg-white border border-border rounded-t-2xl shadow-2xl transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-y-0 opacity-100 translate-x-[-50%]' : 'translate-y-full opacity-0 translate-x-[-50%]'}`}
-      style={{ width: 'max-content', minWidth: '280px', maxWidth: '90vw' }}
-    >
-      <div className="px-6 py-6 space-y-4 text-center">
-        <button 
-          onClick={() => scrollToSection('care')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-care"
-        >
-          and We Care
-        </button>
-        <button 
-          onClick={() => scrollToSection('vibe')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-vibe"
-        >
-          and We Vibe
-        </button>
-        <button 
-          onClick={() => scrollToSection('teach')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-teach"
-        >
-          and We Teach
-        </button>
-        <button 
-          onClick={() => scrollToSection('story')}
-          className="block w-full text-center text-base font-bold text-secondary hover:text-primary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-story"
-        >
-          and Our Story
-        </button>
-        <button 
-          onClick={() => scrollToSection('believe')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-believe"
-        >
-          and We Believe
-        </button>
-        <button 
-          onClick={() => scrollToSection('connect')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-connect"
-        >
-          and We Connect
-        </button>
-        <button 
-          onClick={() => scrollToSection('ally')}
-          className="block w-full text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 py-1.5"
-          data-testid="mobile-nav-ally"
-        >
-          and We Meet Yogis
-        </button>
-        <div className="pt-4 border-t border-border/30 space-y-2">
-          {user ? (
-            <>
-              <p className="text-sm text-purple-600 font-bold text-center">
-                Welcome, {user.name}!
-              </p>
-              <Button 
-                onClick={() => {
-                  setLocation('/my-account');
-                  setIsMobileMenuOpen(false);
-                }}
-                variant="outline"
-                className="w-full border-primary text-primary hover:bg-primary/10 px-6 py-3 rounded-full text-sm font-bold"
-                data-testid="mobile-nav-my-account"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                My Account
-              </Button>
-              <Button 
-                onClick={() => {
-                  logout();
-                  setIsMobileMenuOpen(false);
-                }}
-                variant="outline"
-                className="w-full border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-full text-sm font-bold"
-                data-testid="mobile-nav-logout"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </Button>
-            </>
-          ) : (
-            <AuthHoverPopup>
-              <Button 
-                className="w-full bg-primary !text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
-                data-testid="mobile-nav-sign-in-up"
-              >
-                <User className="h-4 w-4 mr-2" />
-                Sign In / Sign Up
-              </Button>
-            </AuthHoverPopup>
-          )}
-        </div>
-      </div>
-    </div>
-    
-    {/* Mobile Overlay when menu is open */}
-    {isMobileMenuOpen && (
-      <div 
-        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
-        onClick={() => setIsMobileMenuOpen(false)}
-        data-testid="mobile-menu-overlay"
-      />
-    )}
-    
-    {/* Mobile Navigation - Bottom */}
-    <nav className="md:hidden fixed bottom-0 left-1/2 transform -translate-x-1/2 z-50 bg-white/95 backdrop-blur-sm border-t border-l border-r border-border rounded-t-lg">
-      <div className="px-4">
-        <div className="flex items-center justify-center gap-8 h-16">
-          {/* Sandwich Menu Button */}
-          <div className="flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 hover:bg-muted transition-colors"
-              onClick={toggleMobileMenu}
-              data-testid="mobile-menu-toggle-bottom"
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-primary" />
-              ) : (
-                <Menu className="h-6 w-6 text-primary" />
-              )}
-            </Button>
-          </div>
-
-          {/* Book Session Button */}
-          <div className="flex-shrink-0">
-            <Button 
-              onClick={onBookingClick}
-              className="bg-primary !text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
-              data-testid="nav-book-session-mobile"
-            >
-              Book
-            </Button>
-          </div>
-        </div>
-      </div>
     </nav>
     </>
   );
