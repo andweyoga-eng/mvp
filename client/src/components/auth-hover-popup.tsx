@@ -65,10 +65,10 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
           {/* Close Button */}
           <button
             onClick={handleClose}
-            className="absolute top-3 right-3 p-1 hover:bg-gray-100 rounded-full transition-colors"
+            className="absolute top-3 right-3 w-6 h-6 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm flex items-center justify-center transition-colors"
             data-testid="close-google-popup"
           >
-            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+            <X className="h-3.5 w-3.5 text-black font-bold stroke-2" />
           </button>
           <Button
             type="button"
