@@ -94,7 +94,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             
             <Button 
               onClick={onBookingClick}
-              className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+              className="bg-primary !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
               data-testid="nav-book-session"
             >
               <span className="hidden sm:inline">Book Session</span>
@@ -305,7 +305,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           ) : (
             <AuthHoverPopup>
               <Button 
-                className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
+                className="w-full bg-primary !text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
                 data-testid="mobile-nav-sign-in-up"
               >
                 <User className="h-4 w-4 mr-2" />
@@ -351,7 +351,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           <div className="flex-shrink-0">
             <Button 
               onClick={onBookingClick}
-              className="bg-primary text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
+              className="bg-primary !text-white px-3 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs font-bold shadow-lg"
               data-testid="nav-book-session-mobile"
             >
               Book

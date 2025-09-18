@@ -134,7 +134,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
               </p>
               <AuthHoverPopup>
                 <Button
-                  className="bg-primary text-white font-bold hover:bg-primary/90"
+                  className="bg-primary !text-white font-bold hover:bg-primary/90"
                   data-testid="show-auth-hover"
                 >
                   Sign In / Sign Up
@@ -210,7 +210,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
                   </Button>
                   <Button
                     type="submit"
-                    className="flex-1 bg-primary text-white font-bold hover:bg-primary/90"
+                    className="flex-1 bg-primary !text-white font-bold hover:bg-primary/90"
                     disabled={bookingMutation.isPending}
                     data-testid="booking-confirm"
                   >

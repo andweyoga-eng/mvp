@@ -57,8 +57,16 @@ Preferred communication style: Simple, everyday language.
 ### CTA Button Standards
 - **All CTA buttons will be purple (#401e9c) background with white text** - This is frozen as the design guideline for now and all future development
 - Buttons should use `font-bold` class
-- Primary buttons: `bg-primary text-white px-8 py-4 rounded-full font-bold hover:bg-primary/90`
+- Primary buttons: `bg-primary !text-white px-8 py-4 rounded-full font-bold hover:bg-primary/90`
 - Secondary buttons: `border-2 border-primary text-primary px-8 py-4 rounded-full font-bold hover:bg-primary hover:text-white`
+
+### Button Text Color Standards (FROZEN ✅ LOCKED)
+- **ALL primary buttons MUST use `!text-white` instead of `text-white`** - This prevents CSS specificity conflicts with Button component variants
+- **CSS Specificity Issue Fixed**: Button component's default variant `text-primary-foreground` has higher specificity than manual `text-white`
+- **Implementation Standard**: Always use `bg-primary !text-white` for consistent white text across all device breakpoints
+- **Applies to**: Sign In buttons, Book buttons, CTA buttons, Submit buttons - ALL primary purple buttons
+- **No Exceptions**: This standard prevents future text visibility issues and regression
+- **Code Standard**: `className="bg-primary !text-white font-bold hover:bg-primary/90"`
 
 ### Menu Design Standards
 - Menu items should have purple to orange hover transition effect
