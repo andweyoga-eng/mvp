@@ -20,7 +20,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Google OAuth Routes (redirect-based)
   app.get('/api/auth/google', (req, res) => {
     // Force HTTPS for OAuth callback
-    const protocol = req.get('host')?.includes('replit.dev') ? 'https' : req.protocol;
+    const protocol = 'https'; // Force HTTPS for all environments
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
       `redirect_uri=${protocol}://${req.get('host')}/oauth2callback&` +
@@ -51,7 +51,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           code: code as string,
           grant_type: 'authorization_code',
-          redirect_uri: `${req.get('host')?.includes('replit.dev') ? 'https' : req.protocol}://${req.get('host')}/oauth2callback`,
+          redirect_uri: `https://${req.get('host')}/oauth2callback`,
         }),
       });
 
