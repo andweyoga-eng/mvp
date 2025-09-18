@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { X } from 'lucide-react';
 
 interface AuthHoverPopupProps {
   children: React.ReactNode;
@@ -38,18 +39,7 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
     setShowPopup(!showPopup);
   };
 
-  const handleLeave = () => {
-    // Add delay to allow user to move to popup
-    setTimeout(() => {
-      setShowPopup(false);
-    }, 300);
-  };
-
-  const handlePopupEnter = () => {
-    setShowPopup(true);
-  };
-
-  const handlePopupLeave = () => {
+  const handleClose = () => {
     setShowPopup(false);
   };
 
@@ -57,7 +47,7 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
     <div 
       className="relative inline-block"
       onMouseEnter={handleInteraction}
-      onMouseLeave={handleLeave}
+      onMouseLeave={() => {}} // Remove auto-close behavior
       onClick={handleToggle}
     >
       {children}
@@ -65,19 +55,21 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
       {/* Hover Popup */}
       {showPopup && (
         <div 
-          className={`absolute w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)] ${
-            isMobile 
-              ? 'bottom-full right-0 mb-2' 
-              : 'top-full right-0 mt-2'
-          }`}
+          className="absolute bottom-full right-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)]"
           style={{ 
-            transform: isMobile ? 'translateX(20px)' : 'translateX(-10px)',
+            transform: 'translateX(20px)',
             left: 'auto',
             right: '0'
           }}
-          onMouseEnter={handlePopupEnter}
-          onMouseLeave={handlePopupLeave}
         >
+          {/* Close Button */}
+          <button
+            onClick={handleClose}
+            className="absolute top-3 right-3 p-1 hover:bg-gray-100 rounded-full transition-colors"
+            data-testid="close-google-popup"
+          >
+            <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+          </button>
           <Button
             type="button"
             variant="outline"
