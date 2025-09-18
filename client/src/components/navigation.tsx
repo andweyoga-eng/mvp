@@ -84,25 +84,12 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             </button>
           </div>
 
-          {/* Sign In/Book Session Buttons - Right side */}
+          {/* Book Session Button - Right side */}
           <div className="flex-shrink-0 flex items-center gap-2">
             {user && (
               <span className="text-sm text-purple-600 font-medium hidden lg:inline">
                 {user.name}
               </span>
-            )}
-            
-            {!user && (
-              <AuthHoverPopup>
-                <Button 
-                  className="bg-primary text-white px-3 py-2 sm:px-4 sm:py-2.5 rounded-full hover:bg-primary/90 hover:text-orange-500 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg"
-                  data-testid="desktop-nav-sign-in-up"
-                >
-                  <User className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Sign In / Sign Up</span>
-                  <span className="sm:hidden">Sign In</span>
-                </Button>
-              </AuthHoverPopup>
             )}
             
             <Button 
@@ -208,7 +195,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               <AuthHoverPopup>
                 <Button 
                   className="w-full bg-primary text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90 hover:text-orange-500"
-                  data-testid="mobile-nav-sign-in-up"
+                  data-testid="desktop-sidebar-sign-in-up"
                 >
                   <User className="h-4 w-4 mr-2" />
                   Sign In / Sign Up

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface AuthHoverPopupProps {
@@ -8,6 +8,18 @@ interface AuthHoverPopupProps {
 export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
   const [showPopup, setShowPopup] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile devices
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Google Sign-In handler
   const handleGoogleSignIn = () => {
@@ -30,7 +42,15 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
     // Add delay to allow user to move to popup
     setTimeout(() => {
       setShowPopup(false);
-    }, 200);
+    }, 300);
+  };
+
+  const handlePopupEnter = () => {
+    setShowPopup(true);
+  };
+
+  const handlePopupLeave = () => {
+    setShowPopup(false);
   };
 
   return (
@@ -45,14 +65,18 @@ export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
       {/* Hover Popup */}
       {showPopup && (
         <div 
-          className="absolute bottom-full right-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)]"
+          className={`absolute w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)] ${
+            isMobile 
+              ? 'bottom-full right-0 mb-2' 
+              : 'top-full right-0 mt-2'
+          }`}
           style={{ 
-            transform: 'translateX(20px)',
+            transform: isMobile ? 'translateX(20px)' : 'translateX(-10px)',
             left: 'auto',
             right: '0'
           }}
-          onMouseEnter={() => setShowPopup(true)}
-          onMouseLeave={() => setShowPopup(false)}
+          onMouseEnter={handlePopupEnter}
+          onMouseLeave={handlePopupLeave}
         >
           <Button
             type="button"
