@@ -134,7 +134,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
               </p>
               <AuthHoverPopup>
                 <Button
-                  className="bg-primary text-white font-bold hover:bg-primary/90 hover:text-orange-500"
+                  className="bg-primary text-white font-bold hover:bg-primary/90"
                   data-testid="show-auth-hover"
                 >
                   Sign In / Sign Up
