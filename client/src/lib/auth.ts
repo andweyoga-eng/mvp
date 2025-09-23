@@ -11,6 +11,11 @@ export interface User {
   secondaryMobileCountryCode?: string | null;
   emergencyMobile: string;
   emergencyMobileCountryCode: string;
+  // Health Update fields - mandatory for booking sessions
+  healthUpdateText?: string | null;
+  healthDocumentUrls?: string[] | null;
+  profileCompletionStatus: 'incomplete' | 'complete';
+  healthUpdateLastModified?: string | null;
 }
 
 export interface AuthContextType {
@@ -43,6 +48,9 @@ export interface ProfileData {
   secondaryMobileCountryCode?: string;
   emergencyMobile: string;
   emergencyMobileCountryCode: string;
+  // Health Update fields
+  healthUpdateText?: string;
+  healthDocumentUrls?: string[];
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
