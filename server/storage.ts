@@ -13,15 +13,28 @@ import {
   type InsertBooking,
   type ContactMessage,
   type InsertContactMessage,
+  type AdminUser,
+  type InsertAdminUser,
   users,
   classTypes,
   instructors,
   classes,
   bookings,
-  contactMessages
+  contactMessages,
+  adminUsers
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
+
+// Profile completeness interface for admin console
+export interface ProfileCompleteness {
+  isComplete: boolean;
+  healthUpdateComplete: boolean;  // ≥10 characters
+  documentsComplete: boolean;     // Valid uploaded files
+  emailVerified: boolean;
+  completionPercentage: number;   // 0-100%
+  flags: string[];               // Array of flag descriptions
+}
 
 export interface IStorage {
   // Users
@@ -69,6 +82,13 @@ export interface IStorage {
   // Contact Messages
   getAllContactMessages(): Promise<ContactMessage[]>;
   createContactMessage(message: InsertContactMessage): Promise<ContactMessage>;
+  
+  // Admin Users
+  getAdminByEmail(email: string): Promise<AdminUser | undefined>;
+  createAdminUser(admin: InsertAdminUser): Promise<AdminUser>;
+  verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUsersWithCompleteness(): Promise<(User & { completeness: ProfileCompleteness })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -202,6 +222,20 @@ export class DatabaseStorage implements IStorage {
 
       const insertedClasses = await db.insert(classes).values(classesData).returning();
       console.log(`[DB] Inserted ${insertedClasses.length} classes`);
+
+      // Initialize admin users
+      const existingAdmins = await db.select().from(adminUsers).limit(1);
+      if (existingAdmins.length === 0) {
+        const adminData: InsertAdminUser = {
+          email: "admin@andweyoga.com",
+          name: "System Administrator",
+          role: "super_admin"
+        };
+        
+        const [insertedAdmin] = await db.insert(adminUsers).values(adminData).returning();
+        console.log(`[DB] Created default admin user: ${insertedAdmin.email}`);
+      }
+      
       console.log('[DB] Database initialization complete');
     } catch (error) {
       console.error('[DB] Error initializing database:', error);
@@ -550,6 +584,95 @@ export class DatabaseStorage implements IStorage {
       console.error('[DB] Error creating contact message:', error);
       throw error;
     }
+  }
+
+  // Admin Users Methods
+  async getAdminByEmail(email: string): Promise<AdminUser | undefined> {
+    try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const [admin] = await db.select().from(adminUsers).where(sql`LOWER(TRIM(${adminUsers.email})) = ${normalizedEmail}`);
+      return admin || undefined;
+    } catch (error) {
+      console.error('[DB] Error getting admin by email:', error);
+      return undefined;
+    }
+  }
+
+  async createAdminUser(admin: InsertAdminUser): Promise<AdminUser> {
+    try {
+      const [newAdmin] = await db.insert(adminUsers).values(admin).returning();
+      return newAdmin;
+    } catch (error) {
+      console.error('[DB] Error creating admin user:', error);
+      throw error;
+    }
+  }
+
+  async verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined> {
+    try {
+      // For now, we'll implement a simple check against admin users table
+      // In production, you'd want to hash passwords for admins too
+      const admin = await this.getAdminByEmail(email);
+      if (admin && password === 'admin123') { // TODO: Implement proper password hashing for admins
+        return admin;
+      }
+      return undefined;
+    } catch (error) {
+      console.error('[DB] Error verifying admin credentials:', error);
+      return undefined;
+    }
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    try {
+      return await db.select().from(users);
+    } catch (error) {
+      console.error('[DB] Error getting all users:', error);
+      return [];
+    }
+  }
+
+  async getUsersWithCompleteness(): Promise<(User & { completeness: ProfileCompleteness })[]> {
+    try {
+      const allUsers = await this.getAllUsers();
+      
+      return allUsers.map(user => {
+        const completeness = this.calculateProfileCompleteness(user);
+        return { ...user, completeness };
+      });
+    } catch (error) {
+      console.error('[DB] Error getting users with completeness:', error);
+      return [];
+    }
+  }
+
+  // Profile completeness calculation helper
+  private calculateProfileCompleteness(user: User): ProfileCompleteness {
+    const healthUpdateComplete = user.healthUpdateText ? user.healthUpdateText.trim().length >= 10 : false;
+    const documentsComplete = user.healthDocumentUrls ? user.healthDocumentUrls.length > 0 : false;
+    const emailVerified = user.emailVerified || false;
+    
+    // Calculate completion percentage
+    const checks = [healthUpdateComplete, documentsComplete, emailVerified];
+    const completedChecks = checks.filter(Boolean).length;
+    const completionPercentage = Math.round((completedChecks / checks.length) * 100);
+    
+    const isComplete = healthUpdateComplete && emailVerified; // Documents are optional but recommended
+    
+    // Generate flags for incomplete items
+    const flags: string[] = [];
+    if (!healthUpdateComplete) flags.push('Missing health update (minimum 10 characters)');
+    if (!documentsComplete) flags.push('No health documents uploaded');
+    if (!emailVerified) flags.push('Email not verified');
+    
+    return {
+      isComplete,
+      healthUpdateComplete,
+      documentsComplete,
+      emailVerified,
+      completionPercentage,
+      flags
+    };
   }
 }
 
