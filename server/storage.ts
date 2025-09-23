@@ -29,6 +29,12 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<UpdateProfile>): Promise<User | undefined>;
+  updateUserHealthData(id: string, healthData: { 
+    healthUpdateText: string; 
+    healthDocumentUrls: string[]; 
+    profileCompletionStatus: string;
+    healthUpdateLastModified: string;
+  }): Promise<User | undefined>;
   verifyUserEmail(id: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   findUserByEmail(email: string): Promise<User | undefined>;
@@ -190,8 +196,7 @@ export class DatabaseStorage implements IStorage {
           classTypeId: insertedClassTypes[schedule.classTypeIndex].id,
           instructorId: insertedInstructors[schedule.instructorIndex].id,
           date: classDate,
-          maxCapacity: 20,
-          currentBookings: Math.floor(Math.random() * 10)
+          maxCapacity: 20
         });
       });
 
@@ -265,6 +270,30 @@ export class DatabaseStorage implements IStorage {
       return user || undefined;
     } catch (error) {
       console.error('[DB] Error updating user:', error);
+      return undefined;
+    }
+  }
+
+  async updateUserHealthData(id: string, healthData: { 
+    healthUpdateText: string; 
+    healthDocumentUrls: string[]; 
+    profileCompletionStatus: string;
+    healthUpdateLastModified: string;
+  }): Promise<User | undefined> {
+    try {
+      const [user] = await db.update(users)
+        .set({ 
+          healthUpdateText: healthData.healthUpdateText,
+          healthDocumentUrls: healthData.healthDocumentUrls,
+          profileCompletionStatus: healthData.profileCompletionStatus,
+          healthUpdateLastModified: new Date(healthData.healthUpdateLastModified),
+          updatedAt: new Date()
+        })
+        .where(eq(users.id, id))
+        .returning();
+      return user || undefined;
+    } catch (error) {
+      console.error('[DB] Error updating user health data:', error);
       return undefined;
     }
   }

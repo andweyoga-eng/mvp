@@ -293,21 +293,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Forbidden: Cannot update another user\'s health data' });
       }
       
-      // Validate health update data
+      // Validate health update data with Zod schema
       const healthUpdateData = healthUpdateSchema.parse(req.body);
       
-      // Calculate profile completion status
-      const isHealthComplete = healthUpdateData.healthUpdateText.trim().length > 0;
+      // Calculate profile completion status - unified logic with booking validation
+      const isHealthComplete = healthUpdateData.healthUpdateText.trim().length >= 10;
       const profileCompletionStatus = isHealthComplete ? 'complete' : 'incomplete';
       
-      // TODO: Implement updateUserHealthData in storage interface
-      // For now, update with existing updateUser method
-      const updatedUser = await storage.updateUser(userId, {
+      // Use dedicated health data persistence method
+      const updatedUser = await storage.updateUserHealthData(userId, {
         healthUpdateText: healthUpdateData.healthUpdateText,
         healthDocumentUrls: healthUpdateData.healthDocumentUrls || [],
         profileCompletionStatus,
         healthUpdateLastModified: new Date().toISOString()
-      } as any);
+      });
       
       if (!updatedUser) {
         return res.status(404).json({ error: 'User not found' });
@@ -608,12 +607,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       
-      // Block booking if health profile is incomplete
-      if (user.profileCompletionStatus !== 'complete' || !user.healthUpdateText || user.healthUpdateText.trim().length === 0) {
+      // Canonical completeness check - compute from actual data, not stored status
+      const isHealthComplete = user.healthUpdateText && user.healthUpdateText.trim().length >= 10;
+      
+      if (!isHealthComplete) {
         return res.status(409).json({ 
           message: "Health profile required: Please complete your health update in My Account before booking sessions.",
           requiresHealthUpdate: true,
-          redirectTo: "/my-account?tab=health"
+          redirectTo: "/my-account?tab=health",
+          code: "profile_incomplete"
         });
       }
       

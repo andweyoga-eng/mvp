@@ -14,6 +14,7 @@ interface HealthUpdateProps {
   onHealthUpdateChange: (text: string) => void;
   onDocumentUpload: (files: FileList) => void;
   onDocumentDelete: (url: string) => void;
+  onSave: (healthData: { healthUpdateText: string; healthDocumentUrls: string[] }) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -23,6 +24,7 @@ export function HealthUpdateSection({
   onHealthUpdateChange,
   onDocumentUpload,
   onDocumentDelete,
+  onSave,
   isLoading
 }: HealthUpdateProps) {
   const { toast } = useToast();

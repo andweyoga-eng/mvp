@@ -59,6 +59,51 @@ export default function MyAccount() {
     setProfileData(prev => ({ ...prev, healthUpdateText: text }));
   };
 
+  // Wire health update to new API endpoint
+  const handleHealthUpdateSave = async (healthData: { healthUpdateText: string; healthDocumentUrls: string[] }) => {
+    if (!user?.id) return;
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/users/${user.id}/health-update`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(healthData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save health update');
+      }
+
+      const result = await response.json();
+      
+      // Update local state with saved data
+      setProfileData(prev => ({
+        ...prev,
+        healthUpdateText: healthData.healthUpdateText,
+        healthDocumentUrls: healthData.healthDocumentUrls
+      }));
+
+      toast({
+        title: "Health Update Saved",
+        description: "Your health information has been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Health update error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save health update",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDocumentUpload = async (files: FileList) => {
     setIsUploadingDocument(true);
     try {
@@ -647,7 +692,8 @@ export default function MyAccount() {
                 onHealthUpdateChange={handleHealthUpdateChange}
                 onDocumentUpload={handleDocumentUpload}
                 onDocumentDelete={handleDocumentDelete}
-                isLoading={isUploadingDocument}
+                onSave={handleHealthUpdateSave}
+                isLoading={isUploadingDocument || isLoading}
               />
             </TabsContent>
 
