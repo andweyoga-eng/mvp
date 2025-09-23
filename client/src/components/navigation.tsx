@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Menu, X, User, LogOut, Settings } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, AlertTriangle } from "lucide-react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { useToast } from "@/hooks/use-toast";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -14,6 +16,26 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  // Check profile completeness
+  const isProfileComplete = user ? 
+    user.healthUpdateText && 
+    user.healthUpdateText.trim().length >= 10 && 
+    user.emailVerified : false;
+
+  const handleBookingClick = () => {
+    if (user && !isProfileComplete) {
+      toast({
+        title: "Profile Incomplete",
+        description: "Please complete your health profile before booking sessions.",
+        variant: "destructive",
+      });
+      setLocation('/my-account?tab=health');
+      return;
+    }
+    onBookingClick();
+  };
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -73,14 +95,23 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               </span>
             )}
             
-            <Button 
-              onClick={onBookingClick}
-              className="bg-primary !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full hover:bg-primary/90 transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
-              data-testid="nav-book-session"
-            >
-              <span className="hidden sm:inline">Book Session</span>
-              <span className="sm:hidden">Book</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button 
+                onClick={handleBookingClick}
+                className={`${user && !isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105`}
+                data-testid="nav-book-session"
+              >
+                {user && !isProfileComplete && (
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                )}
+                <span className="hidden sm:inline">
+                  {user && !isProfileComplete ? 'Complete Profile' : 'Book Session'}
+                </span>
+                <span className="sm:hidden">
+                  {user && !isProfileComplete ? 'Profile' : 'Book'}
+                </span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>

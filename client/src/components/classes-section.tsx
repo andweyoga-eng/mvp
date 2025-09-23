@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertTriangle } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import type { ClassType } from "@shared/schema";
 
 interface ClassesSectionProps {
@@ -12,6 +16,29 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
   const { data: classTypes, isLoading, error } = useQuery<ClassType[]>({
     queryKey: ['/api/class-types'],
   });
+
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  // Check profile completeness
+  const isProfileComplete = user ? 
+    user.healthUpdateText && 
+    user.healthUpdateText.trim().length >= 10 && 
+    user.emailVerified : false;
+
+  const handleClassBooking = (classTypeId?: string) => {
+    if (user && !isProfileComplete) {
+      toast({
+        title: "Profile Incomplete",
+        description: "Please complete your health profile before booking sessions.",
+        variant: "destructive",
+      });
+      setLocation('/my-account?tab=health');
+      return;
+    }
+    onBookingClick(classTypeId);
+  };
 
   if (error) {
     return (
@@ -78,11 +105,14 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                       ₹{classType.price}/session
                     </span>
                     <Button 
-                      onClick={() => onBookingClick(classType.id)}
-                      className="bg-primary !text-white px-4 py-2 rounded-full hover:bg-primary/90 transition-all duration-200 font-bold"
+                      onClick={() => handleClassBooking(classType.id)}
+                      className={`${user && !isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold`}
                       data-testid={`book-button-${classType.id}`}
                     >
-                      Book Now
+                      {user && !isProfileComplete && (
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                      )}
+                      {user && !isProfileComplete ? 'Complete Profile' : 'Book Now'}
                     </Button>
                   </div>
                 </CardContent>
