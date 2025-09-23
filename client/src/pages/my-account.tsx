@@ -4,12 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Phone, Mail, Shield, Check, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, Shield, Check, AlertTriangle, Heart, CalendarDays } from 'lucide-react';
 import Navigation from '@/components/navigation';
 import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
+import { HealthUpdateSection } from '@/components/health-update-section';
+import { SessionHistory } from '@/components/session-history';
 
 // Standard scroll function - aligns carousel end with header bottom (64px) across all devices
 const scrollToSchedule = () => {
@@ -31,6 +34,8 @@ export default function MyAccount() {
     secondaryMobileCountryCode: '+91',
     emergencyMobile: '',
     emergencyMobileCountryCode: '+91',
+    healthUpdateText: '',
+    healthDocumentUrls: [] as string[],
   });
 
   const [mobileValidation, setMobileValidation] = useState({
@@ -44,6 +49,63 @@ export default function MyAccount() {
     secondaryMobile: false,
     emergencyMobile: false,
   });
+
+  // Health update state
+  const [activeTab, setActiveTab] = useState('profile');
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+
+  // Health update handlers
+  const handleHealthUpdateChange = (text: string) => {
+    setProfileData(prev => ({ ...prev, healthUpdateText: text }));
+  };
+
+  const handleDocumentUpload = async (files: FileList) => {
+    setIsUploadingDocument(true);
+    try {
+      // TODO: Implement actual file upload to storage
+      const uploadedUrls: string[] = [];
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
+        
+        // Simulate upload process
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const mockUrl = `/documents/${user?.id}/${Date.now()}-${file.name}`;
+        uploadedUrls.push(mockUrl);
+      }
+      
+      setProfileData(prev => ({
+        ...prev,
+        healthDocumentUrls: [...prev.healthDocumentUrls, ...uploadedUrls]
+      }));
+      
+      toast({
+        title: "Documents Uploaded Successfully",
+        description: `${files.length} document(s) uploaded to your health profile.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload Failed",
+        description: "Unable to upload documents. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingDocument(false);
+    }
+  };
+
+  const handleDocumentDelete = (urlToDelete: string) => {
+    setProfileData(prev => ({
+      ...prev,
+      healthDocumentUrls: prev.healthDocumentUrls.filter(url => url !== urlToDelete)
+    }));
+    
+    toast({
+      title: "Document Removed",
+      description: "Document has been removed from your health profile.",
+    });
+  };
 
   // Redirect if not logged in
   useEffect(() => {
@@ -63,6 +125,8 @@ export default function MyAccount() {
         secondaryMobileCountryCode: user.secondaryMobileCountryCode || '+91',
         emergencyMobile: user.emergencyMobile || '',
         emergencyMobileCountryCode: user.emergencyMobileCountryCode || '+91',
+        healthUpdateText: user.healthUpdateText || '',
+        healthDocumentUrls: user.healthDocumentUrls || [],
       });
     }
   }, [user]);
@@ -196,6 +260,17 @@ export default function MyAccount() {
       return;
     }
 
+    // Validate health update - mandatory for profile completion
+    if (!profileData.healthUpdateText.trim()) {
+      toast({
+        title: "Health Update Required",
+        description: "Please provide a health update. Enter 'None' if no health concerns to share.",
+        variant: "destructive",
+      });
+      setActiveTab('health');
+      return;
+    }
+
     setIsLoading(true);
     try {
       await updateProfile(profileData);
@@ -248,19 +323,49 @@ export default function MyAccount() {
             <p className="text-purple-600">Manage your profile and contact information</p>
           </div>
 
-          {/* Profile Information Card */}
-          <Card className="mb-6">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-full">
-                  <User className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-primary">Profile Information</CardTitle>
-                  <CardDescription>Update your personal details</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
+          {/* Tabbed Interface */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger 
+                value="profile" 
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                data-testid="profile-tab"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Profile
+              </TabsTrigger>
+              <TabsTrigger 
+                value="health"
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                data-testid="health-tab"
+              >
+                <Heart className="h-4 w-4 mr-2" />
+                Health Update
+              </TabsTrigger>
+              <TabsTrigger 
+                value="sessions"
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                data-testid="sessions-tab"
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Sessions
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Profile Tab */}
+            <TabsContent value="profile" data-testid="profile-content">
+              <Card className="mb-6">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <User className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-primary">Profile Information</CardTitle>
+                      <CardDescription>Update your personal details and contact information</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 
@@ -532,6 +637,25 @@ export default function MyAccount() {
               </Button>
             </CardContent>
           </Card>
+            </TabsContent>
+
+            {/* Health Update Tab */}
+            <TabsContent value="health" data-testid="health-content">
+              <HealthUpdateSection
+                healthUpdateText={profileData.healthUpdateText}
+                healthDocumentUrls={profileData.healthDocumentUrls}
+                onHealthUpdateChange={handleHealthUpdateChange}
+                onDocumentUpload={handleDocumentUpload}
+                onDocumentDelete={handleDocumentDelete}
+                isLoading={isUploadingDocument}
+              />
+            </TabsContent>
+
+            {/* Session History Tab */}
+            <TabsContent value="sessions" data-testid="sessions-content">
+              <SessionHistory userId={user?.id || ''} />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
