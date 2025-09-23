@@ -1,0 +1,75 @@
+Feature Request: Health Update in User Profile with Mandatory Upload for Medical Records
+1. Feature Overview
+* Profile Section Addition: Add a "Health Update" text box in the My Account Profile section.
+* File Upload: Allow users to upload medical documents or images in all standard formats (pdf, jpeg, png, docx, etc.) with appropriate file size limits.
+* Mandatory Completion: The Health Update section (text ) must be mandatory file upload is optional. Create informtive text explaing what they need to fill in text .For instance They may want to share a surgery they have goe through or a recent injury or any  recommendations by teh doctor. If they nothing to share they can enter “None” . Please have this.  
+* Booking Restriction: Users should NOT be able to book any sessions unless this section is completed.
+* Sessions View:
+    * Add a dropdown in Profile showing three session tabs: Upcoming Sessions, Completed Sessions, Cancelled Sessions.
+    * Connect session data via a Session–User mapping table in the database.
+
+2. Database Schema Requirements
+* Users Table:
+    * Fields: id, registration method, profile info (name, contact, emergency details, Health Updates), profile state (complete/incomplete).
+* Session-User Mapping Table:
+    * Maps user_id to session_id and tracks session status for display in sessions view.
+
+3. Admin Console Requirements
+* Create a table view listing all registered users.
+* Show profile completeness indicators (Complete / Incomplete).
+* Allow admins to view session linkages and health update document previews/downloads.
+* Provide a separate admin console dashboard link to login and manage these records securely.
+
+4. Inputs & Outputs
+* Inputs:
+    * User credentials (Google sign-in).
+    * Profile fields with mandatory name, contact, emergency details, and Health Updates (text ).
+* Outputs:
+    * Successfully registered user accounts with fully populated profiles.
+    * Correct user-to-session mappings for session history.
+    * Admin visibility of compliance and completeness status.
+
+5. Mandatory Field Enforcement & Validation
+* Is there explicit validation:
+    * On both client-side (UI validation) AND server-side (API validation) that Health Update text and file upload are complete before allowing session bookings?
+* Blocking Booking:
+    * How is the user prevented from booking without fulfilling the Health Update requirement?
+    * What is the user-facing error or blocking UX pattern?
+
+6. File Upload Constraints & Handling
+* Allowed File Types:
+    * Confirm supported file formats (pdf, jpeg, png, docx, etc.).
+* Maximum File Size:
+    * Confirm max allowed file size.
+* Validation:
+    * Will file type and size be validated pre-upload on frontend AND confirmed on backend?
+* Upload Failures:
+    * How will upload failures, retries, or progress feedback be handled in the UI?
+
+7. Storage and Security
+* Storage Location:
+    * Will health updates (text + files) be stored directly in the Users Table, or in linked tables?
+    * Where and how will uploaded documents be stored (cloud storage, encrypted BLOB in DB, etc.)?
+* Versioning & Edits:
+    * Is there a plan for version history or edits of Health Updates?
+* Security:
+    * Confirm encryption for uploads at rest and in transit.
+    * Access controls restricting document visibility only to the user and authorized admins.
+    * Audit logging of uploads, downloads, and changes for compliance.
+
+8. Admin Console Detailed Features
+* Ability for admin users to preview or download uploaded health documents securely.
+* Profile completeness indicator is tied to the presence of health update text and valid uploaded files.
+* Ability to flag incomplete profiles or missing mandatory documents.
+
+9. Session-User Mapping & Booking Restrictions
+* Booking endpoint must verify profile completeness (including Health Update) before confirming session bookings.
+* Session dropdown view in user profile is filtered based on Session-User mapping data.
+
+10. "Vibey Cool" User Messaging
+* Please confirm the exact user message to display that conveys: "Your wellbeing and safety are our topmost concerns before you begin your journey."
+* Specify places the message should appear, such as:
+    * Profile section near Health Update.
+    * Booking flow (when blocking without Health Update).
+    * Notifications or confirmation screens.
+
