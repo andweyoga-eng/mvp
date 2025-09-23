@@ -74,7 +74,7 @@ export const userDocuments = pgTable("user_documents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   fileName: text("file_name").notNull(),
-  fileType: varchar("file_type", { length: 10 }).notNull(),
+  fileType: varchar("file_type", { length: 255 }).notNull(), // Fixed: MIME types can be long (e.g., application/vnd.openxmlformats-officedocument.wordprocessingml.document)
   fileSize: integer("file_size").notNull(),
   storageProvider: varchar("storage_provider", { length: 50 }).notNull().default("replit"), // 'replit', 's3', 'gcs', 'local'
   storageKey: text("storage_key").notNull(), // provider-specific file identifier

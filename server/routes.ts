@@ -10,7 +10,8 @@ import {
   insertContactMessageSchema,
   registerUserSchema,
   loginUserSchema,
-  updateProfileSchema
+  updateProfileSchema,
+  healthUpdateSchema
 } from "@shared/schema";
 import { hashPassword, verifyPassword, generateToken, generateVerificationToken, requireAuth, optionalAuth, type AuthRequest } from "./auth";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
@@ -268,7 +269,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           secondaryMobile: updatedUser.secondaryMobile,
           secondaryMobileCountryCode: updatedUser.secondaryMobileCountryCode,
           emergencyMobile: updatedUser.emergencyMobile,
-          emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode
+          emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode,
+          healthUpdateText: updatedUser.healthUpdateText,
+          healthDocumentUrls: updatedUser.healthDocumentUrls,
+          profileCompletionStatus: updatedUser.profileCompletionStatus
         }
       });
     } catch (error) {
@@ -276,6 +280,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to update profile" });
+    }
+  });
+
+  // Health update route - critical for mandatory health data collection
+  app.patch("/api/users/:id/health-update", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const userId = req.params.id;
+      
+      // Ensure user can only update their own health data
+      if (userId !== req.user!.id) {
+        return res.status(403).json({ error: 'Forbidden: Cannot update another user\'s health data' });
+      }
+      
+      // Validate health update data
+      const healthUpdateData = healthUpdateSchema.parse(req.body);
+      
+      // Calculate profile completion status
+      const isHealthComplete = healthUpdateData.healthUpdateText.trim().length > 0;
+      const profileCompletionStatus = isHealthComplete ? 'complete' : 'incomplete';
+      
+      // TODO: Implement updateUserHealthData in storage interface
+      // For now, update with existing updateUser method
+      const updatedUser = await storage.updateUser(userId, {
+        healthUpdateText: healthUpdateData.healthUpdateText,
+        healthDocumentUrls: healthUpdateData.healthDocumentUrls || [],
+        profileCompletionStatus,
+        healthUpdateLastModified: new Date().toISOString()
+      } as any);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      res.json({ 
+        message: 'Health update saved successfully',
+        profileCompletionStatus: updatedUser.profileCompletionStatus
+      });
+    } catch (error) {
+      console.error('Health update error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: 'Validation failed', details: error.errors });
+      }
+      res.status(500).json({ error: 'Failed to update health data' });
     }
   });
 
@@ -554,6 +601,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/bookings", requireAuth, async (req: AuthRequest, res) => {
     try {
       const validatedData = insertBookingSchema.parse(req.body);
+      
+      // CRITICAL: Enforce mandatory health profile completion before booking
+      const user = await storage.getUser(req.user!.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Block booking if health profile is incomplete
+      if (user.profileCompletionStatus !== 'complete' || !user.healthUpdateText || user.healthUpdateText.trim().length === 0) {
+        return res.status(409).json({ 
+          message: "Health profile required: Please complete your health update in My Account before booking sessions.",
+          requiresHealthUpdate: true,
+          redirectTo: "/my-account?tab=health"
+        });
+      }
       
       // Check if class exists and has capacity
       const cls = await storage.getClass(validatedData.classId);
