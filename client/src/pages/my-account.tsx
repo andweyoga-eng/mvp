@@ -88,9 +88,17 @@ export default function MyAccount() {
         healthDocumentUrls: healthData.healthDocumentUrls
       }));
 
+      // Refresh auth state to update profile completion status immediately
+      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      
+      // Refresh page to ensure all components get updated user state
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
       toast({
         title: "Health Update Saved",
-        description: "Your health information has been saved successfully.",
+        description: "Your health information has been saved successfully. Your profile is now complete!",
       });
     } catch (error) {
       console.error('Health update error:', error);

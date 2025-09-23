@@ -251,12 +251,37 @@ export function HealthUpdateSection({
           )}
         </div>
 
-        {/* Completion Status */}
-        {hasRequiredInfo && (
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              ✨ <strong>Perfect! Your health profile is complete.</strong> You can now book yoga sessions with confidence.
+        {/* Save Button */}
+        <div className="pt-4 border-t border-purple-200">
+          <Button
+            onClick={() => onSave({ healthUpdateText, healthDocumentUrls })}
+            disabled={!hasRequiredInfo || isLoading}
+            className="w-full bg-primary !text-white px-8 py-4 rounded-full font-bold hover:bg-primary/90 disabled:opacity-50"
+            data-testid="save-health-update"
+          >
+            {isLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Saving Health Update...
+              </div>
+            ) : (
+              "Save Health Update"
+            )}
+          </Button>
+          
+          {!hasRequiredInfo && (
+            <p className="text-sm text-orange-600 text-center mt-2">
+              Please complete the health update text to save your information.
+            </p>
+          )}
+        </div>
+
+        {/* Completion Status - Only show after successful save */}
+        {hasRequiredInfo && !isLoading && (
+          <Alert className="border-blue-200 bg-blue-50">
+            <CheckCircle2 className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              ✨ <strong>Ready to save!</strong> Click "Save Health Update" above to complete your health profile and enable session booking.
             </AlertDescription>
           </Alert>
         )}

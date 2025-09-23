@@ -226,7 +226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   
-  app.get("/api/auth/me", requireAuth, async (req: AuthRequest, res) => {
+  app.get("/api/auth/me", requireAuth, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.user!.id);
       if (!user) {
@@ -243,7 +243,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         secondaryMobile: user.secondaryMobile,
         secondaryMobileCountryCode: user.secondaryMobileCountryCode,
         emergencyMobile: user.emergencyMobile,
-        emergencyMobileCountryCode: user.emergencyMobileCountryCode
+        emergencyMobileCountryCode: user.emergencyMobileCountryCode,
+        // Health Update fields - CRITICAL for profile completeness
+        healthUpdateText: user.healthUpdateText,
+        healthDocumentUrls: user.healthDocumentUrls,
+        profileCompletionStatus: user.profileCompletionStatus,
+        healthUpdateLastModified: user.healthUpdateLastModified
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to get user profile" });
@@ -285,7 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Health update route - critical for mandatory health data collection
-  app.patch("/api/users/:id/health-update", requireAuth, async (req: AuthRequest, res) => {
+  app.patch("/api/users/:id/health-update", requireAuth, async (req: any, res) => {
     try {
       const userId = req.params.id;
       
@@ -598,7 +603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", requireAuth, async (req: AuthRequest, res) => {
+  app.post("/api/bookings", requireAuth, async (req: any, res) => {
     try {
       const validatedData = insertBookingSchema.parse(req.body);
       
