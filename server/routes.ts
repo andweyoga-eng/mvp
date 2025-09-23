@@ -14,6 +14,7 @@ import {
   healthUpdateSchema
 } from "@shared/schema";
 import { hashPassword, verifyPassword, generateToken, generateVerificationToken, requireAuth, optionalAuth, type AuthRequest } from "./auth";
+import { generateAdminToken, verifyAdminToken, requireAdminAuth, type AdminAuthRequest, verifyAdminCredentials } from "./adminAuth";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 
@@ -736,6 +737,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Reset password error:', error);
       res.status(500).send('Server error');
+    }
+  });
+
+  // Admin Authentication Routes
+  app.post("/api/admin/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+      
+      // Verify admin credentials
+      const admin = await verifyAdminCredentials(email, password);
+      
+      if (!admin) {
+        return res.status(401).json({ message: "Invalid admin credentials" });
+      }
+      
+      // Generate admin token
+      const token = generateAdminToken(admin.id);
+      
+      res.json({
+        message: "Admin login successful",
+        token,
+        admin: {
+          id: admin.id,
+          email: admin.email,
+          name: admin.name,
+          role: admin.role
+        }
+      });
+    } catch (error) {
+      console.error('Admin login error:', error);
+      res.status(500).json({ message: "Admin login failed" });
+    }
+  });
+
+  app.get("/api/admin/auth/verify", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      if (!req.admin) {
+        return res.status(401).json({ message: "Admin authentication required" });
+      }
+      
+      res.json({
+        message: "Admin token valid",
+        admin: {
+          id: req.admin.id,
+          email: req.admin.email,
+          name: req.admin.name,
+          role: req.admin.role
+        }
+      });
+    } catch (error) {
+      console.error('Admin verify error:', error);
+      res.status(500).json({ message: "Admin verification failed" });
+    }
+  });
+
+  // Admin User Management Routes
+  app.get("/api/admin/users", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const usersWithCompleteness = await storage.getUsersWithCompleteness();
+      
+      res.json({
+        users: usersWithCompleteness,
+        totalUsers: usersWithCompleteness.length,
+        completeProfiles: usersWithCompleteness.filter(u => u.completeness.isComplete).length,
+        incompleteProfiles: usersWithCompleteness.filter(u => !u.completeness.isComplete).length
+      });
+    } catch (error) {
+      console.error('Admin get users error:', error);
+      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 

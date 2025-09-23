@@ -85,6 +85,7 @@ export interface IStorage {
   
   // Admin Users
   getAdminByEmail(email: string): Promise<AdminUser | undefined>;
+  getAdminById(id: string): Promise<AdminUser | undefined>;
   createAdminUser(admin: InsertAdminUser): Promise<AdminUser>;
   verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined>;
   getAllUsers(): Promise<User[]>;
@@ -594,6 +595,16 @@ export class DatabaseStorage implements IStorage {
       return admin || undefined;
     } catch (error) {
       console.error('[DB] Error getting admin by email:', error);
+      return undefined;
+    }
+  }
+
+  async getAdminById(id: string): Promise<AdminUser | undefined> {
+    try {
+      const [admin] = await db.select().from(adminUsers).where(eq(adminUsers.id, id));
+      return admin || undefined;
+    } catch (error) {
+      console.error('[DB] Error getting admin by id:', error);
       return undefined;
     }
   }
