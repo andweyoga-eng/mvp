@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth, getAuthHeaders } from "@/lib/auth";
 import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { AlertTriangle, FileText, User } from "lucide-react";
 import type { ClassType, Class } from "@shared/schema";
 
 interface BookingModalProps {
@@ -32,6 +35,23 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  // Check profile completeness
+  const isProfileComplete = user ? 
+    user.healthUpdateText && 
+    user.healthUpdateText.trim().length >= 10 && 
+    user.emailVerified : false;
+
+  const getProfileIssues = () => {
+    if (!user) return [];
+    const issues = [];
+    if (!user.emailVerified) issues.push("Email not verified");
+    if (!user.healthUpdateText || user.healthUpdateText.trim().length < 10) {
+      issues.push("Health update required (minimum 10 characters)");
+    }
+    return issues;
+  };
 
   // Fetch class types for dropdown
   const { data: classTypes } = useQuery<ClassType[]>({
@@ -60,6 +80,29 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   const bookingMutation = useMutation({
     mutationFn: async (data: { classId: string }) => {
       const response = await apiRequest('POST', '/api/bookings', data, getAuthHeaders());
+      
+      // Check if response is not ok and handle specific error cases
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Handle profile completeness validation errors (409 status)
+        if (response.status === 409 && errorData.requiresHealthUpdate) {
+          throw {
+            status: 409,
+            requiresHealthUpdate: true,
+            redirectTo: errorData.redirectTo || '/my-account?tab=health',
+            message: errorData.message || 'Health profile required',
+            code: errorData.code || 'profile_incomplete'
+          };
+        }
+        
+        // Handle other errors
+        throw {
+          status: response.status,
+          message: errorData.message || `Request failed with status ${response.status}`
+        };
+      }
+      
       return response.json();
     },
     onSuccess: () => {
@@ -73,6 +116,25 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
       queryClient.invalidateQueries({ queryKey: ['/api/schedule/week'] });
     },
     onError: (error: any) => {
+      // Handle profile completeness errors specifically
+      if (error.status === 409 && error.requiresHealthUpdate) {
+        onClose(); // Close booking modal first
+        
+        toast({
+          title: "Profile Incomplete",
+          description: "Please complete your health profile to book sessions.",
+          variant: "destructive",
+        });
+        
+        // Redirect to profile page with health tab
+        setTimeout(() => {
+          setLocation(error.redirectTo || '/my-account?tab=health');
+        }, 100);
+        
+        return;
+      }
+      
+      // Handle other errors
       toast({
         title: "Booking failed",
         description: error.message || "Please try again or contact support.",
@@ -90,6 +152,24 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
       return;
     }
     
+    // Preemptive profile completeness check
+    if (!isProfileComplete) {
+      onClose(); // Close modal first
+      
+      toast({
+        title: "Profile Incomplete",
+        description: "Please complete your health profile before booking sessions.",
+        variant: "destructive",
+      });
+      
+      // Redirect to profile page with health tab
+      setTimeout(() => {
+        setLocation('/my-account?tab=health');
+      }, 100);
+      
+      return;
+    }
+    
     if (!formData.classId) {
       toast({
         title: "Please select a class",
@@ -100,6 +180,11 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
     }
     
     bookingMutation.mutate(formData);
+  };
+
+  const handleGoToProfile = () => {
+    onClose();
+    setLocation('/my-account?tab=health');
   };
 
 
@@ -123,6 +208,34 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-md">
+          {/* Profile Incomplete Warning */}
+          {user && !isProfileComplete && (
+            <Alert className="mb-4 border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <div className="space-y-2">
+                  <p className="font-medium">Profile Incomplete</p>
+                  <div className="text-sm">
+                    <p>To book yoga sessions, please complete:</p>
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      {getProfileIssues().map((issue, index) => (
+                        <li key={index}>{issue}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Button 
+                    onClick={handleGoToProfile}
+                    size="sm"
+                    className="bg-orange-600 hover:bg-orange-700 !text-white"
+                    data-testid="button-go-to-profile"
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    Complete Profile
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
           <DialogHeader>
             <DialogTitle className="text-primary font-bold">Book Your Yoga Session</DialogTitle>
           </DialogHeader>
