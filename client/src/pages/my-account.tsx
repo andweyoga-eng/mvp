@@ -13,6 +13,7 @@ import Navigation from '@/components/navigation';
 import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
 import { HealthUpdateSection } from '@/components/health-update-section';
 import { SessionHistory } from '@/components/session-history';
+import { queryClient } from '@/lib/queryClient';
 
 // Standard scroll function - aligns carousel end with header bottom (64px) across all devices
 const scrollToSchedule = () => {
