@@ -17,6 +17,8 @@ import { hashPassword, verifyPassword, generateToken, generateVerificationToken,
 import { generateAdminToken, verifyAdminToken, requireAdminAuth, type AdminAuthRequest, verifyAdminCredentials } from "./adminAuth";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Google OAuth Routes (redirect-based)
@@ -815,6 +817,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Admin get users error:', error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  // Object Storage Routes for Health Documents
+  
+  // Get presigned upload URL for health documents (authenticated)
+  app.post("/api/objects/upload", requireAuth, async (req: any, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error getting upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  // Download health documents with authentication and ACL check
+  app.get("/objects/:objectPath(*)", requireAuth, async (req: any, res) => {
+    const userId = req.user?.id;
+    const objectStorageService = new ObjectStorageService();
+    
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      
+      // Check if user can access this document
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+      
+      if (!canAccess) {
+        return res.status(401).json({ error: "Unauthorized access to document" });
+      }
+      
+      // Stream the document to the response
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error accessing document:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update health document URLs after upload (authenticated)
+  app.put("/api/health-documents", requireAuth, async (req: any, res) => {
+    try {
+      if (!req.body.healthDocumentURL) {
+        return res.status(400).json({ error: "healthDocumentURL is required" });
+      }
+
+      const userId = req.user?.id;
+      const objectStorageService = new ObjectStorageService();
+      
+      // Set ACL policy for the uploaded document (private, owned by user)
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.healthDocumentURL,
+        {
+          owner: userId,
+          visibility: "private", // Health documents are private
+        }
+      );
+
+      res.status(200).json({
+        objectPath: objectPath,
+        message: "Document access configured successfully"
+      });
+    } catch (error) {
+      console.error("Error configuring document access:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
