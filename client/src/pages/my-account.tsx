@@ -90,12 +90,8 @@ export default function MyAccount() {
       }));
 
       // Refresh auth state to update profile completion status immediately
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      
-      // Refresh page to ensure all components get updated user state
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/auth/me'] });
 
       toast({
         title: "Health Update Saved",
