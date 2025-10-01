@@ -229,7 +229,27 @@ export function HealthUpdateSection({
                       variant="ghost"
                       size="sm"
                       className="text-green-700 hover:bg-green-100"
-                      onClick={() => window.open(url, '_blank')}
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(url, {
+                            headers: {
+                              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                            }
+                          });
+                          if (!response.ok) throw new Error('Download failed');
+                          const blob = await response.blob();
+                          const downloadUrl = window.URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = downloadUrl;
+                          a.download = `health-document-${index + 1}`;
+                          document.body.appendChild(a);
+                          a.click();
+                          window.URL.revokeObjectURL(downloadUrl);
+                          document.body.removeChild(a);
+                        } catch (error) {
+                          console.error('Download error:', error);
+                        }
+                      }}
                       data-testid={`download-document-${index}`}
                     >
                       <Download className="h-4 w-4" />
