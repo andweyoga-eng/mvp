@@ -112,17 +112,57 @@ export default function MyAccount() {
   const handleDocumentUpload = async (files: FileList) => {
     setIsUploadingDocument(true);
     try {
-      // TODO: Implement actual file upload to storage
       const uploadedUrls: string[] = [];
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
         
-        // Simulate upload process
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const mockUrl = `/documents/${user?.id}/${Date.now()}-${file.name}`;
-        uploadedUrls.push(mockUrl);
+        // Get presigned upload URL from server
+        const uploadResponse = await fetch('/api/objects/upload', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          }
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to get upload URL');
+        }
+        
+        const { uploadURL } = await uploadResponse.json();
+        
+        // Upload file directly to object storage
+        const fileUploadResponse = await fetch(uploadURL, {
+          method: 'PUT',
+          body: file,
+          headers: {
+            'Content-Type': file.type,
+          }
+        });
+        
+        if (!fileUploadResponse.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+        
+        // Configure ACL for the uploaded document
+        const aclResponse = await fetch('/api/health-documents', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          },
+          body: JSON.stringify({
+            healthDocumentURL: uploadURL.split('?')[0] // Remove query params
+          })
+        });
+        
+        if (!aclResponse.ok) {
+          throw new Error('Failed to configure document access');
+        }
+        
+        const { objectPath } = await aclResponse.json();
+        uploadedUrls.push(objectPath);
       }
       
       setProfileData(prev => ({
@@ -135,6 +175,7 @@ export default function MyAccount() {
         description: `${files.length} document(s) uploaded to your health profile.`,
       });
     } catch (error) {
+      console.error('Document upload error:', error);
       toast({
         title: "Upload Failed",
         description: "Unable to upload documents. Please try again.",
