@@ -3,55 +3,60 @@ import { Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import type { AdminUser } from "@shared/schema";
 
-// Admin-specific request interface
 export interface AdminAuthRequest extends Request {
   admin?: AdminUser;
 }
 
-// Generate admin JWT token
-export function generateAdminToken(adminId: string): string {
-  const secret = process.env.JWT_SECRET || "your-secret-key";
-  return jwt.sign({ adminId, type: 'admin' }, secret, { expiresIn: "24h" });
+// SECURITY FIX 1: Same strict secret validation as user auth.
+// Admin tokens share the JWT_SECRET but are distinguished by a 'type: admin' claim.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error('FATAL: JWT_SECRET environment variable is not set or too short.');
+  }
+  return secret;
 }
 
-// Verify admin JWT token
+export function generateAdminToken(adminId: string): string {
+  const secret = getJwtSecret();
+  // Admin tokens expire in 8 hours (shorter than user tokens for security)
+  return jwt.sign({ adminId, type: 'admin' }, secret, { expiresIn: "8h" });
+}
+
 export function verifyAdminToken(token: string): { adminId: string; type: string } | null {
   try {
-    const secret = process.env.JWT_SECRET || "your-secret-key";
+    const secret = getJwtSecret();
     const decoded = jwt.verify(token, secret) as any;
-    
-    // Ensure this is an admin token
+    // CRITICAL: Always check the type claim to prevent user tokens 
+    // being used to access admin endpoints
     if (decoded.type !== 'admin') {
       return null;
     }
-    
     return { adminId: decoded.adminId, type: decoded.type };
   } catch (error) {
     return null;
   }
 }
 
-// Admin authentication middleware
 export async function requireAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ message: "Admin access required. Please login." });
     }
 
     const token = authHeader.substring(7);
     const decoded = verifyAdminToken(token);
-    
+
     if (!decoded) {
       return res.status(401).json({ message: "Invalid admin token. Please login again." });
     }
 
-    // Get admin user from database using ID from token
     const admin = await storage.getAdminById(decoded.adminId);
-    
+
     if (!admin) {
-      return res.status(401).json({ message: "Admin user not found. Please contact system administrator." });
+      return res.status(401).json({ message: "Admin user not found." });
     }
 
     req.admin = admin;
@@ -62,28 +67,23 @@ export async function requireAdminAuth(req: AdminAuthRequest, res: Response, nex
   }
 }
 
-// Optional admin auth middleware (doesn't require login)
 export async function optionalAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
-    
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7);
       const decoded = verifyAdminToken(token);
-      
       if (decoded) {
-        // TODO: Get admin by ID and set req.admin
+        const admin = await storage.getAdminById(decoded.adminId);
+        if (admin) req.admin = admin;
       }
     }
-    
     next();
   } catch (error) {
-    // Silently continue without admin auth
     next();
   }
 }
 
-// Admin credential verification helper
 export async function verifyAdminCredentials(email: string, password: string): Promise<AdminUser | null> {
   try {
     const admin = await storage.verifyAdminCredentials(email, password);

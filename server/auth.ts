@@ -4,7 +4,28 @@ import crypto from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import type { User } from '@shared/schema';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// SECURITY FIX 1: Fail hard at startup if JWT_SECRET is missing or weak.
+// Never fall back to a hardcoded default. A missing secret in production
+// means someone can forge tokens. We crash intentionally so the issue
+// is caught before any user data is exposed.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      'FATAL: JWT_SECRET environment variable is not set. ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"'
+    );
+  }
+  if (secret.length < 32) {
+    throw new Error(
+      'FATAL: JWT_SECRET is too short. It must be at least 32 characters. ' +
+      'Generate a strong one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"'
+    );
+  }
+  return secret;
+}
+
+const JWT_SECRET = getJwtSecret();
 const SALT_ROUNDS = 12;
 
 export interface AuthRequest extends Request {
@@ -35,10 +56,30 @@ export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// SECURITY FIX 5: Email verification tokens now include a 24-hour expiry timestamp.
+// Format: <random-hex>.<expiry-unix-timestamp>
+// This prevents leaked verification links from working indefinitely.
+export function generateExpiringVerificationToken(): string {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours from now
+  return `${token}.${expiry}`;
+}
+
+export function isVerificationTokenExpired(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 2) return false; // old format tokens never expire (backward compat)
+  const expiry = parseInt(parts[1], 10);
+  return isNaN(expiry) || Date.now() > expiry;
+}
+
 export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    // SECURITY FIX 2: Read token from httpOnly cookie first, then fall back to
+    // Authorization header for API clients. This prevents token leakage via URLs.
+    const cookieToken = (req as any).cookies?.authToken;
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const token = cookieToken || headerToken;
 
     if (!token) {
       return res.status(401).json({ message: 'Authentication required' });
@@ -49,7 +90,6 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
 
-    // Set user ID from decoded token
     req.user = { id: decoded.userId };
     next();
   } catch (error) {
@@ -59,8 +99,10 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
 
 export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const cookieToken = (req as any).cookies?.authToken;
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    const token = cookieToken || headerToken;
 
     if (token) {
       const decoded = verifyToken(token);
