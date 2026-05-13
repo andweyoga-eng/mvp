@@ -25,6 +25,8 @@ export interface AuthContextType {
   logout: () => void;
   register: (userData: RegisterData) => Promise<void>;
   updateProfile: (userData: ProfileData) => Promise<void>;
+  /** Re-fetch /api/auth/me (cookie or Bearer), e.g. after health save */
+  refreshUser: () => Promise<void>;
 }
 
 export interface RegisterData {

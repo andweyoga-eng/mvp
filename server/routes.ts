@@ -14,6 +14,10 @@ import {
   healthUpdateSchema
 } from "@shared/schema";
 import {
+  computeProfileCompletionStatus,
+  isAccountProfileComplete,
+} from "@shared/profileCompleteness";
+import {
   hashPassword, verifyPassword, generateToken,
   generateExpiringVerificationToken, isVerificationTokenExpired,
   requireAuth, optionalAuth, type AuthRequest
@@ -24,8 +28,15 @@ import {
 } from "./adminAuth";
 import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
+
+// ---------------------------------------------------------------------------
+// PRODUCT (POV): In-app health document file uploads are DISABLED until we
+// standardize object storage (S3 / R2 / etc.) and need uploads at scale. Users
+// are directed to email detailed reports instead — see HealthUpdateSection UI.
+// Set ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = true to restore POST /api/objects/upload,
+// GET /objects/*, and PUT /api/health-documents.
+// ---------------------------------------------------------------------------
+const ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = false;
 
 // ============================================================
 // SECURITY FIX 4: Rate limiting on all auth endpoints.
@@ -82,18 +93,30 @@ function setAuthCookie(res: Response, token: string) {
   });
 }
 
+/**
+ * redirect_uri sent to Google must exactly match a URI in Google Cloud Console.
+ * Local dev is plain HTTP; production uses HTTPS (TLS terminates at the host).
+ */
+function googleOauthRedirectUri(req: Request): string {
+  const host = (process.env.ALLOWED_ORIGIN || req.get('host') || 'localhost:3000').trim();
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
+  const protocol =
+    process.env.NODE_ENV !== 'production' && isLocalHost ? 'http' : 'https';
+  return `${protocol}://${host}/oauth2callback`;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============================================================
   // GOOGLE OAUTH ROUTES
   // ============================================================
   app.get('/api/auth/google', (req, res) => {
-    const protocol = 'https';
+    const redirectUri = googleOauthRedirectUri(req);
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
       // SECURITY FIX 2b: Use a fixed ALLOWED_ORIGIN env var for the redirect URI,
       // not req.get('host') which is user-controlled.
-      `redirect_uri=${protocol}://${process.env.ALLOWED_ORIGIN || req.get('host')}/oauth2callback&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `response_type=code&` +
       `scope=openid%20email%20profile&` +
       `access_type=offline&` +
@@ -109,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const allowedOrigin = process.env.ALLOWED_ORIGIN || req.get('host');
+      const redirectUri = googleOauthRedirectUri(req);
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -118,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           client_secret: process.env.GOOGLE_CLIENT_SECRET!,
           code: code as string,
           grant_type: 'authorization_code',
-          redirect_uri: `https://${allowedOrigin}/oauth2callback`,
+          redirect_uri: redirectUri,
         }),
       });
 
@@ -283,10 +306,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", requireAuth, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user!.id);
+      let user = await storage.getUser(req.user!.id);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      const reconciled = await storage.recomputeProfileCompletionStatus(req.user!.id);
+      user = reconciled ?? user;
 
       res.json({
         id: user.id,
@@ -312,16 +337,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/auth/profile", requireAuth, async (req: AuthRequest, res) => {
     try {
       const validatedData = updateProfileSchema.parse(req.body);
-      const updatedUser = await storage.updateUser(req.user!.id, validatedData);
+      let updatedUser = await storage.updateUser(req.user!.id, validatedData);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
+      const withCompletion =
+        (await storage.recomputeProfileCompletionStatus(req.user!.id)) ?? updatedUser;
+      updatedUser = withCompletion;
       res.json({
         message: "Profile updated successfully",
         user: {
           id: updatedUser.id,
           email: updatedUser.email,
           name: updatedUser.name,
+          emailVerified: updatedUser.emailVerified,
           primaryMobile: updatedUser.primaryMobile,
           primaryMobileCountryCode: updatedUser.primaryMobileCountryCode,
           secondaryMobile: updatedUser.secondaryMobile,
@@ -330,7 +359,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode,
           healthUpdateText: updatedUser.healthUpdateText,
           healthDocumentUrls: updatedUser.healthDocumentUrls,
-          profileCompletionStatus: updatedUser.profileCompletionStatus
+          profileCompletionStatus: updatedUser.profileCompletionStatus,
+          healthUpdateLastModified: updatedUser.healthUpdateLastModified,
         }
       });
     } catch (error) {
@@ -349,9 +379,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Forbidden: Cannot update another user\'s health data' });
       }
 
+      const existing = await storage.getUser(userId);
+      if (!existing) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
       const healthUpdateData = healthUpdateSchema.parse(req.body);
-      const isHealthComplete = healthUpdateData.healthUpdateText.trim().length >= 10;
-      const profileCompletionStatus = isHealthComplete ? 'complete' : 'incomplete';
+      const mergedForStatus = {
+        ...existing,
+        healthUpdateText: healthUpdateData.healthUpdateText,
+        healthDocumentUrls:
+          healthUpdateData.healthDocumentUrls ?? existing.healthDocumentUrls ?? [],
+      };
+      const profileCompletionStatus = computeProfileCompletionStatus(mergedForStatus);
 
       const updatedUser = await storage.updateUserHealthData(userId, {
         healthUpdateText: healthUpdateData.healthUpdateText,
@@ -661,12 +701,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const isHealthComplete = user.healthUpdateText && user.healthUpdateText.trim().length >= 10;
-      if (!isHealthComplete) {
+      if (!isAccountProfileComplete(user)) {
         return res.status(409).json({
-          message: "Health profile required: Please complete your health update in My Account before booking sessions.",
+          message:
+            "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your health update in My Account before booking.",
           requiresHealthUpdate: true,
-          redirectTo: "/my-account?tab=health",
+          redirectTo: "/my-account",
           code: "profile_incomplete"
         });
       }
@@ -852,67 +892,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================
-  // OBJECT STORAGE — health documents
+  // OBJECT STORAGE — health documents (gated; see ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES)
   // ============================================================
-  app.post("/api/objects/upload", requireAuth, async (req: any, res) => {
-    try {
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
-    } catch (error) {
-      console.error("Error getting upload URL:", error);
-      res.status(500).json({ error: "Failed to get upload URL" });
-    }
-  });
+  if (ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES) {
+    const { ObjectStorageService, ObjectNotFoundError } = await import(
+      "./objectStorage"
+    );
 
-  app.get("/objects/:objectPath(*)", requireAuth, async (req: any, res) => {
-    const userId = req.user?.id;
-    const objectStorageService = new ObjectStorageService();
-
-    try {
-      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
-      const canAccess = await objectStorageService.canAccessObjectEntity({
-        objectFile,
-        userId: userId,
-        requestedPermission: ObjectPermission.READ,
-      });
-
-      if (!canAccess) {
-        return res.status(401).json({ error: "Unauthorized access to document" });
+    app.post("/api/objects/upload", requireAuth, async (req: any, res) => {
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const uploadURL = await objectStorageService.getObjectEntityUploadURL(
+          req.user!.id
+        );
+        res.json({ uploadURL });
+      } catch (error) {
+        console.error("Error getting upload URL:", error);
+        const message =
+          error instanceof Error ? error.message : "Failed to get upload URL";
+        res.status(503).json({ error: message });
       }
+    });
 
-      objectStorageService.downloadObject(objectFile, res);
-    } catch (error) {
-      console.error("Error accessing document:", error);
-      if (error instanceof ObjectNotFoundError) {
-        return res.status(404).json({ error: "Document not found" });
-      }
-      return res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.put("/api/health-documents", requireAuth, async (req: any, res) => {
-    try {
-      if (!req.body.healthDocumentURL) {
-        return res.status(400).json({ error: "healthDocumentURL is required" });
-      }
-
+    app.get("/objects/:objectPath(*)", requireAuth, async (req: any, res) => {
       const userId = req.user?.id;
       const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.healthDocumentURL,
-        { owner: userId, visibility: "private" }
-      );
 
-      res.status(200).json({
-        objectPath: objectPath,
-        message: "Document access configured successfully"
-      });
-    } catch (error) {
-      console.error("Error configuring document access:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
+      try {
+        await objectStorageService.serveObjectEntity(req.path, userId, res);
+      } catch (error) {
+        console.error("Error accessing document:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ error: "Document not found" });
+        }
+        return res.status(500).json({ error: "Internal server error" });
+      }
+    });
+
+    app.put("/api/health-documents", requireAuth, async (req: any, res) => {
+      try {
+        if (!req.body.healthDocumentURL) {
+          return res.status(400).json({ error: "healthDocumentURL is required" });
+        }
+
+        const userId = req.user?.id;
+        const objectStorageService = new ObjectStorageService();
+        const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+          req.body.healthDocumentURL,
+          { owner: userId, visibility: "private" }
+        );
+
+        res.status(200).json({
+          objectPath: objectPath,
+          message: "Document access configured successfully"
+        });
+      } catch (error) {
+        console.error("Error configuring document access:", error);
+        const message =
+          error instanceof Error ? error.message : "Internal server error";
+        res.status(500).json({ error: message });
+      }
+    });
+  }
 
   const httpServer = createServer(app);
   return httpServer;

@@ -2,15 +2,23 @@
 
 This is a full-stack yoga studio booking application built with React, Express.js, and PostgreSQL. The application allows users to browse yoga classes, view schedules, make bookings, and contact the studio. It features a modern responsive design with a complete booking system for yoga classes and instructors.
 
+## Internal development notes (not shown in the app UI)
+
+### SMS phone verification on Profile tab — intentionally disabled
+
+Phone number verification (SMS) is turned off for now. We still collect your numbers and check the format here; the extra step of confirming each number by text message is a form of gatekeeping we will only turn on when we reach the scale and stage where we need it.
+
+Implementation: per-number **Verify** controls are not rendered on My Account → Profile; format validation remains. Same rationale is duplicated in dev comments at the top of `client/src/pages/my-account.tsx`. Re-enable SMS verification UI and backend when product and infra are ready.
+
 ## Recent Changes (September 10, 2025)
 
 ### Milestone: Complete Dual Authentication System Implementation ✅ LOCKED
 - **Gmail SMTP Authentication**: Implemented email/password registration with Gmail SMTP verification system
 - **Google OAuth Integration**: Working Google OAuth sign-in with proper redirect URI configuration for Replit environment  
 - **Authentication State Management**: Fixed OAuth token handling with proper AuthProvider integration
-- **My Account Profile System**: Comprehensive profile management page with mobile number editing and verification
+- **My Account Profile System**: Comprehensive profile management page with mobile number editing (format validation; SMS verify UI off until needed — see Internal development notes)
 - **Advanced Mobile Validation**: Real-time validation with spam detection, length validation, and 40+ country codes
-- **Mobile Verification System**: "Verify" buttons that change to "Verified ✓" status with simulated SMS verification
+- **Mobile numbers on profile**: Collected with format validation; SMS **Verify** flow was later removed from the UI (see *Internal development notes* above) until gatekeeping by SMS is needed at scale
 - **Navigation Integration**: "My Account" option in sandwich menu for logged-in users with sign-out functionality
 - **Token Persistence**: Proper authentication state persistence across browser sessions and page reloads
 
@@ -18,7 +26,7 @@ This is a full-stack yoga studio booking application built with React, Express.j
 - **Multi-Mobile System**: Primary, secondary, and emergency mobile number fields with country code dropdowns
 - **Country Code Support**: 40+ international country codes with flag icons and proper validation rules
 - **Real-time Validation**: Instant feedback for mobile number formats, spam patterns, and length requirements  
-- **Verification Status**: Visual verification system with green checkmarks and status indicators
+- **Verification Status**: Email verification in Account Actions; per-mobile SMS verify UI removed (see Internal development notes)
 - **Profile Updates**: Complete profile editing with validation and error handling
 - **Responsive Design**: Mobile-optimized profile interface following design guidelines
 

@@ -6,14 +6,44 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/lib/auth';
+import { Badge } from '@/components/ui/badge';
+import { useAuth, getAuthHeaders } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Phone, Mail, Shield, Check, AlertTriangle, Heart, CalendarDays } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, Shield, AlertTriangle, Heart, CalendarDays } from 'lucide-react';
 import Navigation from '@/components/navigation';
 import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
 import { HealthUpdateSection } from '@/components/health-update-section';
 import { SessionHistory } from '@/components/session-history';
-import { queryClient } from '@/lib/queryClient';
+import { MIN_HEALTH_UPDATE_CHARS } from '@/lib/profile-constants';
+import { isAccountProfileComplete, type AccountProfileCheckInput } from '@shared/profileCompleteness';
+
+// Health document file upload is disabled (product POV — see HealthUpdateSection.tsx).
+// Previous implementation called POST /api/objects/upload and PUT /api/health-documents; restore when ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES is true in server/routes.ts.
+//
+// INTERNAL — SMS phone verify (Profile tab), not for end-user UI copy:
+// Phone number verification (SMS) is turned off for now. We still collect your numbers and check the format here; the extra step of confirming each number by text message is a form of gatekeeping we will only turn on when we reach the scale and stage where we need it.
+// Per-phone "Verify" buttons are omitted from the Profile form until then. Progress / context: replit.md → "Internal development notes".
+
+function validateRequiredMobile(
+  field: 'primaryMobile' | 'secondaryMobile' | 'emergencyMobile',
+  digits: string,
+  countryCode: string
+): { isValid: boolean; error: string } {
+  if (field === 'secondaryMobile' && !digits.trim()) {
+    return { isValid: true, error: '' };
+  }
+  if (field !== 'secondaryMobile' && !digits.trim()) {
+    return {
+      isValid: false,
+      error:
+        field === 'primaryMobile'
+          ? 'Primary mobile is required'
+          : 'Emergency contact mobile is required',
+    };
+  }
+  const v = validateMobileNumber(digits, countryCode);
+  return { isValid: v.isValid, error: v.error ?? '' };
+}
 
 // Standard scroll function - aligns carousel end with header bottom (64px) across all devices
 const scrollToSchedule = () => {
@@ -22,7 +52,7 @@ const scrollToSchedule = () => {
 };
 
 export default function MyAccount() {
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, logout, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -45,15 +75,8 @@ export default function MyAccount() {
     emergencyMobile: { isValid: true, error: '' },
   });
 
-  const [mobileVerification, setMobileVerification] = useState({
-    primaryMobile: false,
-    secondaryMobile: false,
-    emergencyMobile: false,
-  });
-
-  // Health update state
+  // Health update tab
   const [activeTab, setActiveTab] = useState('profile');
-  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
 
   // Health update handlers
   const handleHealthUpdateChange = (text: string) => {
@@ -63,39 +86,46 @@ export default function MyAccount() {
   // Wire health update to new API endpoint
   const handleHealthUpdateSave = async (healthData: { healthUpdateText: string; healthDocumentUrls: string[] }) => {
     if (!user?.id) return;
-    
+
+    const trimmed = healthData.healthUpdateText.trim();
+    if (trimmed.length < MIN_HEALTH_UPDATE_CHARS) {
+      toast({
+        title: "Health update too short",
+        description: `Please enter at least ${MIN_HEALTH_UPDATE_CHARS} characters (describe your situation or write that you have no current concerns).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch(`/api/users/${user.id}/health-update`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          ...getAuthHeaders(),
         },
-        body: JSON.stringify(healthData)
+        body: JSON.stringify(healthData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save health update');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || 'Failed to save health update');
       }
 
-      const result = await response.json();
-      
-      // Update local state with saved data
-      setProfileData(prev => ({
+      await response.json().catch(() => ({}));
+
+      setProfileData((prev) => ({
         ...prev,
         healthUpdateText: healthData.healthUpdateText,
-        healthDocumentUrls: healthData.healthDocumentUrls
+        healthDocumentUrls: healthData.healthDocumentUrls,
       }));
 
-      // Refresh auth state to update profile completion status immediately
-      await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      await queryClient.refetchQueries({ queryKey: ['/api/auth/me'] });
+      await refreshUser();
 
       toast({
-        title: "Health Update Saved",
-        description: "Your health information has been saved successfully. Your profile is now complete!",
+        title: 'Health update saved',
       });
     } catch (error) {
       console.error('Health update error:', error);
@@ -109,95 +139,6 @@ export default function MyAccount() {
     }
   };
 
-  const handleDocumentUpload = async (files: FileList) => {
-    setIsUploadingDocument(true);
-    try {
-      const uploadedUrls: string[] = [];
-      
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        console.log(`Uploading file: ${file.name}, size: ${file.size} bytes`);
-        
-        // Get presigned upload URL from server
-        const uploadResponse = await fetch('/api/objects/upload', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          }
-        });
-        
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to get upload URL');
-        }
-        
-        const { uploadURL } = await uploadResponse.json();
-        
-        // Upload file directly to object storage
-        const fileUploadResponse = await fetch(uploadURL, {
-          method: 'PUT',
-          body: file,
-          headers: {
-            'Content-Type': file.type,
-          }
-        });
-        
-        if (!fileUploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name}`);
-        }
-        
-        // Configure ACL for the uploaded document
-        const aclResponse = await fetch('/api/health-documents', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          },
-          body: JSON.stringify({
-            healthDocumentURL: uploadURL.split('?')[0] // Remove query params
-          })
-        });
-        
-        if (!aclResponse.ok) {
-          throw new Error('Failed to configure document access');
-        }
-        
-        const { objectPath } = await aclResponse.json();
-        uploadedUrls.push(objectPath);
-      }
-      
-      setProfileData(prev => ({
-        ...prev,
-        healthDocumentUrls: [...prev.healthDocumentUrls, ...uploadedUrls]
-      }));
-      
-      toast({
-        title: "Documents Uploaded Successfully",
-        description: `${files.length} document(s) uploaded to your health profile.`,
-      });
-    } catch (error) {
-      console.error('Document upload error:', error);
-      toast({
-        title: "Upload Failed",
-        description: "Unable to upload documents. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsUploadingDocument(false);
-    }
-  };
-
-  const handleDocumentDelete = (urlToDelete: string) => {
-    setProfileData(prev => ({
-      ...prev,
-      healthDocumentUrls: prev.healthDocumentUrls.filter(url => url !== urlToDelete)
-    }));
-    
-    toast({
-      title: "Document Removed",
-      description: "Document has been removed from your health profile.",
-    });
-  };
-
   // Redirect if not logged in
   useEffect(() => {
     if (!user) {
@@ -208,7 +149,7 @@ export default function MyAccount() {
   // Load user data when component mounts
   useEffect(() => {
     if (user) {
-      setProfileData({
+      const next = {
         name: user.name || '',
         primaryMobile: user.primaryMobile || '',
         primaryMobileCountryCode: user.primaryMobileCountryCode || '+91',
@@ -218,78 +159,74 @@ export default function MyAccount() {
         emergencyMobileCountryCode: user.emergencyMobileCountryCode || '+91',
         healthUpdateText: user.healthUpdateText || '',
         healthDocumentUrls: user.healthDocumentUrls || [],
+      };
+      setProfileData(next);
+      setMobileValidation({
+        primaryMobile: validateRequiredMobile(
+          'primaryMobile',
+          formatMobileNumber(next.primaryMobile),
+          next.primaryMobileCountryCode
+        ),
+        secondaryMobile: validateRequiredMobile(
+          'secondaryMobile',
+          formatMobileNumber(next.secondaryMobile),
+          next.secondaryMobileCountryCode
+        ),
+        emergencyMobile: validateRequiredMobile(
+          'emergencyMobile',
+          formatMobileNumber(next.emergencyMobile),
+          next.emergencyMobileCountryCode
+        ),
       });
     }
   }, [user]);
 
   const handleInputChange = (field: string, value: string) => {
-    // Format mobile numbers to only contain digits
-    if (field.includes('Mobile') && field !== 'primaryMobileCountryCode' && field !== 'secondaryMobileCountryCode' && field !== 'emergencyMobileCountryCode') {
-      value = formatMobileNumber(value);
+    let nextValue = value;
+    if (
+      field.includes('Mobile') &&
+      field !== 'primaryMobileCountryCode' &&
+      field !== 'secondaryMobileCountryCode' &&
+      field !== 'emergencyMobileCountryCode'
+    ) {
+      nextValue = formatMobileNumber(value);
     }
 
-    setProfileData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setProfileData((prev) => {
+      const next = { ...prev, [field]: nextValue };
 
-    // Validate mobile numbers in real-time
-    if (field === 'primaryMobile' || field === 'secondaryMobile' || field === 'emergencyMobile') {
-      const countryCodeField = field + 'CountryCode';
-      const countryCode = profileData[countryCodeField as keyof typeof profileData] as string;
-      const validation = validateMobileNumber(value, countryCode);
-      
-      setMobileValidation(prev => ({
-        ...prev,
-        [field]: validation
-      }));
-      
-      // Reset verification status when number changes
-      if (value !== (user as any)?.[field]) {
-        setMobileVerification(prev => ({
-          ...prev,
-          [field]: false
-        }));
+      if (field === 'primaryMobile' || field === 'secondaryMobile' || field === 'emergencyMobile') {
+        const ccKey =
+          field === 'primaryMobile'
+            ? 'primaryMobileCountryCode'
+            : field === 'secondaryMobile'
+              ? 'secondaryMobileCountryCode'
+              : 'emergencyMobileCountryCode';
+        const cc = next[ccKey as keyof typeof next] as string;
+        const validation = validateRequiredMobile(
+          field as 'primaryMobile' | 'secondaryMobile' | 'emergencyMobile',
+          nextValue,
+          cc
+        );
+        setMobileValidation((mv) => ({ ...mv, [field]: validation }));
       }
-    }
+
+      return next;
+    });
   };
 
   const handleCountryCodeChange = (field: string, value: string) => {
-    setProfileData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-
-    // Re-validate mobile number with new country code
-    const mobileField = field.replace('CountryCode', '');
-    const mobileNumber = profileData[mobileField as keyof typeof profileData] as string;
-    if (mobileNumber) {
-      const validation = validateMobileNumber(mobileNumber, value);
-      setMobileValidation(prev => ({
-        ...prev,
-        [mobileField]: validation
-      }));
-    }
-  };
-
-  const handleVerifyMobile = async (field: 'primaryMobile' | 'secondaryMobile' | 'emergencyMobile') => {
-    // Mock verification - in real app this would send SMS and verify
-    toast({
-      title: "Verification Sent",
-      description: `A verification code has been sent to your ${field.replace('Mobile', '').toLowerCase()} mobile number.`,
+    setProfileData((prev) => {
+      const next = { ...prev, [field]: value };
+      const mobileField = field.replace('CountryCode', '') as
+        | 'primaryMobile'
+        | 'secondaryMobile'
+        | 'emergencyMobile';
+      const digits = formatMobileNumber((next[mobileField] as string) || '');
+      const validation = validateRequiredMobile(mobileField, digits, value);
+      setMobileValidation((mv) => ({ ...mv, [mobileField]: validation }));
+      return next;
     });
-    
-    // Simulate verification after 2 seconds
-    setTimeout(() => {
-      setMobileVerification(prev => ({
-        ...prev,
-        [field]: true
-      }));
-      toast({
-        title: "Mobile Verified",
-        description: `Your ${field.replace('Mobile', '').toLowerCase()} mobile number has been verified successfully.`,
-      });
-    }, 2000);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -351,11 +288,10 @@ export default function MyAccount() {
       return;
     }
 
-    // Validate health update - mandatory for profile completion
-    if (!profileData.healthUpdateText.trim()) {
+    if (profileData.healthUpdateText.trim().length < MIN_HEALTH_UPDATE_CHARS) {
       toast({
         title: "Health Update Required",
-        description: "Please provide a health update. Enter 'None' if no health concerns to share.",
+        description: `Please add at least ${MIN_HEALTH_UPDATE_CHARS} characters in the Health Update tab (e.g. current conditions or "No current concerns").`,
         variant: "destructive",
       });
       setActiveTab('health');
@@ -386,6 +322,22 @@ export default function MyAccount() {
 
   const handleBookingClick = scrollToSchedule;
 
+  const mergedForStatus: AccountProfileCheckInput = {
+    emailVerified: Boolean(user?.emailVerified),
+    name: profileData.name,
+    primaryMobile: profileData.primaryMobile,
+    primaryMobileCountryCode: profileData.primaryMobileCountryCode,
+    secondaryMobile: profileData.secondaryMobile,
+    secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
+    emergencyMobile: profileData.emergencyMobile,
+    emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
+    healthUpdateText: profileData.healthUpdateText,
+  };
+
+  const isBookingReady = isAccountProfileComplete(mergedForStatus);
+
+  const profileSubmitLabel = isBookingReady ? 'Update Profile' : 'Complete Profile';
+
   if (!user) {
     return null; // Will redirect in useEffect
   }
@@ -412,6 +364,15 @@ export default function MyAccount() {
             
             <h1 className="text-3xl font-bold text-primary mb-2">My Account</h1>
             <p className="text-purple-600">Manage your profile and contact information</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">Profile status:</span>
+              <Badge
+                variant={isBookingReady ? "default" : "secondary"}
+                className={isBookingReady ? "bg-green-700 hover:bg-green-700" : "bg-amber-100 text-amber-900 hover:bg-amber-100"}
+              >
+                {isBookingReady ? "Complete" : "Incomplete"}
+              </Badge>
+            </div>
           </div>
 
           {/* Tabbed Interface */}
@@ -535,24 +496,6 @@ export default function MyAccount() {
                         </div>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => handleVerifyMobile('primaryMobile')}
-                      disabled={!profileData.primaryMobile || !mobileValidation.primaryMobile.isValid || mobileVerification.primaryMobile}
-                      variant={mobileVerification.primaryMobile ? "outline" : "default"}
-                      className={`px-4 py-2 text-sm font-bold ${
-                        mobileVerification.primaryMobile 
-                          ? 'border-green-500 text-green-600 bg-green-50' 
-                          : 'bg-primary text-white hover:bg-primary/90'
-                      }`}
-                      data-testid="verify-primary-mobile"
-                    >
-                      {mobileVerification.primaryMobile ? (
-                        <><Check className="h-4 w-4 mr-1" />Verified</>
-                      ) : (
-                        'Verify'
-                      )}
-                    </Button>
                   </div>
                 </div>
 
@@ -596,24 +539,6 @@ export default function MyAccount() {
                         </div>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => handleVerifyMobile('secondaryMobile')}
-                      disabled={!profileData.secondaryMobile || !mobileValidation.secondaryMobile.isValid || mobileVerification.secondaryMobile}
-                      variant={mobileVerification.secondaryMobile ? "outline" : "default"}
-                      className={`px-4 py-2 text-sm font-bold ${
-                        mobileVerification.secondaryMobile 
-                          ? 'border-green-500 text-green-600 bg-green-50' 
-                          : 'bg-primary text-white hover:bg-primary/90'
-                      }`}
-                      data-testid="verify-secondary-mobile"
-                    >
-                      {mobileVerification.secondaryMobile ? (
-                        <><Check className="h-4 w-4 mr-1" />Verified</>
-                      ) : (
-                        'Verify'
-                      )}
-                    </Button>
                   </div>
                 </div>
 
@@ -659,24 +584,6 @@ export default function MyAccount() {
                         </div>
                       )}
                     </div>
-                    <Button
-                      type="button"
-                      onClick={() => handleVerifyMobile('emergencyMobile')}
-                      disabled={!profileData.emergencyMobile || !mobileValidation.emergencyMobile.isValid || mobileVerification.emergencyMobile}
-                      variant={mobileVerification.emergencyMobile ? "outline" : "default"}
-                      className={`px-4 py-2 text-sm font-bold ${
-                        mobileVerification.emergencyMobile 
-                          ? 'border-green-500 text-green-600 bg-green-50' 
-                          : 'bg-primary text-white hover:bg-primary/90'
-                      }`}
-                      data-testid="verify-emergency-mobile"
-                    >
-                      {mobileVerification.emergencyMobile ? (
-                        <><Check className="h-4 w-4 mr-1" />Verified</>
-                      ) : (
-                        'Verify'
-                      )}
-                    </Button>
                   </div>
                 </div>
 
@@ -688,7 +595,7 @@ export default function MyAccount() {
                     className="w-full bg-primary text-white px-8 py-4 rounded-full font-bold hover:bg-primary/90"
                     data-testid="update-profile-button"
                   >
-                    {isLoading ? 'Updating...' : 'Update Profile'}
+                    {isLoading ? 'Updating...' : profileSubmitLabel}
                   </Button>
                 </div>
               </form>
@@ -736,10 +643,8 @@ export default function MyAccount() {
                 healthUpdateText={profileData.healthUpdateText}
                 healthDocumentUrls={profileData.healthDocumentUrls}
                 onHealthUpdateChange={handleHealthUpdateChange}
-                onDocumentUpload={handleDocumentUpload}
-                onDocumentDelete={handleDocumentDelete}
                 onSave={handleHealthUpdateSave}
-                isLoading={isUploadingDocument || isLoading}
+                isLoading={isLoading}
               />
             </TabsContent>
 

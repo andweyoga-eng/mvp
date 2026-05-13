@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { AuthHoverPopup } from "@/components/auth-hover-popup";
 import { useToast } from "@/hooks/use-toast";
+import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -18,20 +19,16 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Check profile completeness
-  const isProfileComplete = user ? 
-    user.healthUpdateText && 
-    user.healthUpdateText.trim().length >= 10 && 
-    user.emailVerified : false;
+  const isProfileComplete = isAuthUserProfileComplete(user);
 
   const handleBookingClick = () => {
     if (user && !isProfileComplete) {
       toast({
         title: "Profile Incomplete",
-        description: "Please complete your health profile before booking sessions.",
+        description: "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
         variant: "destructive",
       });
-      setLocation('/my-account?tab=health');
+      setLocation('/my-account');
       return;
     }
     onBookingClick();

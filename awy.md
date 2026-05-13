@@ -1,0 +1,102 @@
+# awy — andWeYoga MVP change log and decisions
+
+Internal tracking document for engineering and product. Update this file when you ship meaningful changes so the baseline stays explainable.
+
+---
+
+## Highlights (what matters most)
+
+- **Profile completion is one rule everywhere.** Mandatory profile fields (verified email, name, valid primary and emergency mobiles, optional secondary if filled) plus health text (minimum length) must all pass before the account is “complete.” Order of filling Profile vs Health no longer matters for status, booking, or nav CTAs.
+- **Server is source of truth for `profile_completion_status`.** Health-only saves no longer mark the profile complete. `/api/auth/me` reconciles stored status on read so older bad rows self-correct.
+- **Booking is aligned with that rule.** `POST /api/bookings` returns 409 when the full account profile is incomplete, not only when health text is short.
+- **Auth after login loads the full user** from `/api/auth/me` (cookie and optional Bearer) so the client always has mobiles, health fields, and completion status.
+- **Health document uploads are off in product** until object storage and routes are ready; UI and server routes are gated behind a single flag. Users are directed to email for detailed reports where applicable.
+- **SMS “verify phone” on Profile is removed from the UI** for now; numbers are still collected and format-validated. Rationale lives in **dev comments** (`client/src/pages/my-account.tsx`) and **`replit.md`** — not in user-facing copy.
+- **Secrets stay out of git.** `.env` and common local variants are listed in `.gitignore`.
+
+---
+
+## Detailed changes (by area)
+
+### Environment and local dev
+
+- Load env early (e.g. `dotenv` at server entry) so local runs behave predictably.
+- Local database URL should use the **public** Postgres host, not internal-only Railway hostnames, when developing off the hosted network.
+- Port and listen options adjusted for local compatibility (avoid platform-unsupported socket options where needed).
+
+### Authentication
+
+- **Google OAuth / cookie flow:** Local redirect uses **http** for localhost where appropriate; after redirect with `loginSuccess=true`, the client **refetches** the session user when there is no token in the URL.
+- **Email login:** After successful login, **fetch full profile** from `/api/auth/me` instead of relying on a minimal JSON user payload, so completion and booking logic see real data.
+- Logout clears cookie (and local token when used).
+
+### Profile completion and booking (bug fix + product rule)
+
+- **Shared module:** `shared/profileCompleteness.ts` — `isAccountProfileComplete`, `computeProfileCompletionStatus`, `getAccountProfileIncompleteReasons`, `MIN_HEALTH_UPDATE_CHARS`.
+- **Shared mobile validation:** `shared/mobile-validation.ts`; client re-exports from `@/lib/mobile-validation` so client and server share the same digit and spam-pattern rules.
+- **Server:** `PATCH /api/users/:id/health-update` sets completion from **merged** user + new health fields. `PUT /api/auth/profile` runs **`recomputeProfileCompletionStatus`** after update. **`GET /api/auth/me`** runs the same recompute before responding. **`POST /api/bookings`** blocks incomplete accounts with **409** and an updated message/redirect.
+- **Storage:** `recomputeProfileCompletionStatus`; admin “users with completeness” uses the same full-account definition for `isComplete` and flags.
+- **Client:** `client/src/lib/account-profile-complete.ts` wraps the shared check for auth `user`. **Navigation**, **classes-section**, **booking-modal** use it instead of health-only checks. **My Account** uses merged form state for “Complete Profile” vs “Update Profile” and shows **Profile status: Complete / Incomplete** from the same rule.
+
+### Health updates and documents
+
+- In-app **file upload UI removed** or disabled by product decision; help copy and toasts adjusted (e.g. health save toast title).
+- **Server:** `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES` in `server/routes.ts` — when `false`, upload/object routes for health documents are not registered. When `true`, S3-compatible path can be used (`server/s3HealthStorage.ts`, `server/objectStorage.ts`, `.env.example` variables).
+- Verbatim support email line for reports as specified by product (see `HealthUpdateSection` / related copy).
+
+### Profile tab — SMS verification
+
+- Per-number **Verify** buttons (mock SMS) **removed** from the Profile form.
+- **Internal only:** full rationale in file header comments in `client/src/pages/my-account.tsx` and in **`replit.md`** under internal development notes — **not** shown as an alert to end users.
+
+### Repository hygiene
+
+- **`.gitignore`:** `.env`, `.env.local`, `.env.*.local` so secrets are not committed by mistake.
+
+---
+
+## Key decisions (short rationale)
+
+| Topic | Decision | Rationale |
+|--------|-----------|-----------|
+| Profile “complete” | Single definition across DB, API, booking, and UI | Avoid contradictory UX (e.g. health saved → nav said complete while mobiles empty). |
+| Reconcile on `/api/auth/me` | Yes | Fixes legacy rows where `profile_completion_status` was wrong without a one-off migration. |
+| Health uploads | Off until flag + infra | Reduce local breakage and cost; product prefers email path until scale. |
+| SMS verify on Profile | Off for now | Gatekeeping step deferred until product and SMS infra justify it; numbers still validated. |
+| `.env` in git | Never | Security and environment-specific config. |
+
+---
+
+## Future work (backlog — not committed here)
+
+- **SMS OTP verification:** Restore Profile UI and wire real SMS provider; enforce “verified” flags in schema/API if product requires it beyond format validation.
+- **Health documents at scale:** Set `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = true`, configure `OBJECT_STORAGE` / S3-compatible env, restore upload UX in `HealthUpdateSection` per comments in code.
+- **Optional:** One-time SQL migration to backfill `profile_completion_status` from rules if you ever want to stop recomputing on every `/me` read (recompute is cheap but not mandatory forever).
+- **Optional:** Expand login JSON to return full user again if you ever need login without a follow-up `/me` (current pattern is fetch after login).
+
+---
+
+## Primary files touched (reference)
+
+| Area | Paths |
+|------|--------|
+| Completion rules | `shared/profileCompleteness.ts`, `shared/mobile-validation.ts` |
+| API / booking | `server/routes.ts` |
+| Persistence / admin completeness | `server/storage.ts` |
+| Object storage | `server/objectStorage.ts`, `server/s3HealthStorage.ts`, `.env.example` |
+| Auth client | `client/src/components/auth-provider.tsx`, `client/src/lib/auth.ts` |
+| Profile / health UI | `client/src/pages/my-account.tsx`, `client/src/components/health-update-section.tsx` |
+| Booking / nav | `client/src/components/navigation.tsx`, `client/src/components/classes-section.tsx`, `client/src/components/booking-modal.tsx` |
+| Helpers | `client/src/lib/account-profile-complete.ts`, `client/src/lib/profile-constants.ts` |
+| Internal docs | `replit.md`, **`awy.md` (this file)** |
+| Ignore secrets | `.gitignore` |
+
+---
+
+## How to use this file
+
+1. After a meaningful merge or release, append a dated subsection under **Detailed changes** or add bullets to **Highlights** if the change is user-visible or architecturally important.
+2. Move items from **Future work** into **Detailed changes** when shipped, and add new backlog items as they are agreed.
+3. Keep user-facing marketing copy out of this file if you prefer; this is for **engineering and product alignment**.
+
+_Last updated: tracking document created for current MVP baseline._

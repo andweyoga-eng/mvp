@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -126,8 +128,9 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+  // Default 3000: macOS often reserves 5000 for AirPlay Receiver; 5000 is also easy to leave occupied by a stray dev server.
+  const port = parseInt(process.env.PORT || "3000", 10);
+  server.listen({ port, host: "0.0.0.0" }, () => {
     log(`🚀 andWeYoga server running on port ${port}`);
     log(`🔒 Security mode: ${process.env.NODE_ENV || 'development'}`);
   });

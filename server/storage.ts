@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { computeProfileCompletionStatus, isAccountProfileComplete, getAccountProfileIncompleteReasons, MIN_HEALTH_UPDATE_CHARS } from "@shared/profileCompleteness";
 
 // Profile completeness interface for admin console
 export interface ProfileCompleteness {
@@ -48,6 +49,8 @@ export interface IStorage {
     profileCompletionStatus: string;
     healthUpdateLastModified: string;
   }): Promise<User | undefined>;
+  /** Re-reads user, sets profile_completion_status from mandatory profile + health rules */
+  recomputeProfileCompletionStatus(id: string): Promise<User | undefined>;
   verifyUserEmail(id: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   findUserByEmail(email: string): Promise<User | undefined>;
@@ -329,6 +332,26 @@ export class DatabaseStorage implements IStorage {
       return user || undefined;
     } catch (error) {
       console.error('[DB] Error updating user health data:', error);
+      return undefined;
+    }
+  }
+
+  async recomputeProfileCompletionStatus(id: string): Promise<User | undefined> {
+    try {
+      const user = await this.getUser(id);
+      if (!user) return undefined;
+      const next = computeProfileCompletionStatus(user);
+      if (user.profileCompletionStatus === next) {
+        return user;
+      }
+      const [row] = await db
+        .update(users)
+        .set({ profileCompletionStatus: next, updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+      return row || undefined;
+    } catch (error) {
+      console.error("[DB] Error recomputing profile completion:", error);
       return undefined;
     }
   }
@@ -659,30 +682,30 @@ export class DatabaseStorage implements IStorage {
 
   // Profile completeness calculation helper
   private calculateProfileCompleteness(user: User): ProfileCompleteness {
-    const healthUpdateComplete = user.healthUpdateText ? user.healthUpdateText.trim().length >= 10 : false;
+    const healthUpdateComplete =
+      (user.healthUpdateText ?? "").trim().length >= MIN_HEALTH_UPDATE_CHARS;
     const documentsComplete = user.healthDocumentUrls ? user.healthDocumentUrls.length > 0 : false;
     const emailVerified = user.emailVerified || false;
-    
-    // Calculate completion percentage
-    const checks = [healthUpdateComplete, documentsComplete, emailVerified];
+
+    const isComplete = isAccountProfileComplete(user);
+
+    const checks = [isComplete, documentsComplete];
     const completedChecks = checks.filter(Boolean).length;
     const completionPercentage = Math.round((completedChecks / checks.length) * 100);
-    
-    const isComplete = healthUpdateComplete && emailVerified; // Documents are optional but recommended
-    
-    // Generate flags for incomplete items
+
     const flags: string[] = [];
-    if (!healthUpdateComplete) flags.push('Missing health update (minimum 10 characters)');
-    if (!documentsComplete) flags.push('No health documents uploaded');
-    if (!emailVerified) flags.push('Email not verified');
-    
+    if (!isComplete) {
+      flags.push(...getAccountProfileIncompleteReasons(user));
+    }
+    if (!documentsComplete) flags.push("No health documents uploaded");
+
     return {
       isComplete,
       healthUpdateComplete,
       documentsComplete,
       emailVerified,
       completionPercentage,
-      flags
+      flags,
     };
   }
 }

@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth, getAuthHeaders } from "@/lib/auth";
 import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, FileText, User } from "lucide-react";
 import type { ClassType, Class } from "@shared/schema";
 
@@ -37,20 +39,21 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Check profile completeness
-  const isProfileComplete = user ? 
-    user.healthUpdateText && 
-    user.healthUpdateText.trim().length >= 10 && 
-    user.emailVerified : false;
+  const isProfileComplete = isAuthUserProfileComplete(user);
 
   const getProfileIssues = () => {
     if (!user) return [];
-    const issues = [];
-    if (!user.emailVerified) issues.push("Email not verified");
-    if (!user.healthUpdateText || user.healthUpdateText.trim().length < 10) {
-      issues.push("Health update required (minimum 10 characters)");
-    }
-    return issues;
+    return getAccountProfileIncompleteReasons({
+      emailVerified: user.emailVerified,
+      name: user.name,
+      primaryMobile: user.primaryMobile,
+      primaryMobileCountryCode: user.primaryMobileCountryCode,
+      secondaryMobile: user.secondaryMobile,
+      secondaryMobileCountryCode: user.secondaryMobileCountryCode,
+      emergencyMobile: user.emergencyMobile,
+      emergencyMobileCountryCode: user.emergencyMobileCountryCode,
+      healthUpdateText: user.healthUpdateText,
+    });
   };
 
   // Fetch class types for dropdown
@@ -90,7 +93,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
           throw {
             status: 409,
             requiresHealthUpdate: true,
-            redirectTo: errorData.redirectTo || '/my-account?tab=health',
+            redirectTo: errorData.redirectTo || '/my-account',
             message: errorData.message || 'Health profile required',
             code: errorData.code || 'profile_incomplete'
           };
@@ -122,13 +125,13 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
         
         toast({
           title: "Profile Incomplete",
-          description: "Please complete your health profile to book sessions.",
+          description: "Please complete your profile (name, mobiles, verified email, and health update) to book sessions.",
           variant: "destructive",
         });
         
         // Redirect to profile page with health tab
         setTimeout(() => {
-          setLocation(error.redirectTo || '/my-account?tab=health');
+          setLocation(error.redirectTo || '/my-account');
         }, 100);
         
         return;
@@ -158,13 +161,12 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
       
       toast({
         title: "Profile Incomplete",
-        description: "Please complete your health profile before booking sessions.",
+        description: "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
         variant: "destructive",
       });
       
-      // Redirect to profile page with health tab
       setTimeout(() => {
-        setLocation('/my-account?tab=health');
+        setLocation('/my-account');
       }, 100);
       
       return;
@@ -184,7 +186,7 @@ export default function BookingModal({ isOpen, onClose, selectedClassId }: Booki
 
   const handleGoToProfile = () => {
     onClose();
-    setLocation('/my-account?tab=health');
+    setLocation('/my-account');
   };
 
 

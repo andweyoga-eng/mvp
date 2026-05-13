@@ -1,19 +1,25 @@
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useToast } from '@/hooks/use-toast';
-import { Heart, Upload, FileText, AlertCircle, CheckCircle2, Download, Trash2 } from 'lucide-react';
+import { Heart, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { MIN_HEALTH_UPDATE_CHARS } from '@/lib/profile-constants';
+
+/**
+ * PRODUCT OWNER (POV) — Health document **file upload** is intentionally turned off until we
+ * pick an object-storage provider (S3 / R2 / etc.) and need in-app uploads at that scale of
+ * operations. Until then, members are asked to email detailed reports. To re-enable uploads:
+ * set `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES` in `server/routes.ts`, restore the upload/delete
+ * handlers in `my-account.tsx`, and add back the file UI block that lived below the health
+ * textarea (git history / prior commits).
+ */
 
 interface HealthUpdateProps {
   healthUpdateText: string;
+  /** Kept so “Save health update” still persists any URLs already stored in the DB. */
   healthDocumentUrls: string[];
   onHealthUpdateChange: (text: string) => void;
-  onDocumentUpload: (files: FileList) => void;
-  onDocumentDelete: (url: string) => void;
   onSave: (healthData: { healthUpdateText: string; healthDocumentUrls: string[] }) => Promise<void>;
   isLoading: boolean;
 }
@@ -22,86 +28,11 @@ export function HealthUpdateSection({
   healthUpdateText,
   healthDocumentUrls,
   onHealthUpdateChange,
-  onDocumentUpload,
-  onDocumentDelete,
   onSave,
-  isLoading
+  isLoading,
 }: HealthUpdateProps) {
-  const { toast } = useToast();
-  const [dragActive, setDragActive] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFiles(e.dataTransfer.files);
-    }
-  };
-
-  const handleFiles = (files: FileList) => {
-    // Validate file types and sizes
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png', 
-      'image/tiff',
-      'image/bmp',
-      'image/gif',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword'
-    ];
-
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const maxFiles = 3;
-
-    if (healthDocumentUrls.length + files.length > maxFiles) {
-      toast({
-        title: "File Limit Exceeded",
-        description: `You can upload a maximum of ${maxFiles} health documents.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Invalid File Type",
-          description: `${file.name} is not a supported format. Please upload PDF, JPEG, PNG, TIFF, BMP, GIF, DOC, or DOCX files.`,
-          variant: "destructive",
-        });
-        continue;
-      }
-
-      if (file.size > maxSize) {
-        toast({
-          title: "File Too Large",
-          description: `${file.name} exceeds the 10MB size limit.`,
-          variant: "destructive",
-        });
-        continue;
-      }
-    }
-
-    onDocumentUpload(files);
-  };
-
-  const isHealthUpdateValid = healthUpdateText.trim().length >= 1;
+  const trimmedHealth = healthUpdateText.trim();
+  const isHealthUpdateValid = trimmedHealth.length >= MIN_HEALTH_UPDATE_CHARS;
   const hasRequiredInfo = isHealthUpdateValid;
 
   return (
@@ -112,166 +43,55 @@ export function HealthUpdateSection({
           Health Update - Your Wellness Story
         </CardTitle>
         <CardDescription className="text-purple-700 font-medium">
-          🌟 <strong>Your wellbeing and safety are our topmost priority before you begin your yoga journey.</strong><br/>
+          🌟 <strong>Your wellbeing and safety are our topmost priority before you begin your yoga journey.</strong><br />
           Please share any health information that helps us create the perfect practice for you!
         </CardDescription>
       </CardHeader>
-      
+
       <CardContent className="p-6 space-y-6">
-        {/* Informative Message */}
         <Alert className="border-purple-200 bg-purple-50">
           <Heart className="h-4 w-4 text-purple-600" />
           <AlertDescription className="text-purple-800">
-            💝 <strong>Help us understand your unique wellness story!</strong> Share any recent surgeries, injuries, 
-            doctor recommendations, or physical considerations. If you have nothing specific to mention, 
-            simply enter <strong>'None'</strong> - we've got you covered!
+            💝 <strong>Help us understand your unique wellness story!</strong> Share any recent surgeries, injuries,
+            doctor recommendations, or physical considerations. If you have nothing specific to mention, copy and paste:{' '}
+            <strong>No current concerns</strong>.
           </AlertDescription>
         </Alert>
 
-        {/* Health Update Text Field - Mandatory */}
         <div className="space-y-2">
           <Label htmlFor="health-update" className="text-purple-800 font-bold">
             Health Update <span className="text-red-500">*</span>
           </Label>
           <Textarea
             id="health-update"
-            placeholder="Please share any health information, recent surgeries, injuries, doctor recommendations, or physical considerations. If nothing to share, enter 'None'."
+            placeholder='Share surgeries, injuries, doctor notes, or other considerations. If nothing to share, copy and paste this: No current concerns.'
             value={healthUpdateText}
             onChange={(e) => onHealthUpdateChange(e.target.value)}
-            className={`min-h-[120px] ${!isHealthUpdateValid && healthUpdateText.length > 0 ? 'border-red-500' : 'border-purple-200'} focus:border-purple-500`}
+            className={`min-h-[120px] ${trimmedHealth.length > 0 && !isHealthUpdateValid ? 'border-red-500' : 'border-purple-200'} focus:border-purple-500`}
             data-testid="health-update-text"
           />
-          {!isHealthUpdateValid && healthUpdateText.length > 0 && (
+          {trimmedHealth.length > 0 && !isHealthUpdateValid && (
             <p className="text-sm text-red-600 flex items-center gap-1">
               <AlertCircle className="h-4 w-4" />
-              Health update is required. Enter 'None' if no health concerns to share.
+              Enter at least {MIN_HEALTH_UPDATE_CHARS} characters — describe your situation, or copy and paste:{' '}
+              <span className="font-medium">No current concerns</span>.
             </p>
           )}
           {isHealthUpdateValid && (
             <p className="text-sm text-green-600 flex items-center gap-1">
               <CheckCircle2 className="h-4 w-4" />
-              Health update completed ✓
+              Health Updates ✓
             </p>
           )}
         </div>
 
-        {/* File Upload Section - Optional */}
-        <div className="space-y-4">
-          <Label className="text-purple-800 font-bold">
-            Medical Documents <span className="text-sm text-purple-600 font-normal">(Optional)</span>
-          </Label>
-          <p className="text-sm text-purple-600">
-            Upload any relevant medical documents, test results, or doctor's notes (PDF, JPEG, PNG, DOC, DOCX - Max 10MB each, up to 3 files)
-          </p>
-          
-          {/* Upload Area */}
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-              dragActive 
-                ? 'border-purple-500 bg-purple-50' 
-                : 'border-purple-200 hover:border-purple-400 hover:bg-purple-25'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            data-testid="file-upload-area"
-          >
-            <Upload className="h-12 w-12 text-purple-400 mx-auto mb-4" />
-            <div className="space-y-2">
-              <p className="text-purple-800 font-medium">
-                Drag and drop your medical documents here
-              </p>
-              <p className="text-sm text-purple-600">
-                or
-              </p>
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.tiff,.bmp,.gif,.doc,.docx"
-                onChange={(e) => e.target.files && handleFiles(e.target.files)}
-                className="hidden"
-                id="health-document-upload"
-                data-testid="file-input"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="border-purple-500 text-purple-700 hover:bg-purple-50"
-                onClick={() => document.getElementById('health-document-upload')?.click()}
-                disabled={isLoading}
-                data-testid="upload-button"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Choose Files
-              </Button>
-            </div>
-          </div>
+        <p
+          className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          data-testid="health-report-email-note"
+        >
+          Please send a detailed report, if any, to mudit@andweyoga.com
+        </p>
 
-          {/* Uploaded Documents List */}
-          {healthDocumentUrls.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-purple-800 font-medium">Uploaded Documents:</Label>
-              {healthDocumentUrls.map((url, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
-                >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-green-600" />
-                    <span className="text-sm text-green-800">
-                      Health Document {index + 1}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-green-700 hover:bg-green-100"
-                      onClick={async () => {
-                        try {
-                          const response = await fetch(url, {
-                            headers: {
-                              'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                            }
-                          });
-                          if (!response.ok) throw new Error('Download failed');
-                          const blob = await response.blob();
-                          const downloadUrl = window.URL.createObjectURL(blob);
-                          const a = document.createElement('a');
-                          a.href = downloadUrl;
-                          a.download = `health-document-${index + 1}`;
-                          document.body.appendChild(a);
-                          a.click();
-                          window.URL.revokeObjectURL(downloadUrl);
-                          document.body.removeChild(a);
-                        } catch (error) {
-                          console.error('Download error:', error);
-                        }
-                      }}
-                      data-testid={`download-document-${index}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600 hover:bg-red-100"
-                      onClick={() => onDocumentDelete(url)}
-                      data-testid={`delete-document-${index}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Save Button */}
         <div className="pt-4 border-t border-purple-200">
           <Button
             onClick={() => onSave({ healthUpdateText, healthDocumentUrls })}
@@ -285,23 +105,23 @@ export function HealthUpdateSection({
                 Saving Health Update...
               </div>
             ) : (
-              "Save Health Update"
+              'Save Health Update'
             )}
           </Button>
-          
+
           {!hasRequiredInfo && (
             <p className="text-sm text-orange-600 text-center mt-2">
-              Please complete the health update text to save your information.
+              Please enter at least {MIN_HEALTH_UPDATE_CHARS} characters in the health update above before saving.
             </p>
           )}
         </div>
 
-        {/* Completion Status - Only show after successful save */}
         {hasRequiredInfo && !isLoading && (
           <Alert className="border-blue-200 bg-blue-50">
             <CheckCircle2 className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
-              ✨ <strong>Ready to save!</strong> Click "Save Health Update" above to complete your health profile and enable session booking.
+              <strong>Ready to save.</strong> Click &quot;Save Health Update&quot; to store this section. Session booking still
+              requires a verified email and your personal details on the Profile tab.
             </AlertDescription>
           </Alert>
         )}

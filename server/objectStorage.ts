@@ -1,5 +1,5 @@
 import { Storage, File } from "@google-cloud/storage";
-import { Response } from "express";
+import type { Response } from "express";
 import { randomUUID } from "crypto";
 import {
   ObjectAclPolicy,
@@ -8,26 +8,80 @@ import {
   getObjectAclPolicy,
   setObjectAclPolicy,
 } from "./objectAcl";
+import {
+  assertS3Configured,
+  presignHealthDocumentPut,
+  s3UploadUrlToObjectPath,
+  streamS3HealthDocument,
+  userOwnsHealthDocumentPath,
+  verifyS3HealthObjectExists,
+} from "./s3HealthStorage";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
+export type HealthObjectStorageBackend = "s3" | "replit";
+
+let cachedBackend: HealthObjectStorageBackend | null = null;
+
+/**
+ * s3: S3-compatible bucket (AWS S3, Cloudflare R2, MinIO, etc.)
+ * replit: legacy Replit Object Storage + sidecar signed URLs
+ */
+export function getHealthObjectStorageBackend(): HealthObjectStorageBackend {
+  const explicit = (process.env.OBJECT_STORAGE || "").trim().toLowerCase();
+  if (explicit === "s3") {
+    assertS3Configured();
+    return "s3";
+  }
+  if (explicit === "replit") return "replit";
+
+  const hasS3 =
+    !!(process.env.S3_BUCKET || process.env.AWS_S3_BUCKET) &&
+    !!process.env.AWS_ACCESS_KEY_ID?.trim() &&
+    !!process.env.AWS_SECRET_ACCESS_KEY?.trim();
+  if (hasS3) {
+    assertS3Configured();
+    return "s3";
+  }
+
+  if (process.env.PRIVATE_OBJECT_DIR?.trim()) return "replit";
+
+  throw new Error(
+    "Object storage is not configured. Use S3-compatible storage (recommended): OBJECT_STORAGE=s3, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION; for Cloudflare R2 add S3_ENDPOINT and S3_FORCE_PATH_STYLE=true. Legacy Replit: OBJECT_STORAGE=replit and PRIVATE_OBJECT_DIR (Replit sidecar required)."
+  );
+}
+
+function backend(): HealthObjectStorageBackend {
+  if (!cachedBackend) {
+    cachedBackend = getHealthObjectStorageBackend();
+  }
+  return cachedBackend;
+}
+
+let replitGcsClient: Storage | null = null;
+
+function getReplitGcsClient(): Storage {
+  if (!replitGcsClient) {
+    replitGcsClient = new Storage({
+      credentials: {
+        audience: "replit",
+        subject_token_type: "access_token",
+        token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+        type: "external_account",
+        credential_source: {
+          url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+          format: {
+            type: "json",
+            subject_token_field_name: "access_token",
+          },
+        },
+        universe_domain: "googleapis.com",
       },
-    },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+      projectId: "",
+    });
+  }
+  return replitGcsClient;
+}
 
 export class ObjectNotFoundError extends Error {
   constructor() {
@@ -38,9 +92,10 @@ export class ObjectNotFoundError extends Error {
 }
 
 export class ObjectStorageService {
-  constructor() {}
-
   getPublicObjectSearchPaths(): Array<string> {
+    if (backend() === "s3") {
+      throw new Error("PUBLIC_OBJECT_SEARCH_PATHS is only used with Replit object storage.");
+    }
     const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
     const paths = Array.from(
       new Set(
@@ -60,6 +115,9 @@ export class ObjectStorageService {
   }
 
   getPrivateObjectDir(): string {
+    if (backend() === "s3") {
+      throw new Error("PRIVATE_OBJECT_DIR is only used with Replit object storage.");
+    }
     const dir = process.env.PRIVATE_OBJECT_DIR || "";
     if (!dir) {
       throw new Error(
@@ -74,7 +132,7 @@ export class ObjectStorageService {
     for (const searchPath of this.getPublicObjectSearchPaths()) {
       const fullPath = `${searchPath}/${filePath}`;
       const { bucketName, objectName } = parseObjectPath(fullPath);
-      const bucket = objectStorageClient.bucket(bucketName);
+      const bucket = getReplitGcsClient().bucket(bucketName);
       const file = bucket.file(objectName);
       const [exists] = await file.exists();
       if (exists) {
@@ -110,18 +168,23 @@ export class ObjectStorageService {
     }
   }
 
-  async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
+  /**
+   * Presigned PUT URL. For S3, `userId` is required (object key is scoped per user).
+   */
+  async getObjectEntityUploadURL(userId?: string): Promise<string> {
+    if (backend() === "s3") {
+      if (!userId) {
+        throw new Error("Authenticated user id is required for document uploads.");
+      }
+      const { uploadUrl } = await presignHealthDocumentPut(userId);
+      return uploadUrl;
     }
+
+    const privateObjectDir = this.getPrivateObjectDir();
     const objectId = randomUUID();
     const fullPath = `${privateObjectDir}/health-documents/${objectId}`;
     const { bucketName, objectName } = parseObjectPath(fullPath);
-    return signObjectURL({
+    return signReplitObjectURL({
       bucketName,
       objectName,
       method: "PUT",
@@ -130,6 +193,9 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {
+    if (backend() === "s3") {
+      throw new ObjectNotFoundError();
+    }
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
     }
@@ -144,7 +210,7 @@ export class ObjectStorageService {
     }
     const objectEntityPath = `${entityDir}${entityId}`;
     const { bucketName, objectName } = parseObjectPath(objectEntityPath);
-    const bucket = objectStorageClient.bucket(bucketName);
+    const bucket = getReplitGcsClient().bucket(bucketName);
     const objectFile = bucket.file(objectName);
     const [exists] = await objectFile.exists();
     if (!exists) {
@@ -154,6 +220,13 @@ export class ObjectStorageService {
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
+    if (backend() === "s3") {
+      if (rawPath.startsWith("https://") || rawPath.startsWith("http://")) {
+        return s3UploadUrlToObjectPath(rawPath);
+      }
+      return rawPath;
+    }
+
     if (!rawPath.startsWith("https://storage.googleapis.com/")) {
       return rawPath;
     }
@@ -164,7 +237,7 @@ export class ObjectStorageService {
       objectEntityDir = `${objectEntityDir}/`;
     }
     if (!rawObjectPath.startsWith(objectEntityDir)) {
-      return rawObjectPath;
+      return rawPath;
     }
     const entityId = rawObjectPath.slice(objectEntityDir.length);
     return `/objects/${entityId}`;
@@ -174,6 +247,19 @@ export class ObjectStorageService {
     rawPath: string,
     aclPolicy: ObjectAclPolicy
   ): Promise<string> {
+    if (backend() === "s3") {
+      const normalized = this.normalizeObjectEntityPath(rawPath);
+      if (!normalized.startsWith("/objects/health-documents/")) {
+        throw new Error("Invalid health document path");
+      }
+      if (!userOwnsHealthDocumentPath(normalized, aclPolicy.owner)) {
+        throw new Error("Upload does not belong to the signed-in user");
+      }
+      const key = normalized.replace(/^\/objects\//, "");
+      await verifyS3HealthObjectExists(key);
+      return normalized;
+    }
+
     const normalizedPath = this.normalizeObjectEntityPath(rawPath);
     if (!normalizedPath.startsWith("/")) {
       return normalizedPath;
@@ -198,6 +284,53 @@ export class ObjectStorageService {
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
   }
+
+  /** Download handler for GET /objects/... — supports S3 and Replit GCS. */
+  async serveObjectEntity(
+    reqPath: string,
+    userId: string | undefined,
+    res: Response
+  ): Promise<void> {
+    if (backend() === "s3") {
+      if (!userOwnsHealthDocumentPath(reqPath, userId)) {
+        res.status(401).json({ error: "Unauthorized access to document" });
+        return;
+      }
+      try {
+        await streamS3HealthDocument(reqPath, res);
+      } catch (e) {
+        console.error("S3 document stream error:", e);
+        if (!res.headersSent) {
+          res.status(404).json({ error: "Document not found" });
+        }
+      }
+      return;
+    }
+
+    try {
+      const objectFile = await this.getObjectEntityFile(reqPath);
+      const canAccess = await this.canAccessObjectEntity({
+        objectFile,
+        userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+
+      if (!canAccess) {
+        res.status(401).json({ error: "Unauthorized access to document" });
+        return;
+      }
+
+      await this.downloadObject(objectFile, res);
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        if (!res.headersSent) {
+          res.status(404).json({ error: "Document not found" });
+        }
+        return;
+      }
+      throw error;
+    }
+  }
 }
 
 function parseObjectPath(path: string): {
@@ -219,7 +352,7 @@ function parseObjectPath(path: string): {
   };
 }
 
-async function signObjectURL({
+async function signReplitObjectURL({
   bucketName,
   objectName,
   method,
@@ -248,8 +381,7 @@ async function signObjectURL({
   );
   if (!response.ok) {
     throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
+      `Failed to sign object URL (HTTP ${response.status}). Replit object storage requires the Replit sidecar. For Railway or local servers, configure S3-compatible storage (see OBJECT_STORAGE=s3).`
     );
   }
   const { signed_url: signedURL } = await response.json();

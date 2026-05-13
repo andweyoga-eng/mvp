@@ -156,7 +156,9 @@ export const updateProfileSchema = createInsertSchema(users).pick({
 
 // Health Update validation schema with mandatory text field
 export const healthUpdateSchema = z.object({
-  healthUpdateText: z.string().min(1, "Health update is required. Enter 'None' if no health concerns to share."),
+  healthUpdateText: z
+    .string()
+    .min(10, "Health update must be at least 10 characters (e.g. describe your situation or write 'No current concerns')."),
   healthDocumentUrls: z.array(z.string()).optional(),
 });
 

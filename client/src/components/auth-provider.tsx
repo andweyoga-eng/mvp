@@ -16,20 +16,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     
-    // Handle Google OAuth redirect with token
+    // Google OAuth: server sets httpOnly auth cookie and may redirect with only
+    // ?loginSuccess=true (no token in URL — intentional). Passport flow may still
+    // append ?token=... — support both.
     const oauthToken = urlParams.get('token');
     const loginSuccess = urlParams.get('loginSuccess');
-    
-    if (oauthToken && loginSuccess === 'true') {
-      // Store the OAuth token
-      setAuthToken(oauthToken);
-      // Clean up URL parameters
+
+    if (loginSuccess === 'true') {
+      if (oauthToken) {
+        setAuthToken(oauthToken);
+      }
       window.history.replaceState({}, document.title, window.location.pathname);
-      // Fetch user data with the new token
-      fetchUser();
-      toast({
-        title: "Login successful!",
-        description: "Welcome to andWeYoga!",
+      void fetchUser().then((ok) => {
+        if (ok) {
+          toast({
+            title: "Login successful!",
+            description: "Welcome to andWeYoga!",
+          });
+        }
       });
       return;
     }
@@ -53,19 +57,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [toast]);
 
-  const fetchUser = async () => {
+  /** Loads user from /api/auth/me using Bearer token (if any) and/or auth cookie. */
+  const fetchUser = async (): Promise<boolean> => {
     try {
       const response = await apiRequest('GET', '/api/auth/me', undefined, getAuthHeaders());
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        // Token is invalid, remove it
-        setAuthToken(null);
-      }
+      const userData = await response.json();
+      setUser(userData);
+      return true;
     } catch (error) {
       console.error('Failed to fetch user:', error);
       setAuthToken(null);
+      setUser(null);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -81,8 +84,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       const data = await response.json();
-      setAuthToken(data.token);
-      setUser(data.user);
+      if (data.token) {
+        setAuthToken(data.token);
+      }
+      const loaded = await fetchUser();
+      if (!loaded) {
+        throw new Error("Could not load your profile after login");
+      }
       
       toast({
         title: "Login successful",
@@ -150,12 +158,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = () => {
-    setAuthToken(null);
-    setUser(null);
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully.",
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
+      setAuthToken(null);
+      setUser(null);
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully.",
+      });
     });
+  };
+
+  const refreshUser = async () => {
+    await fetchUser();
   };
 
   const value = {
@@ -165,6 +179,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     logout,
     register,
     updateProfile,
+    refreshUser,
   };
 
   return (
