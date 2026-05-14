@@ -10,8 +10,11 @@ import { setupVite, serveStatic, log } from "./vite";
 // than silently using insecure defaults.
 // ============================================================
 function validateEnvironment() {
-  const required = ['JWT_SECRET', 'DATABASE_URL'];
+  const required = ['JWT_SECRET'];
   const missing = required.filter(key => !process.env[key]);
+  if (!process.env.DATABASE_URL?.trim() && !process.env.DATABASE_PUBLIC_URL?.trim()) {
+    missing.push('DATABASE_URL or DATABASE_PUBLIC_URL');
+  }
 
   if (missing.length > 0) {
     console.error('\n⛔ FATAL: Missing required environment variables:');

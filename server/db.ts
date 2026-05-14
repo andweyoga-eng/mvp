@@ -3,14 +3,26 @@ const { Pool } = pkg;
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '../shared/schema';
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    'DATABASE_URL must be set. Did you forget to provision a database?'
-  );
+/**
+ * Railway (and similar) often set DATABASE_URL to a private *.railway.internal host.
+ * That only resolves inside Railway's private network; some app deployments still get
+ * ENOTFOUND for that hostname. DATABASE_PUBLIC_URL is the TCP proxy URL and resolves
+ * reliably from the app container. Prefer it when set (Railway Postgres exposes both).
+ */
+function getDatabaseConnectionString(): string {
+  const pub = process.env.DATABASE_PUBLIC_URL?.trim();
+  const internal = process.env.DATABASE_URL?.trim();
+  const url = pub || internal;
+  if (!url) {
+    throw new Error(
+      'DATABASE_URL or DATABASE_PUBLIC_URL must be set. Did you forget to provision a database?'
+    );
+  }
+  return url;
 }
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: getDatabaseConnectionString(),
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
