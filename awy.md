@@ -13,10 +13,44 @@ Internal tracking document for engineering and product. Update this file when yo
 - **Health document uploads are off in product** until object storage and routes are ready; UI and server routes are gated behind a single flag. Users are directed to email for detailed reports where applicable.
 - **SMS “verify phone” on Profile is removed from the UI** for now; numbers are still collected and format-validated. Rationale lives in **dev comments** (`client/src/pages/my-account.tsx`) and **`replit.md`** — not in user-facing copy.
 - **Secrets stay out of git.** `.env` and common local variants are listed in `.gitignore`.
+- **Railway Postgres:** App prefers **`DATABASE_PUBLIC_URL`** over **`DATABASE_URL`** when both exist, so the web service avoids **`ENOTFOUND postgres.railway.internal`** when private DNS does not resolve from the container.
+
+---
+
+## Session log (dated)
+
+### 2026-05-14 — Railway production, OAuth, and database connectivity
+
+**Google OAuth on Railway vs custom domain**
+
+- `ALLOWED_ORIGIN` in `server/routes.ts` drives `googleOauthRedirectUri()` (host for `redirect_uri`). Value must be **hostname only** — no `https://`, no path (e.g. `mvp-production-….up.railway.app` while testing on Railway; later `andweyoga.com` for live).
+- If `ALLOWED_ORIGIN` is set to the production domain while testing on a Railway URL, Google redirects after login to the **wrong host**. Match `ALLOWED_ORIGIN` to the URL users actually open, and add the matching **Authorized JavaScript origins** and **Authorized redirect URIs** (`https://<host>/oauth2callback`) in Google Cloud Console.
+
+**Database: `ENOTFOUND postgres.railway.internal`**
+
+- Symptom: logs showed `getaddrinfo ENOTFOUND postgres.railway.internal` on DB calls; Google OAuth failed at callback with `Google OAuth callback error` because user lookup/create hits Postgres.
+- Cause: **`DATABASE_URL`** from Railway often points at a **private** `*.railway.internal` host; in this deploy that name did not resolve from the web container.
+- **Fix (shipped):** `server/db.ts` uses **`DATABASE_PUBLIC_URL` first**, then **`DATABASE_URL`**. `server/index.ts` startup accepts either variable. `drizzle.config.ts` uses the same preference for migrations.
+- **Railway configuration:** On the **web** service, add **`DATABASE_PUBLIC_URL`** via **variable reference** from the **Postgres** service (Railway exposes this as the public TCP URL). Redeploy after changing variables. Keeping Postgres’s `DATABASE_URL` reference on the web service is fine; the app prefers public when set.
+- Prefer the **full** connection string Railway shows for Postgres; do not arbitrarily strip query parameters (e.g. SSL-related) unless you understand the impact.
+
+**Deploy to Railway**
+
+- Connect repo and branch in Railway; **push** to GitHub (`git push origin <branch>`) triggers auto-deploy when enabled.
+- After deploy, confirm **Variables** (`DATABASE_PUBLIC_URL`, `ALLOWED_ORIGIN`, `JWT_SECRET`, etc.) and check **Deployments → Logs**.
+
+**Outcome:** Confirmed working in production after deploy and env updates.
 
 ---
 
 ## Detailed changes (by area)
+
+### Railway and production database
+
+- **`server/db.ts`:** Connection string = `DATABASE_PUBLIC_URL` || `DATABASE_URL`; production SSL keeps `rejectUnauthorized: false` for hosted Postgres.
+- **`server/index.ts`:** Env validation requires `JWT_SECRET` and at least one of `DATABASE_URL` or `DATABASE_PUBLIC_URL`.
+- **`drizzle.config.ts`:** Same URL resolution for Drizzle Kit / migrations.
+- **`.env.example`:** Documents `DATABASE_PUBLIC_URL` for Railway.
 
 ### Environment and local dev
 
@@ -64,6 +98,7 @@ Internal tracking document for engineering and product. Update this file when yo
 | Health uploads | Off until flag + infra | Reduce local breakage and cost; product prefers email path until scale. |
 | SMS verify on Profile | Off for now | Gatekeeping step deferred until product and SMS infra justify it; numbers still validated. |
 | `.env` in git | Never | Security and environment-specific config. |
+| Railway DB URL | Prefer `DATABASE_PUBLIC_URL` when Railway provides it | Private `*.railway.internal` in `DATABASE_URL` may not resolve from the app container; public TCP URL is reliable. |
 
 ---
 
@@ -90,6 +125,7 @@ Internal tracking document for engineering and product. Update this file when yo
 | Helpers | `client/src/lib/account-profile-complete.ts`, `client/src/lib/profile-constants.ts` |
 | Internal docs | `replit.md`, **`awy.md` (this file)** |
 | Ignore secrets | `.gitignore` |
+| DB / Drizzle | `server/db.ts`, `server/index.ts`, `drizzle.config.ts`, `.env.example` |
 
 ---
 
@@ -99,4 +135,4 @@ Internal tracking document for engineering and product. Update this file when yo
 2. Move items from **Future work** into **Detailed changes** when shipped, and add new backlog items as they are agreed.
 3. Keep user-facing marketing copy out of this file if you prefer; this is for **engineering and product alignment**.
 
-_Last updated: tracking document created for current MVP baseline._
+_Last updated: 2026-05-14 — Railway DB/OAuth session + `awy.md` session log._
