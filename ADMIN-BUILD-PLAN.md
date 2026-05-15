@@ -48,9 +48,15 @@ This is the execution order for admin backend work. Each slice should be deploya
 
 ### After deploy
 
+**Preferred** (avoids `drizzle-kit push` error `42P16 column "id" is in a primary key` on existing DBs):
+
 ```bash
-npm run db:push   # adds admin_users.password_hash
+npm run db:patch
 ```
+
+This applies SQL in `scripts/db/patches/` (e.g. `password_hash`, session link columns).
+
+`npm run db:push` may still fail on databases created before schema drift was resolved; use `db:patch` for incremental column adds.
 
 Set `ADMIN_INITIAL_PASSWORD` before first boot in a fresh DB, or reset hash via DB for existing admins.
 
