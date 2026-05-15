@@ -1,5 +1,7 @@
 # andWeYoga MVP — Admin features audit
 
+> **Building admin backend? Start with [`ADMIN-BUILD-PLAN.md`](./ADMIN-BUILD-PLAN.md)** — recommended slices and current sprint (auth → catalog CRUD → bookings UI).
+
 Internal reference for what the admin console can do today, what exists only on the API, and what is gated or not built. Use this before extending admin login, schedule management, and user operations.
 
 | Field | Value |

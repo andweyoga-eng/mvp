@@ -146,11 +146,8 @@ export default function AdminLogin() {
 
               <div className="pt-4 border-t border-gray-200">
                 <div className="text-center text-sm text-gray-500">
-                  <p>Default Admin Credentials:</p>
-                  <p className="font-mono text-xs mt-1">
-                    Email: admin@andweyoga.com<br />
-                    Password: admin123
-                  </p>
+                  <p>Access is limited to authorized administrators.</p>
+                  <p className="text-xs mt-1">Contact your system owner if you need an account.</p>
                 </div>
               </div>
             </CardContent>

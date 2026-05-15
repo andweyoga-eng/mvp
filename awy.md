@@ -6,6 +6,8 @@ Internal tracking document for engineering and product. Update this file when yo
 
 **Admin console audit:** see [`ADMIN-FEATURES-AUDIT.md`](./ADMIN-FEATURES-AUDIT.md) (enabled vs API-only vs future).
 
+**Admin build slices:** see [`ADMIN-BUILD-PLAN.md`](./ADMIN-BUILD-PLAN.md) (execution order; slice 1 = auth hardening).
+
 ---
 
 ## Highlights (what matters most)

@@ -51,6 +51,8 @@ export const classes = pgTable("classes", {
   date: timestamp("date").notNull(),
   maxCapacity: integer("max_capacity").notNull().default(20),
   currentBookings: integer("current_bookings").notNull().default(0),
+  googleMeetLink: text("google_meet_link"),
+  razorpayLink: text("razorpay_link"),
 });
 
 export const bookings = pgTable("bookings", {
@@ -112,6 +114,7 @@ export const auditLogs = pgTable("audit_logs", {
 export const adminUsers = pgTable("admin_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"),
   name: text("name").notNull(),
   role: varchar("role", { length: 20 }).notNull().default("admin"), // 'admin', 'super_admin'
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -156,9 +159,7 @@ export const updateProfileSchema = createInsertSchema(users).pick({
 
 // Health Update validation schema with mandatory text field
 export const healthUpdateSchema = z.object({
-  healthUpdateText: z
-    .string()
-    .min(10, "Health update must be at least 10 characters (e.g. describe your situation or write 'No current concerns')."),
+  healthUpdateText: z.string().min(1, "Health update is required. Enter 'None' if no health concerns to share."),
   healthDocumentUrls: z.array(z.string()).optional(),
 });
 
@@ -185,6 +186,7 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
 // Admin user schemas
 export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({
   id: true,
+  passwordHash: true,
   createdAt: true,
 });
 

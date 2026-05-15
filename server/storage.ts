@@ -26,6 +26,10 @@ import {
 import { db } from "./db";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { computeProfileCompletionStatus, isAccountProfileComplete, getAccountProfileIncompleteReasons, MIN_HEALTH_UPDATE_CHARS } from "@shared/profileCompleteness";
+import { hashPassword, verifyPassword } from "./auth";
+
+/** Legacy dev password — only used once to migrate rows missing password_hash (then rehashed). */
+const LEGACY_ADMIN_PASSWORD = "admin123";
 
 // Profile completeness interface for admin console
 export interface ProfileCompleteness {
@@ -89,7 +93,8 @@ export interface IStorage {
   // Admin Users
   getAdminByEmail(email: string): Promise<AdminUser | undefined>;
   getAdminById(id: string): Promise<AdminUser | undefined>;
-  createAdminUser(admin: InsertAdminUser): Promise<AdminUser>;
+  createAdminUser(admin: InsertAdminUser, passwordHash: string): Promise<AdminUser>;
+  updateAdminPasswordHash(id: string, passwordHash: string): Promise<AdminUser | undefined>;
   verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined>;
   getAllUsers(): Promise<User[]>;
   getUsersWithCompleteness(): Promise<(User & { completeness: ProfileCompleteness })[]>;
@@ -227,17 +232,27 @@ export class DatabaseStorage implements IStorage {
       const insertedClasses = await db.insert(classes).values(classesData).returning();
       console.log(`[DB] Inserted ${insertedClasses.length} classes`);
 
-      // Initialize admin users
+      // Initialize admin users (first deploy: set ADMIN_INITIAL_PASSWORD in env)
       const existingAdmins = await db.select().from(adminUsers).limit(1);
       if (existingAdmins.length === 0) {
-        const adminData: InsertAdminUser = {
-          email: "admin@andweyoga.com",
-          name: "System Administrator",
-          role: "super_admin"
-        };
-        
-        const [insertedAdmin] = await db.insert(adminUsers).values(adminData).returning();
-        console.log(`[DB] Created default admin user: ${insertedAdmin.email}`);
+        const initialPassword = process.env.ADMIN_INITIAL_PASSWORD?.trim();
+        if (!initialPassword || initialPassword.length < 8) {
+          console.warn(
+            "[DB] No admin user exists. Set ADMIN_INITIAL_PASSWORD (min 8 chars) and restart to seed the first admin.",
+          );
+        } else {
+          const passwordHash = await hashPassword(initialPassword);
+          const adminData: InsertAdminUser = {
+            email: process.env.ADMIN_INITIAL_EMAIL?.trim().toLowerCase() || "admin@andweyoga.com",
+            name: process.env.ADMIN_INITIAL_NAME?.trim() || "System Administrator",
+            role: "super_admin",
+          };
+          const [insertedAdmin] = await db
+            .insert(adminUsers)
+            .values({ ...adminData, passwordHash })
+            .returning();
+          console.log(`[DB] Created initial admin user: ${insertedAdmin.email}`);
+        }
       }
       
       console.log('[DB] Database initialization complete');
@@ -632,9 +647,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createAdminUser(admin: InsertAdminUser): Promise<AdminUser> {
+  async createAdminUser(admin: InsertAdminUser, passwordHash: string): Promise<AdminUser> {
     try {
-      const [newAdmin] = await db.insert(adminUsers).values(admin).returning();
+      const [newAdmin] = await db
+        .insert(adminUsers)
+        .values({ ...admin, passwordHash })
+        .returning();
       return newAdmin;
     } catch (error) {
       console.error('[DB] Error creating admin user:', error);
@@ -642,15 +660,44 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateAdminPasswordHash(id: string, passwordHash: string): Promise<AdminUser | undefined> {
+    try {
+      const [row] = await db
+        .update(adminUsers)
+        .set({ passwordHash })
+        .where(eq(adminUsers.id, id))
+        .returning();
+      return row || undefined;
+    } catch (error) {
+      console.error('[DB] Error updating admin password hash:', error);
+      return undefined;
+    }
+  }
+
   async verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined> {
     try {
-      // For now, we'll implement a simple check against admin users table
-      // In production, you'd want to hash passwords for admins too
       const admin = await this.getAdminByEmail(email);
-      if (admin && password === 'admin123') { // TODO: Implement proper password hashing for admins
-        return admin;
+      if (!admin) return undefined;
+
+      if (admin.passwordHash) {
+        const ok = await verifyPassword(password, admin.passwordHash);
+        return ok ? admin : undefined;
       }
-      return undefined;
+
+      // One-time migration for rows created before password_hash existed
+      const legacyOk =
+        password === LEGACY_ADMIN_PASSWORD ||
+        (process.env.ADMIN_INITIAL_PASSWORD?.trim() &&
+          password === process.env.ADMIN_INITIAL_PASSWORD.trim());
+
+      if (!legacyOk) return undefined;
+
+      console.warn(
+        `[DB] Admin ${admin.email}: migrated from legacy login to password_hash. Change password after login.`,
+      );
+      const passwordHash = await hashPassword(password);
+      await this.updateAdminPasswordHash(admin.id, passwordHash);
+      return { ...admin, passwordHash };
     } catch (error) {
       console.error('[DB] Error verifying admin credentials:', error);
       return undefined;
