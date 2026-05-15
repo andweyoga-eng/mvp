@@ -2,6 +2,8 @@
 
 Internal tracking document for engineering and product. Update this file when you ship meaningful changes so the baseline stays explainable.
 
+**Full testing & deploy SOP:** see [`SOP-TESTING-AND-PRODUCTION.md`](./SOP-TESTING-AND-PRODUCTION.md) (localhost → Railway → pre-live checklist).
+
 ---
 
 ## Highlights (what matters most)
