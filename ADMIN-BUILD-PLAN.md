@@ -43,7 +43,9 @@ This is the execution order for admin backend work. Each slice should be deploya
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ADMIN_INITIAL_PASSWORD` | Strongly recommended on first deploy | Password for **new** seeded admin only (when no admin row exists) |
+| `ADMIN_INITIAL_PASSWORD` | Strongly recommended | Bootstrap password; synced to DB on each boot. **Copy into local `.env` for localhost** (Railway vars are not read locally). |
+| `ADMIN_INITIAL_EMAIL` | Optional | Login email for bootstrap admin (updates existing row on boot) |
+| `ADMIN_INITIAL_NAME` | Optional | Display name for bootstrap admin |
 | `JWT_SECRET` | Yes | Already required; admin tokens use same secret with `type: admin` |
 
 ### After deploy
@@ -58,7 +60,7 @@ This applies SQL in `scripts/db/patches/` (e.g. `password_hash`, session link co
 
 `npm run db:push` may still fail on databases created before schema drift was resolved; use `db:patch` for incremental column adds.
 
-Set `ADMIN_INITIAL_PASSWORD` before first boot in a fresh DB, or reset hash via DB for existing admins.
+Set `ADMIN_INITIAL_PASSWORD` on the **webapp** service. For **localhost**, copy the same three vars into `.env` and restart `npm run dev`. After a one-time `admin123` login, env password wins on next restart (sync overwrites hash).
 
 ---
 

@@ -31,6 +31,18 @@ import { hashPassword, verifyPassword } from "./auth";
 /** Legacy dev password — only used once to migrate rows missing password_hash (then rehashed). */
 const LEGACY_ADMIN_PASSWORD = "admin123";
 
+function getAdminBootstrapConfig():
+  | { password: string; email: string | null; name: string | null }
+  | null {
+  const password = process.env.ADMIN_INITIAL_PASSWORD?.trim();
+  if (!password || password.length < 8) return null;
+  return {
+    password,
+    email: process.env.ADMIN_INITIAL_EMAIL?.trim().toLowerCase() || null,
+    name: process.env.ADMIN_INITIAL_NAME?.trim() || null,
+  };
+}
+
 // Profile completeness interface for admin console
 export interface ProfileCompleteness {
   isComplete: boolean;
@@ -112,6 +124,7 @@ export class DatabaseStorage implements IStorage {
       const existingClassTypes = await db.select().from(classTypes).limit(1);
       if (existingClassTypes.length > 0) {
         console.log('[DB] Database already initialized');
+        await this.syncAdminFromEnv();
         return;
       }
 
@@ -232,29 +245,8 @@ export class DatabaseStorage implements IStorage {
       const insertedClasses = await db.insert(classes).values(classesData).returning();
       console.log(`[DB] Inserted ${insertedClasses.length} classes`);
 
-      // Initialize admin users (first deploy: set ADMIN_INITIAL_PASSWORD in env)
-      const existingAdmins = await db.select().from(adminUsers).limit(1);
-      if (existingAdmins.length === 0) {
-        const initialPassword = process.env.ADMIN_INITIAL_PASSWORD?.trim();
-        if (!initialPassword || initialPassword.length < 8) {
-          console.warn(
-            "[DB] No admin user exists. Set ADMIN_INITIAL_PASSWORD (min 8 chars) and restart to seed the first admin.",
-          );
-        } else {
-          const passwordHash = await hashPassword(initialPassword);
-          const adminData: InsertAdminUser = {
-            email: process.env.ADMIN_INITIAL_EMAIL?.trim().toLowerCase() || "admin@andweyoga.com",
-            name: process.env.ADMIN_INITIAL_NAME?.trim() || "System Administrator",
-            role: "super_admin",
-          };
-          const [insertedAdmin] = await db
-            .insert(adminUsers)
-            .values({ ...adminData, passwordHash })
-            .returning();
-          console.log(`[DB] Created initial admin user: ${insertedAdmin.email}`);
-        }
-      }
-      
+      await this.syncAdminFromEnv();
+
       console.log('[DB] Database initialization complete');
     } catch (error) {
       console.error('[DB] Error initializing database:', error);
@@ -625,6 +617,63 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /**
+   * When ADMIN_INITIAL_PASSWORD is set (webapp env / local .env), keep the primary
+   * admin row aligned with that password (and optional email/name). Runs on every boot.
+   */
+  private async syncAdminFromEnv(): Promise<void> {
+    const config = getAdminBootstrapConfig();
+    if (!config) return;
+
+    try {
+      const passwordHash = await hashPassword(config.password);
+      const [existing] = await db.select().from(adminUsers).limit(1);
+
+      if (!existing) {
+        const adminData: InsertAdminUser = {
+          email: config.email || "admin@andweyoga.com",
+          name: config.name || "System Administrator",
+          role: "super_admin",
+        };
+        const [inserted] = await db
+          .insert(adminUsers)
+          .values({ ...adminData, passwordHash })
+          .returning();
+        console.log(`[DB] Created bootstrap admin: ${inserted.email}`);
+        return;
+      }
+
+      const updates: { passwordHash: string; email?: string; name?: string } = {
+        passwordHash,
+      };
+
+      if (config.name) updates.name = config.name;
+
+      if (config.email && config.email !== existing.email) {
+        const conflict = await this.getAdminByEmail(config.email);
+        if (conflict && conflict.id !== existing.id) {
+          console.warn(
+            `[DB] ADMIN_INITIAL_EMAIL ${config.email} is taken; keeping admin email ${existing.email}`,
+          );
+        } else {
+          updates.email = config.email;
+        }
+      }
+
+      const [updated] = await db
+        .update(adminUsers)
+        .set(updates)
+        .where(eq(adminUsers.id, existing.id))
+        .returning();
+
+      console.log(
+        `[DB] Admin bootstrap synced for ${updated.email} (password from ADMIN_INITIAL_PASSWORD)`,
+      );
+    } catch (error) {
+      console.error("[DB] Error syncing admin from env:", error);
+    }
+  }
+
   // Admin Users Methods
   async getAdminByEmail(email: string): Promise<AdminUser | undefined> {
     try {
@@ -676,24 +725,45 @@ export class DatabaseStorage implements IStorage {
 
   async verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined> {
     try {
-      const admin = await this.getAdminByEmail(email);
-      if (!admin) return undefined;
+      const normalizedEmail = email.trim().toLowerCase();
+      let admin = await this.getAdminByEmail(normalizedEmail);
+
+      const bootstrap = getAdminBootstrapConfig();
+      if (!admin && bootstrap?.email && bootstrap.email === normalizedEmail) {
+        await this.syncAdminFromEnv();
+        admin = await this.getAdminByEmail(normalizedEmail);
+      }
+
+      if (!admin) {
+        if (bootstrap?.email && bootstrap.email !== normalizedEmail) {
+          console.warn(
+            `[Admin login] No admin for "${normalizedEmail}". Bootstrap email is "${bootstrap.email}" — use that email, or set ADMIN_INITIAL_EMAIL to match.`,
+          );
+        }
+        return undefined;
+      }
 
       if (admin.passwordHash) {
         const ok = await verifyPassword(password, admin.passwordHash);
-        return ok ? admin : undefined;
+        if (ok) return admin;
+
+        if (bootstrap && password === bootstrap.password) {
+          const passwordHash = await hashPassword(password);
+          await this.updateAdminPasswordHash(admin.id, passwordHash);
+          return { ...admin, passwordHash };
+        }
+        return undefined;
       }
 
       // One-time migration for rows created before password_hash existed
       const legacyOk =
         password === LEGACY_ADMIN_PASSWORD ||
-        (process.env.ADMIN_INITIAL_PASSWORD?.trim() &&
-          password === process.env.ADMIN_INITIAL_PASSWORD.trim());
+        (bootstrap && password === bootstrap.password);
 
       if (!legacyOk) return undefined;
 
       console.warn(
-        `[DB] Admin ${admin.email}: migrated from legacy login to password_hash. Change password after login.`,
+        `[DB] Admin ${admin.email}: migrated from legacy login to password_hash.`,
       );
       const passwordHash = await hashPassword(password);
       await this.updateAdminPasswordHash(admin.id, passwordHash);

@@ -8,6 +8,8 @@ Internal tracking document for engineering and product. Update this file when yo
 
 **Admin build slices:** see [`ADMIN-BUILD-PLAN.md`](./ADMIN-BUILD-PLAN.md) (execution order; slice 1 = auth hardening).
 
+**Commit log convention:** Under **Session log**, each shipped change is recorded with **UTC timestamp**, **short git hash**, and **commit subject**. New entries are appended at the top of the session log (newest first).
+
 ---
 
 ## Highlights (what matters most)
@@ -20,10 +22,41 @@ Internal tracking document for engineering and product. Update this file when yo
 - **SMS “verify phone” on Profile is removed from the UI** for now; numbers are still collected and format-validated. Rationale lives in **dev comments** (`client/src/pages/my-account.tsx`) and **`replit.md`** — not in user-facing copy.
 - **Secrets stay out of git.** `.env` and common local variants are listed in `.gitignore`.
 - **Railway Postgres:** App prefers **`DATABASE_PUBLIC_URL`** over **`DATABASE_URL`** when both exist, so the web service avoids **`ENOTFOUND postgres.railway.internal`** when private DNS does not resolve from the container.
+- **Admin DB patches:** Use **`npm run db:patch`** for incremental SQL on existing DBs (avoids `drizzle-kit push` `42P16` on primary keys). Patches: `password_hash`, session link columns.
+- **Admin bootstrap:** `ADMIN_INITIAL_PASSWORD` / `ADMIN_INITIAL_EMAIL` / `ADMIN_INITIAL_NAME` on the **webapp** service sync the primary admin on every boot. **Copy the same vars into local `.env`** for localhost — Railway variables are not read locally.
+- **Admin dashboard (local):** Expanded UI — tabs for users, class types, instructors, sessions; create modals for catalog and sessions.
 
 ---
 
-## Session log (dated)
+## Session log (dated, newest first)
+
+### 2026-05-15 — Admin bootstrap sync, db patches, admin dashboard UI
+
+| Timestamp (UTC) | Commit | Subject |
+|-----------------|--------|---------|
+| 2026-05-15 13:35 UTC | `5f45f7f` | fix(admin): sync bootstrap credentials from env on boot |
+| 2026-05-15 12:41 UTC | `a19b25c` | fix(db): add incremental SQL patches via npm run db:patch |
+| 2026-05-15 12:11 UTC | `31eee28` | feat(admin): slice 1 auth hardening + ADMIN-BUILD-PLAN |
+
+**Admin bootstrap (`server/storage.ts`)**
+
+- **Problem:** Railway `ADMIN_INITIAL_*` vars do not apply on localhost; after legacy `admin123` login the DB hash did not match env password; wrong email vs `ADMIN_INITIAL_EMAIL` failed silently.
+- **Fix:** `syncAdminFromEnv()` runs on every boot when `ADMIN_INITIAL_PASSWORD` is set (min 8 chars) — updates primary admin password hash and optional email/name. Login accepts env password if hash is stale; dev log hints when email does not match bootstrap email.
+- **Ops:** Set vars on Railway **webapp** (not Postgres). Mirror into **local `.env`** and restart `npm run dev`. Look for `[DB] Admin bootstrap synced for …` in server logs.
+
+**DB patches (`scripts/db/`, `npm run db:patch`)**
+
+- Idempotent SQL patches for `admin_users.password_hash` and `classes.google_meet_link` / `razorpay_link`.
+- Prefer over `npm run db:push` on existing Railway/local databases.
+
+**Admin dashboard (`client/src/pages/admin-dashboard.tsx`)**
+
+- Tabbed layout: overview stats, users, class types, instructors, sessions.
+- Create flows for class types, instructors, and scheduled sessions (admin POST APIs).
+
+**Docs:** `.env.example`, `ADMIN-BUILD-PLAN.md` updated for bootstrap and patch workflow.
+
+---
 
 ### 2026-05-14 — Railway production, OAuth, and database connectivity
 
@@ -132,13 +165,16 @@ Internal tracking document for engineering and product. Update this file when yo
 | Internal docs | `replit.md`, **`awy.md` (this file)** |
 | Ignore secrets | `.gitignore` |
 | DB / Drizzle | `server/db.ts`, `server/index.ts`, `drizzle.config.ts`, `.env.example` |
+| Admin auth / bootstrap | `server/storage.ts`, `server/adminAuth.ts`, `client/src/pages/admin-login.tsx` |
+| Admin dashboard | `client/src/pages/admin-dashboard.tsx` |
+| DB patches | `scripts/db/apply-patches.ts`, `scripts/db/patches/*.sql`, `package.json` (`db:patch`) |
 
 ---
 
 ## How to use this file
 
-1. After a meaningful merge or release, append a dated subsection under **Detailed changes** or add bullets to **Highlights** if the change is user-visible or architecturally important.
+1. After a meaningful merge or release, append a **timestamped row** to the session log table (`Timestamp (UTC) | Commit | Subject`) and a short narrative subsection; update **Highlights** when user-visible or architectural.
 2. Move items from **Future work** into **Detailed changes** when shipped, and add new backlog items as they are agreed.
 3. Keep user-facing marketing copy out of this file if you prefer; this is for **engineering and product alignment**.
 
-_Last updated: 2026-05-14 — Railway DB/OAuth session + `awy.md` session log._
+_Last updated: 2026-05-15 — Admin bootstrap, db patches, admin dashboard; timestamped commit log in session log._
