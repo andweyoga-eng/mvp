@@ -4,6 +4,8 @@ Internal tracking document for engineering and product. Update this file when yo
 
 **Full testing & deploy SOP:** see [`SOP-TESTING-AND-PRODUCTION.md`](./SOP-TESTING-AND-PRODUCTION.md) (localhost → Railway → pre-live checklist).
 
+**Admin console audit:** see [`ADMIN-FEATURES-AUDIT.md`](./ADMIN-FEATURES-AUDIT.md) (enabled vs API-only vs future).
+
 ---
 
 ## Highlights (what matters most)
