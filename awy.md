@@ -8,7 +8,7 @@ Internal tracking document for engineering and product. Update this file when yo
 
 **Admin build slices:** see [`ADMIN-BUILD-PLAN.md`](./ADMIN-BUILD-PLAN.md) (execution order; slice 1 = auth hardening).
 
-**Commit log convention:** Under **Session log**, each shipped change is recorded with **UTC timestamp**, **short git hash**, and **commit subject**. New entries are appended at the top of the session log (newest first).
+**Deploy log convention:** Do **not** timestamp every git commit in this file. Only when a **working feature or fix is pushed/deployed** (tested and live or ready on Railway), add **one row** to **Deploy log** with: **UTC timestamp**, **short commit hash**, and the **same commit message** used for that push. Use **Session log** below for narrative context (what/why), not per-commit tables.
 
 ---
 
@@ -28,15 +28,19 @@ Internal tracking document for engineering and product. Update this file when yo
 
 ---
 
+## Deploy log (timestamp + commit — only when pushed/deployed)
+
+_Add a row when a feature or fix is deployed and working — not for every intermediate commit._
+
+| Deployed (UTC) | Commit | Message |
+|----------------|--------|---------|
+| 2026-05-15 13:39 UTC | `4838b4c` | fix(admin): sync bootstrap credentials from env on boot |
+
+---
+
 ## Session log (dated, newest first)
 
 ### 2026-05-15 — Admin bootstrap sync, db patches, admin dashboard UI
-
-| Timestamp (UTC) | Commit | Subject |
-|-----------------|--------|---------|
-| 2026-05-15 13:35 UTC | `5f45f7f` | fix(admin): sync bootstrap credentials from env on boot |
-| 2026-05-15 12:41 UTC | `a19b25c` | fix(db): add incremental SQL patches via npm run db:patch |
-| 2026-05-15 12:11 UTC | `31eee28` | feat(admin): slice 1 auth hardening + ADMIN-BUILD-PLAN |
 
 **Admin bootstrap (`server/storage.ts`)**
 
@@ -173,8 +177,8 @@ Internal tracking document for engineering and product. Update this file when yo
 
 ## How to use this file
 
-1. After a meaningful merge or release, append a **timestamped row** to the session log table (`Timestamp (UTC) | Commit | Subject`) and a short narrative subsection; update **Highlights** when user-visible or architectural.
+1. When a feature or fix is **pushed/deployed and working**, add one row to **Deploy log** (UTC time, commit hash, commit message). Add or extend a **Session log** subsection for narrative (what/why). Update **Highlights** when user-visible or architectural. Skip `awy.md` updates for WIP or intermediate commits.
 2. Move items from **Future work** into **Detailed changes** when shipped, and add new backlog items as they are agreed.
 3. Keep user-facing marketing copy out of this file if you prefer; this is for **engineering and product alignment**.
 
-_Last updated: 2026-05-15 — Admin bootstrap, db patches, admin dashboard; timestamped commit log in session log._
+_Last updated: 2026-05-15 — Admin bootstrap, db patches, admin dashboard; deploy log convention clarified._
