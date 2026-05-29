@@ -21,9 +21,29 @@ function getDatabaseConnectionString(): string {
   return url;
 }
 
+/** Hosted Postgres (Railway, etc.) requires SSL even from localhost. */
+function resolvePoolSsl(connectionString: string): false | { rejectUnauthorized: boolean } {
+  if (process.env.NODE_ENV === "production") {
+    return { rejectUnauthorized: false };
+  }
+  try {
+    const host = new URL(connectionString).hostname.toLowerCase();
+    const remote =
+      host.endsWith(".rlwy.net") ||
+      host.includes("railway") ||
+      host.includes("amazonaws.com") ||
+      host.includes("supabase.co");
+    return remote ? { rejectUnauthorized: false } : false;
+  } catch {
+    return false;
+  }
+}
+
+const connectionString = getDatabaseConnectionString();
+
 export const pool = new Pool({
-  connectionString: getDatabaseConnectionString(),
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString,
+  ssl: resolvePoolSsl(connectionString),
 });
 
 export const db = drizzle(pool, { schema });

@@ -11,39 +11,160 @@ import {
   type InsertClass,
   type Booking,
   type InsertBooking,
+  type Payment,
+  type InsertPayment,
   type ContactMessage,
   type InsertContactMessage,
   type AdminUser,
   type InsertAdminUser,
+  type AdminProfile,
+  type InsertAdminProfile,
+  type ClassTypeNotifyRequest,
+  type InsertNotifyRequest,
+  type Subscription,
+  type InsertSubscription,
+  type PaymentQrCode,
+  type InsertPaymentQrCode,
   users,
   classTypes,
   instructors,
   classes,
   bookings,
+  payments,
+  paymentQrCodes,
   contactMessages,
-  adminUsers
+  adminUsers,
+  adminProfiles,
+  classTypeNotifyRequests,
+  subscriptions,
+  sessionMoodCheckins,
+  sessionJoinEvents,
+  userSessionMappings,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc } from "drizzle-orm";
 import { computeProfileCompletionStatus, isAccountProfileComplete, getAccountProfileIncompleteReasons, MIN_HEALTH_UPDATE_CHARS } from "@shared/profileCompleteness";
+import { classifyMemberSessionStatus } from "@shared/member-session-status";
+import { existingBookingBlocksNewBooking } from "@shared/member-booking-duplicate";
+import { getMeetJoinState } from "@shared/session-meet-access";
+import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod } from "@shared/payment-gateway";
 import { hashPassword, verifyPassword } from "./auth";
+import {
+  LEGACY_ADMIN_PASSWORD,
+  getAdminBootstrapConfig,
+  normalizeAdminEmail,
+  normalizeAdminPassword,
+} from "./admin-bootstrap";
 
-/** Legacy dev password — only used once to migrate rows missing password_hash (then rehashed). */
-const LEGACY_ADMIN_PASSWORD = "admin123";
-
-function getAdminBootstrapConfig():
-  | { password: string; email: string | null; name: string | null }
-  | null {
-  const password = process.env.ADMIN_INITIAL_PASSWORD?.trim();
-  if (!password || password.length < 8) return null;
-  return {
-    password,
-    email: process.env.ADMIN_INITIAL_EMAIL?.trim().toLowerCase() || null,
-    name: process.env.ADMIN_INITIAL_NAME?.trim() || null,
-  };
-}
+/** Resolves after first DB init + admin bootstrap sync (await before handling traffic). */
+let resolveStorageReady: () => void = () => {};
+export const storageReady = new Promise<void>((resolve) => {
+  resolveStorageReady = resolve;
+});
 
 // Profile completeness interface for admin console
+export interface MemberSessionRow {
+  id: string;
+  bookingId: string;
+  classId: string;
+  className: string;
+  instructorName: string;
+  sessionDate: string;
+  googleMeetLink: string | null;
+  status: "upcoming" | "completed" | "cancelled";
+  isLive: boolean;
+  cancellationReason: string | null;
+  paymentStatus: string;
+  paymentMethod: string | null;
+  verificationStatus: string | null;
+  paidAt: string | null;
+  receiptUrl: string | null;
+  invoiceUrl: string | null;
+  amountPaise: number | null;
+  bookedAt: string;
+  sessionDurationMinutes: number;
+  meetJoinState: "hidden" | "disabled" | "active";
+}
+
+export interface PendingQrBookingRow {
+  bookingId: string;
+  verificationStatus: string;
+  transactionAckNumber: string | null;
+  ackSubmittedAt: string | null;
+  paymentStatus: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  classId: string;
+  className: string;
+  sessionDate: string;
+  instructorName: string;
+  price: string;
+}
+
+export interface PaymentHistoryRow {
+  id: string;
+  bookingId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  className: string;
+  sessionDate: string;
+  amountPaise: number | null;
+  currency: string;
+  paymentMethod: string | null;
+  gatewayProvider: string | null;
+  gatewayReference: string | null;
+  payerName: string | null;
+  payerEmail: string | null;
+  payerPhone: string | null;
+  gatewayPaymentMethod: string | null;
+  status: string;
+  adminDisposition: string;
+  bookingPaymentStatus: string | null;
+  verificationStatus: string | null;
+  transactionAckNumber: string | null;
+  receiptUrl: string | null;
+  invoiceUrl: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface SubscriptionSummaryRow {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  classTypeId: string;
+  classTypeName: string;
+  subscriptionType: string;
+  totalAmountPaise: number;
+  totalSessions: number;
+  utilizedSessions: number;
+  refundedSessions: number;
+  disputedSessions: number;
+  disputesResolved: number;
+  waivedSessions: number;
+  status: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminWaitlistRow {
+  id: string;
+  classTypeId: string;
+  classTypeName: string;
+  userId: string | null;
+  userName: string | null;
+  email: string;
+  source: string;
+  emailSendStatus: string | null;
+  emailSendError: string | null;
+  emailSendCount: number;
+  lastEmailedAt: string | null;
+  createdAt: string;
+}
+
 export interface ProfileCompleteness {
   isComplete: boolean;
   healthUpdateComplete: boolean;  // ≥10 characters
@@ -79,17 +200,70 @@ export interface IStorage {
   getAllClassTypes(): Promise<ClassType[]>;
   getClassType(id: string): Promise<ClassType | undefined>;
   createClassType(classType: InsertClassType): Promise<ClassType>;
+  updateClassType(id: string, updates: Partial<InsertClassType>): Promise<ClassType | undefined>;
+  deleteClassType(id: string): Promise<{ ok: boolean; message?: string }>;
+  countClassesByClassTypeId(classTypeId: string): Promise<number>;
+  getClassTypeIdsWithUpcomingSessions(): Promise<string[]>;
+  createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest>;
+  getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]>;
+  updateNotifyRequestEmailStatus(
+    id: string,
+    status: "sent" | "failed",
+    options?: { error?: string | null; sentAt?: Date | null },
+  ): Promise<ClassTypeNotifyRequest | undefined>;
+  getNotifyRequestsForAdmin(): Promise<AdminWaitlistRow[]>;
+  getRecurringSeriesBounds(
+    seriesId: string,
+  ): Promise<{ startAt: Date; endAt: Date } | undefined>;
+  findNextRecurringClassAfter(
+    classTypeId: string,
+    afterDate: Date,
+    excludeSeriesId?: string | null,
+  ): Promise<Class | undefined>;
   
   // Instructors
   getAllInstructors(): Promise<Instructor[]>;
+  getPublicInstructors(): Promise<Instructor[]>;
+  getSessionEligibleInstructors(): Promise<Instructor[]>;
   getInstructor(id: string): Promise<Instructor | undefined>;
   createInstructor(instructor: InsertInstructor): Promise<Instructor>;
+  updateInstructor(id: string, updates: Partial<InsertInstructor>): Promise<Instructor | undefined>;
+  setInstructorEmailOtp(
+    id: string,
+    hash: string,
+    expiresAt: Date,
+  ): Promise<Instructor | undefined>;
+  markInstructorEmailVerified(id: string): Promise<Instructor | undefined>;
+  markInstructorPhoneVerified(id: string): Promise<Instructor | undefined>;
+  updateInstructorStatus(
+    id: string,
+    status: string,
+    statusNotes: string | null,
+  ): Promise<Instructor | undefined>;
+  reconcileInstructorStatus(id: string): Promise<Instructor | undefined>;
   
   // Classes
   getAllClasses(): Promise<Class[]>;
+  getPublishedClasses(): Promise<Class[]>;
   getClass(id: string): Promise<Class | undefined>;
   getClassesByDate(date: Date): Promise<Class[]>;
-  createClass(classData: InsertClass): Promise<Class>;
+  createClass(classData: InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }): Promise<Class>;
+  updateClassSession(id: string, updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>): Promise<Class | undefined>;
+  deleteClassSession(id: string): Promise<{ ok: boolean; message?: string }>;
+  cancelClassSessionWithBookings(
+    id: string,
+    reason: string,
+    ownerOtp: string,
+  ): Promise<{ ok: boolean; message?: string }>;
+  findNextSessionForClassType(
+    classTypeId: string,
+    after: Date,
+    sessionFrequencies?: string[],
+  ): Promise<Class | undefined>;
+  countBookingsForClass(classId: string): Promise<number>;
+  setUserActive(id: string, isActive: boolean): Promise<User | undefined>;
+  recordSessionJoin(userId: string, classId: string): Promise<void>;
+  recordMoodCheckin(userId: string, classId: string, phase: "pre" | "post", moodId: string): Promise<void>;
   updateClassBookingCount(id: string, count: number): Promise<Class | undefined>;
   
   // Bookings
@@ -97,7 +271,50 @@ export interface IStorage {
   getBooking(id: string): Promise<Booking | undefined>;
   getBookingsByClass(classId: string): Promise<Booking[]>;
   createBooking(booking: InsertBooking): Promise<Booking>;
-  
+  getUserBookings(userId: string): Promise<Booking[]>;
+  userHasUpcomingBookingForClass(userId: string, classId: string): Promise<boolean>;
+  updateBookingPaymentStatus(
+    bookingId: string,
+    paymentStatus: string,
+  ): Promise<Booking | undefined>;
+  ensureUserSessionMapping(userId: string, classId: string): Promise<void>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentById(id: string): Promise<Payment | undefined>;
+  getPaymentByBookingId(bookingId: string): Promise<Payment | undefined>;
+  getPaymentByRazorpayOrderId(orderId: string): Promise<Payment | undefined>;
+  updatePayment(id: string, updates: Partial<InsertPayment>): Promise<Payment | undefined>;
+  ensurePaymentStubForBooking(params: {
+    bookingId: string;
+    userId: string;
+    classId: string;
+    amountPaise: number;
+    gatewayProvider: string;
+    payerName?: string | null;
+    payerEmail?: string | null;
+    payerPhone?: string | null;
+    gatewayReference?: string | null;
+  }): Promise<Payment>;
+  getPaymentHistoryForAdmin(): Promise<PaymentHistoryRow[]>;
+  getPaymentHistoryForUser(userId: string): Promise<PaymentHistoryRow[]>;
+  updatePaymentAdminDisposition(
+    paymentId: string,
+    disposition: string,
+  ): Promise<Payment | undefined>;
+  getMemberSessions(userId: string): Promise<MemberSessionRow[]>;
+  getAllPaymentQrCodes(): Promise<PaymentQrCode[]>;
+  getPaymentQrCode(id: string): Promise<PaymentQrCode | undefined>;
+  createPaymentQrCode(data: InsertPaymentQrCode): Promise<PaymentQrCode>;
+  updatePaymentQrCode(id: string, updates: Partial<InsertPaymentQrCode>): Promise<PaymentQrCode | undefined>;
+  deletePaymentQrCode(id: string): Promise<{ ok: boolean; message?: string }>;
+  countClassesByPaymentQrCodeId(qrId: string): Promise<number>;
+  submitBookingPaymentAck(
+    bookingId: string,
+    userId: string,
+    transactionAckNumber: string,
+  ): Promise<Booking | undefined>;
+  getPendingQrBookings(): Promise<PendingQrBookingRow[]>;
+  confirmQrBooking(bookingId: string): Promise<Booking | undefined>;
+
   // Contact Messages
   getAllContactMessages(): Promise<ContactMessage[]>;
   createContactMessage(message: InsertContactMessage): Promise<ContactMessage>;
@@ -110,12 +327,25 @@ export interface IStorage {
   verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined>;
   getAllUsers(): Promise<User[]>;
   getUsersWithCompleteness(): Promise<(User & { completeness: ProfileCompleteness })[]>;
+  getAdminProfile(adminUserId: string): Promise<AdminProfile | undefined>;
+  upsertAdminProfile(
+    adminUserId: string,
+    profile: Omit<InsertAdminProfile, "adminUserId">,
+  ): Promise<AdminProfile>;
+  updateAdminProfileVerification(
+    adminUserId: string,
+    status: "pending" | "verified" | "rejected",
+    notes?: string | null,
+  ): Promise<AdminProfile | undefined>;
+  createSubscription(subscription: InsertSubscription): Promise<Subscription>;
+  getSubscriptionSummariesForAdmin(): Promise<SubscriptionSummaryRow[]>;
+  getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]>;
+  incrementSubscriptionUtilization(userId: string, classId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
   constructor() {
-    // Initialize the database with seed data
-    this.initializeData();
+    void this.initializeData().finally(() => resolveStorageReady());
   }
 
   private async initializeData() {
@@ -465,14 +695,246 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateClassType(
+    id: string,
+    updates: Partial<InsertClassType>,
+  ): Promise<ClassType | undefined> {
+    try {
+      const [updated] = await db
+        .update(classTypes)
+        .set(updates)
+        .where(eq(classTypes.id, id))
+        .returning();
+      return updated || undefined;
+    } catch (error) {
+      console.error("[DB] Error updating class type:", error);
+      throw error;
+    }
+  }
+
+  async countClassesByClassTypeId(classTypeId: string): Promise<number> {
+    try {
+      const rows = await db
+        .select({ id: classes.id })
+        .from(classes)
+        .where(eq(classes.classTypeId, classTypeId));
+      return rows.length;
+    } catch (error) {
+      console.error("[DB] Error counting classes for class type:", error);
+      return 0;
+    }
+  }
+
+  async getClassTypeIdsWithUpcomingSessions(): Promise<string[]> {
+    try {
+      const now = new Date();
+      const rows = await db
+        .select({
+          classTypeId: classes.classTypeId,
+          date: classes.date,
+          duration: classTypes.duration,
+        })
+        .from(classes)
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .where(
+          and(
+            isNull(classes.pausedAt),
+            isNull(classes.cancelledAt),
+            or(
+              eq(classes.status, "published"),
+              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
+            ),
+          ),
+        );
+      const nowMs = now.getTime();
+      const open = new Set<string>();
+      for (const row of rows) {
+        const durationMinutes =
+          typeof row.duration === "number" && row.duration > 0 ? row.duration : 60;
+        if (new Date(row.date).getTime() + durationMinutes * 60_000 > nowMs) {
+          open.add(row.classTypeId);
+        }
+      }
+      return [...open];
+    } catch (error) {
+      console.error("[DB] Error loading class type availability:", error);
+      return [];
+    }
+  }
+
+  async createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest> {
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const existing = await db
+      .select()
+      .from(classTypeNotifyRequests)
+      .where(
+        and(
+          eq(classTypeNotifyRequests.classTypeId, data.classTypeId),
+          eq(classTypeNotifyRequests.email, normalizedEmail),
+          isNull(classTypeNotifyRequests.unsubscribedAt),
+        ),
+      )
+      .limit(1);
+    if (existing[0]) return existing[0];
+    const [row] = await db
+      .insert(classTypeNotifyRequests)
+      .values({ ...data, email: normalizedEmail })
+      .returning();
+    return row;
+  }
+
+  async getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]> {
+    try {
+      return await db
+        .select()
+        .from(classTypeNotifyRequests)
+        .where(
+          and(
+            eq(classTypeNotifyRequests.classTypeId, classTypeId),
+            isNull(classTypeNotifyRequests.unsubscribedAt),
+          ),
+        )
+        .orderBy(desc(classTypeNotifyRequests.createdAt));
+    } catch (error) {
+      console.error("[DB] Error loading notify requests:", error);
+      return [];
+    }
+  }
+
+  async updateNotifyRequestEmailStatus(
+    id: string,
+    status: "sent" | "failed",
+    options?: { error?: string | null; sentAt?: Date | null },
+  ): Promise<ClassTypeNotifyRequest | undefined> {
+    const [row] = await db
+      .update(classTypeNotifyRequests)
+      .set({
+        emailSendStatus: status,
+        emailSendError: options?.error ?? null,
+        lastEmailedAt: status === "sent" ? options?.sentAt ?? new Date() : null,
+        emailSendCount: sql`${classTypeNotifyRequests.emailSendCount} + 1`,
+      })
+      .where(eq(classTypeNotifyRequests.id, id))
+      .returning();
+    return row ?? undefined;
+  }
+
+  async getNotifyRequestsForAdmin(): Promise<AdminWaitlistRow[]> {
+    const rows = await db
+      .select({
+        id: classTypeNotifyRequests.id,
+        classTypeId: classTypeNotifyRequests.classTypeId,
+        classTypeName: classTypes.name,
+        userId: classTypeNotifyRequests.userId,
+        userName: users.name,
+        email: classTypeNotifyRequests.email,
+        source: classTypeNotifyRequests.source,
+        emailSendStatus: classTypeNotifyRequests.emailSendStatus,
+        emailSendError: classTypeNotifyRequests.emailSendError,
+        emailSendCount: classTypeNotifyRequests.emailSendCount,
+        lastEmailedAt: classTypeNotifyRequests.lastEmailedAt,
+        createdAt: classTypeNotifyRequests.createdAt,
+      })
+      .from(classTypeNotifyRequests)
+      .innerJoin(classTypes, eq(classTypeNotifyRequests.classTypeId, classTypes.id))
+      .leftJoin(users, eq(classTypeNotifyRequests.userId, users.id))
+      .where(isNull(classTypeNotifyRequests.unsubscribedAt))
+      .orderBy(desc(classTypeNotifyRequests.createdAt));
+
+    return rows.map((row) => ({
+      ...row,
+      userName: row.userName ?? null,
+      lastEmailedAt: row.lastEmailedAt?.toISOString() ?? null,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  async getRecurringSeriesBounds(
+    seriesId: string,
+  ): Promise<{ startAt: Date; endAt: Date } | undefined> {
+    const [row] = await db
+      .select({
+        startAt: sql<Date>`MIN(${classes.date})`,
+        endAt: sql<Date>`MAX(${classes.date})`,
+      })
+      .from(classes)
+      .where(eq(classes.seriesId, seriesId));
+    if (!row?.startAt || !row?.endAt) return undefined;
+    return row;
+  }
+
+  async findNextRecurringClassAfter(
+    classTypeId: string,
+    afterDate: Date,
+    excludeSeriesId?: string | null,
+  ): Promise<Class | undefined> {
+    const now = new Date();
+    const visibility = and(
+      isNull(classes.pausedAt),
+      isNull(classes.cancelledAt),
+      or(
+        eq(classes.status, "published"),
+        and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
+      ),
+    );
+    const whereClause = excludeSeriesId
+      ? and(
+          eq(classes.classTypeId, classTypeId),
+          eq(classes.sessionFrequency, "recurring"),
+          gte(classes.date, afterDate),
+          visibility,
+          sql`${classes.seriesId} IS DISTINCT FROM ${excludeSeriesId}`,
+        )
+      : and(
+          eq(classes.classTypeId, classTypeId),
+          eq(classes.sessionFrequency, "recurring"),
+          gte(classes.date, afterDate),
+          visibility,
+        );
+    const [row] = await db.select().from(classes).where(whereClause).orderBy(classes.date).limit(1);
+    return row ?? undefined;
+  }
+
+  async deleteClassType(id: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const used = await this.countClassesByClassTypeId(id);
+      if (used > 0) {
+        return {
+          ok: false,
+          message: `Cannot delete: ${used} scheduled session(s) use this class type. Remove or reassign them first.`,
+        };
+      }
+      const result = await db.delete(classTypes).where(eq(classTypes.id, id)).returning({ id: classTypes.id });
+      if (result.length === 0) {
+        return { ok: false, message: "Class type not found" };
+      }
+      return { ok: true };
+    } catch (error) {
+      console.error("[DB] Error deleting class type:", error);
+      throw error;
+    }
+  }
+
   // Instructors
   async getAllInstructors(): Promise<Instructor[]> {
     try {
-      return await db.select().from(instructors);
+      return await db.select().from(instructors).orderBy(instructors.name);
     } catch (error) {
       console.error('[DB] Error getting instructors:', error);
       return [];
     }
+  }
+
+  async getPublicInstructors(): Promise<Instructor[]> {
+    const { isInstructorPublicVisible } = await import("@shared/instructor-compliance");
+    const all = await this.getAllInstructors();
+    return all.filter(isInstructorPublicVisible);
+  }
+
+  async getSessionEligibleInstructors(): Promise<Instructor[]> {
+    const { isInstructorSessionPoolEligible } = await import("@shared/instructor-compliance");
+    const all = await this.getAllInstructors();
+    return all.filter(isInstructorSessionPoolEligible);
   }
 
   async getInstructor(id: string): Promise<Instructor | undefined> {
@@ -487,7 +949,14 @@ export class DatabaseStorage implements IStorage {
 
   async createInstructor(instructor: InsertInstructor): Promise<Instructor> {
     try {
-      const [newInstructor] = await db.insert(instructors).values(instructor).returning();
+      const payload = {
+        ...instructor,
+        email: instructor.email?.trim().toLowerCase() ?? null,
+        phone: instructor.phone?.trim() ?? null,
+        status: instructor.status ?? "pending",
+        updatedAt: new Date(),
+      };
+      const [newInstructor] = await db.insert(instructors).values(payload).returning();
       return newInstructor;
     } catch (error) {
       console.error('[DB] Error creating instructor:', error);
@@ -495,12 +964,150 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async updateInstructor(
+    id: string,
+    updates: Partial<InsertInstructor>,
+  ): Promise<Instructor | undefined> {
+    try {
+      const patch: Partial<InsertInstructor> & { updatedAt: Date } = {
+        ...updates,
+        updatedAt: new Date(),
+      };
+      if (updates.email != null) {
+        patch.email = updates.email.trim().toLowerCase();
+      }
+      if (updates.phone != null) {
+        patch.phone = updates.phone.trim();
+      }
+      const [row] = await db
+        .update(instructors)
+        .set(patch)
+        .where(eq(instructors.id, id))
+        .returning();
+      return row;
+    } catch (error) {
+      console.error("[DB] Error updating instructor:", error);
+      return undefined;
+    }
+  }
+
+  async setInstructorEmailOtp(
+    id: string,
+    hash: string,
+    expiresAt: Date,
+  ): Promise<Instructor | undefined> {
+    try {
+      const [row] = await db
+        .update(instructors)
+        .set({
+          emailOtpHash: hash,
+          emailOtpExpiresAt: expiresAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(instructors.id, id))
+        .returning();
+      return row;
+    } catch (error) {
+      console.error("[DB] Error setting instructor OTP:", error);
+      return undefined;
+    }
+  }
+
+  async markInstructorEmailVerified(id: string): Promise<Instructor | undefined> {
+    try {
+      const [row] = await db
+        .update(instructors)
+        .set({
+          emailVerified: true,
+          emailOtpHash: null,
+          emailOtpExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(instructors.id, id))
+        .returning();
+      if (row) return (await this.reconcileInstructorStatus(id)) ?? row;
+      return row;
+    } catch (error) {
+      console.error("[DB] Error marking instructor email verified:", error);
+      return undefined;
+    }
+  }
+
+  async markInstructorPhoneVerified(id: string): Promise<Instructor | undefined> {
+    try {
+      const [row] = await db
+        .update(instructors)
+        .set({ phoneVerified: true, updatedAt: new Date() })
+        .where(eq(instructors.id, id))
+        .returning();
+      if (row) return (await this.reconcileInstructorStatus(id)) ?? row;
+      return row;
+    } catch (error) {
+      console.error("[DB] Error marking instructor phone verified:", error);
+      return undefined;
+    }
+  }
+
+  async updateInstructorStatus(
+    id: string,
+    status: string,
+    statusNotes: string | null,
+  ): Promise<Instructor | undefined> {
+    try {
+      const [row] = await db
+        .update(instructors)
+        .set({ status, statusNotes, updatedAt: new Date() })
+        .where(eq(instructors.id, id))
+        .returning();
+      return row;
+    } catch (error) {
+      console.error("[DB] Error updating instructor status:", error);
+      return undefined;
+    }
+  }
+
+  async reconcileInstructorStatus(id: string): Promise<Instructor | undefined> {
+    const { computeInstructorOperationalStatus } = await import(
+      "@shared/instructor-compliance"
+    );
+    const instructor = await this.getInstructor(id);
+    if (!instructor) return undefined;
+
+    const { status, statusNotes } = computeInstructorOperationalStatus(instructor);
+    if (instructor.status === status && instructor.statusNotes === statusNotes) {
+      return instructor;
+    }
+    return this.updateInstructorStatus(id, status, statusNotes);
+  }
+
   // Classes
   async getAllClasses(): Promise<Class[]> {
     try {
-      return await db.select().from(classes);
+      return await db.select().from(classes).orderBy(classes.date);
     } catch (error) {
       console.error('[DB] Error getting classes:', error);
+      return [];
+    }
+  }
+
+  async getPublishedClasses(): Promise<Class[]> {
+    try {
+      const now = new Date();
+      return await db
+        .select()
+        .from(classes)
+        .where(
+          and(
+            isNull(classes.pausedAt),
+            or(
+              eq(classes.status, "published"),
+              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
+            ),
+          ),
+        )
+        .orderBy(classes.date);
+    } catch (error) {
+      console.error("[DB] Error getting published classes:", error);
       return [];
     }
   }
@@ -530,12 +1137,204 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createClass(classData: InsertClass): Promise<Class> {
+  async createClass(
+    classData: InsertClass & {
+      status?: string;
+      publishedAt?: Date | null;
+      pausedAt?: Date | null;
+    },
+  ): Promise<Class> {
     try {
       const [newClass] = await db.insert(classes).values(classData).returning();
       return newClass;
     } catch (error) {
       console.error('[DB] Error creating class:', error);
+      throw error;
+    }
+  }
+
+  async updateClassSession(
+    id: string,
+    updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>,
+  ): Promise<Class | undefined> {
+    try {
+      const [row] = await db.update(classes).set(updates).where(eq(classes.id, id)).returning();
+      return row || undefined;
+    } catch (error) {
+      console.error("[DB] Error updating class session:", error);
+      return undefined;
+    }
+  }
+
+  async countBookingsForClass(classId: string): Promise<number> {
+    try {
+      const rows = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.classId, classId));
+      return rows.length;
+    } catch (error) {
+      console.error("[DB] Error counting bookings for class:", error);
+      return 0;
+    }
+  }
+
+  async deleteClassSession(id: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const bookingCount = await this.countBookingsForClass(id);
+      if (bookingCount > 0) {
+        return {
+          ok: false,
+          message: `Cannot delete: ${bookingCount} booking(s) exist for this session.`,
+        };
+      }
+      const result = await db.delete(classes).where(eq(classes.id, id)).returning({ id: classes.id });
+      return { ok: result.length > 0, message: result.length ? undefined : "Session not found" };
+    } catch (error) {
+      console.error("[DB] Error deleting class session:", error);
+      return { ok: false, message: "Failed to delete session" };
+    }
+  }
+
+  async cancelClassSessionWithBookings(
+    id: string,
+    reason: string,
+    ownerOtp: string,
+  ): Promise<{ ok: boolean; message?: string }> {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) {
+      return { ok: false, message: "Please enter a cancellation reason (at least 3 characters)." };
+    }
+    const placeholderOtp = (process.env.OWNER_CANCEL_OTP_DUMMY || "000000").trim();
+    if (ownerOtp.trim() !== placeholderOtp) {
+      return {
+        ok: false,
+        message:
+          "Invalid owner OTP. Until SMS verification is live, use placeholder OTP 000000 (ask the studio owner).",
+      };
+    }
+
+    try {
+      const cls = await this.getClass(id);
+      if (!cls) return { ok: false, message: "Session not found" };
+      if (cls.cancelledAt) return { ok: false, message: "This session is already cancelled." };
+
+      const now = new Date();
+      await db
+        .update(classes)
+        .set({
+          cancelledAt: now,
+          cancellationReason: trimmedReason,
+          pausedAt: now,
+          status: "paused",
+        })
+        .where(eq(classes.id, id));
+
+      await db
+        .update(userSessionMappings)
+        .set({
+          status: "cancelled",
+          cancelledAt: now,
+          cancellationReason: trimmedReason,
+          updatedAt: now,
+        })
+        .where(eq(userSessionMappings.classId, id));
+
+      return { ok: true };
+    } catch (error) {
+      console.error("[DB] Error cancelling class session:", error);
+      return { ok: false, message: "Failed to cancel session" };
+    }
+  }
+
+  async findNextSessionForClassType(
+    classTypeId: string,
+    after: Date,
+    sessionFrequencies?: string[],
+  ): Promise<Class | undefined> {
+    try {
+      const now = new Date();
+      const rows = await db
+        .select()
+        .from(classes)
+        .where(
+          and(
+            eq(classes.classTypeId, classTypeId),
+            gte(classes.date, after),
+            isNull(classes.pausedAt),
+            isNull(classes.cancelledAt),
+            or(
+              eq(classes.status, "published"),
+              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
+            ),
+          ),
+        )
+        .orderBy(classes.date);
+
+      for (const row of rows) {
+        if (
+          sessionFrequencies?.length &&
+          !sessionFrequencies.includes(row.sessionFrequency ?? "")
+        ) {
+          continue;
+        }
+        if (row.date.getTime() > after.getTime()) {
+          return row;
+        }
+      }
+      return undefined;
+    } catch (error) {
+      console.error("[DB] Error finding next session:", error);
+      return undefined;
+    }
+  }
+
+  async setUserActive(id: string, isActive: boolean): Promise<User | undefined> {
+    try {
+      const [row] = await db
+        .update(users)
+        .set({ isActive, updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+      return row || undefined;
+    } catch (error) {
+      console.error("[DB] Error setting user active:", error);
+      return undefined;
+    }
+  }
+
+  async recordSessionJoin(userId: string, classId: string): Promise<void> {
+    try {
+      await db.insert(sessionJoinEvents).values({ userId, classId });
+      await db
+        .update(users)
+        .set({
+          sessionAttendanceCount: sql`${users.sessionAttendanceCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      await db
+        .update(userSessionMappings)
+        .set({ attendedAt: new Date(), status: "completed", updatedAt: new Date() })
+        .where(
+          and(eq(userSessionMappings.userId, userId), eq(userSessionMappings.classId, classId)),
+        );
+      await this.incrementSubscriptionUtilization(userId, classId);
+    } catch (error) {
+      console.error("[DB] Error recording session join:", error);
+    }
+  }
+
+  async recordMoodCheckin(
+    userId: string,
+    classId: string,
+    phase: "pre" | "post",
+    moodId: string,
+  ): Promise<void> {
+    try {
+      await db.insert(sessionMoodCheckins).values({ userId, classId, phase, moodId });
+    } catch (error) {
+      console.error("[DB] Error recording mood check-in:", error);
       throw error;
     }
   }
@@ -584,9 +1383,15 @@ export class DatabaseStorage implements IStorage {
 
   async createBooking(booking: InsertBooking): Promise<Booking> {
     try {
-      const [newBooking] = await db.insert(bookings).values(booking).returning();
+      const cls = await this.getClass(booking.classId);
+      const paymentMethod = booking.paymentMethod ?? cls?.paymentMethod ?? "razorpay_link";
+      const [newBooking] = await db
+        .insert(bookings)
+        .values({ ...booking, paymentMethod })
+        .returning();
 
-      // Update class booking count
+      await this.ensureUserSessionMapping(booking.userId, booking.classId);
+
       const classBookings = await this.getBookingsByClass(booking.classId);
       await this.updateClassBookingCount(booking.classId, classBookings.length);
 
@@ -595,6 +1400,567 @@ export class DatabaseStorage implements IStorage {
       console.error('[DB] Error creating booking:', error);
       throw error;
     }
+  }
+
+  async getUserBookings(userId: string): Promise<Booking[]> {
+    try {
+      return await db.select().from(bookings).where(eq(bookings.userId, userId));
+    } catch (error) {
+      console.error("[DB] Error getting user bookings:", error);
+      return [];
+    }
+  }
+
+  async userHasUpcomingBookingForClass(userId: string, classId: string): Promise<boolean> {
+    try {
+      const cls = await this.getClass(classId);
+      if (!cls || new Date(cls.date).getTime() < Date.now()) return false;
+
+      const [row] = await db
+        .select({
+          mappingStatus: userSessionMappings.status,
+          paymentStatus: bookings.paymentStatus,
+        })
+        .from(bookings)
+        .leftJoin(
+          userSessionMappings,
+          and(
+            eq(userSessionMappings.userId, bookings.userId),
+            eq(userSessionMappings.classId, bookings.classId),
+          ),
+        )
+        .where(and(eq(bookings.userId, userId), eq(bookings.classId, classId)))
+        .limit(1);
+
+      if (!row) return false;
+      return existingBookingBlocksNewBooking({
+        hasBookingRow: true,
+        mappingStatus: row.mappingStatus,
+        paymentStatus: row.paymentStatus,
+        classSessionStartMs: new Date(cls.date).getTime(),
+      });
+    } catch (error) {
+      console.error("[DB] Error checking existing booking:", error);
+      return false;
+    }
+  }
+
+  async updateBookingPaymentStatus(
+    bookingId: string,
+    paymentStatus: string,
+  ): Promise<Booking | undefined> {
+    try {
+      const [row] = await db
+        .update(bookings)
+        .set({ paymentStatus })
+        .where(eq(bookings.id, bookingId))
+        .returning();
+      return row;
+    } catch (error) {
+      console.error("[DB] Error updating booking payment status:", error);
+      return undefined;
+    }
+  }
+
+  async ensureUserSessionMapping(userId: string, classId: string): Promise<void> {
+    try {
+      const [existing] = await db
+        .select()
+        .from(userSessionMappings)
+        .where(
+          and(
+            eq(userSessionMappings.userId, userId),
+            eq(userSessionMappings.classId, classId),
+          ),
+        )
+        .limit(1);
+      if (existing) return;
+      await db.insert(userSessionMappings).values({
+        userId,
+        classId,
+        status: "upcoming",
+      });
+    } catch (error) {
+      console.error("[DB] Error ensuring session mapping:", error);
+    }
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [row] = await db.insert(payments).values(payment).returning();
+    return row;
+  }
+
+  async getPaymentById(id: string): Promise<Payment | undefined> {
+    const [row] = await db.select().from(payments).where(eq(payments.id, id));
+    return row;
+  }
+
+  async getPaymentByBookingId(bookingId: string): Promise<Payment | undefined> {
+    const [row] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.bookingId, bookingId))
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
+    return row;
+  }
+
+  async getPaymentByRazorpayOrderId(orderId: string): Promise<Payment | undefined> {
+    const [row] = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.razorpayOrderId, orderId));
+    return row;
+  }
+
+  async updatePayment(
+    id: string,
+    updates: Partial<InsertPayment>,
+  ): Promise<Payment | undefined> {
+    const [row] = await db
+      .update(payments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(payments.id, id))
+      .returning();
+    return row;
+  }
+
+  async ensurePaymentStubForBooking(params: {
+    bookingId: string;
+    userId: string;
+    classId: string;
+    amountPaise: number;
+    gatewayProvider: string;
+    payerName?: string | null;
+    payerEmail?: string | null;
+    payerPhone?: string | null;
+    gatewayReference?: string | null;
+  }): Promise<Payment> {
+    const existing = await this.getPaymentByBookingId(params.bookingId);
+    if (existing) return existing;
+
+    return this.createPayment({
+      bookingId: params.bookingId,
+      userId: params.userId,
+      classId: params.classId,
+      amountPaise: params.amountPaise,
+      currency: "INR",
+      status: "pending",
+      gatewayProvider: params.gatewayProvider,
+      gatewayReference: params.gatewayReference ?? null,
+      payerName: params.payerName ?? null,
+      payerEmail: params.payerEmail ?? null,
+      payerPhone: params.payerPhone ?? null,
+      adminDisposition: "pending",
+    });
+  }
+
+  private mapPaymentHistoryRows(
+    rows: Array<{
+      id: string;
+      bookingId: string;
+      userId: string;
+      userName: string;
+      userEmail: string;
+      className: string;
+      sessionDate: Date;
+      amountPaise: number | null;
+      currency: string;
+      paymentMethod: string | null;
+      gatewayProvider: string | null;
+      gatewayReference: string | null;
+      payerName: string | null;
+      payerEmail: string | null;
+      payerPhone: string | null;
+      gatewayPaymentMethod: string | null;
+      status: string;
+      adminDisposition: string | null;
+      bookingPaymentStatus: string | null;
+      verificationStatus: string | null;
+      transactionAckNumber: string | null;
+      receiptUrl: string | null;
+      invoiceUrl: string | null;
+      paidAt: Date | null;
+      createdAt: Date;
+    }>,
+  ): PaymentHistoryRow[] {
+    return rows.map((r) => ({
+      id: r.id,
+      bookingId: r.bookingId,
+      userId: r.userId,
+      userName: r.userName,
+      userEmail: r.userEmail,
+      className: r.className,
+      sessionDate: r.sessionDate.toISOString(),
+      amountPaise: r.amountPaise,
+      currency: r.currency,
+      paymentMethod: r.paymentMethod,
+      gatewayProvider: r.gatewayProvider,
+      gatewayReference: r.gatewayReference,
+      payerName: r.payerName,
+      payerEmail: r.payerEmail,
+      payerPhone: r.payerPhone,
+      gatewayPaymentMethod: r.gatewayPaymentMethod,
+      status: r.status,
+      adminDisposition:
+        r.adminDisposition ?? dispositionFromPaymentStatus(r.status),
+      bookingPaymentStatus: r.bookingPaymentStatus,
+      verificationStatus: r.verificationStatus,
+      transactionAckNumber: r.transactionAckNumber,
+      receiptUrl: r.receiptUrl,
+      invoiceUrl: r.invoiceUrl,
+      paidAt: r.paidAt?.toISOString() ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async getPaymentHistoryForAdmin(): Promise<PaymentHistoryRow[]> {
+    try {
+      const rows = await db
+        .select({
+          id: payments.id,
+          bookingId: payments.bookingId,
+          userId: payments.userId,
+          userName: users.name,
+          userEmail: users.email,
+          className: classTypes.name,
+          sessionDate: classes.date,
+          amountPaise: payments.amountPaise,
+          currency: payments.currency,
+          paymentMethod: bookings.paymentMethod,
+          gatewayProvider: payments.gatewayProvider,
+          gatewayReference: payments.gatewayReference,
+          payerName: payments.payerName,
+          payerEmail: payments.payerEmail,
+          payerPhone: payments.payerPhone,
+          gatewayPaymentMethod: payments.gatewayPaymentMethod,
+          status: payments.status,
+          adminDisposition: payments.adminDisposition,
+          bookingPaymentStatus: bookings.paymentStatus,
+          verificationStatus: bookings.verificationStatus,
+          transactionAckNumber: bookings.transactionAckNumber,
+          receiptUrl: payments.receiptUrl,
+          invoiceUrl: payments.invoiceUrl,
+          paidAt: payments.paidAt,
+          createdAt: payments.createdAt,
+        })
+        .from(payments)
+        .innerJoin(bookings, eq(payments.bookingId, bookings.id))
+        .innerJoin(users, eq(payments.userId, users.id))
+        .innerJoin(classes, eq(payments.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .orderBy(desc(payments.createdAt));
+      return this.mapPaymentHistoryRows(rows);
+    } catch (error) {
+      console.error("[DB] Error loading admin payment history:", error);
+      return [];
+    }
+  }
+
+  async getPaymentHistoryForUser(userId: string): Promise<PaymentHistoryRow[]> {
+    try {
+      const rows = await db
+        .select({
+          id: payments.id,
+          bookingId: payments.bookingId,
+          userId: payments.userId,
+          userName: users.name,
+          userEmail: users.email,
+          className: classTypes.name,
+          sessionDate: classes.date,
+          amountPaise: payments.amountPaise,
+          currency: payments.currency,
+          paymentMethod: bookings.paymentMethod,
+          gatewayProvider: payments.gatewayProvider,
+          gatewayReference: payments.gatewayReference,
+          payerName: payments.payerName,
+          payerEmail: payments.payerEmail,
+          payerPhone: payments.payerPhone,
+          gatewayPaymentMethod: payments.gatewayPaymentMethod,
+          status: payments.status,
+          adminDisposition: payments.adminDisposition,
+          receiptUrl: payments.receiptUrl,
+          invoiceUrl: payments.invoiceUrl,
+          paidAt: payments.paidAt,
+          createdAt: payments.createdAt,
+        })
+        .from(payments)
+        .innerJoin(bookings, eq(payments.bookingId, bookings.id))
+        .innerJoin(users, eq(payments.userId, users.id))
+        .innerJoin(classes, eq(payments.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .where(eq(payments.userId, userId))
+        .orderBy(desc(payments.createdAt));
+      return this.mapPaymentHistoryRows(rows);
+    } catch (error) {
+      console.error("[DB] Error loading user payment history:", error);
+      return [];
+    }
+  }
+
+  async updatePaymentAdminDisposition(
+    paymentId: string,
+    disposition: string,
+  ): Promise<Payment | undefined> {
+    const [row] = await db
+      .update(payments)
+      .set({ adminDisposition: disposition, updatedAt: new Date() })
+      .where(eq(payments.id, paymentId))
+      .returning();
+    return row;
+  }
+
+  async getMemberSessions(userId: string): Promise<MemberSessionRow[]> {
+    try {
+      const rows = await db
+        .select({
+          mappingId: userSessionMappings.id,
+          bookingId: bookings.id,
+          classId: classes.id,
+          className: classTypes.name,
+          instructorName: instructors.name,
+          sessionDate: classes.date,
+          sessionDurationMinutes: classTypes.duration,
+          googleMeetLink: classes.googleMeetLink,
+          mappingStatus: userSessionMappings.status,
+          mappingCancellationReason: userSessionMappings.cancellationReason,
+          classCancelledAt: classes.cancelledAt,
+          classCancellationReason: classes.cancellationReason,
+          paymentStatus: bookings.paymentStatus,
+          paymentMethod: bookings.paymentMethod,
+          verificationStatus: bookings.verificationStatus,
+          paidAt: payments.paidAt,
+          receiptUrl: payments.receiptUrl,
+          invoiceUrl: payments.invoiceUrl,
+          amountPaise: payments.amountPaise,
+          bookedAt: bookings.createdAt,
+        })
+        .from(bookings)
+        .innerJoin(classes, eq(bookings.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .innerJoin(instructors, eq(classes.instructorId, instructors.id))
+        .leftJoin(
+          userSessionMappings,
+          and(
+            eq(userSessionMappings.userId, bookings.userId),
+            eq(userSessionMappings.classId, bookings.classId),
+          ),
+        )
+        .leftJoin(payments, eq(payments.bookingId, bookings.id))
+        .where(eq(bookings.userId, userId))
+        .orderBy(sql`${bookings.createdAt} DESC`);
+
+      const seen = new Set<string>();
+      const unique = rows.filter((r) => {
+        if (seen.has(r.bookingId)) return false;
+        seen.add(r.bookingId);
+        return true;
+      });
+
+      const now = new Date();
+      return unique.map((r) => {
+        const isPaid = r.paymentStatus === "paid" || r.paymentStatus === "waived";
+        const { status, isLive } = classifyMemberSessionStatus({
+          mappingStatus: r.mappingStatus ?? "upcoming",
+          classCancelledAt: r.classCancelledAt,
+          sessionStart: r.sessionDate,
+          durationMinutes: r.sessionDurationMinutes,
+          now,
+        });
+        const cancellationReason =
+          r.mappingCancellationReason?.trim() ||
+          r.classCancellationReason?.trim() ||
+          null;
+
+        const duration = r.sessionDurationMinutes ?? 60;
+        const meetJoinState = getMeetJoinState({
+          sessionStart: r.sessionDate,
+          sessionDurationMinutes: duration,
+          isPaid,
+          hasMeetLink: !!r.googleMeetLink?.trim(),
+        });
+
+        return {
+          id: r.mappingId ?? r.bookingId,
+          bookingId: r.bookingId,
+          classId: r.classId,
+          className: r.className,
+          instructorName: r.instructorName,
+          sessionDate: r.sessionDate.toISOString(),
+          googleMeetLink: isPaid ? r.googleMeetLink : null,
+          status,
+          isLive,
+          cancellationReason,
+          paymentStatus: r.paymentStatus ?? "pending",
+          paymentMethod: r.paymentMethod ?? null,
+          verificationStatus: r.verificationStatus ?? null,
+          paidAt: r.paidAt?.toISOString() ?? null,
+          receiptUrl: r.receiptUrl,
+          invoiceUrl: r.invoiceUrl,
+          amountPaise: r.amountPaise,
+          bookedAt: r.bookedAt.toISOString(),
+          sessionDurationMinutes: duration,
+          meetJoinState,
+        };
+      });
+    } catch (error) {
+      console.error("[DB] Error getting member sessions:", error);
+      return [];
+    }
+  }
+
+  async getAllPaymentQrCodes(): Promise<PaymentQrCode[]> {
+    try {
+      return await db.select().from(paymentQrCodes).orderBy(desc(paymentQrCodes.createdAt));
+    } catch (error) {
+      console.error("[DB] Error getting payment QR codes:", error);
+      return [];
+    }
+  }
+
+  async getPaymentQrCode(id: string): Promise<PaymentQrCode | undefined> {
+    const [row] = await db.select().from(paymentQrCodes).where(eq(paymentQrCodes.id, id));
+    return row;
+  }
+
+  async createPaymentQrCode(data: InsertPaymentQrCode): Promise<PaymentQrCode> {
+    const [row] = await db.insert(paymentQrCodes).values(data).returning();
+    return row;
+  }
+
+  async updatePaymentQrCode(
+    id: string,
+    updates: Partial<InsertPaymentQrCode>,
+  ): Promise<PaymentQrCode | undefined> {
+    const [row] = await db
+      .update(paymentQrCodes)
+      .set(updates)
+      .where(eq(paymentQrCodes.id, id))
+      .returning();
+    return row;
+  }
+
+  async deletePaymentQrCode(id: string): Promise<{ ok: boolean; message?: string }> {
+    const inUse = await this.countClassesByPaymentQrCodeId(id);
+    if (inUse > 0) {
+      return { ok: false, message: "This QR code is linked to scheduled sessions and cannot be deleted." };
+    }
+    await db.delete(paymentQrCodes).where(eq(paymentQrCodes.id, id));
+    return { ok: true };
+  }
+
+  async countClassesByPaymentQrCodeId(qrId: string): Promise<number> {
+    const rows = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.paymentQrCodeId, qrId));
+    return rows.length;
+  }
+
+  async submitBookingPaymentAck(
+    bookingId: string,
+    userId: string,
+    transactionAckNumber: string,
+  ): Promise<Booking | undefined> {
+    const booking = await this.getBooking(bookingId);
+    if (!booking || booking.userId !== userId) return undefined;
+    const method = normalizeSessionPaymentMethod(booking.paymentMethod);
+    if (method !== "qr" && method !== "razorpay_link") return undefined;
+    if (booking.paymentStatus === "paid") return booking;
+
+    const [row] = await db
+      .update(bookings)
+      .set({
+        transactionAckNumber,
+        verificationStatus: "pending",
+        ackSubmittedAt: new Date(),
+      })
+      .where(eq(bookings.id, bookingId))
+      .returning();
+
+    const payment = await this.getPaymentByBookingId(bookingId);
+    if (payment) {
+      await this.updatePayment(payment.id, {
+        gatewayReference: transactionAckNumber,
+        adminDisposition: "pending",
+      });
+    }
+
+    return row;
+  }
+
+  async getPendingQrBookings(): Promise<PendingQrBookingRow[]> {
+    try {
+      const rows = await db
+        .select({
+          bookingId: bookings.id,
+          verificationStatus: bookings.verificationStatus,
+          transactionAckNumber: bookings.transactionAckNumber,
+          ackSubmittedAt: bookings.ackSubmittedAt,
+          paymentStatus: bookings.paymentStatus,
+          userId: users.id,
+          userName: users.name,
+          userEmail: users.email,
+          classId: classes.id,
+          className: classTypes.name,
+          sessionDate: classes.date,
+          instructorName: instructors.name,
+          price: classTypes.price,
+        })
+        .from(bookings)
+        .innerJoin(users, eq(bookings.userId, users.id))
+        .innerJoin(classes, eq(bookings.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .innerJoin(instructors, eq(classes.instructorId, instructors.id))
+        .where(
+          and(
+            eq(bookings.paymentMethod, "qr"),
+            eq(bookings.verificationStatus, "pending"),
+          ),
+        )
+        .orderBy(desc(bookings.ackSubmittedAt));
+
+      return rows.map((r) => ({
+        bookingId: r.bookingId,
+        verificationStatus: r.verificationStatus ?? "pending",
+        transactionAckNumber: r.transactionAckNumber,
+        ackSubmittedAt: r.ackSubmittedAt?.toISOString() ?? null,
+        paymentStatus: r.paymentStatus,
+        userId: r.userId,
+        userName: r.userName,
+        userEmail: r.userEmail,
+        classId: r.classId,
+        className: r.className,
+        sessionDate: r.sessionDate.toISOString(),
+        instructorName: r.instructorName,
+        price: String(r.price),
+      }));
+    } catch (error) {
+      console.error("[DB] Error getting pending QR bookings:", error);
+      return [];
+    }
+  }
+
+  async confirmQrBooking(bookingId: string): Promise<Booking | undefined> {
+    const [row] = await db
+      .update(bookings)
+      .set({
+        paymentStatus: "paid",
+        verificationStatus: "confirmed",
+      })
+      .where(eq(bookings.id, bookingId))
+      .returning();
+
+    const payment = await this.getPaymentByBookingId(bookingId);
+    if (payment) {
+      await this.updatePayment(payment.id, {
+        status: "paid",
+        paidAt: new Date(),
+        adminDisposition: "received",
+      });
+    }
+
+    return row;
   }
 
   // Contact Messages
@@ -618,70 +1984,83 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
-   * When ADMIN_INITIAL_PASSWORD is set (webapp env / local .env), keep the primary
-   * admin row aligned with that password (and optional email/name). Runs on every boot.
+   * When ADMIN_INITIAL_PASSWORD is set, upsert the bootstrap admin by env email
+   * (not an arbitrary first row). Runs on every boot and before admin login.
    */
-  private async syncAdminFromEnv(): Promise<void> {
+  async syncAdminFromEnv(options?: { throwOnError?: boolean }): Promise<void> {
     const config = getAdminBootstrapConfig();
-    if (!config) return;
+    if (!config) {
+      console.warn(
+        "[DB] ADMIN_INITIAL_PASSWORD not set or shorter than 8 chars — admin bootstrap skipped.",
+      );
+      return;
+    }
 
     try {
       const passwordHash = await hashPassword(config.password);
-      const [existing] = await db.select().from(adminUsers).limit(1);
+      const targetEmail = config.email;
 
-      if (!existing) {
-        const adminData: InsertAdminUser = {
-          email: config.email || "admin@andweyoga.com",
-          name: config.name || "System Administrator",
-          role: "super_admin",
-        };
-        const [inserted] = await db
-          .insert(adminUsers)
-          .values({ ...adminData, passwordHash })
-          .returning();
-        console.log(`[DB] Created bootstrap admin: ${inserted.email}`);
-        return;
-      }
+      let admin = await this.getAdminByEmail(targetEmail);
 
-      const updates: { passwordHash: string; email?: string; name?: string } = {
-        passwordHash,
-      };
-
-      if (config.name) updates.name = config.name;
-
-      if (config.email && config.email !== existing.email) {
-        const conflict = await this.getAdminByEmail(config.email);
-        if (conflict && conflict.id !== existing.id) {
-          console.warn(
-            `[DB] ADMIN_INITIAL_EMAIL ${config.email} is taken; keeping admin email ${existing.email}`,
-          );
+      if (!admin) {
+        const [first] = await db.select().from(adminUsers).limit(1);
+        if (first) {
+          const [updated] = await db
+            .update(adminUsers)
+            .set({
+              email: targetEmail,
+              passwordHash,
+              name: config.name || first.name,
+              role: "super_admin",
+            })
+            .where(eq(adminUsers.id, first.id))
+            .returning();
+          admin = updated;
+          console.log(`[DB] Migrated admin row to bootstrap email ${updated.email}`);
         } else {
-          updates.email = config.email;
+          const [inserted] = await db
+            .insert(adminUsers)
+            .values({
+              email: targetEmail,
+              name: config.name || "System Administrator",
+              role: "super_admin",
+              passwordHash,
+            })
+            .returning();
+          admin = inserted;
+          console.log(`[DB] Created bootstrap admin: ${inserted.email}`);
         }
+      } else {
+        const [updated] = await db
+          .update(adminUsers)
+          .set({
+            passwordHash,
+            ...(config.name ? { name: config.name } : {}),
+            role: "super_admin",
+          })
+          .where(eq(adminUsers.id, admin.id))
+          .returning();
+        admin = updated;
+        console.log(`[DB] Admin bootstrap synced for ${updated.email}`);
       }
-
-      const [updated] = await db
-        .update(adminUsers)
-        .set(updates)
-        .where(eq(adminUsers.id, existing.id))
-        .returning();
-
-      console.log(
-        `[DB] Admin bootstrap synced for ${updated.email} (password from ADMIN_INITIAL_PASSWORD)`,
-      );
     } catch (error) {
       console.error("[DB] Error syncing admin from env:", error);
+      if (options?.throwOnError !== false) throw error;
     }
   }
 
   // Admin Users Methods
   async getAdminByEmail(email: string): Promise<AdminUser | undefined> {
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const [admin] = await db.select().from(adminUsers).where(sql`LOWER(TRIM(${adminUsers.email})) = ${normalizedEmail}`);
+      const normalizedEmail = normalizeAdminEmail(email);
+      const [admin] = await db
+        .select()
+        .from(adminUsers)
+        .where(eq(adminUsers.email, normalizedEmail))
+        .limit(1);
       return admin || undefined;
     } catch (error) {
-      console.error('[DB] Error getting admin by email:', error);
+      console.error("[DB] Error getting admin by email:", error);
       return undefined;
     }
   }
@@ -725,51 +2104,50 @@ export class DatabaseStorage implements IStorage {
 
   async verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined> {
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-      let admin = await this.getAdminByEmail(normalizedEmail);
-
+      const normalizedEmail = normalizeAdminEmail(email);
+      const normalizedPassword = normalizeAdminPassword(password);
       const bootstrap = getAdminBootstrapConfig();
-      if (!admin && bootstrap?.email && bootstrap.email === normalizedEmail) {
-        await this.syncAdminFromEnv();
-        admin = await this.getAdminByEmail(normalizedEmail);
+
+      if (bootstrap) {
+        await this.syncAdminFromEnv({ throwOnError: false });
       }
 
+      let admin = await this.getAdminByEmail(normalizedEmail);
+
       if (!admin) {
-        if (bootstrap?.email && bootstrap.email !== normalizedEmail) {
+        if (bootstrap && bootstrap.email !== normalizedEmail) {
           console.warn(
-            `[Admin login] No admin for "${normalizedEmail}". Bootstrap email is "${bootstrap.email}" — use that email, or set ADMIN_INITIAL_EMAIL to match.`,
+            `[Admin login] No admin for "${normalizedEmail}". Use bootstrap email "${bootstrap.email}" (ADMIN_INITIAL_EMAIL).`,
           );
         }
         return undefined;
       }
 
       if (admin.passwordHash) {
-        const ok = await verifyPassword(password, admin.passwordHash);
-        if (ok) return admin;
+        if (await verifyPassword(normalizedPassword, admin.passwordHash)) {
+          return admin;
+        }
 
-        if (bootstrap && password === bootstrap.password) {
-          const passwordHash = await hashPassword(password);
+        if (bootstrap && normalizedPassword === bootstrap.password) {
+          const passwordHash = await hashPassword(normalizedPassword);
           await this.updateAdminPasswordHash(admin.id, passwordHash);
           return { ...admin, passwordHash };
         }
         return undefined;
       }
 
-      // One-time migration for rows created before password_hash existed
       const legacyOk =
-        password === LEGACY_ADMIN_PASSWORD ||
-        (bootstrap && password === bootstrap.password);
+        normalizedPassword === LEGACY_ADMIN_PASSWORD ||
+        (bootstrap && normalizedPassword === bootstrap.password);
 
       if (!legacyOk) return undefined;
 
-      console.warn(
-        `[DB] Admin ${admin.email}: migrated from legacy login to password_hash.`,
-      );
-      const passwordHash = await hashPassword(password);
+      console.warn(`[DB] Admin ${admin.email}: migrated from legacy login to password_hash.`);
+      const passwordHash = await hashPassword(normalizedPassword);
       await this.updateAdminPasswordHash(admin.id, passwordHash);
       return { ...admin, passwordHash };
     } catch (error) {
-      console.error('[DB] Error verifying admin credentials:', error);
+      console.error("[DB] Error verifying admin credentials:", error);
       return undefined;
     }
   }
@@ -795,6 +2173,120 @@ export class DatabaseStorage implements IStorage {
       console.error('[DB] Error getting users with completeness:', error);
       return [];
     }
+  }
+
+  async getAdminProfile(adminUserId: string): Promise<AdminProfile | undefined> {
+    const [row] = await db
+      .select()
+      .from(adminProfiles)
+      .where(eq(adminProfiles.adminUserId, adminUserId))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async upsertAdminProfile(
+    adminUserId: string,
+    profile: Omit<InsertAdminProfile, "adminUserId">,
+  ): Promise<AdminProfile> {
+    const existing = await this.getAdminProfile(adminUserId);
+    if (existing) {
+      const [updated] = await db
+        .update(adminProfiles)
+        .set({ ...profile, updatedAt: new Date() })
+        .where(eq(adminProfiles.adminUserId, adminUserId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(adminProfiles)
+      .values({ ...profile, adminUserId })
+      .returning();
+    return created;
+  }
+
+  async updateAdminProfileVerification(
+    adminUserId: string,
+    status: "pending" | "verified" | "rejected",
+    notes?: string | null,
+  ): Promise<AdminProfile | undefined> {
+    const [row] = await db
+      .update(adminProfiles)
+      .set({
+        verificationStatus: status,
+        verificationNotes: notes ?? null,
+        verifiedAt: status === "verified" ? new Date() : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(adminProfiles.adminUserId, adminUserId))
+      .returning();
+    return row ?? undefined;
+  }
+
+  async createSubscription(subscription: InsertSubscription): Promise<Subscription> {
+    const [row] = await db.insert(subscriptions).values(subscription).returning();
+    return row;
+  }
+
+  async getSubscriptionSummariesForAdmin(): Promise<SubscriptionSummaryRow[]> {
+    const rows = await db
+      .select({
+        id: subscriptions.id,
+        userId: subscriptions.userId,
+        userName: users.name,
+        userEmail: users.email,
+        classTypeId: subscriptions.classTypeId,
+        classTypeName: classTypes.name,
+        subscriptionType: subscriptions.subscriptionType,
+        totalAmountPaise: subscriptions.totalAmountPaise,
+        totalSessions: subscriptions.totalSessions,
+        utilizedSessions: subscriptions.utilizedSessions,
+        refundedSessions: subscriptions.refundedSessions,
+        disputedSessions: subscriptions.disputedSessions,
+        disputesResolved: subscriptions.disputesResolved,
+        waivedSessions: subscriptions.waivedSessions,
+        status: subscriptions.status,
+        expiresAt: subscriptions.expiresAt,
+        createdAt: subscriptions.createdAt,
+      })
+      .from(subscriptions)
+      .innerJoin(users, eq(subscriptions.userId, users.id))
+      .innerJoin(classTypes, eq(subscriptions.classTypeId, classTypes.id))
+      .orderBy(desc(subscriptions.createdAt));
+    return rows.map((r) => ({
+      ...r,
+      expiresAt: r.expiresAt?.toISOString() ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]> {
+    const all = await this.getSubscriptionSummariesForAdmin();
+    return all.filter((row) => row.userId === userId);
+  }
+
+  async incrementSubscriptionUtilization(userId: string, classId: string): Promise<void> {
+    const cls = await this.getClass(classId);
+    if (!cls) return;
+    const [active] = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.userId, userId),
+          eq(subscriptions.classTypeId, cls.classTypeId),
+          eq(subscriptions.status, "active"),
+        ),
+      )
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    if (!active) return;
+    await db
+      .update(subscriptions)
+      .set({
+        utilizedSessions: sql`${subscriptions.utilizedSessions} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(subscriptions.id, active.id));
   }
 
   // Profile completeness calculation helper

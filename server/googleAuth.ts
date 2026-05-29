@@ -63,13 +63,18 @@ export function setupGoogleAuth(app: Express) {
   app.get('/api/auth/google/callback',
     passport.authenticate('google', { session: false }),
     (req, res) => {
-      // Generate JWT token for the authenticated user
       const { generateToken } = require('./auth');
       const user = req.user as any;
       const token = generateToken(user.id);
-      
-      // Redirect to frontend with token
-      res.redirect(`/?token=${token}&loginSuccess=true`);
+
+      res.cookie('authToken', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      res.redirect('/?loginSuccess=true');
     }
   );
 }

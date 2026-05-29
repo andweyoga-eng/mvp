@@ -7,6 +7,15 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/** Parse JSON once — never call res.json() again after this (body stream is consumed). */
+export async function readResponseJson<T = unknown>(res: Response): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,

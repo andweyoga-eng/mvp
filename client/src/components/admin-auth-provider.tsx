@@ -79,8 +79,17 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Login failed");
+        let message = "Login failed";
+        try {
+          const error = await response.json();
+          message = error.message || message;
+        } catch {
+          if (response.status === 503) {
+            message =
+              "Database is unavailable. Refresh DATABASE_URL from Railway and restart the server.";
+          }
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();

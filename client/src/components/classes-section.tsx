@@ -1,40 +1,88 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle } from "lucide-react";
-import { useAuth } from "@/lib/auth";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import { useAuth } from "@/lib/auth";
+import { getSessionBadgeLabel } from "@/lib/session-badges";
 import type { ClassType } from "@shared/schema";
+import type { BookingIntent } from "@/lib/pending-booking";
 
 interface ClassesSectionProps {
-  onBookingClick: (classTypeId?: string) => void;
+  onBookingClick: (intent?: BookingIntent) => void;
 }
 
 export default function ClassesSection({ onBookingClick }: ClassesSectionProps) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [notifyType, setNotifyType] = useState<ClassType | null>(null);
+  const [guestEmail, setGuestEmail] = useState("");
   const { data: classTypes, isLoading, error } = useQuery<ClassType[]>({
-    queryKey: ['/api/class-types'],
+    queryKey: ["/api/class-types"],
+  });
+  const { data: availability } = useQuery<{ classTypeIds: string[] }>({
+    queryKey: ["/api/class-types-availability/upcoming"],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+  const { data: upcomingClasses = [] } = useQuery<Array<{
+    classTypeId: string;
+    date: string;
+    sessionFrequency?: string | null;
+    deliveryMode?: string | null;
+  }>>({
+    queryKey: ["/api/classes"],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
-  const { user } = useAuth();
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const handleClassBooking = (classTypeId: string) => {
+    onBookingClick({ classTypeId, scrollTo: "schedule" });
+  };
 
-  const isProfileComplete = isAuthUserProfileComplete(user);
+  const hasUpcomingSession = (classTypeId: string) =>
+    !!availability?.classTypeIds?.includes(classTypeId);
 
-  const handleClassBooking = (classTypeId?: string) => {
-    if (user && !isProfileComplete) {
+  const frequencyBadge = (classTypeId: string): string | null => {
+    const now = Date.now();
+    const row = upcomingClasses
+      .filter((c) => c.classTypeId === classTypeId && new Date(c.date).getTime() > now)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+    return getSessionBadgeLabel(row?.sessionFrequency, row?.deliveryMode);
+  };
+
+  const handleNotifySubmit = async () => {
+    if (!notifyType) return;
+    const email = user?.email ?? guestEmail.trim();
+    if (!email) {
       toast({
-        title: "Profile Incomplete",
-        description: "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
+        title: "Email required",
+        description: "Share your email to get session notifications.",
         variant: "destructive",
       });
-      setLocation('/my-account');
       return;
     }
-    onBookingClick(classTypeId);
+    const res = await fetch(`/api/class-types/${notifyType.id}/notify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      toast({ title: "Could not save notification request", variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "You're on the notify list",
+      description: "We'll email you when sessions open. Explore other sessions in the meantime.",
+    });
+    setNotifyType(null);
+    setGuestEmail("");
   };
 
   if (error) {
@@ -84,14 +132,29 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {classTypes?.map((classType) => (
               <Card key={classType.id} className="bg-card rounded-lg overflow-hidden shadow-lg hover-scale">
-                <img 
-                  src={classType.imageUrl || '/api/placeholder/600/300'} 
-                  alt={`${classType.name} class`}
-                  className="w-full h-48 object-cover"
-                  data-testid={`class-image-${classType.id}`}
-                />
+                <div className="relative">
+                  <img
+                    src={classType.imageUrl || "/api/placeholder/600/300"}
+                    alt={`${classType.name} class`}
+                    className="w-full h-48 object-cover"
+                    data-testid={`class-image-${classType.id}`}
+                  />
+                  {!hasUpcomingSession(classType.id) && (
+                    <Badge className="absolute left-2 top-2 bg-amber-600 text-white">
+                      Coming Soon
+                    </Badge>
+                  )}
+                  {hasUpcomingSession(classType.id) && frequencyBadge(classType.id) && (
+                    <Badge className="absolute right-2 top-2 bg-[#3d1b80] text-white">
+                      {frequencyBadge(classType.id)}
+                    </Badge>
+                  )}
+                </div>
                 <CardContent className="p-6">
-                  <h3 className="text-2xl font-bold text-primary mb-2" data-testid={`class-name-${classType.id}`}>
+                  <h3
+                    className="text-2xl font-bold text-primary mb-2"
+                    data-testid={`class-name-${classType.id}`}
+                  >
                     {classType.name}
                   </h3>
                   <p className="text-purple-600 mb-4" data-testid={`class-description-${classType.id}`}>
@@ -101,22 +164,66 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                     <span className="text-secondary font-bold" data-testid={`class-price-${classType.id}`}>
                       ₹{classType.price}/session
                     </span>
-                    <Button 
-                      onClick={() => handleClassBooking(classType.id)}
-                      className={`${user && !isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold`}
-                      data-testid={`book-button-${classType.id}`}
-                    >
-                      {user && !isProfileComplete && (
-                        <AlertTriangle className="w-4 h-4 mr-2" />
-                      )}
-                      {user && !isProfileComplete ? 'Complete Profile' : 'Book Now'}
-                    </Button>
+                    {hasUpcomingSession(classType.id) ? (
+                      <Button
+                        onClick={() => handleClassBooking(classType.id)}
+                        className="bg-primary hover:bg-primary/90 !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold"
+                        data-testid={`book-button-${classType.id}`}
+                      >
+                        Book Now
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setNotifyType(classType)}
+                        className="bg-[#bb5309] hover:bg-[#9a4508] !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold"
+                        data-testid={`notify-button-${classType.id}`}
+                      >
+                        Notify me
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
+
+        <Dialog open={!!notifyType} onOpenChange={(open) => !open && setNotifyType(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Notify me when sessions open</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {notifyType?.name ?? "This session type"} is coming soon. We can notify you as soon
+                as a session is scheduled.
+              </p>
+              {!user && (
+                <div className="space-y-2">
+                  <Label htmlFor="notify-email">Email</Label>
+                  <Input
+                    id="notify-email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="you@example.com"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Sign up later to book recurring sessions. Drop-in and trial can be booked as
+                    guest sessions.
+                  </p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button className="w-full" onClick={() => void handleNotifySubmit()}>
+                  Save notification request
+                </Button>
+                <Button variant="outline" className="w-full" onClick={() => setNotifyType(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {!isLoading && classTypes?.length === 0 && (
           <div className="text-center py-12">

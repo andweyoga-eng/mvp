@@ -38,10 +38,17 @@ const app = express();
 // ============================================================
 // SECURITY: CORS — only allow requests from your own domain
 // ============================================================
+function getAllowedCorsOrigin(): string {
+  const host = process.env.ALLOWED_ORIGIN?.trim();
+  if (!host) return '*';
+  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
+  const protocol =
+    process.env.NODE_ENV !== 'production' && isLocalHost ? 'http' : 'https';
+  return `${protocol}://${host}`;
+}
+
 app.use((req, res, next) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN
-    ? `https://${process.env.ALLOWED_ORIGIN}`
-    : '*';
+  const allowedOrigin = getAllowedCorsOrigin();
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -73,9 +80,20 @@ app.use((req, res, next) => {
 // Install with: npm install cookie-parser @types/cookie-parser
 // ============================================================
 import cookieParser from 'cookie-parser';
+import { handleRazorpayWebhook } from './payment-webhook';
+import { checkDatabaseHealth } from './db-health';
+
 app.use(cookieParser());
 
-app.use(express.json({ limit: '1mb' })); // Limit body size to prevent large payload attacks
+// Razorpay webhooks require the raw body for signature verification
+app.post(
+  '/api/payments/webhook',
+  express.raw({ type: 'application/json' }),
+  handleRazorpayWebhook,
+);
+
+// QR admin uploads send base64 data URLs (~33% larger than raw files); allow headroom for ~2MB images.
+app.use(express.json({ limit: '3mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from attached_assets
@@ -112,9 +130,26 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const dbHealth = await checkDatabaseHealth();
+  if (!dbHealth.ok) {
+    console.error("\n⚠️  Database connection failed at startup.");
+    console.error(`   ${dbHealth.error}`);
+    console.error(
+      "   Admin login and most API routes will not work until DATABASE_URL is valid.",
+    );
+    console.error(
+      "   Fix: In Railway → Postgres → Connect, copy DATABASE_PUBLIC_URL into .env (and webapp vars).\n",
+    );
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if (err.type === "entity.too.large") {
+      return res.status(413).json({
+        message: "Request body is too large. Try a smaller image (under 2MB).",
+      });
+    }
     const status = err.status || err.statusCode || 500;
     // SECURITY: Never expose internal error details to clients in production
     const message = process.env.NODE_ENV === 'production'

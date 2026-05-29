@@ -1,12 +1,43 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import { z } from "zod";
-import { storage } from "./storage";
 import {
-  insertClassTypeSchema,
-  insertInstructorSchema,
-  insertClassSchema,
-  insertBookingSchema,
+  isSessionBookable,
+  isTrialOrDropIn,
+  TRIAL_DROPIN_MIDSESSION_MESSAGE,
+} from "@shared/booking-eligibility";
+import { shouldBlockRecurringMidBatchBooking } from "@shared/recurring-batch";
+import { expandSessionOccurrences, serializeRecurrenceWeekdays } from "@shared/session-schedule";
+import { storage, storageReady } from "./storage";
+import { getAdminBootstrapConfig, normalizeAdminEmail, normalizeAdminPassword } from "./admin-bootstrap";
+import { checkDatabaseHealth } from "./db-health";
+import {
+  adminCreateClassTypeSchema,
+  adminCreateInstructorSchema,
+  adminUpdateInstructorSchema,
+  adminCreateClassSessionSchema,
+  adminUpdateClassSessionSchema,
+  adminPaymentQrCodeSchema,
+  adminUpdateInstructorStatusSchema,
+  adminInstructorEmailOtpSchema,
+  formatZodErrorsForDisplay,
+} from "@shared/admin-validation";
+import {
+  isInstructorSessionPoolEligible,
+  isInstructorPublicVisible,
+  toPublicInstructorProfile,
+} from "@shared/instructor-compliance";
+import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
+import {
+  createInstructorOtpPayload,
+  deliverInstructorEmailOtp,
+  verifyInstructorOtpHash,
+} from "./instructor-verification";
+import { MOOD_OPTIONS } from "@shared/mood";
+import {
+  memberBookingBodySchema,
+  memberPaymentAckSchema,
   insertContactMessageSchema,
   registerUserSchema,
   loginUserSchema,
@@ -26,8 +57,24 @@ import {
   generateAdminToken, requireAdminAuth,
   type AdminAuthRequest, verifyAdminCredentials
 } from "./adminAuth";
-import { sendEmail, createVerificationEmailHTML, createPasswordResetEmailHTML } from "./email";
+import {
+  sendEmail,
+  sendEmailDetailed,
+  createVerificationEmailHTML,
+  createPasswordResetEmailHTML,
+} from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
+import { isUserActive, respondAccountDeactivated } from "./account";
+import { getConfiguredCheckoutGateway, rupeesToPaise } from "./payment-gateways";
+import {
+  normalizeSessionPaymentMethod,
+  providerForSessionMethod,
+  usesHostedCheckout,
+  usesQrManualVerification,
+  type PaymentDisposition,
+} from "@shared/payment-gateway";
+import { markPaymentPaid, confirmQrBookingPayment, verifyManualPayment } from "./payment-service";
+import { MANUAL_PAYMENT_SUBMITTED_COPY } from "@shared/manual-payment-ack";
 
 // ---------------------------------------------------------------------------
 // PRODUCT (POV): In-app health document file uploads are DISABLED until we
@@ -80,6 +127,29 @@ setInterval(() => {
 const authRateLimit = rateLimit(10, 15 * 60 * 1000);   // 10 attempts per 15 minutes
 const forgotPwdRateLimit = rateLimit(3, 60 * 60 * 1000); // 3 attempts per hour
 
+function adminRateLimitMiddleware(maxRequests: number, windowMs: number) {
+  const adminStore = new Map<string, { count: number; resetAt: number }>();
+  return (req: Request, res: Response, next: () => void) => {
+    const key = `admin:${req.ip || "unknown"}`;
+    const now = Date.now();
+    const record = adminStore.get(key);
+    if (!record || now > record.resetAt) {
+      adminStore.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+    if (record.count >= maxRequests) {
+      return res.status(429).json({
+        message: "Too many admin login attempts. Please try again later.",
+        retryAfter: Math.ceil((record.resetAt - now) / 1000),
+      });
+    }
+    record.count++;
+    next();
+  };
+}
+
+const adminLoginRateLimit = adminRateLimitMiddleware(30, 15 * 60 * 1000);
+
 // ============================================================
 // Helper: set auth cookie securely
 // SECURITY FIX 2: Tokens go into httpOnly cookies, not URLs.
@@ -106,6 +176,7 @@ function googleOauthRedirectUri(req: Request): string {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await storageReady;
 
   // ============================================================
   // GOOGLE OAUTH ROUTES
@@ -171,6 +242,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         user = await storage.createUser(userData);
         await storage.verifyUserEmail(user.id);
+      }
+
+      if (!isUserActive(user)) {
+        return res.redirect('/?error=account_deactivated');
       }
 
       const token = generateToken(user.id);
@@ -256,6 +331,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Please verify your email before logging in" });
       }
 
+      if (!isUserActive(user)) {
+        return respondAccountDeactivated(res);
+      }
+
       const token = generateToken(user.id);
 
       // SECURITY FIX 2: Set as httpOnly cookie
@@ -263,7 +342,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: "Login successful",
-        user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified }
+        token,
+        user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified },
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -309,6 +389,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let user = await storage.getUser(req.user!.id);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
+      }
+      if (!isUserActive(user)) {
+        res.clearCookie("authToken");
+        return respondAccountDeactivated(res);
       }
       const reconciled = await storage.recomputeProfileCompletionStatus(req.user!.id);
       user = reconciled ?? user;
@@ -448,6 +532,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.verifyUserEmail(user.id);
       }
 
+      if (!isUserActive(user)) {
+        return respondAccountDeactivated(res);
+      }
+
       const authToken = generateToken(user.id);
 
       // SECURITY FIX 2: Cookie not URL
@@ -495,27 +583,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SECURITY FIX 3: requireAdminAuth added
-  app.post("/api/class-types", requireAdminAuth, async (req, res) => {
+  app.get("/api/class-types-availability/upcoming", async (_req, res) => {
     try {
-      const validatedData = insertClassTypeSchema.parse(req.body);
-      const classType = await storage.createClassType(validatedData);
-      res.status(201).json(classType);
+      const ids = await storage.getClassTypeIdsWithUpcomingSessions();
+      res.json({ classTypeIds: ids });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch class type availability" });
+    }
+  });
+
+  app.post("/api/class-types/:id/notify", optionalAuth, async (req: any, res) => {
+    try {
+      const classType = await storage.getClassType(req.params.id);
+      if (!classType) {
+        return res.status(404).json({ message: "Session type not found" });
+      }
+      const body = z
+        .object({
+          email: z.string().email().optional(),
+        })
+        .parse(req.body ?? {});
+      const user = req.user?.id ? await storage.getUser(req.user.id) : undefined;
+      const email = (user?.email ?? body.email ?? "").trim().toLowerCase();
+      if (!email) {
+        return res.status(400).json({ message: "Email is required for notification." });
+      }
+      const request = await storage.createNotifyRequest({
+        classTypeId: classType.id,
+        userId: user?.id ?? null,
+        email,
+        source: user ? "member" : "guest",
+      });
+      res.status(201).json({
+        id: request.id,
+        message: "Thanks! We’ll notify you when sessions open.",
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
+      res.status(500).json({ message: "Failed to save notification request" });
+    }
+  });
+
+  // SECURITY FIX 3: requireAdminAuth added
+  app.post("/api/class-types", requireAdminAuth, async (req, res) => {
+    try {
+      const validatedData = adminCreateClassTypeSchema.parse(req.body);
+      const classType = await storage.createClassType(validatedData);
+      res.status(201).json(classType);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
       res.status(500).json({ message: "Failed to create class type" });
+    }
+  });
+
+  app.patch("/api/class-types/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const existing = await storage.getClassType(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Class type not found" });
+      }
+      const validatedData = adminCreateClassTypeSchema.parse(req.body);
+      const updated = await storage.updateClassType(req.params.id, validatedData);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update class type" });
+    }
+  });
+
+  app.delete("/api/class-types/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const result = await storage.deleteClassType(req.params.id);
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Cannot delete class type" });
+      }
+      res.json({ message: "Class type deleted" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete class type" });
     }
   });
 
   // ============================================================
   // INSTRUCTORS
   // ============================================================
-  app.get("/api/instructors", async (req, res) => {
+  app.get("/api/instructors", async (_req, res) => {
     try {
-      const instructors = await storage.getAllInstructors();
-      res.json(instructors);
+      const instructors = await storage.getPublicInstructors();
+      res.json(instructors.map(toPublicInstructorProfile));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch instructors" });
     }
@@ -527,29 +693,261 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!instructor) {
         return res.status(404).json({ message: "Instructor not found" });
       }
-      res.json(instructor);
+      if (!isInstructorPublicVisible(instructor)) {
+        return res.status(404).json({ message: "Instructor not found" });
+      }
+      res.json(toPublicInstructorProfile(instructor));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch instructor" });
     }
   });
 
-  // SECURITY FIX 3: requireAdminAuth added
+  app.get("/api/admin/instructors", requireAdminAuth, async (_req, res) => {
+    try {
+      const instructors = await storage.getAllInstructors();
+      res.json(instructors);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch instructors" });
+    }
+  });
+
+  app.get("/api/admin/instructors/eligible", requireAdminAuth, async (_req, res) => {
+    try {
+      const instructors = await storage.getSessionEligibleInstructors();
+      res.json(instructors);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch instructors" });
+    }
+  });
+
   app.post("/api/instructors", requireAdminAuth, async (req, res) => {
     try {
-      const validatedData = insertInstructorSchema.parse(req.body);
-      const instructor = await storage.createInstructor(validatedData);
-      res.status(201).json(instructor);
+      const validatedData = adminCreateInstructorSchema.parse(req.body);
+      const instructor = await storage.createInstructor({
+        ...validatedData,
+        status: "pending",
+        emailVerified: false,
+        phoneVerified: false,
+      });
+      const reconciled = await storage.reconcileInstructorStatus(instructor.id);
+      res.status(201).json(reconciled ?? instructor);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
       }
       res.status(500).json({ message: "Failed to create instructor" });
     }
   });
 
+  app.patch("/api/admin/instructors/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const validatedData = adminUpdateInstructorSchema.parse(req.body);
+      const existing = await storage.getInstructor(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Instructor not found" });
+      }
+
+      const nextEmail = validatedData.email.trim().toLowerCase();
+      const prevEmail = existing.email?.trim().toLowerCase() ?? "";
+      const emailChanged = nextEmail !== prevEmail;
+
+      const updated = await storage.updateInstructor(req.params.id, {
+        ...validatedData,
+        ...(emailChanged
+          ? {
+              emailVerified: false,
+              emailOtpHash: null,
+              emailOtpExpiresAt: null,
+            }
+          : {}),
+      });
+      if (!updated) {
+        return res.status(500).json({ message: "Failed to update instructor" });
+      }
+      const reconciled = await storage.reconcileInstructorStatus(req.params.id);
+      res.json(reconciled ?? updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update instructor" });
+    }
+  });
+
+  app.patch("/api/admin/instructors/:id/status", requireAdminAuth, async (req, res) => {
+    try {
+      const { status } = adminUpdateInstructorStatusSchema.parse(req.body);
+      const existing = await storage.getInstructor(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Instructor not found" });
+      }
+
+      if (status === "suspended") {
+        await storage.updateInstructor(req.params.id, {
+          ycbLicenseStatus: "suspended_by_awy",
+          yogaAllianceLicenseStatus: "suspended_by_awy",
+        });
+      } else if (status === "blacklisted") {
+        await storage.updateInstructor(req.params.id, {
+          ycbLicenseStatus: "blacklisted_by_awy",
+          yogaAllianceLicenseStatus: "blacklisted_by_awy",
+        });
+      } else if (status === "expired") {
+        await storage.updateInstructor(req.params.id, {
+          ycbLicenseStatus: "expired",
+          yogaAllianceLicenseStatus: "expired",
+        });
+      } else if (status === "active") {
+        await storage.updateInstructor(req.params.id, {
+          ycbLicenseStatus: "verified",
+          yogaAllianceLicenseStatus: "verified",
+        });
+      }
+
+      const reconciled = await storage.reconcileInstructorStatus(req.params.id);
+      if (!reconciled) {
+        return res.status(500).json({ message: "Failed to update instructor status" });
+      }
+      res.json(reconciled);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update instructor status" });
+    }
+  });
+
+  app.post(
+    "/api/admin/instructors/:id/send-email-otp",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const instructor = await storage.getInstructor(req.params.id);
+        if (!instructor) {
+          return res.status(404).json({ message: "Instructor not found" });
+        }
+        const { otp, hash, expiresAt } = await createInstructorOtpPayload();
+        const saved = await storage.setInstructorEmailOtp(req.params.id, hash, expiresAt);
+        if (!saved) {
+          return res.status(500).json({ message: "Could not save verification code" });
+        }
+        const sent = await deliverInstructorEmailOtp(instructor, otp);
+        if (!sent.ok) {
+          return res.status(sent.error?.includes("not configured") ? 503 : 500).json({
+            message: sent.error ?? "Failed to send verification email.",
+          });
+        }
+        res.json({ message: "Verification code sent to instructor email" });
+      } catch (err) {
+        console.error("[send-email-otp]", err);
+        res.status(500).json({ message: "Failed to send verification email" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/instructors/:id/verify-email-otp",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { otp } = adminInstructorEmailOtpSchema.parse(req.body);
+        const instructor = await storage.getInstructor(req.params.id);
+        if (!instructor) {
+          return res.status(404).json({ message: "Instructor not found" });
+        }
+        if (
+          !instructor.emailOtpExpiresAt ||
+          instructor.emailOtpExpiresAt.getTime() < Date.now()
+        ) {
+          return res.status(400).json({ message: "Verification code expired. Send a new code." });
+        }
+        const valid = await verifyInstructorOtpHash(otp, instructor.emailOtpHash);
+        if (!valid) {
+          return res.status(400).json({ message: "Invalid verification code" });
+        }
+        const updated = await storage.markInstructorEmailVerified(req.params.id);
+        res.json(updated ?? { message: "Verified" });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+            errors: error.errors,
+          });
+        }
+        res.status(500).json({ message: "Failed to verify email" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/instructors/:id/verify-phone",
+    requireAdminAuth,
+    async (_req, res) => {
+      res.status(501).json({
+        message:
+          "SMS verification will be available once the SMS gateway is integrated. Use manual verification for now.",
+        smsGatewayReady: false,
+      });
+    },
+  );
+
+  app.post(
+    "/api/admin/instructors/:id/verify-phone/manual",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const instructor = await storage.getInstructor(req.params.id);
+        if (!instructor) {
+          return res.status(404).json({ message: "Instructor not found" });
+        }
+        const updated = await storage.markInstructorPhoneVerified(req.params.id);
+        res.json(updated);
+      } catch {
+        res.status(500).json({ message: "Failed to verify phone" });
+      }
+    },
+  );
+
   // ============================================================
   // CLASSES
   // ============================================================
+  /** Member booking + schedule: published session with active (session-pool) instructor. */
+  async function enrichPublicClassForBooking(
+    cls: Awaited<ReturnType<typeof storage.getClass>>,
+  ) {
+    if (!cls || !isClassVisibleForBooking(cls)) return null;
+    const classType = await storage.getClassType(cls.classTypeId);
+    const instructor = await storage.getInstructor(cls.instructorId);
+    if (!classType || !instructor || !isInstructorSessionPoolEligible(instructor)) {
+      return null;
+    }
+    return sanitizePublicClass(cls, {
+      classType,
+      instructor: toPublicInstructorProfile(instructor) as typeof instructor,
+    });
+  }
+
+  /** Marketing instructor list — full onboarding + active only. */
+  async function enrichPublicClassIfVisible(cls: Awaited<ReturnType<typeof storage.getClass>>) {
+    if (!cls || !isClassVisibleForBooking(cls)) return null;
+    const classType = await storage.getClassType(cls.classTypeId);
+    const instructor = await storage.getInstructor(cls.instructorId);
+    if (!classType || !instructor || !isInstructorPublicVisible(instructor)) return null;
+    return sanitizePublicClass(cls, {
+      classType,
+      instructor: toPublicInstructorProfile(instructor) as typeof instructor,
+    });
+  }
+
   app.get("/api/classes", async (req, res) => {
     try {
       const { date } = req.query;
@@ -560,23 +958,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "Invalid date format" });
         }
         const classes = await storage.getClassesByDate(filterDate);
-        const enrichedClasses = await Promise.all(
-          classes.map(async (cls) => {
-            const classType = await storage.getClassType(cls.classTypeId);
-            const instructor = await storage.getInstructor(cls.instructorId);
-            return { ...cls, classType, instructor };
-          })
-        );
+        const enrichedClasses = (
+          await Promise.all(classes.map((cls) => enrichPublicClassForBooking(cls)))
+        ).filter(Boolean);
         res.json(enrichedClasses);
       } else {
-        const classes = await storage.getAllClasses();
-        const enrichedClasses = await Promise.all(
-          classes.map(async (cls) => {
-            const classType = await storage.getClassType(cls.classTypeId);
-            const instructor = await storage.getInstructor(cls.instructorId);
-            return { ...cls, classType, instructor };
-          })
-        );
+        const classes = await storage.getPublishedClasses();
+        const enrichedClasses = (
+          await Promise.all(classes.map((cls) => enrichPublicClassForBooking(cls)))
+        ).filter(Boolean);
         res.json(enrichedClasses);
       }
     } catch (error) {
@@ -590,25 +980,225 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!cls) {
         return res.status(404).json({ message: "Class not found" });
       }
-      const classType = await storage.getClassType(cls.classTypeId);
-      const instructor = await storage.getInstructor(cls.instructorId);
-      res.json({ ...cls, classType, instructor });
+      const enriched = await enrichPublicClassForBooking(cls);
+      if (!enriched) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      res.json(enriched);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch class" });
+    }
+  });
+
+  // ─── Payment QR codes (admin) ─────────────────────────────────────────────
+  app.get("/api/admin/payment-qr-codes", requireAdminAuth, async (_req, res) => {
+    try {
+      const codes = await storage.getAllPaymentQrCodes();
+      res.json(codes);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch payment QR codes" });
+    }
+  });
+
+  app.post("/api/admin/payment-qr-codes", requireAdminAuth, async (req, res) => {
+    try {
+      const data = adminPaymentQrCodeSchema.parse(req.body);
+      const created = await storage.createPaymentQrCode(data);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to create payment QR code" });
+    }
+  });
+
+  app.patch("/api/admin/payment-qr-codes/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const existing = await storage.getPaymentQrCode(req.params.id);
+      if (!existing) return res.status(404).json({ message: "QR code not found" });
+      const data = adminPaymentQrCodeSchema.parse(req.body);
+      const updated = await storage.updatePaymentQrCode(req.params.id, data);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update payment QR code" });
+    }
+  });
+
+  app.delete("/api/admin/payment-qr-codes/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const result = await storage.deletePaymentQrCode(req.params.id);
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Cannot delete QR code" });
+      }
+      res.json({ message: "QR code deleted" });
+    } catch {
+      res.status(500).json({ message: "Failed to delete payment QR code" });
     }
   });
 
   // SECURITY FIX 3: requireAdminAuth added
   app.post("/api/classes", requireAdminAuth, async (req, res) => {
     try {
-      const validatedData = insertClassSchema.parse(req.body);
-      const cls = await storage.createClass(validatedData);
-      res.status(201).json(cls);
+      const validatedData = adminCreateClassSessionSchema.parse(req.body);
+      const adminProfile = await storage.getAdminProfile((req as any).admin.id);
+      if (!adminProfile || !/^\d{10}$/.test(adminProfile.phone)) {
+        return res.status(400).json({
+          message:
+            "Admin profile with a valid 10-digit phone is required before creating sessions.",
+          code: "admin_profile_required",
+        });
+      }
+      if (!adminProfile.governmentIdImageUrl) {
+        return res.status(400).json({
+          message: "Upload and save a government ID image in Admin Profile first.",
+          code: "admin_profile_required",
+        });
+      }
+      const instructor = await storage.getInstructor(validatedData.instructorId);
+      if (!instructor) {
+        return res.status(400).json({ message: "Selected instructor was not found" });
+      }
+      if (!isInstructorSessionPoolEligible(instructor)) {
+        return res.status(400).json({
+          message:
+            instructor.status !== "active"
+              ? "Only active instructors can be assigned to sessions."
+              : "This instructor has a blocked license status and cannot take sessions.",
+        });
+      }
+      const seriesId =
+        validatedData.recurrenceKind === "weekly" ? crypto.randomUUID() : null;
+      const occurrenceDates = expandSessionOccurrences({
+        startAt: validatedData.date,
+        recurrenceKind: validatedData.recurrenceKind,
+        occurrenceCount: validatedData.occurrenceCount,
+        recurrenceWeekdays: validatedData.recurrenceWeekdays,
+      });
+
+      const created = [];
+      for (const date of occurrenceDates) {
+        const cls = await storage.createClass({
+          classTypeId: validatedData.classTypeId,
+          instructorId: validatedData.instructorId,
+          date,
+          maxCapacity: validatedData.maxCapacity,
+          googleMeetLink: validatedData.googleMeetLink,
+          deliveryMode: validatedData.deliveryMode,
+          sessionFrequency: validatedData.sessionFrequency,
+          venueAddress: validatedData.venueAddress,
+          venueMapLink: validatedData.venueMapLink,
+          venueContactPhone: validatedData.venueContactPhone,
+          paymentMethod: validatedData.paymentMethod,
+          razorpayLink: validatedData.razorpayLink,
+          paymentQrCodeId: validatedData.paymentQrCodeId,
+          qrContactPhone: validatedData.qrContactPhone,
+          qrContactEmail: validatedData.qrContactEmail,
+          status: validatedData.status,
+          publishedAt: validatedData.publishedAt,
+          scheduleSource: "manual",
+          recurrenceKind: validatedData.recurrenceKind,
+          recurrenceWeekdays:
+            validatedData.recurrenceKind === "weekly"
+              ? serializeRecurrenceWeekdays(validatedData.recurrenceWeekdays)
+              : null,
+          seriesWeekCount:
+            validatedData.recurrenceKind === "weekly" ? validatedData.occurrenceCount : null,
+          seriesId,
+        });
+        created.push(cls);
+      }
+
+      let notifySummary: { queued: number; sent: number; failed: number } | null = null;
+      if (created.length > 0) {
+        const notifyList = await storage.getActiveNotifyRequestsByClassTypeId(validatedData.classTypeId);
+        if (notifyList.length > 0) {
+          const classType = await storage.getClassType(validatedData.classTypeId);
+          const first = created[0];
+          const bookingLink = `${process.env.ALLOWED_ORIGIN || "http://localhost:5000"}/?openBooking=true&sessionId=${first.id}`;
+          const sendResults = await Promise.all(
+            notifyList.map(async (row) => {
+              const result = await sendEmailDetailed({
+                to: row.email,
+                subject: `New ${classType?.name ?? "session"} now open for booking`,
+                html: `<p>Hi there,</p>
+<p>A new <strong>${classType?.name ?? "session"}</strong> is available now.</p>
+<p><a href="${bookingLink}">Book this session</a></p>
+<p>If you don't have an account yet, please sign up before booking recurring sessions.</p>`,
+              });
+              await storage.updateNotifyRequestEmailStatus(row.id, result.ok ? "sent" : "failed", {
+                error: result.ok ? null : result.error,
+                sentAt: result.ok ? new Date() : null,
+              });
+              return result.ok;
+            }),
+          );
+          const sent = sendResults.filter(Boolean).length;
+          notifySummary = {
+            queued: notifyList.length,
+            sent,
+            failed: notifyList.length - sent,
+          };
+        } else {
+          notifySummary = { queued: 0, sent: 0, failed: 0 };
+        }
+      }
+
+      res.status(201).json(
+        created.length === 1
+          ? { session: created[0], sessions: created, seriesId, notifySummary }
+          : {
+              sessions: created,
+              seriesId,
+              message: `${created.length} sessions scheduled`,
+              notifySummary,
+            },
+      );
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
       }
       res.status(500).json({ message: "Failed to create class" });
+    }
+  });
+
+  // Member: mood check-in (pre/post session)
+  app.post("/api/sessions/:classId/mood", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const phase = z.enum(["pre", "post"]).parse(req.body.phase);
+      const moodId = z.string().parse(req.body.moodId);
+      if (!MOOD_OPTIONS.some((m) => m.id === moodId)) {
+        return res.status(400).json({ message: "Invalid mood selection" });
+      }
+      await storage.recordMoodCheckin(req.user!.id, req.params.classId, phase, moodId);
+      res.status(201).json({ message: "Mood recorded", phase, moodId });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "phase and moodId are required" });
+      }
+      res.status(500).json({ message: "Failed to record mood" });
+    }
+  });
+
+  // Member: shadow attendance when opening Meet link (not Google Meet API)
+  app.post("/api/sessions/:classId/join", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      await storage.recordSessionJoin(req.user!.id, req.params.classId);
+      res.json({ message: "Join recorded" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to record join" });
     }
   });
 
@@ -616,30 +1206,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/schedule/week", async (req, res) => {
     try {
       const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
+      const startDay = new Date(today);
+      startDay.setHours(0, 0, 0, 0);
 
       const weekSchedule = [];
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
       for (let i = 0; i < 7; i++) {
-        const currentDay = new Date(startOfWeek);
-        currentDay.setDate(startOfWeek.getDate() + i);
+        const currentDay = new Date(startDay);
+        currentDay.setDate(startDay.getDate() + i);
 
         const dayClasses = await storage.getClassesByDate(currentDay);
-        const enrichedClasses = await Promise.all(
-          dayClasses.map(async (cls) => {
-            const classType = await storage.getClassType(cls.classTypeId);
-            const instructor = await storage.getInstructor(cls.instructorId);
-            return { ...cls, classType, instructor };
-          })
-        );
+        const enrichedClasses = (
+          await Promise.all(dayClasses.map((cls) => enrichPublicClassForBooking(cls)))
+        ).filter(Boolean);
 
-        if (enrichedClasses.length > 0) {
+        const now = Date.now();
+        const upcomingClasses = enrichedClasses
+          .filter((cls) => {
+            const durationMinutes =
+              typeof cls.classType?.duration === "number" && cls.classType.duration > 0
+                ? cls.classType.duration
+                : 60;
+            return cls.date.getTime() + durationMinutes * 60_000 > now;
+          })
+          .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+        if (upcomingClasses.length > 0) {
           weekSchedule.push({
-            day: dayNames[i],
+            day: dayNames[currentDay.getDay()],
             date: currentDay,
-            classes: enrichedClasses.sort((a, b) => a.date.getTime() - b.date.getTime())
+            classes: upcomingClasses,
           });
         }
       }
@@ -676,6 +1273,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/sessions/my", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.user!.id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (!isUserActive(user)) return respondAccountDeactivated(res);
+
+      const sessions = await storage.getMemberSessions(req.user!.id);
+      res.json(sessions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch your sessions" });
+    }
+  });
+
+  app.post("/api/bookings/:id/payment-ack", requireAuth, async (req: any, res) => {
+    try {
+      const { transactionAckNumber } = memberPaymentAckSchema.parse(req.body);
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking || booking.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      const payMethod = normalizeSessionPaymentMethod(booking.paymentMethod);
+      if (payMethod !== "qr" && payMethod !== "razorpay_link") {
+        return res.status(400).json({
+          message: "This booking does not use manual payment verification",
+        });
+      }
+      if (booking.paymentStatus === "paid") {
+        return res.status(400).json({ message: "Payment already confirmed" });
+      }
+
+      const updated = await storage.submitBookingPaymentAck(
+        booking.id,
+        req.user!.id,
+        transactionAckNumber,
+      );
+      if (!updated) {
+        return res.status(400).json({ message: "Could not submit payment reference" });
+      }
+
+      res.json({
+        message: MANUAL_PAYMENT_SUBMITTED_COPY.confirmation,
+        bookingId: updated.id,
+        verificationStatus: updated.verificationStatus,
+        workingHours: MANUAL_PAYMENT_SUBMITTED_COPY.workingHoursDetail,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to submit payment reference" });
+    }
+  });
+
   app.get("/api/bookings/:id", requireAuth, async (req: any, res) => {
     try {
       const booking = await storage.getBooking(req.params.id);
@@ -692,16 +1342,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings", requireAuth, async (req: any, res) => {
+  app.post("/api/bookings", optionalAuth, async (req: any, res) => {
     try {
-      const validatedData = insertBookingSchema.parse(req.body);
+      const payload = z
+        .object({
+          classId: z.string().min(1),
+          guestEmail: z.string().trim().email().max(120).optional(),
+          guestName: z.string().trim().min(1).max(80).optional(),
+          guestPhone: z
+            .string()
+            .optional()
+            .transform((v) => (v ?? "").replace(/\D/g, "").slice(0, 10)),
+        })
+        .refine(
+          (data) => !data.guestPhone || data.guestPhone.length === 10,
+          {
+            message: "Guest phone must be exactly 10 digits, or omitted.",
+            path: ["guestPhone"],
+          },
+        )
+        .parse(req.body);
+      const { classId } = payload;
 
-      const user = await storage.getUser(req.user!.id);
+      const cls = await storage.getClass(classId);
+      if (!cls) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+
+      const isGuestAllowedSession =
+        cls.sessionFrequency === "drop_in" || cls.sessionFrequency === "trial";
+      const mustBeSignedIn = !isGuestAllowedSession;
+      const isGuestBooking = !req.user?.id;
+
+      let user = req.user?.id ? await storage.getUser(req.user.id) : undefined;
+      if (!user && mustBeSignedIn) {
+        return res.status(401).json({
+          message: "Sign in is required for recurring sessions.",
+          code: "signup_required",
+        });
+      }
+
+      if (!user && isGuestAllowedSession) {
+        if (!payload.guestEmail || !payload.guestName) {
+          return res.status(400).json({
+            message: "Guest name and email are required for this booking.",
+          });
+        }
+        const existing = await storage.getUserByEmail(payload.guestEmail);
+        if (existing) {
+          user = existing;
+        } else {
+          user = await storage.createUser({
+            email: payload.guestEmail.toLowerCase().trim(),
+            name: payload.guestName.trim(),
+            password: crypto.randomUUID(),
+            primaryMobile: payload.guestPhone ?? null,
+            emergencyMobile: payload.guestPhone ?? null,
+            profileCompletionStatus: "complete",
+          } as any);
+          await storage.verifyUserEmail(user.id);
+        }
+      }
+
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      if (!isAccountProfileComplete(user)) {
+      if (!isUserActive(user)) {
+        return respondAccountDeactivated(res);
+      }
+
+      if (mustBeSignedIn && !isAccountProfileComplete(user)) {
         return res.status(409).json({
           message:
             "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your health update in My Account before booking.",
@@ -711,26 +1422,356 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const cls = await storage.getClass(validatedData.classId);
-      if (!cls) {
-        return res.status(404).json({ message: "Class not found" });
-      }
-
       if (cls.currentBookings >= cls.maxCapacity) {
         return res.status(400).json({ message: "Class is fully booked" });
       }
 
+      const classTypeForBooking = await storage.getClassType(cls.classTypeId);
+      if (
+        !isSessionBookable(
+          cls.date,
+          classTypeForBooking?.duration,
+          cls.sessionFrequency,
+        )
+      ) {
+        if (isTrialOrDropIn(cls.sessionFrequency)) {
+          const nextSession = await storage.findNextSessionForClassType(
+            cls.classTypeId,
+            new Date(),
+            ["trial", "drop_in"],
+          );
+          return res.status(409).json({
+            code: "session_in_progress_dropin",
+            message: TRIAL_DROPIN_MIDSESSION_MESSAGE,
+            nextSession: nextSession
+              ? { id: nextSession.id, date: nextSession.date }
+              : null,
+          });
+        }
+        return res.status(400).json({ message: "This session is no longer open for booking." });
+      }
+
+      const recurringSeriesBounds = cls.seriesId
+        ? await storage.getRecurringSeriesBounds(cls.seriesId)
+        : undefined;
+
+      if (
+        shouldBlockRecurringMidBatchBooking({
+          sessionStart: cls.date,
+          sessionFrequency: cls.sessionFrequency,
+          seriesId: cls.seriesId,
+          seriesBounds: recurringSeriesBounds,
+          durationMinutes: classTypeForBooking?.duration,
+        })
+      ) {
+        const nextBatch = recurringSeriesBounds
+          ? await storage.findNextRecurringClassAfter(
+              cls.classTypeId,
+              new Date(recurringSeriesBounds.endAt.getTime() + 60_000),
+              cls.seriesId,
+            )
+          : undefined;
+        return res.status(409).json({
+          code: "next_batch_only",
+          message: nextBatch
+            ? "This session has already started. Join the next batch instead."
+            : "This session has already started. Join the waitlist for the next batch.",
+          nextBatch: nextBatch
+            ? {
+                id: nextBatch.id,
+                date: nextBatch.date,
+              }
+            : null,
+        });
+      }
+
+      if (await storage.userHasUpcomingBookingForClass(user.id, classId)) {
+        return res.status(409).json({
+          message: "You have already booked this session.",
+          code: "already_booked",
+          redirectTo: "/my-account?tab=sessions&sessionsTab=upcoming",
+        });
+      }
+
       const booking = await storage.createBooking({
-        userId: req.user!.id,
-        classId: validatedData.classId
+        userId: user.id,
+        classId,
       });
 
-      res.status(201).json(booking);
+      const classType = await storage.getClassType(cls.classTypeId);
+      const instructor = await storage.getInstructor(cls.instructorId);
+      const price = classType?.price ?? null;
+      const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
+      const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+      const checkoutGateway = getConfiguredCheckoutGateway();
+      const checkoutEnabled =
+        hasPrice && usesHostedCheckout(sessionPaymentMethod) && !!checkoutGateway;
+
+      if (!hasPrice) {
+        await storage.updateBookingPaymentStatus(booking.id, "waived");
+      }
+
+      if (hasPrice) {
+        const amountPaise = rupeesToPaise(classType!.price);
+        const provider = providerForSessionMethod(sessionPaymentMethod);
+        await storage.ensurePaymentStubForBooking({
+          bookingId: booking.id,
+          userId: user.id,
+          classId: cls.id,
+          amountPaise,
+          gatewayProvider: provider,
+          payerName: user.name,
+          payerEmail: user.email,
+          payerPhone: user.primaryMobile ?? null,
+        });
+
+        try {
+          await storage.createSubscription({
+            userId: user.id,
+            classTypeId: cls.classTypeId,
+            bookingId: booking.id,
+            subscriptionType: cls.sessionFrequency ?? "recurring",
+            totalSessions: cls.sessionFrequency === "recurring" ? 4 : 1,
+            totalAmountPaise: amountPaise,
+            status: "active",
+          });
+        } catch (subErr) {
+          console.error("[bookings] subscription row (non-fatal):", subErr);
+        }
+      }
+
+      let qrPayment: {
+        qrCodeName: string;
+        qrImageUrl: string;
+        contactPhone: string;
+        contactEmail: string;
+      } | null = null;
+
+      if (
+        hasPrice &&
+        usesQrManualVerification(sessionPaymentMethod) &&
+        cls.paymentQrCodeId
+      ) {
+        const qr = await storage.getPaymentQrCode(cls.paymentQrCodeId);
+        if (qr) {
+          qrPayment = {
+            qrCodeName: qr.name,
+            qrImageUrl: qr.imageUrl,
+            contactPhone: cls.qrContactPhone?.trim() || qr.contactPhone || "",
+            contactEmail: cls.qrContactEmail?.trim() || qr.contactEmail || "",
+          };
+        }
+      }
+
+      const usePaymentLink =
+        hasPrice && sessionPaymentMethod === "razorpay_link";
+
+      if (isGuestBooking && user.email) {
+        await sendEmail({
+          to: user.email,
+          subject: `Booking reserved — ${classType?.name ?? "Session"}`,
+          html: `<p>Hi ${user.name},</p>
+<p>Your ${cls.sessionFrequency === "trial" ? "trial" : "drop-in"} session has been reserved.</p>
+<p><strong>${classType?.name ?? "Session"}</strong> with ${instructor?.name ?? "Instructor"} on ${new Date(cls.date).toLocaleString("en-IN")}.</p>
+<p>Complete payment to confirm your seat.</p>`,
+        });
+      }
+
+      let checkoutAuthToken: string | undefined;
+      if (checkoutEnabled || isGuestBooking) {
+        checkoutAuthToken = generateToken(user.id);
+        setAuthCookie(res, checkoutAuthToken);
+      }
+
+      res.status(201).json({
+        booking,
+        bookingId: booking.id,
+        classId: cls.id,
+        className: classType?.name ?? "Yoga Session",
+        instructorName: instructor?.name ?? "",
+        sessionDate: cls.date,
+        price,
+        paymentMethod: sessionPaymentMethod,
+        razorpayLink: usePaymentLink ? (cls.razorpayLink ?? null) : null,
+        googleMeetLink: null,
+        useRazorpayCheckout: checkoutEnabled,
+        useQrPayment: !!qrPayment,
+        qrPayment,
+        razorpayKeyId: checkoutEnabled ? checkoutGateway!.getPublicKeyId() : null,
+        paymentRequired: hasPrice,
+        token: checkoutAuthToken ?? null,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create booking" });
+    }
+  });
+
+  // ============================================================
+  // RAZORPAY PAYMENTS
+  // ============================================================
+  app.post("/api/payments/create-order", requireAuth, async (req: any, res) => {
+    try {
+      const gateway = getConfiguredCheckoutGateway();
+      if (!gateway) {
+        return res.status(503).json({ message: "Online payments are not configured yet." });
+      }
+
+      const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(req.body);
+      const user = await storage.getUser(req.user!.id);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      if (!isUserActive(user)) return respondAccountDeactivated(res);
+
+      const booking = await storage.getBooking(bookingId);
+      if (!booking || booking.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      if (booking.paymentStatus === "paid") {
+        return res.status(400).json({ message: "This booking is already paid" });
+      }
+
+      const cls = await storage.getClass(booking.classId);
+      if (!cls) return res.status(404).json({ message: "Class not found" });
+      const sessionMethod = normalizeSessionPaymentMethod(
+        booking.paymentMethod ?? cls.paymentMethod,
+      );
+      if (!usesHostedCheckout(sessionMethod)) {
+        return res.status(400).json({
+          message: "This session does not use the payment gateway checkout.",
+        });
+      }
+
+      const classType = await storage.getClassType(cls.classTypeId);
+      if (!classType?.price) {
+        return res.status(400).json({ message: "This session has no fee configured" });
+      }
+
+      const amountPaise = rupeesToPaise(classType.price);
+      let payment = await storage.getPaymentByBookingId(bookingId);
+
+      if (payment?.razorpayOrderId && payment.status !== "paid") {
+        return res.json({
+          orderId: payment.razorpayOrderId,
+          amount: payment.amountPaise,
+          currency: payment.currency ?? "INR",
+          keyId: gateway.getPublicKeyId(),
+          paymentId: payment.id,
+        });
+      }
+
+      const order = await gateway.createOrder({
+        amountPaise,
+        receipt: bookingId,
+        notes: {
+          bookingId,
+          userId: user.id,
+          classId: cls.id,
+        },
+      });
+
+      if (payment) {
+        payment =
+          (await storage.updatePayment(payment.id, {
+            razorpayOrderId: order.orderId,
+            gatewayProvider: gateway.id,
+            gatewayReference: order.orderId,
+            payerName: user.name,
+            payerEmail: user.email,
+            payerPhone: user.primaryMobile ?? payment.payerPhone,
+            status: "created",
+            adminDisposition: "pending",
+          })) ?? payment;
+      } else {
+        payment = await storage.createPayment({
+          bookingId,
+          userId: user.id,
+          classId: cls.id,
+          amountPaise,
+          currency: "INR",
+          razorpayOrderId: order.orderId,
+          gatewayProvider: gateway.id,
+          gatewayReference: order.orderId,
+          payerName: user.name,
+          payerEmail: user.email,
+          payerPhone: user.primaryMobile ?? null,
+          status: "created",
+          adminDisposition: "pending",
+        });
+      }
+
+      res.json({
+        orderId: order.orderId,
+        amount: order.amount,
+        currency: order.currency,
+        keyId: order.keyId,
+        paymentId: payment.id,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      console.error("[payments/create-order]", error);
+      res.status(500).json({ message: "Failed to create payment order" });
+    }
+  });
+
+  app.post("/api/payments/verify", requireAuth, async (req: any, res) => {
+    try {
+      const body = z
+        .object({
+          paymentId: z.string().min(1),
+          razorpay_order_id: z.string().min(1),
+          razorpay_payment_id: z.string().min(1),
+          razorpay_signature: z.string().min(1),
+        })
+        .parse(req.body);
+
+      const payment = await storage.getPaymentById(body.paymentId);
+      if (!payment || payment.userId !== req.user!.id) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const result = await markPaymentPaid({
+        paymentId: payment.id,
+        razorpayPaymentId: body.razorpay_payment_id,
+        razorpayOrderId: body.razorpay_order_id,
+        razorpaySignature: body.razorpay_signature,
+      });
+
+      if (!result) {
+        return res.status(500).json({ message: "Could not confirm payment" });
+      }
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      console.error("[payments/verify]", error);
+      res.status(400).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Payment verification failed",
+      });
+    }
+  });
+
+  app.get("/api/payments/config", (_req, res) => {
+    const gateway = getConfiguredCheckoutGateway();
+    res.json({
+      enabled: !!gateway,
+      keyId: gateway?.getPublicKeyId() ?? null,
+      provider: gateway?.id ?? null,
+    });
+  });
+
+  app.get("/api/payments/my", requireAuth, async (req: any, res) => {
+    try {
+      const rows = await storage.getPaymentHistoryForUser(req.user!.id);
+      res.json(rows);
+    } catch {
+      res.status(500).json({ message: "Failed to load payment history" });
     }
   });
 
@@ -837,16 +1878,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
   // ADMIN ROUTES
   // ============================================================
-  app.post("/api/admin/auth/login", authRateLimit, async (req, res) => {
+  if (process.env.NODE_ENV !== "production") {
+    app.get("/api/admin/auth/login-hint", (_req, res) => {
+      const bootstrap = getAdminBootstrapConfig();
+      res.json({
+        bootstrapEmail: bootstrap?.email ?? null,
+      });
+    });
+  }
+
+  app.post("/api/admin/auth/login", adminLoginRateLimit, async (req, res) => {
     try {
-      const { email, password } = req.body;
+      const email = typeof req.body?.email === "string" ? normalizeAdminEmail(req.body.email) : "";
+      const password = typeof req.body?.password === "string" ? normalizeAdminPassword(req.body.password) : "";
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
       }
 
+      const dbHealth = await checkDatabaseHealth();
+      if (!dbHealth.ok) {
+        console.error("[Admin login] Database unavailable:", dbHealth.error);
+        return res.status(503).json({
+          message:
+            "Database is unavailable. Copy a fresh DATABASE_URL (or DATABASE_PUBLIC_URL) from Railway Postgres into .env and restart the server.",
+        });
+      }
+
       const admin = await verifyAdminCredentials(email, password);
       if (!admin) {
-        return res.status(401).json({ message: "Invalid admin credentials" });
+        const bootstrap = getAdminBootstrapConfig();
+        const hint =
+          bootstrap && bootstrap.email !== email
+            ? `No admin account for this email. Use ${bootstrap.email} (ADMIN_INITIAL_EMAIL).`
+            : bootstrap
+              ? "Invalid password. Use ADMIN_INITIAL_PASSWORD from .env / Railway webapp (not legacy admin123 unless bootstrap is unset)."
+              : "Invalid admin credentials.";
+        return res.status(401).json({ message: hint });
       }
 
       const token = generateAdminToken(admin.id);
@@ -889,6 +1956,320 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Admin get users error:', error);
       res.status(500).json({ message: "Failed to fetch users" });
     }
+  });
+
+  app.get("/api/admin/pending-qr-bookings", requireAdminAuth, async (_req, res) => {
+    try {
+      const pending = await storage.getPendingQrBookings();
+      res.json(pending);
+    } catch {
+      res.status(500).json({ message: "Failed to fetch pending bookings" });
+    }
+  });
+
+  app.post("/api/admin/bookings/:id/confirm-qr", requireAdminAuth, async (req, res) => {
+    try {
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      if (
+        normalizeSessionPaymentMethod(booking.paymentMethod) !== "qr" ||
+        booking.verificationStatus !== "pending"
+      ) {
+        return res.status(400).json({ message: "Booking is not pending QR verification" });
+      }
+
+      const payload = await confirmQrBookingPayment(booking.id);
+      if (!payload) {
+        return res.status(500).json({ message: "Could not confirm payment" });
+      }
+
+      res.json({
+        message: "Payment confirmed and confirmation email sent",
+        ...payload,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Confirmation failed";
+      res.status(400).json({ message: msg });
+    }
+  });
+
+  app.get("/api/admin/payments/history", requireAdminAuth, async (_req, res) => {
+    try {
+      const rows = await storage.getPaymentHistoryForAdmin();
+      res.json(rows);
+    } catch {
+      res.status(500).json({ message: "Failed to load payment history" });
+    }
+  });
+
+  app.post("/api/admin/payments/:id/verify", requireAdminAuth, async (req, res) => {
+    try {
+      const disposition = z
+        .enum(["pending", "received", "failed", "dispute"])
+        .parse(req.body?.adminDisposition) as PaymentDisposition;
+      const payload = await verifyManualPayment(req.params.id, disposition);
+      res.json({
+        message:
+          disposition === "received"
+            ? "Payment verified and confirmation email sent"
+            : "Payment status updated",
+        ...payload,
+      });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Verification failed";
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid payment status" });
+      }
+      res.status(400).json({ message: msg });
+    }
+  });
+
+  app.get("/api/admin/classes", requireAdminAuth, async (_req, res) => {
+    try {
+      const all = await storage.getAllClasses();
+      const enriched = await Promise.all(
+        all.map(async (cls) => {
+          const classType = await storage.getClassType(cls.classTypeId);
+          const instructor = await storage.getInstructor(cls.instructorId);
+          return { ...cls, classType, instructor };
+        }),
+      );
+      res.json(enriched);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch admin classes" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const body = z.object({ isActive: z.boolean() }).parse(req.body);
+      const user = await storage.setUserActive(req.params.id, body.isActive);
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "isActive (boolean) is required" });
+      }
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.post("/api/admin/users/bulk", requireAdminAuth, async (_req, res) => {
+    // PLACEHOLDER: Excel bulk upload — needs multer/xlsx parser + row validation + invite emails
+    res.status(501).json({
+      message:
+        "Bulk user upload is planned. Use single-user invite flow when available, or add users via public registration.",
+      code: "bulk_upload_not_implemented",
+    });
+  });
+
+  app.post("/api/admin/users", requireAdminAuth, async (_req, res) => {
+    res.status(501).json({
+      message: "Admin-created users (invite) not implemented yet. Users register via the public site.",
+      code: "admin_create_user_not_implemented",
+    });
+  });
+
+  app.delete("/api/admin/users/:id", requireAdminAuth, async (req, res) => {
+    const user = await storage.setUserActive(req.params.id, false);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({ message: "User deactivated (soft remove). Hard delete not enabled.", user });
+  });
+
+  app.patch("/api/admin/classes/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const existing = await storage.getClass(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Session not found" });
+
+      const validated = adminUpdateClassSessionSchema.parse({
+        ...req.body,
+        date: req.body.date ?? existing.date,
+        recurrenceKind: req.body.recurrenceKind ?? existing.recurrenceKind ?? "once",
+        occurrenceCount: req.body.occurrenceCount ?? existing.seriesWeekCount ?? 1,
+        recurrenceWeekdays: req.body.recurrenceWeekdays ?? [],
+      });
+
+      if (
+        validated.date.getTime() !== existing.date.getTime() &&
+        (await storage.countBookingsForClass(existing.id)) > 0
+      ) {
+        return res.status(400).json({
+          message: "Cannot change date/time — this session already has bookings.",
+        });
+      }
+
+      const instructor = await storage.getInstructor(validated.instructorId);
+      if (!instructor || !isInstructorSessionPoolEligible(instructor)) {
+        return res.status(400).json({ message: "Selected instructor cannot take sessions." });
+      }
+
+      const updated = await storage.updateClassSession(existing.id, {
+        classTypeId: validated.classTypeId,
+        instructorId: validated.instructorId,
+        date: validated.date,
+        maxCapacity: validated.maxCapacity,
+        googleMeetLink: validated.googleMeetLink,
+        deliveryMode: validated.deliveryMode,
+        sessionFrequency: validated.sessionFrequency,
+        venueAddress: validated.venueAddress,
+        venueMapLink: validated.venueMapLink,
+        venueContactPhone: validated.venueContactPhone,
+        paymentMethod: validated.paymentMethod,
+        razorpayLink: validated.razorpayLink,
+        paymentQrCodeId: validated.paymentQrCodeId,
+        qrContactPhone: validated.qrContactPhone,
+        qrContactEmail: validated.qrContactEmail,
+        status: validated.status,
+        publishedAt: validated.publishedAt,
+        recurrenceKind: validated.recurrenceKind,
+        recurrenceWeekdays:
+          validated.recurrenceKind === "weekly"
+            ? serializeRecurrenceWeekdays(validated.recurrenceWeekdays)
+            : null,
+        seriesWeekCount:
+          validated.recurrenceKind === "weekly" ? validated.occurrenceCount : null,
+      });
+      if (!updated) return res.status(404).json({ message: "Session not found" });
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update session" });
+    }
+  });
+
+  app.delete("/api/admin/classes/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const result = await storage.deleteClassSession(req.params.id);
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Cannot delete session" });
+      }
+      res.json({ message: "Session deleted" });
+    } catch {
+      res.status(500).json({ message: "Failed to delete session" });
+    }
+  });
+
+  app.post("/api/admin/classes/:id/cancel", requireAdminAuth, async (req, res) => {
+    try {
+      const body = z
+        .object({
+          reason: z.string().min(3, "Cancellation reason is required"),
+          ownerOtp: z.string().min(1, "Owner OTP is required"),
+        })
+        .parse(req.body);
+      const result = await storage.cancelClassSessionWithBookings(
+        req.params.id,
+        body.reason,
+        body.ownerOtp,
+      );
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Could not cancel session" });
+      }
+      res.json({
+        message: "Session cancelled. Booked members will see the reason in their profile.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+        });
+      }
+      res.status(500).json({ message: "Failed to cancel session" });
+    }
+  });
+
+  app.patch("/api/admin/classes/:id/pause", requireAdminAuth, async (req, res) => {
+    const cls = await storage.updateClassSession(req.params.id, {
+      status: "paused",
+      pausedAt: new Date(),
+    });
+    if (!cls) return res.status(404).json({ message: "Session not found" });
+    res.json(cls);
+  });
+
+  app.patch("/api/admin/classes/:id/resume", requireAdminAuth, async (req, res) => {
+    const cls = await storage.updateClassSession(req.params.id, {
+      status: "published",
+      pausedAt: null,
+    });
+    if (!cls) return res.status(404).json({ message: "Session not found" });
+    res.json(cls);
+  });
+
+  // PLACEHOLDER: Instructor mood aggregate for Google Meet moderation UI
+  app.get("/api/admin/classes/:id/mood-summary", requireAdminAuth, async (_req, res) => {
+    res.status(501).json({
+      message:
+        "Instructor mood aggregate (per-user + rolled-up) requires session_mood_checkins queries and Meet add-on integration — schema ready after db:patch.",
+      code: "instructor_mood_aggregate_not_implemented",
+    });
+  });
+
+  app.get("/api/admin/profile", requireAdminAuth, async (req: any, res) => {
+    const admin = await storage.getAdminById(req.admin.id);
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    const profile = await storage.getAdminProfile(admin.id);
+    res.json({
+      profile: profile ?? null,
+      fallback: { email: admin.email, phone: "" },
+    });
+  });
+
+  app.put("/api/admin/profile", requireAdminAuth, async (req: any, res) => {
+    const data = z
+      .object({
+        email: z.string().email(),
+        phone: z.string().regex(/^\d{10}$/),
+        governmentIdImageUrl: z.string().optional().nullable(),
+      })
+      .parse(req.body);
+    if (data.governmentIdImageUrl && data.governmentIdImageUrl.startsWith("data:")) {
+      const approxBytes = Math.ceil((data.governmentIdImageUrl.length * 3) / 4);
+      if (approxBytes > 1_000_000) {
+        return res.status(400).json({ message: "Government ID image must be <= 1MB" });
+      }
+    }
+    const profile = await storage.upsertAdminProfile(req.admin.id, {
+      email: data.email,
+      phone: data.phone,
+      governmentIdImageUrl: data.governmentIdImageUrl ?? null,
+      verificationStatus: "pending",
+      verificationNotes: null,
+    });
+    res.json(profile);
+  });
+
+  app.post("/api/admin/profile/verify-id", requireAdminAuth, async (req: any, res) => {
+    const notes = z.object({ notes: z.string().optional().nullable() }).parse(req.body ?? {});
+    const profile = await storage.updateAdminProfileVerification(
+      req.admin.id,
+      "verified",
+      notes.notes ?? "Manual verification completed",
+    );
+    if (!profile) return res.status(404).json({ message: "Admin profile not found" });
+    res.json(profile);
+  });
+
+  app.get("/api/admin/subscriptions", requireAdminAuth, async (_req, res) => {
+    const rows = await storage.getSubscriptionSummariesForAdmin();
+    res.json(rows);
+  });
+
+  app.get("/api/admin/waitlist-users", requireAdminAuth, async (_req, res) => {
+    const rows = await storage.getNotifyRequestsForAdmin();
+    res.json(rows);
+  });
+
+  app.get("/api/subscriptions/my", requireAuth, async (req: any, res) => {
+    const rows = await storage.getSubscriptionSummariesForUser(req.user.id);
+    res.json(rows);
   });
 
   // ============================================================

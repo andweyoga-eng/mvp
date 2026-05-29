@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Menu, X, User, LogOut, Settings, AlertTriangle } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, AlertTriangle, Sparkles } from "lucide-react";
+import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,19 +19,11 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { celebrationCount, openCelebrationFromMenu } = usePaymentVerifiedCelebrations();
 
   const isProfileComplete = isAuthUserProfileComplete(user);
 
   const handleBookingClick = () => {
-    if (user && !isProfileComplete) {
-      toast({
-        title: "Profile Incomplete",
-        description: "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
-        variant: "destructive",
-      });
-      setLocation('/my-account');
-      return;
-    }
     onBookingClick();
   };
 
@@ -53,7 +46,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
       <div className="container mx-auto px-2 sm:px-4">
         <div className="flex items-center justify-between h-16 relative">
           {/* Sandwich Menu Button - Leftmost corner */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 relative">
             <Button
               variant="ghost"
               size="sm"
@@ -67,6 +60,20 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 <Menu className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
               )}
             </Button>
+            {user && celebrationCount > 0 && (
+              <button
+                type="button"
+                className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br from-[#bb5309] to-[#3d1b80] px-1 text-[10px] font-bold text-white shadow-md ring-2 ring-white animate-pulse"
+                aria-label="Session starting soon — open join prompt"
+                data-testid="payment-verified-menu-bubble"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openCelebrationFromMenu();
+                }}
+              >
+                {celebrationCount > 1 ? celebrationCount : <Sparkles className="h-3 w-3" />}
+              </button>
+            )}
           </div>
 
           {/* Logo - Center with responsive sizing */}
@@ -175,6 +182,20 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 <p className="text-sm text-purple-600 font-bold text-center">
                   Welcome, {user.name}!
                 </p>
+                {celebrationCount > 0 && (
+                  <Button
+                    onClick={() => {
+                      openCelebrationFromMenu();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full bg-gradient-to-r from-[#3d1b80] to-[#bb5309] !text-white px-6 py-3 rounded-full text-sm font-bold shadow-md hover:opacity-95"
+                    data-testid="mobile-nav-payment-verified"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Join your session
+                    <Badge className="ml-2 bg-white/20 text-white border-0">{celebrationCount}</Badge>
+                  </Button>
+                )}
                 <Button 
                   onClick={() => {
                     setLocation('/my-account');

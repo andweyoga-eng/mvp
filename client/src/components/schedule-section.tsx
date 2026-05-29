@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Clock, X } from "lucide-react";
+import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
+import { getSessionBadgeLabel } from "@/lib/session-badges";
+import {
+  formatScheduleDayHeader,
+  getRollingWeekDateRange,
+} from "@shared/schedule-display";
 import hathaYogaImg from "@assets/hatha yoga_1756809174781.jpg";
 import hyyocrossImg from "@assets/Hyyocross_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
@@ -33,6 +40,8 @@ interface ScheduleDay {
     };
     currentBookings: number;
     maxCapacity: number;
+    sessionFrequency?: string | null;
+    deliveryMode?: string | null;
   }>;
 }
 
@@ -46,15 +55,16 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
   
   const { data: weeklySchedule, isLoading, error } = useQuery<ScheduleDay[]>({
     queryKey: ['/api/schedule/week'],
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
-  // Get current week number
-  const getCurrentWeekNumber = () => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), 0, 1);
-    const days = Math.floor((now.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
-    return Math.ceil((days + start.getDay() + 1) / 7);
-  };
+  const upcomingSchedule = useMemo(
+    () => (weeklySchedule ? filterUpcomingScheduleDays(weeklySchedule) : []),
+    [weeklySchedule],
+  );
+
+  const rollingWeek = useMemo(() => getRollingWeekDateRange(), []);
 
   const getClassDescriptions = () => {
     return {
@@ -94,15 +104,6 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
     });
   };
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-IN', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
   const handleMoreClick = (classType: ClassType) => {
     setSelectedClass(classType);
     setIsModalOpen(true);
@@ -134,7 +135,9 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
     <section id="schedule" className="py-20 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4 text-center">Week {getCurrentWeekNumber()} Schedule</h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4 text-center">
+            Week {rollingWeek.weekNumber} ({rollingWeek.label}) Schedule
+          </h2>
           <p className="text-xl text-purple-500 max-w-2xl mx-auto">
             Find the perfect time for your practice
           </p>
@@ -159,17 +162,19 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                     </div>
                   ))}
                 </div>
-              ) : weeklySchedule && weeklySchedule.length > 0 ? (
+              ) : upcomingSchedule.length > 0 ? (
                 <div className="space-y-6">
-                  {weeklySchedule.map((day) => (
+                  {upcomingSchedule.map((day) => (
                     <div key={day.day} className="border-b border-border pb-6 mb-6 last:border-b-0 last:mb-0">
-                      <div className="text-center mb-6">
-                        <h4 className="text-xl font-bold text-primary mb-2" data-testid={`schedule-day-${day.day}`}>
-                          {day.day}
-                        </h4>
-                        <p className="text-sm text-purple-600">
-                          {formatDate(day.date)}
+                      <div className="mb-4 flex items-center gap-3">
+                        <div className="h-px flex-1 bg-border" />
+                        <p
+                          className="text-sm font-semibold text-primary tracking-wide px-2"
+                          data-testid={`schedule-day-${day.day}`}
+                        >
+                          {formatScheduleDayHeader(day.date)}
                         </p>
+                        <div className="h-px flex-1 bg-border" />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {day.classes.map((cls) => {
@@ -186,6 +191,11 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                                   <p className="text-sm text-purple-600" data-testid={`instructor-${cls.id}`}>
                                     With {cls.instructor.name}
                                   </p>
+                                  {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode) && (
+                                    <Badge className="mt-1 bg-[#3d1b80] text-white">
+                                      {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode)}
+                                    </Badge>
+                                  )}
                                 </div>
                                 <div className="text-right">
                                   <Tooltip>
@@ -238,7 +248,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                                     disabled={cls.currentBookings >= cls.maxCapacity}
                                     data-testid={`book-class-${cls.id}`}
                                   >
-                                    {cls.currentBookings >= cls.maxCapacity ? 'Full' : 'Book'}
+                                    {cls.currentBookings >= cls.maxCapacity ? "Full" : "Book"}
                                   </Button>
                                 </div>
                               </div>
@@ -252,10 +262,10 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
               ) : (
                 <div className="text-center py-12">
                   <h3 className="text-2xl font-semibold text-purple-600 mb-4">
-                    No classes scheduled this week
+                    No upcoming classes this week
                   </h3>
                   <p className="text-purple-600">
-                    Please check back later for updated schedules.
+                    Please check back later for new sessions.
                   </p>
                 </div>
               )}

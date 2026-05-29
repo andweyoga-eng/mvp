@@ -23,6 +23,8 @@ export const users = pgTable("users", {
   emailVerificationToken: text("email_verification_token"),
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
+  isActive: boolean("is_active").notNull().default(true),
+  sessionAttendanceCount: integer("session_attendance_count").notNull().default(0),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -42,6 +44,35 @@ export const instructors = pgTable("instructors", {
   bio: text("bio"),
   imageUrl: text("image_url"),
   specialties: text("specialties").array(),
+  email: text("email"),
+  phone: text("phone"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  phoneVerified: boolean("phone_verified").notNull().default(false),
+  emailOtpHash: text("email_otp_hash"),
+  emailOtpExpiresAt: timestamp("email_otp_expires_at"),
+  /** One-off UPI/payment QR captured at instructor onboarding (separate from session payment QR library). */
+  onboardingQrImageUrl: text("onboarding_qr_image_url"),
+  /** pending | active | suspended | blacklisted | expired */
+  status: varchar("status", { length: 32 }).notNull().default("pending"),
+  statusNotes: text("status_notes"),
+  ycbRegistrationNumber: text("ycb_registration_number"),
+  ycbLicenseStatus: varchar("ycb_license_status", { length: 32 }).notNull().default("pending"),
+  ycbAdminComment: text("ycb_admin_comment"),
+  yogaAllianceRegistrationNumber: text("yoga_alliance_registration_number"),
+  yogaAllianceLicenseStatus: varchar("yoga_alliance_license_status", { length: 32 })
+    .notNull()
+    .default("pending"),
+  yogaAllianceAdminComment: text("yoga_alliance_admin_comment"),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const paymentQrCodes = pgTable("payment_qr_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  imageUrl: text("image_url").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  contactEmail: text("contact_email").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const classes = pgTable("classes", {
@@ -53,13 +84,75 @@ export const classes = pgTable("classes", {
   currentBookings: integer("current_bookings").notNull().default(0),
   googleMeetLink: text("google_meet_link"),
   razorpayLink: text("razorpay_link"),
+  /** razorpay_link | razorpay_gateway | qr */
+  paymentMethod: varchar("payment_method", { length: 24 }).notNull().default("razorpay_link"),
+  paymentQrCodeId: varchar("payment_qr_code_id").references(() => paymentQrCodes.id),
+  qrContactPhone: text("qr_contact_phone"),
+  qrContactEmail: text("qr_contact_email"),
+  status: varchar("status", { length: 20 }).notNull().default("published"), // draft | scheduled | published | paused
+  publishedAt: timestamp("published_at"),
+  pausedAt: timestamp("paused_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  cancellationReason: text("cancellation_reason"),
+  scheduleSource: varchar("schedule_source", { length: 32 }).notNull().default("manual"),
+  recurrenceKind: varchar("recurrence_kind", { length: 16 }).notNull().default("once"),
+  /** Comma-separated weekday indices 0–6 (Sun–Sat) for weekly series */
+  recurrenceWeekdays: varchar("recurrence_weekdays", { length: 32 }),
+  /** Calendar weeks in a weekly series (from admin form) */
+  seriesWeekCount: integer("series_week_count"),
+  /** online | offline | hybrid */
+  deliveryMode: varchar("delivery_mode", { length: 16 }).notNull().default("online"),
+  /** recurring | drop_in | trial */
+  sessionFrequency: varchar("session_frequency", { length: 16 }).notNull().default("recurring"),
+  venueAddress: text("venue_address"),
+  venueMapLink: text("venue_map_link"),
+  venueContactPhone: text("venue_contact_phone"),
+  seriesId: varchar("series_id"),
+  externalProvider: varchar("external_provider", { length: 32 }),
+  externalEventId: text("external_event_id"),
 });
 
 export const bookings = pgTable("bookings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   classId: varchar("class_id").notNull().references(() => classes.id),
   userId: varchar("user_id").notNull().references(() => users.id),
+  /** pending | paid | waived | failed */
+  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
+  paymentMethod: varchar("payment_method", { length: 20 }),
+  transactionAckNumber: text("transaction_ack_number"),
+  /** pending | confirmed — manual QR verification */
+  verificationStatus: varchar("verification_status", { length: 20 }),
+  ackSubmittedAt: timestamp("ack_submitted_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bookingId: varchar("booking_id").notNull().references(() => bookings.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  classId: varchar("class_id").notNull().references(() => classes.id),
+  amountPaise: integer("amount_paise").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("INR"),
+  razorpayOrderId: text("razorpay_order_id"),
+  razorpayPaymentId: text("razorpay_payment_id"),
+  razorpaySignature: text("razorpay_signature"),
+  gatewayProvider: varchar("gateway_provider", { length: 32 }),
+  gatewayReference: text("gateway_reference"),
+  payerName: text("payer_name"),
+  payerEmail: text("payer_email"),
+  payerPhone: text("payer_phone"),
+  /** Razorpay instrument: upi, card, netbanking, wallet, etc. */
+  gatewayPaymentMethod: varchar("gateway_payment_method", { length: 32 }),
+  /** pending | received | failed | dispute */
+  adminDisposition: varchar("admin_disposition", { length: 20 }).notNull().default("pending"),
+  /** created | pending | paid | failed | refunded */
+  status: varchar("status", { length: 20 }).notNull().default("created"),
+  receiptUrl: text("receipt_url"),
+  invoiceUrl: text("invoice_url"),
+  failureReason: text("failure_reason"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  paidAt: timestamp("paid_at"),
 });
 
 export const contactMessages = pgTable("contact_messages", {
@@ -94,6 +187,7 @@ export const userSessionMappings = pgTable("user_session_mappings", {
   bookedAt: timestamp("booked_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   attendedAt: timestamp("attended_at"),
   cancelledAt: timestamp("cancelled_at"),
+  cancellationReason: text("cancellation_reason"),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -110,6 +204,24 @@ export const auditLogs = pgTable("audit_logs", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Pre/post session mood (instructor aggregate API — see awy.md backlog) */
+export const sessionMoodCheckins = pgTable("session_mood_checkins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  classId: varchar("class_id").notNull().references(() => classes.id),
+  phase: varchar("phase", { length: 10 }).notNull(), // 'pre' | 'post'
+  moodId: varchar("mood_id", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** Shadow attendance when member opens Meet link (not Google Meet API attendance) */
+export const sessionJoinEvents = pgTable("session_join_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  classId: varchar("class_id").notNull().references(() => classes.id),
+  joinedAt: timestamp("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 // Admin users for admin console access
 export const adminUsers = pgTable("admin_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -118,6 +230,52 @@ export const adminUsers = pgTable("admin_users", {
   name: text("name").notNull(),
   role: varchar("role", { length: 20 }).notNull().default("admin"), // 'admin', 'super_admin'
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const adminProfiles = pgTable("admin_profiles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adminUserId: varchar("admin_user_id").notNull().references(() => adminUsers.id),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  governmentIdImageUrl: text("government_id_image_url"),
+  verificationStatus: varchar("verification_status", { length: 20 }).notNull().default("pending"),
+  verificationNotes: text("verification_notes"),
+  verifiedAt: timestamp("verified_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const classTypeNotifyRequests = pgTable("class_type_notify_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
+  userId: varchar("user_id").references(() => users.id),
+  email: text("email").notNull(),
+  source: varchar("source", { length: 20 }).notNull().default("public"),
+  emailSendStatus: varchar("email_send_status", { length: 20 }).default("pending"),
+  emailSendError: text("email_send_error"),
+  emailSendCount: integer("email_send_count").notNull().default(0),
+  lastEmailedAt: timestamp("last_emailed_at"),
+  unsubscribedAt: timestamp("unsubscribed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
+  bookingId: varchar("booking_id").references(() => bookings.id),
+  subscriptionType: varchar("subscription_type", { length: 16 }).notNull(), // drop_in | trial | recurring
+  totalSessions: integer("total_sessions").notNull().default(1),
+  utilizedSessions: integer("utilized_sessions").notNull().default(0),
+  refundedSessions: integer("refunded_sessions").notNull().default(0),
+  disputedSessions: integer("disputed_sessions").notNull().default(0),
+  disputesResolved: integer("disputes_resolved").notNull().default(0),
+  waivedSessions: integer("waived_sessions").notNull().default(0),
+  totalAmountPaise: integer("total_amount_paise").notNull().default(0),
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -189,6 +347,22 @@ export const insertAdminUserSchema = createInsertSchema(adminUsers).omit({
   passwordHash: true,
   createdAt: true,
 });
+export const insertAdminProfileSchema = createInsertSchema(adminProfiles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  verifiedAt: true,
+});
+export const insertNotifyRequestSchema = createInsertSchema(classTypeNotifyRequests).omit({
+  id: true,
+  createdAt: true,
+  unsubscribedAt: true,
+});
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 export const insertClassTypeSchema = createInsertSchema(classTypes).omit({
   id: true,
@@ -204,6 +378,27 @@ export const insertClassSchema = createInsertSchema(classes).omit({
 });
 
 export const insertBookingSchema = createInsertSchema(bookings).omit({
+  id: true,
+  createdAt: true,
+});
+
+/** Member POST /api/bookings — only classId; userId is taken from the auth session. */
+export const memberBookingBodySchema = z.object({
+  classId: z.string().min(1, "Class is required"),
+});
+
+export const memberPaymentAckSchema = z.object({
+  transactionAckNumber: z
+    .string()
+    .trim()
+    .length(4, "Enter exactly 4 characters from your payment reference or payment ID")
+    .regex(
+      /^[A-Za-z0-9]{4}$/,
+      "Use 4 letters or numbers from your payment reference or payment ID",
+    ),
+});
+
+export const insertPaymentQrCodeSchema = createInsertSchema(paymentQrCodes).omit({
   id: true,
   createdAt: true,
 });
@@ -229,6 +424,12 @@ export type Class = typeof classes.$inferSelect;
 export type InsertClass = z.infer<typeof insertClassSchema>;
 export type Booking = typeof bookings.$inferSelect;
 export type InsertBooking = z.infer<typeof insertBookingSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
+export type MemberBookingBody = z.infer<typeof memberBookingBodySchema>;
+export type MemberPaymentAck = z.infer<typeof memberPaymentAckSchema>;
+export type PaymentQrCode = typeof paymentQrCodes.$inferSelect;
+export type InsertPaymentQrCode = z.infer<typeof insertPaymentQrCodeSchema>;
 export type ContactMessage = typeof contactMessages.$inferSelect;
 export type InsertContactMessage = z.infer<typeof insertContactMessageSchema>;
 
@@ -241,3 +442,9 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
+export type AdminProfile = typeof adminProfiles.$inferSelect;
+export type InsertAdminProfile = z.infer<typeof insertAdminProfileSchema>;
+export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect;
+export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;

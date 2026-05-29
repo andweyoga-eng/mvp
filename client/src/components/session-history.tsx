@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +9,6 @@ import {
   Calendar, 
   Clock, 
   User, 
-  MapPin, 
   CheckCircle2, 
   XCircle, 
   CalendarDays,
@@ -17,92 +17,76 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
+import {
+  fetchMemberSessions,
+  memberSessionsQueryKey,
+  sessionAwaitingPaymentUpdate,
+  type MemberSession,
+} from '@/lib/member-sessions';
+import { Download, Video, ExternalLink } from 'lucide-react';
+import {
+  canRetrySessionPayment,
+  defaultPaymentRetryDeps,
+  retrySessionPayment,
+} from '@/lib/session-payment-retry';
 
-interface SessionData {
-  id: string;
-  className: string;
-  instructorName: string;
-  date: string;
-  time: string;
-  duration: number;
-  location?: string;
-  status: 'upcoming' | 'completed' | 'cancelled';
-  bookedAt: string;
-  attendedAt?: string;
-  cancelledAt?: string;
+type SessionData = MemberSession & {
   canCancel?: boolean;
   canRebook?: boolean;
   canReview?: boolean;
+  isLive?: boolean;
+  cancellationReason?: string | null;
+};
+
+function withSessionActions(sessions: MemberSession[]): SessionData[] {
+  return sessions.map((r) => ({
+    ...r,
+    canCancel: r.status === "upcoming" && !r.isLive && r.paymentStatus === "paid",
+    canRebook: r.status === "cancelled",
+    canReview: r.status === "completed",
+  }));
 }
 
 interface SessionHistoryProps {
   userId: string;
+  /** Initial sub-tab: upcoming | completed | cancelled */
+  initialSubTab?: string;
 }
 
-export function SessionHistory({ userId }: SessionHistoryProps) {
+export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
   const { toast } = useToast();
-  const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('upcoming');
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState(
+    initialSubTab === "completed" || initialSubTab === "cancelled"
+      ? initialSubTab
+      : "upcoming",
+  );
 
-  // Mock data for demonstration - will be replaced with actual API calls
+  const {
+    data: sessions = [],
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: memberSessionsQueryKey(userId),
+    queryFn: fetchMemberSessions,
+    select: (rows) => withSessionActions(rows),
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const rows = query.state.data ?? [];
+      return sessionAwaitingPaymentUpdate(rows) ? 4000 : false;
+    },
+    retry: 1,
+  });
+
   useEffect(() => {
-    const mockSessions: SessionData[] = [
-      {
-        id: '1',
-        className: 'Hatha Yoga - Beginner',
-        instructorName: 'Sarah Johnson',
-        date: '2025-09-25',
-        time: '09:00',
-        duration: 60,
-        location: 'Studio A',
-        status: 'upcoming',
-        bookedAt: '2025-09-20T10:00:00Z',
-        canCancel: true
-      },
-      {
-        id: '2',
-        className: 'Vinyasa Flow - Intermediate',
-        instructorName: 'Michael Chen',
-        date: '2025-09-27',
-        time: '18:30',
-        duration: 75,
-        location: 'Studio B',
-        status: 'upcoming',
-        bookedAt: '2025-09-21T15:30:00Z',
-        canCancel: true
-      },
-      {
-        id: '3',
-        className: 'Restorative Yoga',
-        instructorName: 'Emma Williams',
-        date: '2025-09-15',
-        time: '19:00',
-        duration: 90,
-        location: 'Studio A',
-        status: 'completed',
-        bookedAt: '2025-09-10T12:00:00Z',
-        attendedAt: '2025-09-15T19:00:00Z',
-        canReview: true
-      },
-      {
-        id: '4',
-        className: 'Power Yoga',
-        instructorName: 'David Kumar',
-        date: '2025-09-12',
-        time: '07:00',
-        duration: 60,
-        location: 'Studio B',
-        status: 'cancelled',
-        bookedAt: '2025-09-08T09:00:00Z',
-        cancelledAt: '2025-09-11T14:00:00Z',
-        canRebook: true
-      }
-    ];
-    
-    setSessions(mockSessions);
-    setIsLoading(false);
-  }, [userId]);
+    if (
+      initialSubTab === "upcoming" ||
+      initialSubTab === "completed" ||
+      initialSubTab === "cancelled"
+    ) {
+      setActiveTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   const upcomingSessions = sessions.filter(s => s.status === 'upcoming');
   const completedSessions = sessions.filter(s => s.status === 'completed');
@@ -113,48 +97,57 @@ export function SessionHistory({ userId }: SessionHistoryProps) {
       // TODO: Implement actual API call
       console.log(`Cancelling session ${sessionId}`);
       
-      setSessions(prev => 
-        prev.map(session => 
-          session.id === sessionId 
-            ? { 
-                ...session, 
-                status: 'cancelled' as const, 
-                cancelledAt: new Date().toISOString(),
-                canCancel: false 
-              }
-            : session
-        )
-      );
+      void refetch();
       
       toast({
-        title: "Session Cancelled",
-        description: "Your yoga session has been successfully cancelled.",
+        title: "Session cancelled",
+        description: "Your session has been cancelled successfully.",
       });
-    } catch (error) {
+    } catch {
       toast({
-        title: "Cancellation Failed",
-        description: "Unable to cancel your session. Please try again.",
+        title: "Cancellation failed",
+        description: "Please try again later.",
         variant: "destructive",
       });
     }
   };
 
-  const handleRebookSession = async (sessionId: string) => {
-    try {
-      // TODO: Implement actual API call to open booking modal
-      console.log(`Rebooking session ${sessionId}`);
-      
-      toast({
-        title: "Rebooking Session",
-        description: "Opening booking calendar to schedule a new session.",
-      });
-    } catch (error) {
-      toast({
-        title: "Rebooking Failed",
-        description: "Unable to rebook your session. Please try again.",
-        variant: "destructive",
-      });
-    }
+  const handleRebookSession = (sessionId: string) => {
+    console.log(`Rebooking session ${sessionId}`);
+    toast({
+      title: "Rebooking",
+      description: "Redirecting to booking page...",
+    });
+  };
+
+  const handleRetryPayment = async (session: SessionData) => {
+    await retrySessionPayment(
+      session,
+      defaultPaymentRetryDeps({
+        onPaid: async () => {
+          toast({
+            title: "Payment completed",
+            description: "Your booking is now confirmed.",
+          });
+          void refetch();
+          queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
+        },
+        onDismiss: () => {
+          toast({
+            title: "Payment not completed",
+            description: "You can retry payment anytime from Upcoming sessions.",
+            variant: "destructive",
+          });
+        },
+        onError: (message) => {
+          toast({
+            title: "Retry payment failed",
+            description: message,
+            variant: "destructive",
+          });
+        },
+      }),
+    );
   };
 
   const renderSessionCard = (session: SessionData) => (
@@ -170,44 +163,109 @@ export function SessionHistory({ userId }: SessionHistoryProps) {
               <span>{session.instructorName}</span>
             </div>
           </div>
-          <Badge 
-            variant={
-              session.status === 'upcoming' ? 'default' :
-              session.status === 'completed' ? 'secondary' : 
-              'destructive'
-            }
-            className={
-              session.status === 'upcoming' ? 'bg-purple-100 text-purple-800' :
-              session.status === 'completed' ? 'bg-green-100 text-green-800' : 
-              'bg-red-100 text-red-800'
-            }
-            data-testid={`session-status-${session.id}`}
-          >
-            {session.status === 'upcoming' && <CalendarDays className="h-3 w-3 mr-1" />}
-            {session.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-            {session.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
-            {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-          </Badge>
+          <div className="flex flex-col items-end gap-1">
+            {session.isLive && session.status === "upcoming" && (
+              <Badge className="bg-emerald-600 text-white animate-pulse" data-testid={`session-live-${session.id}`}>
+                Session is Live
+              </Badge>
+            )}
+            <Badge 
+              variant={
+                session.status === 'upcoming' ? 'default' :
+                session.status === 'completed' ? 'secondary' : 
+                'destructive'
+              }
+              className={
+                session.status === 'upcoming' ? 'bg-purple-100 text-purple-800' :
+                session.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                'bg-red-100 text-red-800'
+              }
+              data-testid={`session-status-${session.id}`}
+            >
+              {session.status === 'upcoming' && !session.isLive && <CalendarDays className="h-3 w-3 mr-1" />}
+              {session.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
+              {session.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
+              {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+            </Badge>
+          </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2 text-purple-600">
             <Calendar className="h-4 w-4" />
             <span>{format(new Date(session.date), 'MMM dd, yyyy')}</span>
           </div>
           <div className="flex items-center gap-2 text-purple-600">
             <Clock className="h-4 w-4" />
-            <span>{session.time} ({session.duration} min)</span>
+            <span>{session.time}</span>
           </div>
-          {session.location && (
-            <div className="flex items-center gap-2 text-purple-600">
-              <MapPin className="h-4 w-4" />
-              <span>{session.location}</span>
-            </div>
+        </div>
+
+        {session.status === "cancelled" && session.cancellationReason && (
+          <p className="mt-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-md p-2">
+            <span className="font-semibold">Cancellation reason: </span>
+            {session.cancellationReason}
+          </p>
+        )}
+
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <Badge
+            variant="outline"
+            className={
+              session.paymentStatus === "paid"
+                ? "capitalize border-green-300 text-green-800"
+                : "capitalize"
+            }
+          >
+            Payment: {session.paymentStatus}
+          </Badge>
+          {session.paymentStatus === "pending" && session.verificationStatus === "pending" && (
+            <Badge className="bg-amber-100 text-amber-800">Awaiting verification</Badge>
+          )}
+          {session.paymentStatus === "paid" && session.verificationStatus === "confirmed" && (
+            <Badge className="bg-green-100 text-green-800">Payment confirmed</Badge>
+          )}
+          {session.paymentStatus === "paid" &&
+            session.googleMeetLink &&
+            session.meetJoinState !== "hidden" && (
+              session.meetJoinState === "active" ? (
+                <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                  <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
+                    <Video className="h-3 w-3 mr-1" />
+                    Join session
+                  </a>
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs opacity-50 cursor-not-allowed"
+                  disabled
+                  title="Join opens 1 hour before the session and closes when the session ends"
+                >
+                  <Video className="h-3 w-3 mr-1" />
+                  Join session
+                </Button>
+              )
+            )}
+          {session.invoiceUrl && (
+            <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+              <a href={session.invoiceUrl} target="_blank" rel="noopener noreferrer">
+                <Download className="h-3 w-3 mr-1" />
+                Invoice
+              </a>
+            </Button>
+          )}
+          {session.receiptUrl && (
+            <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+              <a href={session.receiptUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3 mr-1" />
+                Receipt
+              </a>
+            </Button>
           )}
         </div>
         
-        {/* Action Buttons */}
         <div className="flex gap-2 mt-4">
           {session.status === 'upcoming' && session.canCancel && (
             <Button
@@ -219,6 +277,19 @@ export function SessionHistory({ userId }: SessionHistoryProps) {
             >
               <XCircle className="h-4 w-4 mr-1" />
               Cancel
+            </Button>
+          )}
+
+          {canRetrySessionPayment(session) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleRetryPayment(session)}
+              className="border-amber-200 text-amber-700 hover:bg-amber-50"
+              data-testid={`retry-payment-${session.id}`}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Retry payment
             </Button>
           )}
           
@@ -245,17 +316,6 @@ export function SessionHistory({ userId }: SessionHistoryProps) {
               <Star className="h-4 w-4 mr-1" />
               Review
             </Button>
-          )}
-        </div>
-        
-        {/* Timestamps */}
-        <div className="text-xs text-gray-500 mt-3 space-y-1">
-          <div>Booked: {format(new Date(session.bookedAt), 'MMM dd, yyyy HH:mm')}</div>
-          {session.attendedAt && (
-            <div>Attended: {format(new Date(session.attendedAt), 'MMM dd, yyyy HH:mm')}</div>
-          )}
-          {session.cancelledAt && (
-            <div>Cancelled: {format(new Date(session.cancelledAt), 'MMM dd, yyyy HH:mm')}</div>
           )}
         </div>
       </CardContent>
@@ -339,7 +399,7 @@ export function SessionHistory({ userId }: SessionHistoryProps) {
               <div className="text-center py-8 text-red-600">
                 <XCircle className="h-12 w-12 mx-auto mb-4 text-red-300" />
                 <p className="text-lg font-medium">No cancelled sessions</p>
-                <p className="text-sm">Great! You haven't cancelled any sessions.</p>
+                <p className="text-sm">Great! You haven&apos;t cancelled any sessions.</p>
               </div>
             )}
           </TabsContent>

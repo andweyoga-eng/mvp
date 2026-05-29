@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,11 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useAuth, getAuthHeaders } from '@/lib/auth';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Phone, Mail, Shield, AlertTriangle, Heart, CalendarDays } from 'lucide-react';
+import { ArrowLeft, User, Phone, Mail, Shield, AlertTriangle, Heart, CalendarDays, CreditCard, Layers } from 'lucide-react';
 import Navigation from '@/components/navigation';
 import { countryCodeOptions, validateMobileNumber, formatMobileNumber } from '@/lib/mobile-validation';
 import { HealthUpdateSection } from '@/components/health-update-section';
 import { SessionHistory } from '@/components/session-history';
+import { parseMyAccountTabFromSearch } from '@/lib/member-landing';
+import { PaymentHistory } from '@/components/payment-history';
 import { MIN_HEALTH_UPDATE_CHARS } from '@/lib/profile-constants';
 import { isAccountProfileComplete, type AccountProfileCheckInput } from '@shared/profileCompleteness';
 
@@ -75,8 +78,36 @@ export default function MyAccount() {
     emergencyMobile: { isValid: true, error: '' },
   });
 
-  // Health update tab
-  const [activeTab, setActiveTab] = useState('profile');
+  const accountTabs = parseMyAccountTabFromSearch(
+    typeof window !== 'undefined' ? window.location.search : '',
+  );
+
+  const [activeTab, setActiveTab] = useState(accountTabs.tab ?? 'profile');
+  const { data: subscriptions = [] } = useQuery<Array<{
+    id: string;
+    classTypeName: string;
+    subscriptionType: string;
+    totalAmountPaise: number;
+    totalSessions: number;
+    utilizedSessions: number;
+    refundedSessions: number;
+    disputedSessions: number;
+    disputesResolved: number;
+    waivedSessions: number;
+    status: string;
+    expiresAt: string | null;
+  }>>({
+    queryKey: ['/api/subscriptions/my'],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await fetch('/api/subscriptions/my', {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load subscriptions');
+      return res.json();
+    },
+  });
 
   // Health update handlers
   const handleHealthUpdateChange = (text: string) => {
@@ -377,7 +408,7 @@ export default function MyAccount() {
 
           {/* Tabbed Interface */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 mb-6">
               <TabsTrigger 
                 value="profile" 
                 className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
@@ -401,6 +432,22 @@ export default function MyAccount() {
               >
                 <CalendarDays className="h-4 w-4 mr-2" />
                 Sessions
+              </TabsTrigger>
+              <TabsTrigger
+                value="payments"
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                data-testid="payments-tab"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Payment History
+              </TabsTrigger>
+              <TabsTrigger
+                value="subscriptions"
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
+                data-testid="subscriptions-tab"
+              >
+                <Layers className="h-4 w-4 mr-2" />
+                My Subscription
               </TabsTrigger>
             </TabsList>
 
@@ -648,9 +695,47 @@ export default function MyAccount() {
               />
             </TabsContent>
 
-            {/* Session History Tab */}
+            {/* My Sessions Tab */}
             <TabsContent value="sessions" data-testid="sessions-content">
-              <SessionHistory userId={user?.id || ''} />
+              <SessionHistory
+                userId={user?.id || ''}
+                initialSubTab={accountTabs.sessionsTab}
+              />
+            </TabsContent>
+
+            <TabsContent value="payments" data-testid="payments-content">
+              <PaymentHistory />
+            </TabsContent>
+
+            <TabsContent value="subscriptions" data-testid="subscriptions-content">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-primary">My Subscription</CardTitle>
+                  <CardDescription>
+                    Track usage across drop-in, trial, and recurring subscriptions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {subscriptions.map((s) => (
+                    <div key={s.id} className="rounded-md border p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-primary">{s.classTypeName}</p>
+                        <Badge className="capitalize">{s.subscriptionType.replace('_', ' ')}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Used {s.utilizedSessions}/{s.totalSessions} · Refunded {s.refundedSessions} · Disputes {s.disputedSessions}/{s.disputesResolved} · Waived {s.waivedSessions}
+                      </p>
+                      <p className="text-sm">Paid: ₹{(s.totalAmountPaise / 100).toLocaleString('en-IN')}</p>
+                      {s.subscriptionType === 'recurring' && (s.status !== 'active' || (s.expiresAt && new Date(s.expiresAt).getTime() < Date.now())) && (
+                        <Button className="mt-2" onClick={scrollToSchedule}>Renew</Button>
+                      )}
+                    </div>
+                  ))}
+                  {subscriptions.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No subscriptions yet.</p>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

@@ -102,6 +102,8 @@ _Add a row when a feature or fix is deployed and working — not for every inter
 - Port and listen options adjusted for local compatibility (avoid platform-unsupported socket options where needed).
 
 ### Authentication
+- **Input length discipline (project rule):** Any text input with a bounded business size must enforce limits in UI and server parsing. Prefer shared constants in `shared/input-limits.ts` and truncate on input via `limitTextInput(...)` before submit.
+
 
 - **Google OAuth / cookie flow:** Local redirect uses **http** for localhost where appropriate; after redirect with `loginSuccess=true`, the client **refetches** the session user when there is no token in the URL.
 - **Email login:** After successful login, **fetch full profile** from `/api/auth/me` instead of relying on a minimal JSON user payload, so completion and booking logic see real data.
@@ -142,6 +144,51 @@ _Add a row when a feature or fix is deployed and working — not for every inter
 | SMS verify on Profile | Off for now | Gatekeeping step deferred until product and SMS infra justify it; numbers still validated. |
 | `.env` in git | Never | Security and environment-specific config. |
 | Railway DB URL | Prefer `DATABASE_PUBLIC_URL` when Railway provides it | Private `*.railway.internal` in `DATABASE_URL` may not resolve from the app container; public TCP URL is reliable. |
+
+---
+
+## Platform roadmap (admin, mood, redirects) — 2026-05-15
+
+### Shipped in codebase (run `npm run db:patch` for `003-platform-features.sql`)
+
+| Area | Status | Notes |
+|------|--------|--------|
+| Admin form validation | **Fixed** | Shared `shared/admin-validation.ts`; price as string, date coercion; inline field errors + summary |
+| Publish now / later | **MVP** | Session create modal; `classes.status`, `published_at` |
+| Week grid (admin) | **MVP** | `WeekScheduleGrid` on Sessions tab with week number + date range |
+| User activate/deactivate | **MVP** | `PATCH /api/admin/users/:id`; Deactivate = soft remove |
+| Session attendance shadow | **MVP** | `session_join_events` + `users.session_attendance_count` on Meet link click API |
+| Pre/post mood storage | **Schema + API** | `session_mood_checkins`, `POST /api/sessions/:classId/mood` |
+| Post-session mood popup | **MVP UI** | Emoji dialog on schedule: `/?mood=post&classId=<id>#schedule` |
+
+### Placeholder / next integration
+
+| Area | Status | Approach |
+|------|--------|----------|
+| Bulk Excel user upload | **501 API** | `POST /api/admin/users/bulk` — needs xlsx parser + row validation + invite emails |
+| Admin add user | **501 API** | Invite-by-email flow |
+| Edit/delete catalog & pause UI | **Partial** | Pause/resume APIs exist; edit/delete buttons need Slice 2 PATCH/DELETE + UI |
+| Instructor mood aggregate in Meet | **501 API** | `GET /api/admin/classes/:id/mood-summary` — query checkins + Meet add-on or side panel |
+| Pre-session mood before Meet | **UI TBD** | Gate Meet link in schedule/booking with mood modal; call join + mood APIs |
+| Google Meet auto-redirect after class | **Not in Meet API** | Use feedback URL in Meet description; Workspace custom leave URL; or manual return |
+| Razorpay Payment Link redirect | **Config in Razorpay** | Set redirect URL per environment (below) |
+| Payment webhook → booking | **Future** | Razorpay webhooks not wired in MVP |
+
+### Redirect URLs (class schedule = `/#schedule`)
+
+Replace `<host>` and `<classId>` with real values.
+
+| Environment | After successful Razorpay payment | After session (post-mood feedback) |
+|-------------|-----------------------------------|-------------------------------------|
+| Localhost | `http://localhost:5000/#schedule` | `http://localhost:5000/?mood=post&classId=<classId>#schedule` |
+| Railway MVP | `https://<your-railway-host>/#schedule` | `https://<your-railway-host>/?mood=post&classId=<classId>#schedule` |
+| Production | `https://andweyoga.com/#schedule` | `https://andweyoga.com/?mood=post&classId=<classId>#schedule` |
+
+**Razorpay:** In Payment Link / Payment Page settings, set **Redirect URL** to the payment column above (same for all links unless you use per-link overrides).
+
+**Google Meet:** Standard Meet links do **not** redirect when a call ends. Options: (1) paste feedback URL in meeting description, (2) Google Workspace admin **leave URL** if available, (3) future Meet add-on. **We need from you:** Workspace admin access for leave URL, or accept manual “return to site” + email reminder.
+
+**Pre-session mood (5.1):** Member flow should call `POST /api/sessions/:classId/mood` with `phase: "pre"` then open Meet; join also calls `POST /api/sessions/:classId/join`.
 
 ---
 

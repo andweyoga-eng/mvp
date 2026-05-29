@@ -4,12 +4,16 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "predev": "tsx scripts/dev/free-port.ts",
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:sanity": "tsx --test tests/sanity-regression.test.ts tests/payment-qr.test.ts tests/admin-session-validation.test.ts tests/admin-auth.test.ts tests/booking-flow.test.ts tests/booking-payment.test.ts tests/admin-login.integration.test.ts",
     "db:push": "drizzle-kit push",
-    "db:patch": "tsx scripts/db/apply-patches.ts"
+    "db:patch": "tsx scripts/db/apply-patches.ts",
+    "db:check": "tsx scripts/db/check-connection.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
@@ -84,6 +88,7 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "pg": "^8.20.0",
+    "razorpay": "^2.9.6",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,19 @@ export default function AdminLogin() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    fetch("/api/admin/auth/login-hint")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.bootstrapEmail) return;
+        setFormData((prev) =>
+          prev.email ? prev : { ...prev, email: data.bootstrapEmail },
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   // Redirect if already logged in
   if (admin) {

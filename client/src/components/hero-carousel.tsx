@@ -6,10 +6,6 @@ import evolveImage from "@assets/evolve_1756461197648.jpg";
 import elevateImage from "@assets/elevate_1756460037530.jpg";
 import becomeImage from "@assets/become_1756460037530.jpg";
 
-interface HeroCarouselProps {
-  onBookingClick: () => void;
-}
-
 const slides = [
   {
     image: embraceImage,
@@ -43,7 +39,7 @@ const slides = [
   }
 ];
 
-export default function HeroCarousel({ onBookingClick }: HeroCarouselProps) {
+export default function HeroCarousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {

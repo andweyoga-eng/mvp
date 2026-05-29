@@ -12,72 +12,123 @@ import StorySection from "@/components/story-section";
 import ContactSection from "@/components/contact-section";
 import Footer from "@/components/footer";
 import BookingModal from "@/components/booking-modal";
-import { useState, useEffect } from "react";
+import { MoodCaptureDialog, type MoodPhase } from "@/components/mood-capture-dialog";
+import { useAuth } from "@/lib/auth";
+import {
+  getPendingBooking,
+  clearPendingBooking,
+  setPendingBooking,
+  type BookingIntent,
+} from "@/lib/pending-booking";
+import { normalizeBookingIntent, scrollToBookingSection } from "@/lib/booking-flow";
+import { useState, useEffect, useRef } from "react";
+
+function parseMoodCaptureFromUrl(): { phase: MoodPhase; classId: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const mood = params.get("mood");
+  const classId = params.get("classId");
+  if ((mood === "post" || mood === "pre") && classId) {
+    return { phase: mood, classId };
+  }
+  return null;
+}
+
+function clearMoodCaptureUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("mood");
+  url.searchParams.delete("classId");
+  const hash = url.hash || "#schedule";
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}${hash}`);
+}
 
 export default function Home() {
+  const { user, isLoading: authLoading } = useAuth();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
+  const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
+  const resumedBookingRef = useRef(false);
 
-  const handleBookingOpen = (classId?: string) => {
-    setSelectedClassId(classId || null);
+  const handleBookingOpen = (input?: string | BookingIntent) => {
+    const intent = normalizeBookingIntent(input);
+    setPendingBooking(intent);
+    setBookingIntent(intent);
     setIsBookingModalOpen(true);
+    setTimeout(() => scrollToBookingSection(intent.scrollTo ?? "schedule"), 100);
   };
 
   const handleBookingClose = () => {
     setIsBookingModalOpen(false);
-    setSelectedClassId(null);
+    setBookingIntent({});
+    clearPendingBooking();
   };
 
-  const scrollToSchedule = () => {
-    const element = document.getElementById('schedule');
-    if (element) {
-      // DEVELOPMENT STANDARD: Align carousel end with header bottom across all devices
-      // Mobile: Top header height (64px), Desktop/Tablet: Top navigation height (64px)  
-      // This is the standard behavior for all Book button clicks site-wide
-      const headerHeight = 64; // Consistent 64px header height for all devices (h-16 = 4rem = 64px)
-      const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
-      const offsetPosition = elementPosition - headerHeight;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
-  };
-
-  // Handle automatic scroll to schedule when coming from My Account page
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('openBooking') === 'true') {
-      // Remove the parameter from URL
+    if (urlParams.get("openBooking") === "true") {
       window.history.replaceState({}, document.title, window.location.pathname);
-      
-      // Scroll to schedule section after a brief delay to ensure DOM is ready
-      setTimeout(() => {
-        scrollToSchedule();
-      }, 100);
+      handleBookingOpen({ scrollTo: "schedule" });
     }
   }, []);
 
+  useEffect(() => {
+    const capture = parseMoodCaptureFromUrl();
+    if (!capture) return;
+    setMoodCapture(capture);
+    setTimeout(() => scrollToBookingSection("schedule"), 150);
+  }, []);
+
+  useEffect(() => {
+    if (authLoading || !user || resumedBookingRef.current) return;
+    const pending = getPendingBooking();
+    if (!pending) return;
+    if (!pending.sessionId && !pending.classTypeId && !pending.scrollTo) return;
+    resumedBookingRef.current = true;
+    setBookingIntent(pending);
+    setIsBookingModalOpen(true);
+    setTimeout(
+      () => scrollToBookingSection(pending.scrollTo ?? (pending.sessionId ? "schedule" : "teach")),
+      150,
+    );
+  }, [user, authLoading]);
+
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-0 pt-16 md:pt-0">
-      <Navigation onBookingClick={scrollToSchedule} />
-      <HeroCarousel onBookingClick={scrollToSchedule} />
-      <ScheduleSection onBookingClick={handleBookingOpen} />
+      <Navigation onBookingClick={() => scrollToBookingSection("schedule")} />
+      <HeroCarousel />
+      <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
+      <ClassesSection onBookingClick={(intent) => handleBookingOpen(intent)} />
       <AllySection />
       <CareSection />
       <VibeSection />
       <BelieveSection />
-      <ClassesSection onBookingClick={handleBookingOpen} />
+      <ConnectSection />
       <AboutSection />
       <StorySection />
       <ContactSection />
       <Footer />
-      <BookingModal 
+      <BookingModal
         isOpen={isBookingModalOpen}
         onClose={handleBookingClose}
-        selectedClassId={selectedClassId}
+        sessionId={bookingIntent.sessionId ?? null}
+        filterClassTypeId={bookingIntent.classTypeId ?? null}
       />
+      {moodCapture && (
+        <MoodCaptureDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setMoodCapture(null);
+              clearMoodCaptureUrl();
+            }
+          }}
+          classId={moodCapture.classId}
+          phase={moodCapture.phase}
+          onComplete={() => {
+            setMoodCapture(null);
+            clearMoodCaptureUrl();
+          }}
+        />
+      )}
     </div>
   );
 }

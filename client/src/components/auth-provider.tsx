@@ -1,6 +1,7 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { AuthContext, type User, type RegisterData, type ProfileData, getAuthToken, setAuthToken, getAuthHeaders } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
+import { clearMemberLandingCheck } from '@/lib/member-landing';
 import { useToast } from '@/hooks/use-toast';
 
 interface AuthProviderProps {
@@ -22,6 +23,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const oauthToken = urlParams.get('token');
     const loginSuccess = urlParams.get('loginSuccess');
 
+    const authError = urlParams.get('error');
+    if (authError === 'google_auth_failed') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      toast({
+        title: "Google sign-in failed",
+        description: "Please try again or contact support if this continues.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    if (authError === 'account_deactivated') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      window.dispatchEvent(new Event("awy:account-deactivated"));
+      setIsLoading(false);
+      return;
+    }
+
     if (loginSuccess === 'true') {
       if (oauthToken) {
         setAuthToken(oauthToken);
@@ -32,6 +51,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
           toast({
             title: "Login successful!",
             description: "Welcome to andWeYoga!",
+          });
+        } else {
+          toast({
+            title: "Sign-in incomplete",
+            description: "We could not load your account. Please try signing in again.",
+            variant: "destructive",
           });
         }
       });
@@ -44,28 +69,39 @@ export function AuthProvider({ children }: AuthProviderProps) {
         title: "Email verified!",
         description: "Your email has been verified successfully. You can now sign in.",
       });
-      // Remove the parameter from URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     
-    // Normal token check for existing sessions
-    const token = getAuthToken();
-    if (token) {
-      fetchUser();
-    } else {
-      setIsLoading(false);
-    }
+    // Restore session from httpOnly cookie and/or Bearer token in localStorage
+    void fetchUser();
   }, [toast]);
 
   /** Loads user from /api/auth/me using Bearer token (if any) and/or auth cookie. */
   const fetchUser = async (): Promise<boolean> => {
     try {
-      const response = await apiRequest('GET', '/api/auth/me', undefined, getAuthHeaders());
-      const userData = await response.json();
-      setUser(userData);
+      const response = await fetch("/api/auth/me", {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 401) {
+          setAuthToken(null);
+          setUser(null);
+          return false;
+        }
+        if (response.status === 403 && body.code === "account_deactivated") {
+          setAuthToken(null);
+          setUser(null);
+          window.dispatchEvent(new Event("awy:account-deactivated"));
+          return false;
+        }
+        throw new Error(body.message || "Failed to load profile");
+      }
+      setUser(body);
       return true;
     } catch (error) {
-      console.error('Failed to fetch user:', error);
+      console.error("Failed to fetch user:", error);
       setAuthToken(null);
       setUser(null);
       return false;
@@ -87,11 +123,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (data.token) {
         setAuthToken(data.token);
       }
+      clearMemberLandingCheck();
       const loaded = await fetchUser();
       if (!loaded) {
         throw new Error("Could not load your profile after login");
       }
-      
+
       toast({
         title: "Login successful",
         description: "Welcome back to andWeYoga!",
@@ -158,6 +195,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const logout = () => {
+    clearMemberLandingCheck();
     void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).finally(() => {
       setAuthToken(null);
       setUser(null);
