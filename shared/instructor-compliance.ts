@@ -1,5 +1,29 @@
 import type { Instructor } from "./schema";
 
+/** How instructor email was verified during onboarding. */
+export const INSTRUCTOR_EMAIL_VERIFICATION_METHODS = [
+  "pending",
+  "otp-verified",
+  "admin-override",
+] as const;
+
+export type InstructorEmailVerificationMethod =
+  (typeof INSTRUCTOR_EMAIL_VERIFICATION_METHODS)[number];
+
+export function getInstructorEmailVerificationLabel(
+  method: string | null | undefined,
+): string {
+  switch (method) {
+    case "otp-verified":
+      return "OTP verified";
+    case "admin-override":
+      return "Manually Verified";
+    case "pending":
+    default:
+      return "Pending";
+  }
+}
+
 /** License / registration validity tracked by admin per credential. */
 export const INSTRUCTOR_LICENSE_STATUSES = [
   { value: "verified", label: "Verified" },
@@ -180,6 +204,27 @@ export function isOnboardingChecklistComplete(
     instructor.emailVerified &&
     instructor.phoneVerified
   );
+}
+
+/** True when onboarding checklist is complete and instructor is operationally active. */
+export function isInstructorFullyOnboarded(
+  instructor: Pick<
+    Instructor,
+    | "status"
+    | "email"
+    | "phone"
+    | "emailVerified"
+    | "phoneVerified"
+    | "onboardingQrImageUrl"
+  >,
+): boolean {
+  return instructor.status === "active" && isOnboardingChecklistComplete(instructor);
+}
+
+export function showManuallyVerifiedBadge(
+  instructor: Pick<Instructor, "emailVerified" | "verificationMethod">,
+): boolean {
+  return instructor.emailVerified && instructor.verificationMethod === "admin-override";
 }
 
 /** Shown on marketing / public instructor lists. */

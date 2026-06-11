@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAdminAuth } from "@/components/admin-auth-provider";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  InstructorManualVerifyDialogs,
+  useInstructorManualEmailVerify,
+} from "@/components/admin/instructor-manual-verify";
 import {
   Select,
   SelectContent,
@@ -41,7 +46,9 @@ import {
 import { FieldError, FormErrorSummary } from "@/components/admin/field-error";
 import {
   INSTRUCTOR_LICENSE_STATUSES,
+  getInstructorEmailVerificationLabel,
   getInstructorStatusLabel,
+  isInstructorFullyOnboarded,
   type InstructorOperationalStatus,
 } from "@shared/instructor-compliance";
 import type { Instructor } from "@shared/schema";
@@ -258,6 +265,7 @@ function InstructorProfileForm({
             <div>
               <Label>Validity status</Label>
               <Select
+                modal={false}
                 value={form.ycbLicenseStatus}
                 onValueChange={(v) => setForm((f) => ({ ...f, ycbLicenseStatus: v }))}
               >
@@ -292,6 +300,7 @@ function InstructorProfileForm({
             <div>
               <Label>Validity status</Label>
               <Select
+                modal={false}
                 value={form.yogaAllianceLicenseStatus}
                 onValueChange={(v) => setForm((f) => ({ ...f, yogaAllianceLicenseStatus: v }))}
               >
@@ -320,6 +329,21 @@ function InstructorProfileForm({
   );
 }
 
+function patchInstructorInListCache(
+  qc: ReturnType<typeof useQueryClient>,
+  updated: Instructor,
+) {
+  qc.setQueryData<Instructor[]>(["/api/admin/instructors"], (prev) =>
+    prev?.map((row) => (row.id === updated.id ? updated : row)),
+  );
+}
+
+function isManualVerifyComplete(instructor: Instructor): boolean {
+  return (
+    instructor.emailVerified && instructor.verificationMethod === "admin-override"
+  );
+}
+
 export function EditInstructorModal({
   instructor,
   onUpdated,
@@ -327,11 +351,38 @@ export function EditInstructorModal({
   instructor: Instructor;
   onUpdated: () => void;
 }) {
+  const { admin } = useAdminAuth();
+  const qc = useQueryClient();
+  const isSuperAdmin = admin?.role === "super_admin";
   const [open, setOpen] = useState(false);
+  const [liveInstructor, setLiveInstructor] = useState(instructor);
   const [form, setForm] = useState(() => instructorToForm(instructor));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setLiveInstructor(instructor);
+  }, [instructor]);
+
+  const manualVerify = useInstructorManualEmailVerify({
+    onSuccess: (updated) => {
+      const { otpEmailSent: _s, otpWarning, ...instructorRow } = updated;
+      setLiveInstructor(instructorRow);
+      patchInstructorInListCache(qc, instructorRow);
+      if (!otpWarning) {
+        toast({
+          title: isInstructorFullyOnboarded(instructorRow)
+            ? "Instructor onboarded"
+            : "Email verified manually",
+          description: isInstructorFullyOnboarded(instructorRow)
+            ? "Manual verification complete. Instructor is now onboarded."
+            : "Override logged. Verification email sent to the instructor.",
+        });
+      }
+      onUpdated();
+    },
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (payload: ReturnType<typeof validateInstructorForm>["data"]) => {
@@ -367,10 +418,15 @@ export function EditInstructorModal({
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) {
+      setLiveInstructor(instructor);
       setForm(instructorToForm(instructor));
       setErrors({});
     }
   }
+
+  const manualVerifyDone = isManualVerifyComplete(liveInstructor);
+  const showManualVerifySection =
+    isSuperAdmin && liveInstructor.status === "pending" && !manualVerifyDone;
 
   async function onQrFile(file: File | undefined) {
     if (!file) return;
@@ -398,45 +454,103 @@ export function EditInstructorModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="mt-2">
-          <Pencil className="w-4 h-4 mr-2" /> Edit details
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit instructor — {instructor.name}</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={submitForm} className="space-y-6">
-          <FormErrorSummary errors={errors} />
-          <InstructorProfileForm
-            form={form}
-            setForm={setForm}
-            errors={errors}
-            setErrors={setErrors}
-            fileRef={fileRef}
-            onQrFile={onQrFile}
-          />
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={updateMutation.isPending}
-              className="bg-[#3d1b80] hover:bg-[#2d1260] text-white"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save changes"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline" className="mt-2">
+            <Pencil className="w-4 h-4 mr-2" /> Edit details
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit instructor — {instructor.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submitForm} className="space-y-6">
+            <FormErrorSummary errors={errors} />
+            {isSuperAdmin && liveInstructor.status === "pending" ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50/60 p-4 space-y-2">
+                <p className="text-sm font-medium">Super admin — manual verify and onboard</p>
+                <p className="text-xs text-muted-foreground">
+                  Onboarding status:{" "}
+                  <span className="font-medium text-gray-900">
+                    {isInstructorFullyOnboarded(liveInstructor)
+                      ? "Onboarded"
+                      : getInstructorStatusLabel(liveInstructor.status)}
+                  </span>
+                  {manualVerifyDone ? (
+                    <>
+                      {" "}
+                      · Verification:{" "}
+                      <span className="font-medium text-amber-800">Manually Verified</span>
+                    </>
+                  ) : null}
+                </p>
+                {showManualVerifySection ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Use when email verification must be overridden during pending onboarding.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={manualVerify.mutation.isPending || manualVerifyDone}
+                      onClick={manualVerify.openConfirm}
+                    >
+                      Verify manually and onboard
+                    </Button>
+                  </>
+                ) : manualVerifyDone ? (
+                  <p className="text-sm text-green-700">
+                    Manual verification complete. This instructor cannot be verified again.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <InstructorProfileForm
+              form={form}
+              setForm={setForm}
+              errors={errors}
+              setErrors={setErrors}
+              fileRef={fileRef}
+              onQrFile={onQrFile}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="bg-[#3d1b80] hover:bg-[#2d1260] text-white"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <InstructorManualVerifyDialogs
+        confirmOpen={manualVerify.confirmOpen}
+        onConfirmOpenChange={manualVerify.setConfirmOpen}
+        errorOpen={manualVerify.errorOpen}
+        errorMessage={manualVerify.errorMessage}
+        warningOpen={manualVerify.warningOpen}
+        warningMessage={manualVerify.warningMessage}
+        isPending={manualVerify.mutation.isPending}
+        instructorName={liveInstructor.name}
+        onConfirm={() => manualVerify.confirm(liveInstructor.id)}
+        onDismissError={manualVerify.dismissError}
+        onDismissWarning={manualVerify.dismissWarning}
+      />
+    </>
   );
 }
 
 export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) {
+  const { admin } = useAdminAuth();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"form" | "verify">("form");
   const [created, setCreated] = useState<Instructor | null>(null);
@@ -445,6 +559,26 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
   const [otp, setOtp] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const isSuperAdmin = admin?.role === "super_admin";
+
+  const manualVerify = useInstructorManualEmailVerify({
+    onSuccess: (updated) => {
+      const { otpEmailSent: _s, otpWarning, ...instructorRow } = updated;
+      setCreated(instructorRow);
+      patchInstructorInListCache(qc, instructorRow);
+      onCreated();
+      if (!otpWarning) {
+        toast({
+          title: isInstructorFullyOnboarded(instructorRow)
+            ? "Instructor onboarded"
+            : "Email verified manually",
+          description: isInstructorFullyOnboarded(instructorRow)
+            ? "Manual verification complete. Instructor is now onboarded."
+            : "Override logged. Verification email sent to the instructor for their records.",
+        });
+      }
+    },
+  });
 
   const createMutation = useMutation({
     mutationFn: async (payload: ReturnType<typeof validateInstructorForm>["data"]) => {
@@ -555,11 +689,16 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
     setForm(INITIAL_FORM);
     setErrors({});
     setOtp("");
+    manualVerify.setConfirmOpen(false);
+    manualVerify.dismissError();
+    manualVerify.dismissWarning();
   }
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
-    if (!next) resetModal();
+    if (!next) {
+      resetModal();
+    }
   }
 
   async function onQrFile(file: File | undefined) {
@@ -601,6 +740,7 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
     : null;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" className="bg-[#3d1b80] hover:bg-[#2d1260] text-white">
@@ -660,7 +800,7 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
                 {checklist && (
                   <>
                     <ChecklistItem done={checklist.qr} label="Onboarding QR uploaded" />
-                    <ChecklistItem done={checklist.email} label="Email verified (OTP)" />
+                    <ChecklistItem done={checklist.email} label="Email verified" />
                     <ChecklistItem done={checklist.phone} label="Phone verified" />
                   </>
                 )}
@@ -671,37 +811,71 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
                   <Mail className="w-4 h-4 text-[#3d1b80]" /> Email verification
                 </div>
                 {!instructor.emailVerified ? (
-                  <>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={sendOtpMutation.isPending}
-                      onClick={() => sendOtpMutation.mutate(instructor.id)}
-                    >
-                      Send OTP to {instructor.email}
-                    </Button>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="6-digit code"
-                        value={otp}
-                        maxLength={6}
-                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                      />
+                  <div className="space-y-4">
+                    <div className="rounded-md border bg-background p-3 space-y-3">
+                      <p className="text-sm font-medium">Option A — Send OTP and wait</p>
+                      <p className="text-xs text-muted-foreground">
+                        Onboarding stays here until the instructor uses the code or link from their
+                        email.
+                      </p>
                       <Button
                         type="button"
-                        className="bg-[#3d1b80] text-white shrink-0"
-                        disabled={verifyEmailMutation.isPending || otp.length !== 6}
-                        onClick={() =>
-                          verifyEmailMutation.mutate({ id: instructor.id, otpCode: otp })
-                        }
+                        variant="outline"
+                        size="sm"
+                        disabled={sendOtpMutation.isPending}
+                        onClick={() => sendOtpMutation.mutate(instructor.id)}
                       >
-                        Verify
+                        Send OTP to {instructor.email}
                       </Button>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="6-digit code from instructor"
+                          value={otp}
+                          maxLength={6}
+                          onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                        />
+                        <Button
+                          type="button"
+                          className="bg-[#3d1b80] text-white shrink-0"
+                          disabled={verifyEmailMutation.isPending || otp.length !== 6}
+                          onClick={() =>
+                            verifyEmailMutation.mutate({ id: instructor.id, otpCode: otp })
+                          }
+                        >
+                          Verify code
+                        </Button>
+                      </div>
                     </div>
-                  </>
+
+                    {isSuperAdmin ? (
+                      <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+                        <p className="text-sm font-medium">Option B — Verify manually and onboard</p>
+                        <p className="text-xs text-muted-foreground">
+                          Super admin only. Completes email verification and onboarding without
+                          waiting for the instructor OTP.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={
+                            manualVerify.mutation.isPending ||
+                            (instructor ? isManualVerifyComplete(instructor) : false)
+                          }
+                          onClick={manualVerify.openConfirm}
+                        >
+                          Verify manually and onboard
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 ) : (
-                  <p className="text-sm text-green-700">Email verified</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-green-700">Email verified</p>
+                    <p className="text-xs text-muted-foreground">
+                      Method: {getInstructorEmailVerificationLabel(instructor.verificationMethod)}
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -750,6 +924,21 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
         )}
       </DialogContent>
     </Dialog>
+
+    <InstructorManualVerifyDialogs
+      confirmOpen={manualVerify.confirmOpen}
+      onConfirmOpenChange={manualVerify.setConfirmOpen}
+      errorOpen={manualVerify.errorOpen}
+      errorMessage={manualVerify.errorMessage}
+      warningOpen={manualVerify.warningOpen}
+      warningMessage={manualVerify.warningMessage}
+      isPending={manualVerify.mutation.isPending}
+      instructorName={created?.name}
+      onConfirm={() => created && manualVerify.confirm(created.id)}
+      onDismissError={manualVerify.dismissError}
+      onDismissWarning={manualVerify.dismissWarning}
+    />
+    </>
   );
 }
 
@@ -760,13 +949,24 @@ export function InstructorStatusActions({
   instructor: Instructor;
   onUpdated: () => void;
 }) {
+  const { admin } = useAdminAuth();
   const { toast } = useToast();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<InstructorOperationalStatus | null>(null);
+  const [reason, setReason] = useState("");
+
   const mutation = useMutation({
-    mutationFn: async (status: InstructorOperationalStatus) => {
+    mutationFn: async ({
+      status,
+      statusNotes,
+    }: {
+      status: InstructorOperationalStatus;
+      statusNotes: string;
+    }) => {
       const res = await fetch(`/api/admin/instructors/${instructor.id}/status`, {
         method: "PATCH",
         headers: adminHeaders(),
-        body: JSON.stringify({ status, statusNotes: null }),
+        body: JSON.stringify({ status, statusNotes }),
       });
       if (!res.ok) {
         const err = await parseAdminApiError(res);
@@ -776,6 +976,9 @@ export function InstructorStatusActions({
     },
     onSuccess: () => {
       toast({ title: "Instructor status updated" });
+      setDialogOpen(false);
+      setPendingStatus(null);
+      setReason("");
       onUpdated();
     },
     onError: (e: Error) => {
@@ -783,42 +986,121 @@ export function InstructorStatusActions({
     },
   });
 
-  if (instructor.status === "suspended" || instructor.status === "blacklisted") {
-    return (
-      <Button
-        size="sm"
-        variant="outline"
-        className="mt-2"
-        disabled={mutation.isPending}
-        onClick={() => mutation.mutate("active")}
-      >
-        Re-activate instructor
-      </Button>
-    );
+  // BUG-03 frontend fix: only super_admin sees these controls.
+  if (admin?.role !== "super_admin") return null;
+
+  function openDialog(status: InstructorOperationalStatus) {
+    setPendingStatus(status);
+    setReason("");
+    setDialogOpen(true);
   }
 
-  if (instructor.status === "active") {
-    return (
-      <div className="flex flex-wrap gap-2">
+  function handleConfirm() {
+    if (!pendingStatus || reason.trim().length < 3) return;
+    mutation.mutate({ status: pendingStatus, statusNotes: reason.trim() });
+  }
+
+  const actionLabel =
+    pendingStatus === "active"
+      ? "Re-activate"
+      : pendingStatus === "suspended"
+        ? "Suspend"
+        : "Blacklist";
+
+  const dialogDescription =
+    pendingStatus === "active"
+      ? `Re-activating ${instructor.name} will restore session eligibility. Both licence statuses will be set to Pending.`
+      : pendingStatus === "suspended"
+        ? `Suspending ${instructor.name} removes them from upcoming sessions and hides their profile.`
+        : `Blacklisting ${instructor.name} is permanent. Only a super admin can reverse this.`;
+
+  return (
+    <>
+      {(instructor.status === "suspended" || instructor.status === "blacklisted") && (
         <Button
           size="sm"
           variant="outline"
+          className="mt-2"
           disabled={mutation.isPending}
-          onClick={() => mutation.mutate("suspended")}
+          onClick={() => openDialog("active")}
         >
-          Suspend
+          Re-activate instructor
         </Button>
-        <Button
-          size="sm"
-          variant="destructive"
-          disabled={mutation.isPending}
-          onClick={() => mutation.mutate("blacklisted")}
-        >
-          Blacklist
-        </Button>
-      </div>
-    );
-  }
+      )}
+      {instructor.status !== "suspended" && instructor.status !== "blacklisted" && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={mutation.isPending}
+            onClick={() => openDialog("suspended")}
+          >
+            Suspend
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={mutation.isPending}
+            onClick={() => openDialog("blacklisted")}
+          >
+            Blacklist
+          </Button>
+        </div>
+      )}
 
-  return null;
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(v) => {
+          setDialogOpen(v);
+          if (!v) { setPendingStatus(null); setReason(""); }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{actionLabel} instructor — {instructor.name}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{dialogDescription}</p>
+          <div className="space-y-2">
+            <Label htmlFor="status-reason">
+              Reason <span className="text-red-500">*</span>
+              <span className="text-muted-foreground text-xs ml-1">(min 3 characters)</span>
+            </Label>
+            <Textarea
+              id="status-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={
+                pendingStatus === "active"
+                  ? "e.g. Investigation complete — cleared to return"
+                  : pendingStatus === "suspended"
+                    ? "e.g. Pending investigation into complaint"
+                    : "e.g. Repeated violations — permanently removed"
+              }
+              rows={3}
+              maxLength={500}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setDialogOpen(false); setPendingStatus(null); setReason(""); }}
+              disabled={mutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={pendingStatus === "blacklisted" ? "destructive" : "default"}
+              disabled={mutation.isPending || reason.trim().length < 3}
+              className={pendingStatus !== "blacklisted" ? "bg-[#3d1b80] hover:bg-[#2d1260] text-white" : ""}
+              onClick={handleConfirm}
+            >
+              {mutation.isPending ? "Saving…" : `Confirm ${actionLabel}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

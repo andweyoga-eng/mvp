@@ -205,6 +205,38 @@ describe("adminCreateClassSessionSchema — recurrence", () => {
     }
   });
 
+  it("accepts drop-in weekly spread when recurrence is explicitly weekly", () => {
+    const r = parseSession({
+      ...base,
+      sessionFrequency: "drop_in",
+      recurrenceKind: "weekly",
+      occurrenceCount: "3",
+      recurrenceWeekdays: [2, 4],
+    });
+    assert.equal(r.success, true);
+    if (r.success) {
+      assert.equal(r.data.sessionFrequency, "drop_in");
+      assert.equal(r.data.recurrenceKind, "weekly");
+      assert.equal(r.data.occurrenceCount, 3);
+    }
+  });
+
+  it("accepts trial weekly spread when recurrence is explicitly weekly", () => {
+    const r = parseSession({
+      ...base,
+      sessionFrequency: "trial",
+      recurrenceKind: "weekly",
+      occurrenceCount: "2",
+      recurrenceWeekdays: [6],
+    });
+    assert.equal(r.success, true);
+    if (r.success) {
+      assert.equal(r.data.sessionFrequency, "trial");
+      assert.equal(r.data.recurrenceKind, "weekly");
+      assert.equal(r.data.occurrenceCount, 2);
+    }
+  });
+
   it("rejects weekly with only 1 occurrence", () => {
     const r = parseSession({
       ...base,

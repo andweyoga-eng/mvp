@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth, getAuthHeaders, setAuthToken } from "@/lib/auth";
+import { useAuth, getAuthHeaders, getAuthToken, setAuthToken } from "@/lib/auth";
 import { readResponseJson } from "@/lib/queryClient";
 import {
   filterBookableSessions,
@@ -43,6 +43,7 @@ import { setPendingBooking, clearPendingBooking } from "@/lib/pending-booking";
 import {
   fetchMemberSessions,
   findUpcomingMemberSessionForClass,
+  findUpcomingPendingSessionForClass,
   memberSessionsQueryKey,
 } from "@/lib/member-sessions";
 import {
@@ -211,6 +212,15 @@ export default function BookingModal({
     (guestEligibleSession as { sessionFrequency?: string } | undefined)?.sessionFrequency ===
       "trial";
 
+  const bookingSessionIsTrialDropIn = useMemo(() => {
+    const freq =
+      (selectedSession as { sessionFrequency?: string } | undefined)?.sessionFrequency ??
+      (displayClass as { sessionFrequency?: string } | undefined)?.sessionFrequency;
+    return isTrialOrDropIn(freq);
+  }, [selectedSession, displayClass]);
+
+  const canAccessCheckoutUi = !!user || !!getAuthToken();
+
   useEffect(() => {
     if (!isOpen) {
       setPaymentResult(null);
@@ -371,14 +381,20 @@ export default function BookingModal({
 
       if (result.token) {
         setAuthToken(result.token);
-        await refreshUser();
       }
 
       if (result.useRazorpayCheckout && result.razorpayKeyId) {
         setPaymentResult(result);
         setPaymentStep("pay");
+        if (result.token) {
+          await refreshUser();
+        }
         await startRazorpayCheckout(result);
         return;
+      }
+
+      if (result.token) {
+        await refreshUser();
       }
 
       if (result.useQrPayment && result.qrPayment) {
@@ -487,9 +503,11 @@ export default function BookingModal({
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
 
+    if (bookingMutation.isPending || isPaying) return;
+
     if (!user && !canGuestBook) return;
 
-    if (user && !isProfileComplete) {
+    if (user && !isProfileComplete && !bookingSessionIsTrialDropIn) {
       onClose();
 
       toast({
@@ -543,6 +561,16 @@ export default function BookingModal({
     }
 
     if (showAlreadyBookedForClass(classId)) return;
+
+    const pendingSession = user
+      ? findUpcomingPendingSessionForClass(memberSessions, classId)
+      : undefined;
+    if (pendingSession && paymentResult?.bookingId === pendingSession.bookingId) {
+      if (paymentResult.useRazorpayCheckout && paymentResult.razorpayKeyId) {
+        void startRazorpayCheckout(paymentResult);
+      }
+      return;
+    }
 
     const payload: Record<string, string> = { classId };
     if (!user && canGuestBook) {
@@ -799,7 +827,7 @@ export default function BookingModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showClose={!hideDialogClose}>
-        {!paymentResult && user && !isProfileComplete && (
+        {!paymentResult && user && !isProfileComplete && !bookingSessionIsTrialDropIn && (
           <Alert className="mb-4 border-orange-200 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
@@ -851,7 +879,7 @@ export default function BookingModal({
           </Alert>
         )}
 
-        {paymentResult && user && paymentStep === "payment-confirmed" && paymentOutcome && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "payment-confirmed" && paymentOutcome && (
           <PaymentConfirmedContent
             details={{
               bookingId: paymentOutcome.bookingId,
@@ -923,7 +951,7 @@ export default function BookingModal({
           </div>
         )}
 
-        {paymentResult && user && paymentStep === "success" && paymentOutcome && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "success" && paymentOutcome && (
           <div className="space-y-4">
             <Alert className="border-purple-200 bg-gradient-to-br from-purple-50 to-orange-50">
               <Sparkles className="h-5 w-5 text-purple-600" />
@@ -991,7 +1019,7 @@ export default function BookingModal({
           </div>
         )}
 
-        {paymentResult && user && paymentStep === "failed" && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "failed" && (
           <div className="space-y-4">
             <Alert variant="destructive">
               <AlertDescription>
@@ -1019,11 +1047,11 @@ export default function BookingModal({
           </div>
         )}
 
-        {paymentResult && user && paymentStep === "manual-submitted" && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "manual-submitted" && (
           <ManualPaymentSubmittedMessage onViewSessions={goToMySessionsUpcoming} />
         )}
 
-        {paymentResult && user && paymentStep === "pay" && !paymentOutcome && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "pay" && !paymentOutcome && (
           <div className="space-y-4">
             <Alert className="border-green-200 bg-green-50">
               <CreditCard className="h-4 w-4 text-green-700" />
@@ -1246,9 +1274,9 @@ export default function BookingModal({
                   <Button
                     className="w-full bg-primary !text-white"
                     onClick={handleSubmit}
-                    disabled={!guestWaiverAccepted}
+                    disabled={!guestWaiverAccepted || bookingMutation.isPending || isPaying}
                   >
-                    Continue to payment
+                    {bookingMutation.isPending ? "Reserving…" : "Continue to payment"}
                   </Button>
                   <AuthHoverPopup>
                     <Button variant="outline" className="w-full">
@@ -1259,15 +1287,22 @@ export default function BookingModal({
               </div>
             ) : (
               <>
-                <p className="text-purple-600 font-medium">Please sign in to book your yoga session</p>
-                <AuthHoverPopup>
+                <p className="text-purple-600 font-medium">
+                  {hasClassTypeFilter
+                    ? "Sign in to book this class type, or pick a trial or drop-in session from the schedule."
+                    : "Choose a trial or drop-in session from the schedule below, or sign in to book recurring classes."}
+                </p>
+                <AuthHoverPopup onContinueAsGuest={() => onClose()}>
                   <Button
-                    className="bg-primary !text-white font-bold hover:bg-primary/90"
+                    className="bg-primary !text-white font-bold hover:bg-primary/90 w-full"
                     data-testid="show-auth-hover"
                   >
                     Sign In / Sign Up
                   </Button>
                 </AuthHoverPopup>
+                <Button type="button" variant="outline" className="w-full" onClick={onClose}>
+                  View schedule
+                </Button>
               </>
             )}
           </div>
@@ -1411,6 +1446,7 @@ export default function BookingModal({
                   className="flex-1 bg-primary !text-white font-bold hover:bg-primary/90"
                   disabled={
                     bookingMutation.isPending ||
+                    isPaying ||
                     (hasPreselectedSession && (!preselectedIsBookable || !(formData.classId || sessionId))) ||
                     (showSessionPicker &&
                       getAvailableClasses.length > 0 &&

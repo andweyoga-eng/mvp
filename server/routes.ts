@@ -30,8 +30,11 @@ import {
 } from "@shared/instructor-compliance";
 import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
 import {
+  buildInstructorVerifyEmailUrl,
+  createInstructorEmailVerifiedHTML,
   createInstructorOtpPayload,
   deliverInstructorEmailOtp,
+  resolvePublicAppBaseUrl,
   verifyInstructorOtpHash,
 } from "./instructor-verification";
 import { MOOD_OPTIONS } from "@shared/mood";
@@ -54,8 +57,11 @@ import {
   requireAuth, optionalAuth, type AuthRequest
 } from "./auth";
 import {
-  generateAdminToken, requireAdminAuth,
-  type AdminAuthRequest, verifyAdminCredentials
+  generateAdminToken,
+  requireAdminAuth,
+  requireSuperAdminAuth,
+  type AdminAuthRequest,
+  verifyAdminCredentials,
 } from "./adminAuth";
 import {
   sendEmail,
@@ -643,26 +649,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/class-types/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const existing = await storage.getClassType(req.params.id);
-      if (!existing) {
-        return res.status(404).json({ message: "Class type not found" });
-      }
-      const validatedData = adminCreateClassTypeSchema.parse(req.body);
-      const updated = await storage.updateClassType(req.params.id, validatedData);
-      res.json(updated);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
-          errors: error.errors,
+  // SECURITY (BUG-03 / SEC-01): requireSuperAdminAuth — only super_admin may
+  // suspend, blacklist, or re-activate instructors. Regular admins get 403.
+  app.patch(
+    "/api/admin/instructors/:id/status",
+    requireSuperAdminAuth,
+    async (req: AdminAuthRequest, res) => {
+      try {
+        const bodySchema = adminUpdateInstructorStatusSchema.extend({
+          statusNotes: z.string().trim().max(500).nullable().optional(),
         });
-      }
-      res.status(500).json({ message: "Failed to update class type" });
-    }
-  });
+        const { status, statusNotes } = bodySchema.parse(req.body);
 
+        const existing = await storage.getInstructor(req.params.id);
+        if (!existing) {
+          return res.status(404).json({ message: "Instructor not found" });
+        }
+
+        const prevYcb = existing.ycbLicenseStatus;
+        const prevYogaAlliance = existing.yogaAllianceLicenseStatus;
+
+        if (status === "suspended") {
+          await storage.updateInstructor(req.params.id, {
+            ycbLicenseStatus: "suspended_by_awy",
+            yogaAllianceLicenseStatus: "suspended_by_awy",
+          });
+        } else if (status === "blacklisted") {
+          await storage.updateInstructor(req.params.id, {
+            ycbLicenseStatus: "blacklisted_by_awy",
+            yogaAllianceLicenseStatus: "blacklisted_by_awy",
+          });
+        } else if (status === "expired") {
+          await storage.updateInstructor(req.params.id, {
+            ycbLicenseStatus: "expired",
+            yogaAllianceLicenseStatus: "expired",
+          });
+        } else if (status === "active") {
+          // BUG-04 FIX: restore to pending not verified on reactivation
+          const restoredYcb = prevYcb === "verified" ? "verified" : "pending";
+          const restoredYogaAlliance =
+            prevYogaAlliance === "verified" ? "verified" : "pending";
+          await storage.updateInstructor(req.params.id, {
+            ycbLicenseStatus: restoredYcb,
+            yogaAllianceLicenseStatus: restoredYogaAlliance,
+          });
+        }
+
+        // SEC-02 FIX: Write audit log for every instructor status change.
+        await storage.insertAuditLog({
+          userId: req.admin?.id ?? null,
+          action: `instructor_status_changed_to_${status}`,
+          resourceType: "instructor",
+          resourceId: req.params.id,
+          metadata: JSON.stringify({
+            previousStatus: existing.status,
+            newStatus: status,
+            adminProvidedNotes: statusNotes ?? null,
+            prevYcbLicenseStatus: prevYcb,
+            prevYogaAllianceLicenseStatus: prevYogaAlliance,
+            performedByEmail: req.admin?.email,
+          }),
+          ipAddress: req.ip ?? null,
+          userAgent: req.get("user-agent") ?? null,
+        });
+
+        const reconciled = await storage.reconcileInstructorStatus(req.params.id);
+        if (!reconciled) {
+          return res.status(500).json({ message: "Failed to update instructor status" });
+        }
+
+        if (statusNotes && statusNotes.trim().length > 0) {
+          await storage.updateInstructorStatus(
+            req.params.id,
+            reconciled.status,
+            statusNotes.trim(),
+          );
+        }
+
+        const final = await storage.getInstructor(req.params.id);
+        res.json(final ?? reconciled);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+            errors: error.errors,
+          });
+        }
+        res.status(500).json({ message: "Failed to update instructor status" });
+      }
+    },
+  );
   app.delete("/api/class-types/:id", requireAdminAuth, async (req, res) => {
     try {
       const result = await storage.deleteClassType(req.params.id);
@@ -759,8 +835,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(emailChanged
           ? {
               emailVerified: false,
+              verificationMethod: "pending",
               emailOtpHash: null,
               emailOtpExpiresAt: null,
+              emailVerificationToken: null,
             }
           : {}),
       });
@@ -780,49 +858,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/instructors/:id/status", requireAdminAuth, async (req, res) => {
+  async function dispatchInstructorEmailOtp(
+    instructorId: string,
+    hostHeader?: string | null,
+  ): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+    const instructor = await storage.getInstructor(instructorId);
+    if (!instructor) {
+      return { ok: false, status: 404, message: "Instructor not found" };
+    }
+    const { otp, hash, expiresAt, linkToken } = await createInstructorOtpPayload();
+    const saved = await storage.setInstructorEmailOtp(instructorId, hash, expiresAt, linkToken);
+    if (!saved) {
+      return { ok: false, status: 500, message: "Could not save verification code" };
+    }
+    const verifyUrl = buildInstructorVerifyEmailUrl(
+      linkToken,
+      resolvePublicAppBaseUrl(hostHeader),
+    );
+    const sent = await deliverInstructorEmailOtp(instructor, otp, { verifyUrl });
+    if (!sent.ok) {
+      return {
+        ok: false,
+        status: sent.error?.includes("not configured") ? 503 : 500,
+        message: sent.error ?? "Failed to send verification email.",
+      };
+    }
+    return { ok: true };
+  }
+
+  app.get("/api/instructors/verify-email", async (req, res) => {
     try {
-      const { status } = adminUpdateInstructorStatusSchema.parse(req.body);
-      const existing = await storage.getInstructor(req.params.id);
-      if (!existing) {
-        return res.status(404).json({ message: "Instructor not found" });
+      const token = typeof req.query.token === "string" ? req.query.token.trim() : "";
+      if (!token) {
+        return res.status(400).send("Invalid verification link.");
       }
 
-      if (status === "suspended") {
-        await storage.updateInstructor(req.params.id, {
-          ycbLicenseStatus: "suspended_by_awy",
-          yogaAllianceLicenseStatus: "suspended_by_awy",
-        });
-      } else if (status === "blacklisted") {
-        await storage.updateInstructor(req.params.id, {
-          ycbLicenseStatus: "blacklisted_by_awy",
-          yogaAllianceLicenseStatus: "blacklisted_by_awy",
-        });
-      } else if (status === "expired") {
-        await storage.updateInstructor(req.params.id, {
-          ycbLicenseStatus: "expired",
-          yogaAllianceLicenseStatus: "expired",
-        });
-      } else if (status === "active") {
-        await storage.updateInstructor(req.params.id, {
-          ycbLicenseStatus: "verified",
-          yogaAllianceLicenseStatus: "verified",
-        });
+      const instructor = await storage.getInstructorByEmailVerificationToken(token);
+      if (!instructor) {
+        return res.status(400).send("Invalid or expired verification link.");
       }
 
-      const reconciled = await storage.reconcileInstructorStatus(req.params.id);
-      if (!reconciled) {
-        return res.status(500).json({ message: "Failed to update instructor status" });
+      if (instructor.emailVerified) {
+        return res
+          .status(200)
+          .send(createInstructorEmailVerifiedHTML(instructor.name));
       }
-      res.json(reconciled);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({
-          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
-          errors: error.errors,
-        });
+
+      if (
+        !instructor.emailOtpExpiresAt ||
+        instructor.emailOtpExpiresAt.getTime() < Date.now()
+      ) {
+        return res.status(400).send("Verification link has expired. Ask your admin to resend.");
       }
-      res.status(500).json({ message: "Failed to update instructor status" });
+
+      const method =
+        instructor.verificationMethod === "admin-override"
+          ? "admin-override"
+          : "otp-verified";
+      const updated = await storage.markInstructorEmailVerified(instructor.id, method);
+      if (!updated) {
+        return res.status(500).send("Could not verify email. Please try again.");
+      }
+
+      return res.status(200).send(createInstructorEmailVerifiedHTML(updated.name));
+    } catch (err) {
+      console.error("[instructor-verify-email-link]", err);
+      res.status(500).send("Failed to verify email.");
     }
   });
 
@@ -831,20 +932,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireAdminAuth,
     async (req, res) => {
       try {
-        const instructor = await storage.getInstructor(req.params.id);
-        if (!instructor) {
-          return res.status(404).json({ message: "Instructor not found" });
-        }
-        const { otp, hash, expiresAt } = await createInstructorOtpPayload();
-        const saved = await storage.setInstructorEmailOtp(req.params.id, hash, expiresAt);
-        if (!saved) {
-          return res.status(500).json({ message: "Could not save verification code" });
-        }
-        const sent = await deliverInstructorEmailOtp(instructor, otp);
-        if (!sent.ok) {
-          return res.status(sent.error?.includes("not configured") ? 503 : 500).json({
-            message: sent.error ?? "Failed to send verification email.",
-          });
+        const result = await dispatchInstructorEmailOtp(req.params.id, req.get("host"));
+        if (!result.ok) {
+          return res.status(result.status).json({ message: result.message });
         }
         res.json({ message: "Verification code sent to instructor email" });
       } catch (err) {
@@ -855,15 +945,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   app.post(
+    "/api/admin/instructors/:id/verify-email/manual",
+    requireSuperAdminAuth,
+    async (req: AdminAuthRequest, res) => {
+      try {
+        const instructor = await storage.getInstructor(req.params.id);
+        if (!instructor) {
+          return res.status(404).json({ message: "Instructor not found" });
+        }
+
+        if (!instructor.emailVerified) {
+          const updated = await storage.markInstructorEmailVerified(
+            req.params.id,
+            "admin-override",
+            { clearOtp: false },
+          );
+          if (!updated) {
+            return res.status(500).json({ message: "Failed to verify email manually" });
+          }
+
+          await storage.insertAuditLog({
+            userId: req.admin?.id ?? null,
+            action: "instructor_email_verified_admin_override",
+            resourceType: "instructor",
+            resourceId: req.params.id,
+            metadata: JSON.stringify({
+              method: "admin-override",
+              instructorId: req.params.id,
+              adminId: req.admin?.id ?? null,
+              adminEmail: req.admin?.email ?? null,
+              timestamp: new Date().toISOString(),
+            }),
+            ipAddress: req.ip ?? null,
+            userAgent: req.get("user-agent") ?? null,
+          });
+        }
+
+        // Complete onboarding: manual verify and onboard includes phone verification.
+        const afterEmail = await storage.getInstructor(req.params.id);
+        if (afterEmail?.phone?.trim() && !afterEmail.phoneVerified) {
+          await storage.markInstructorPhoneVerified(req.params.id);
+        }
+
+        const reconciled = await storage.reconcileInstructorStatus(req.params.id);
+        const otpResult = await dispatchInstructorEmailOtp(req.params.id, req.get("host"));
+
+        res.json({
+          ...(reconciled ?? afterEmail ?? instructor),
+          otpEmailSent: otpResult.ok,
+          otpWarning: otpResult.ok ? null : otpResult.message,
+        });
+      } catch (err) {
+        console.error("[verify-email-manual]", err);
+        res.status(500).json({ message: "Failed to verify email manually" });
+      }
+    },
+  );
+
+  app.post(
     "/api/admin/instructors/:id/verify-email-otp",
     requireAdminAuth,
-    async (req, res) => {
+    async (req: AdminAuthRequest, res) => {
       try {
         const { otp } = adminInstructorEmailOtpSchema.parse(req.body);
         const instructor = await storage.getInstructor(req.params.id);
         if (!instructor) {
           return res.status(404).json({ message: "Instructor not found" });
         }
+
+        if (instructor.emailVerified) {
+          const current = await storage.getInstructor(req.params.id);
+          return res.json(current ?? instructor);
+        }
+
         if (
           !instructor.emailOtpExpiresAt ||
           instructor.emailOtpExpiresAt.getTime() < Date.now()
@@ -874,7 +1028,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!valid) {
           return res.status(400).json({ message: "Invalid verification code" });
         }
-        const updated = await storage.markInstructorEmailVerified(req.params.id);
+
+        const method =
+          instructor.verificationMethod === "admin-override"
+            ? "admin-override"
+            : "otp-verified";
+        const updated = await storage.markInstructorEmailVerified(req.params.id, method);
+
+        await storage.insertAuditLog({
+          userId: req.admin?.id ?? null,
+          action: "instructor_email_verified_otp",
+          resourceType: "instructor",
+          resourceId: req.params.id,
+          metadata: JSON.stringify({
+            method: "otp-verified",
+            instructorId: req.params.id,
+            adminId: req.admin?.id ?? null,
+            adminEmail: req.admin?.email ?? null,
+            timestamp: new Date().toISOString(),
+          }),
+          ipAddress: req.ip ?? null,
+          userAgent: req.get("user-agent") ?? null,
+        });
+
         res.json(updated ?? { message: "Verified" });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -1422,8 +1598,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      if (cls.currentBookings >= cls.maxCapacity) {
-        return res.status(400).json({ message: "Class is fully booked" });
+      const resumableBooking = await storage.findResumableBookingForClass(user.id, classId);
+      if (!resumableBooking) {
+        const activeCount = await storage.syncClassBookingCount(classId);
+        if (activeCount >= cls.maxCapacity) {
+          return res.status(400).json({ message: "Class is fully booked" });
+        }
       }
 
       const classTypeForBooking = await storage.getClassType(cls.classTypeId);
@@ -1493,10 +1673,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const booking = await storage.createBooking({
-        userId: user.id,
-        classId,
-      });
+      const booking = resumableBooking
+        ? resumableBooking
+        : await storage.createBooking({
+            userId: user.id,
+            classId,
+          });
 
       const classType = await storage.getClassType(cls.classTypeId);
       const instructor = await storage.getInstructor(cls.instructorId);
@@ -1600,6 +1782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         razorpayKeyId: checkoutEnabled ? checkoutGateway!.getPublicKeyId() : null,
         paymentRequired: hasPrice,
         token: checkoutAuthToken ?? null,
+        resumedPendingBooking: !!resumableBooking,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2031,9 +2214,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const all = await storage.getAllClasses();
       const enriched = await Promise.all(
         all.map(async (cls) => {
-          const classType = await storage.getClassType(cls.classTypeId);
-          const instructor = await storage.getInstructor(cls.instructorId);
-          return { ...cls, classType, instructor };
+          const [classType, instructor, currentBookings] = await Promise.all([
+            storage.getClassType(cls.classTypeId),
+            storage.getInstructor(cls.instructorId),
+            // FIX: currentBookings was never fetched — the cancel dialog
+            // never opened because bookingCount was always 0 (undefined ?? 0).
+            storage.countBookingsForClass(cls.id),
+          ]);
+          return { ...cls, classType, instructor, currentBookings };
         }),
       );
       res.json(enriched);
@@ -2156,7 +2344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/classes/:id/cancel", requireAdminAuth, async (req, res) => {
+  app.post("/api/admin/classes/:id/cancel", requireAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
       const body = z
         .object({
@@ -2172,6 +2360,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!result.ok) {
         return res.status(400).json({ message: result.message || "Could not cancel session" });
       }
+      await storage.insertAuditLog({
+        userId: req.admin?.id ?? null,
+        action: "session_cancelled",
+        resourceType: "class_session",
+        resourceId: req.params.id,
+        metadata: JSON.stringify({
+          reason: body.reason,
+          performedByEmail: req.admin?.email,
+        }),
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
       res.json({
         message: "Session cancelled. Booked members will see the reason in their profile.",
       });

@@ -1,13 +1,19 @@
 import { useState } from "react";
-import { Menu, X, User, LogOut, Settings, AlertTriangle, Sparkles } from "lucide-react";
+import { LogOut, Settings, AlertTriangle, Sparkles, ChevronDown, Calendar } from "lucide-react";
 import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { useToast } from "@/hooks/use-toast";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -16,6 +22,7 @@ interface NavigationProps {
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -42,23 +49,17 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   return (
     <>
     {/* Unified Navigation - All Devices */}
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border">
+    <nav className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-sm border-b border-border">
       <div className="container mx-auto px-2 sm:px-4">
         <div className="flex items-center justify-between h-16 relative">
-          {/* Sandwich Menu Button - Leftmost corner */}
+          {/* AWY Menu Trigger - Leftmost corner */}
           <div className="flex-shrink-0 relative">
             <Button
-              variant="ghost"
-              size="sm"
-              className="p-1.5 sm:p-2 hover:bg-muted transition-colors"
+              className="bg-primary hover:bg-primary/90 !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
               onClick={toggleMobileMenu}
               data-testid="mobile-menu-toggle"
             >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-              ) : (
-                <Menu className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-              )}
+              {isMobileMenuOpen ? "Close" : "AWY"}
             </Button>
             {user && celebrationCount > 0 && (
               <button
@@ -91,31 +92,57 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             </button>
           </div>
 
-          {/* Book Session Button - Right side */}
+          {/* Primary actions - Right side */}
           <div className="flex-shrink-0 flex items-center gap-2">
-            {user && (
-              <span className="text-sm text-purple-600 font-medium hidden lg:inline">
-                {user.name}
-              </span>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    className={`${!isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105`}
+                    data-testid="nav-my-account"
+                  >
+                    {!isProfileComplete && (
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                    )}
+                    My Account
+                    <ChevronDown className="w-3 h-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleBookingClick} data-testid="nav-dropdown-book-session">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Book Session
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setLocation('/my-account')} data-testid="nav-dropdown-my-account">
+                    <Settings className="w-4 h-4 mr-2" />
+                    My Account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="text-red-600 focus:text-red-700"
+                    data-testid="nav-dropdown-sign-out"
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Button
+                  className="bg-primary hover:bg-primary/90 !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105"
+                  data-testid="nav-book-session"
+                  onClick={() => setBookingAuthOpen(true)}
+                >
+                  Book Session
+                </Button>
+                <AuthChoiceDialog
+                  open={bookingAuthOpen}
+                  onOpenChange={setBookingAuthOpen}
+                  onContinueAsGuest={handleBookingClick}
+                />
+              </>
             )}
-            
-            <div className="flex items-center gap-1">
-              <Button 
-                onClick={handleBookingClick}
-                className={`${user && !isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105`}
-                data-testid="nav-book-session"
-              >
-                {user && !isProfileComplete && (
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                )}
-                <span className="hidden sm:inline">
-                  {user && !isProfileComplete ? 'Complete Profile' : 'Book Session'}
-                </span>
-                <span className="sm:hidden">
-                  {user && !isProfileComplete ? 'Profile' : 'Book'}
-                </span>
-              </Button>
-            </div>
           </div>
         </div>
       </div>
@@ -176,63 +203,22 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           >
             and We Meet Yogis
           </button>
-          <div className="pt-4 border-t border-border/30 space-y-2">
-            {user ? (
-              <>
-                <p className="text-sm text-purple-600 font-bold text-center">
-                  Welcome, {user.name}!
-                </p>
-                {celebrationCount > 0 && (
-                  <Button
-                    onClick={() => {
-                      openCelebrationFromMenu();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full bg-gradient-to-r from-[#3d1b80] to-[#bb5309] !text-white px-6 py-3 rounded-full text-sm font-bold shadow-md hover:opacity-95"
-                    data-testid="mobile-nav-payment-verified"
-                  >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Join your session
-                    <Badge className="ml-2 bg-white/20 text-white border-0">{celebrationCount}</Badge>
-                  </Button>
-                )}
-                <Button 
-                  onClick={() => {
-                    setLocation('/my-account');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  variant="outline"
-                  className="w-full border-primary text-primary hover:bg-primary/10 px-6 py-3 rounded-full text-sm font-bold"
-                  data-testid="mobile-nav-my-account"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  My Account
-                </Button>
-                <Button 
-                  onClick={() => {
-                    logout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  variant="outline"
-                  className="w-full border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-full text-sm font-bold"
-                  data-testid="mobile-nav-logout"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <AuthHoverPopup>
-                <Button 
-                  className="w-full bg-primary !text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
-                  data-testid="desktop-sidebar-sign-in-up"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Sign In / Sign Up
-                </Button>
-              </AuthHoverPopup>
-            )}
-          </div>
+          {user && celebrationCount > 0 && (
+            <div className="pt-4 border-t border-border/30">
+              <Button
+                onClick={() => {
+                  openCelebrationFromMenu();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full bg-gradient-to-r from-[#3d1b80] to-[#bb5309] !text-white px-6 py-3 rounded-full text-sm font-bold shadow-md hover:opacity-95"
+                data-testid="mobile-nav-payment-verified"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Join your session
+                <Badge className="ml-2 bg-white/20 text-white border-0">{celebrationCount}</Badge>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
       

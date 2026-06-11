@@ -33,7 +33,43 @@ export interface SessionFormClassType {
 export interface SessionFormInstructor {
   id: string;
   name: string;
+  /** When true, shown in the list but cannot be selected (onboarding / suspension). */
+  disabled?: boolean;
 }
+
+const SESSION_FREQUENCY_LABELS: Record<string, string> = {
+  recurring: "Recurring",
+  drop_in: "Drop in",
+  trial: "Trial session",
+};
+
+const DELIVERY_MODE_LABELS: Record<string, string> = {
+  online: "Online",
+  offline: "Offline",
+  hybrid: "Hybrid",
+};
+
+const SESSION_TYPE_OPTIONS: Array<{
+  value: "recurring" | "drop_in" | "trial";
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "recurring",
+    label: "Repeat",
+    description: "Regular batch sessions",
+  },
+  {
+    value: "drop_in",
+    label: "Drop in",
+    description: "Flexible one-off or spread sessions",
+  },
+  {
+    value: "trial",
+    label: "Trial session",
+    description: "Intro sessions for new yogis",
+  },
+];
 
 const INITIAL_FORM = {
   classTypeId: "",
@@ -172,7 +208,7 @@ export function CreateSessionModal({
   classTypes: SessionFormClassType[];
   instructors: SessionFormInstructor[];
   paymentQrCodes: PaymentQrCode[];
-  onCreated: () => void;
+  onCreated?: (result?: { sessions?: Array<{ date: string | Date }> }) => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   sessionToEdit?: AdminClassSessionForEdit | null;
@@ -237,7 +273,7 @@ export function CreateSessionModal({
       setErrors({});
       setQrContactNotice(null);
       setOpen(false);
-      onCreated();
+      onCreated?.(data as { sessions?: Array<{ date: string | Date }> });
     },
     onError: (e: Error & { fieldErrors?: Record<string, string> }) => {
       if (e.fieldErrors) setErrors(e.fieldErrors);
@@ -288,6 +324,8 @@ export function CreateSessionModal({
 
   const noClassTypes = classTypes.length === 0;
   const noInstructors = instructors.length === 0;
+  const eligibleInstructors = instructors.filter((i) => !i.disabled);
+  const noEligibleInstructors = instructors.length > 0 && eligibleInstructors.length === 0;
   const selectedClassType = classTypes.find((ct) => ct.id === form.classTypeId);
 
   return (
@@ -313,13 +351,15 @@ export function CreateSessionModal({
           </DialogDescription>
         </DialogHeader>
 
-        {(noClassTypes || noInstructors) ? (
+        {(noClassTypes || noInstructors || noEligibleInstructors) ? (
           <div className="px-6 py-4">
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 {noClassTypes && "Create at least one Session Type first (Sessions → Session Type). "}
-                {noInstructors && "Create at least one Instructor first."}
+                {noInstructors && "Create at least one Instructor first (Instructors tab). "}
+                {noEligibleInstructors &&
+                  "Instructors exist but none are session-eligible yet — complete onboarding verification or re-activate suspended instructors."}
               </AlertDescription>
             </Alert>
           </div>
@@ -344,6 +384,7 @@ export function CreateSessionModal({
                     Session Type <span className="text-red-500">*</span>
                   </Label>
                   <Select
+                    modal={false}
                     value={form.classTypeId || undefined}
                     onValueChange={(v) => {
                       setForm((f) => ({ ...f, classTypeId: v }));
@@ -368,6 +409,7 @@ export function CreateSessionModal({
                     Instructor <span className="text-red-500">*</span>
                   </Label>
                   <Select
+                    modal={false}
                     value={form.instructorId || undefined}
                     onValueChange={(v) => {
                       setForm((f) => ({ ...f, instructorId: v }));
@@ -379,8 +421,13 @@ export function CreateSessionModal({
                     </SelectTrigger>
                     <SelectContent>
                       {instructors.map((ins) => (
-                        <SelectItem key={ins.id} value={ins.id}>
+                        <SelectItem
+                          key={ins.id}
+                          value={ins.id}
+                          disabled={ins.disabled}
+                        >
                           {ins.name}
+                          {ins.disabled ? " (not eligible)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -428,102 +475,175 @@ export function CreateSessionModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border bg-muted/20 p-4">
                 <div>
                   <Label>
-                    Session frequency <span className="text-red-500">*</span>
+                    Session type <span className="text-red-500">*</span>
                   </Label>
-                  <Select
-                    value={form.sessionFrequency}
-                    onValueChange={(v) =>
-                      setForm((f) => ({
-                        ...f,
-                        sessionFrequency: v as "recurring" | "drop_in" | "trial",
-                        recurrenceKind: v === "recurring" ? "weekly" : "once",
-                        recurrenceWeekdays: v === "recurring" ? f.recurrenceWeekdays : [],
-                        occurrenceCount: v === "recurring" ? f.occurrenceCount : "1",
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="recurring">Recurring</SelectItem>
-                      <SelectItem value="drop_in">Drop in</SelectItem>
-                      <SelectItem value="trial">Trial session</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {isEdit ? (
+                    <>
+                      <Input
+                        readOnly
+                        value={
+                          SESSION_FREQUENCY_LABELS[form.sessionFrequency] ??
+                          form.sessionFrequency
+                        }
+                        className="bg-muted/50"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Session type is fixed after creation to protect bookings and guest checkout
+                        rules.
+                      </p>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      {SESSION_TYPE_OPTIONS.map((option) => {
+                        const checked = form.sessionFrequency === option.value;
+                        return (
+                          <label
+                            key={option.value}
+                            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition ${
+                              checked
+                                ? "border-primary bg-primary/5"
+                                : "border-border bg-background hover:bg-muted/30"
+                            }`}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(on) => {
+                                if (!on) return;
+                                setForm((f) => ({
+                                  ...f,
+                                  sessionFrequency: option.value,
+                                }));
+                              }}
+                            />
+                            <div className="space-y-0.5">
+                              <p className="text-sm font-medium">{option.label}</p>
+                              <p className="text-xs text-muted-foreground">{option.description}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label>
                     Session mode <span className="text-red-500">*</span>
                   </Label>
-                  <Select
-                    value={form.deliveryMode}
-                    onValueChange={(v) =>
-                      setForm((f) => ({ ...f, deliveryMode: v as "online" | "offline" | "hybrid" }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="online">Online</SelectItem>
-                      <SelectItem value="offline">Offline</SelectItem>
-                      <SelectItem value="hybrid">Hybrid</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {isEdit ? (
+                    <>
+                      <Input
+                        readOnly
+                        value={
+                          DELIVERY_MODE_LABELS[form.deliveryMode] ?? form.deliveryMode
+                        }
+                        className="bg-muted/50"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Delivery mode cannot be changed here after the session is created.
+                      </p>
+                    </>
+                  ) : (
+                    <Select
+                      modal={false}
+                      value={form.deliveryMode}
+                      onValueChange={(v) =>
+                        setForm((f) => ({
+                          ...f,
+                          deliveryMode: v as "online" | "offline" | "hybrid",
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="online">Online</SelectItem>
+                        <SelectItem value="offline">Offline</SelectItem>
+                        <SelectItem value="hybrid">Hybrid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
 
-              {form.sessionFrequency === "recurring" && !isEdit && (
+              {!isEdit && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border bg-muted/20 p-4">
-                  <div>
-                    <Label className="mb-2 block">
-                      Repeat on <span className="text-red-500">*</span>
-                    </Label>
-                    <div className="flex flex-wrap gap-3">
-                      {WEEKDAY_LABELS.map((label, day) => {
-                        const checked = form.recurrenceWeekdays.includes(day);
-                        return (
-                          <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(on) => {
-                                setForm((f) => {
-                                  const set = new Set(f.recurrenceWeekdays);
-                                  if (on) set.add(day);
-                                  else set.delete(day);
-                                  return {
-                                    ...f,
-                                    recurrenceWeekdays: [...set].sort((a, b) => a - b),
-                                  };
-                                });
-                                clearFieldError("recurrenceWeekdays");
-                              }}
-                            />
-                            {label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <FieldError message={errors.recurrenceWeekdays} />
+                  <div className="sm:col-span-2">
+                    <label className="flex items-start gap-3 rounded-md border p-3 bg-background">
+                      <Checkbox
+                        checked={form.recurrenceKind === "weekly"}
+                        onCheckedChange={(on) => {
+                          setForm((f) => ({
+                            ...f,
+                            recurrenceKind: on ? "weekly" : "once",
+                            occurrenceCount: on ? (parseInt(f.occurrenceCount, 10) >= 2 ? f.occurrenceCount : "4") : "1",
+                            recurrenceWeekdays: on ? f.recurrenceWeekdays : [],
+                          }));
+                          clearFieldError("occurrenceCount");
+                          clearFieldError("recurrenceWeekdays");
+                        }}
+                      />
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium">Repeat on multiple days/weeks</p>
+                        <p className="text-xs text-muted-foreground">
+                          Enable to spread this {SESSION_FREQUENCY_LABELS[form.sessionFrequency]?.toLowerCase() ?? "session"} across upcoming weeks.
+                        </p>
+                      </div>
+                    </label>
                   </div>
-                  <div>
-                    <Label>
-                      For (weeks) <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      min={2}
-                      max={12}
-                      value={form.occurrenceCount}
-                      onChange={(e) => {
-                        setForm((f) => ({ ...f, occurrenceCount: e.target.value }));
-                        clearFieldError("occurrenceCount");
-                      }}
-                      className={errors.occurrenceCount ? "border-red-500" : ""}
-                    />
-                    <FieldError message={errors.occurrenceCount} />
-                  </div>
+
+                  {form.recurrenceKind === "weekly" && (
+                    <>
+                      <div>
+                        <Label className="mb-2 block">
+                          Repeat on <span className="text-red-500">*</span>
+                        </Label>
+                        <div className="flex flex-wrap gap-3">
+                          {WEEKDAY_LABELS.map((label, day) => {
+                            const checked = form.recurrenceWeekdays.includes(day);
+                            return (
+                              <label key={day} className="flex items-center gap-2 text-sm cursor-pointer">
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(on) => {
+                                    setForm((f) => {
+                                      const set = new Set(f.recurrenceWeekdays);
+                                      if (on) set.add(day);
+                                      else set.delete(day);
+                                      return {
+                                        ...f,
+                                        recurrenceWeekdays: [...set].sort((a, b) => a - b),
+                                      };
+                                    });
+                                    clearFieldError("recurrenceWeekdays");
+                                  }}
+                                />
+                                {label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <FieldError message={errors.recurrenceWeekdays} />
+                      </div>
+                      <div>
+                        <Label>
+                          For (weeks) <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          type="number"
+                          min={2}
+                          max={12}
+                          value={form.occurrenceCount}
+                          onChange={(e) => {
+                            setForm((f) => ({ ...f, occurrenceCount: e.target.value }));
+                            clearFieldError("occurrenceCount");
+                          }}
+                          className={errors.occurrenceCount ? "border-red-500" : ""}
+                        />
+                        <FieldError message={errors.occurrenceCount} />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -712,6 +832,7 @@ export function CreateSessionModal({
                         QR code <span className="text-red-500">*</span>
                       </Label>
                       <Select
+                        modal={false}
                         value={form.paymentQrCodeId || undefined}
                         onValueChange={(v) => {
                           const qr = paymentQrCodes.find((q) => q.id === v);

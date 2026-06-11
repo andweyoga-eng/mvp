@@ -229,6 +229,7 @@ function QrCodeForm({
         </Label>
         <div className="flex gap-2 mt-1">
           <Select
+            modal={false}
             value={phoneCountryCode}
             onValueChange={(v) => {
               onPhoneCountryCodeChange(v);

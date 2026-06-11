@@ -67,6 +67,27 @@ export async function requireAdminAuth(req: AdminAuthRequest, res: Response, nex
   }
 }
 
+/**
+ * Middleware that requires the admin to have the 'super_admin' role.
+ * Used for destructive or compliance-sensitive actions:
+ *   - Re-activating suspended / blacklisted instructors
+ *   - Changing instructor operational status (suspend / blacklist)
+ * Any valid admin token that is NOT super_admin receives 403.
+ */
+export async function requireSuperAdminAuth(
+  req: AdminAuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  await requireAdminAuth(req, res, () => {
+    if (req.admin?.role !== "super_admin") {
+      return res
+        .status(403)
+        .json({ message: "Super admin access required for this action." });
+    }
+    next();
+  });
+}
 export async function optionalAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;

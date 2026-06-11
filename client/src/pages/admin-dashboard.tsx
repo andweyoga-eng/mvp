@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
@@ -24,7 +23,7 @@ import {
   adminSectionTabTrigger,
   adminActionTabTrigger,
 } from "@/lib/admin-tab-styles";
-import { WeekScheduleGrid } from "@/components/admin/week-schedule-grid";
+import { WeekScheduleGrid, startOfWeek } from "@/components/admin/week-schedule-grid";
 import { CancelSessionDialog } from "@/components/admin/cancel-session-dialog";
 import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
@@ -47,7 +46,13 @@ import {
   InstructorStatusActions,
 } from "@/components/admin/create-instructor-modal";
 import type { Instructor } from "@shared/schema";
-import { getInstructorStatusLabel } from "@shared/instructor-compliance";
+import {
+  canInstructorTakeSessions,
+  getInstructorStatusLabel,
+  getInstructorEmailVerificationLabel,
+  isInstructorFullyOnboarded,
+  showManuallyVerifiedBadge,
+} from "@shared/instructor-compliance";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -141,6 +146,8 @@ export default function AdminDashboard() {
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
     });
 
   const { data: classTypes = [], isLoading: ctLoading, refetch: refetchCT } =
@@ -163,14 +170,12 @@ export default function AdminDashboard() {
       },
     });
 
-  const { data: sessionInstructors = [] } = useQuery<Instructor[]>({
-    queryKey: ["/api/admin/instructors/eligible"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/instructors/eligible", { headers: adminHeaders() });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-  });
+  const sessionInstructorOptions = instructors.map((i) => ({
+    id: i.id,
+    name: i.name,
+    disabled: !canInstructorTakeSessions(i),
+  }));
+  const eligibleInstructorCount = sessionInstructorOptions.filter((i) => !i.disabled).length;
 
   const { data: sessions = [], isLoading: sessLoading, refetch: refetchSess } =
     useQuery<ClassSession[]>({
@@ -218,12 +223,12 @@ export default function AdminDashboard() {
   });
   const { data: waitlistUsers = [], refetch: refetchWaitlist } = useQuery<AdminWaitlistUser[]>({
     queryKey: ["/api/admin/waitlist-users"],
-    queryFn: async () => {
+      queryFn: async () => {
       const res = await fetch("/api/admin/waitlist-users", { headers: adminHeaders() });
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-  });
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      },
+    });
 
   async function toggleUserActive(userId: string, isActive: boolean) {
     const res = await fetch(`/api/admin/users/${userId}`, {
@@ -299,27 +304,7 @@ export default function AdminDashboard() {
     refetchSess();
   }
 
-  async function performCancelSession(
-    sessionId: string,
-    payload: { reason: string; ownerOtp: string },
-  ) {
-    const res = await fetch(`/api/admin/classes/${sessionId}/cancel`, {
-      method: "POST",
-      headers: { ...adminHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast({
-        title: "Could not cancel session",
-        description: body.message || "Cancellation failed",
-        variant: "destructive",
-      });
-      throw new Error(body.message || "Cancellation failed");
-    }
-    toast({ title: "Session cancelled", description: body.message });
-    refetchSess();
-  }
+  // DEAD-01 FIX: performCancelSession removed — was defined but never called.
 
   async function handleCancelSessionWithBookings(payload: {
     reason: string;
@@ -358,6 +343,7 @@ export default function AdminDashboard() {
     label: string;
     bookingCount: number;
   } | null>(null);
+  const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
 
   const sessionEndMs = (s: { date: string; classType?: { duration?: number } }) =>
     getSessionEndMs(s.date, s.classType?.duration);
@@ -543,7 +529,7 @@ export default function AdminDashboard() {
                   </CardTitle>
                   <CardDescription>Certified practitioners ({instructors.length} total)</CardDescription>
                 </div>
-                <CreateInstructorModal onCreated={() => refetchIns()} />
+                  <CreateInstructorModal onCreated={() => refetchIns()} />
               </CardHeader>
               <CardContent>
                 {insLoading ? (
@@ -574,26 +560,51 @@ export default function AdminDashboard() {
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <Badge
-                                  variant={
-                                    ins.status === "active"
-                                      ? "default"
-                                      : ins.status === "pending"
+                                {isInstructorFullyOnboarded(ins) ? (
+                                  <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs shrink-0">
+                                    Onboarded
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant={
+                                      ins.status === "pending"
                                         ? "secondary"
-                                        : "destructive"
-                                  }
-                                  className={
-                                    ins.status === "active"
-                                      ? "bg-green-700 hover:bg-green-700 text-xs shrink-0"
-                                      : "text-xs shrink-0"
-                                  }
-                                  title={ins.statusNotes ?? undefined}
-                                >
-                                  {getInstructorStatusLabel(ins.status)}
-                                </Badge>
+                                        : ins.status === "active"
+                                          ? "default"
+                                          : "destructive"
+                                    }
+                                    className={
+                                      ins.status === "active"
+                                        ? "bg-green-700 hover:bg-green-700 text-xs shrink-0"
+                                        : "text-xs shrink-0"
+                                    }
+                                    title={ins.statusNotes ?? undefined}
+                                  >
+                                    {getInstructorStatusLabel(ins.status)}
+                                  </Badge>
+                                )}
+                                {showManuallyVerifiedBadge(ins) ? (
+                                  <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 border border-amber-300 text-xs shrink-0">
+                                    Manually Verified
+                                  </Badge>
+                                ) : null}
                                 <h3 className="font-semibold text-gray-900">{ins.name}</h3>
                               </div>
                               <p className="text-xs text-gray-500 mt-1">{ins.email} · {ins.phone}</p>
+                              {ins.emailVerified ? (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Email verification:{" "}
+                                  <span
+                                    className={
+                                      ins.verificationMethod === "admin-override"
+                                        ? "text-amber-700 font-medium"
+                                        : "text-green-700 font-medium"
+                                    }
+                                  >
+                                    {getInstructorEmailVerificationLabel(ins.verificationMethod)}
+                                  </span>
+                                </p>
+                              ) : null}
                               {ins.bio && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{ins.bio}</p>}
                               {ins.specialties && ins.specialties.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-2">
@@ -606,7 +617,8 @@ export default function AdminDashboard() {
                                 <EditInstructorModal
                                   instructor={ins}
                                   onUpdated={() => {
-                                    refetchIns();
+                                    void refetchIns();
+                                    qc.invalidateQueries({ queryKey: ["/api/admin/instructors"] });
                                     qc.invalidateQueries({ queryKey: ["/api/admin/instructors/eligible"] });
                                   }}
                                 />
@@ -670,7 +682,7 @@ export default function AdminDashboard() {
                         data-testid="open-create-session-flow"
                       >
                         <Plus className="w-4 h-4 mr-2" /> New session
-                      </Button>
+                        </Button>
                     </div>
 
                     <p className="text-sm text-muted-foreground mb-4">
@@ -685,6 +697,8 @@ export default function AdminDashboard() {
                         <div className="mb-8">
                           <WeekScheduleGrid
                             sessions={upcomingSessions}
+                            weekStart={scheduleWeekAnchor}
+                            onWeekStartChange={setScheduleWeekAnchor}
                             onEditSession={openEditSession}
                             onDeleteSession={openCancelOrDeleteSession}
                           />
@@ -703,28 +717,31 @@ export default function AdminDashboard() {
 
                     <CreateSessionModal
                       classTypes={classTypes}
-                      instructors={sessionInstructors.map((i) => ({
-                        id: i.id,
-                        name: i.name,
-                      }))}
+                      instructors={sessionInstructorOptions}
                       paymentQrCodes={paymentQrCodes}
                       adminDefaultPhone={adminProfileData?.profile?.phone ?? ""}
                       open={sessionEditorOpen}
                       onOpenChange={setSessionEditorOpen}
                       sessionToEdit={sessionToEdit}
                       showTrigger={false}
-                      onCreated={() => {
-                        refetchSess();
+                      onCreated={(result) => {
+                        void refetchSess();
                         refetchCT();
                         setSessionToEdit(null);
+                        const first = result?.sessions?.[0]?.date;
+                        if (first) {
+                          setScheduleWeekAnchor(startOfWeek(new Date(first)));
+                        }
+                        qc.invalidateQueries({ queryKey: ["/api/schedule/week"] });
+                        qc.invalidateQueries({ queryKey: ["/api/admin/classes"] });
                       }}
                     />
                   </TabsContent>
 
                   <TabsContent value="history">
                     <p className="text-sm text-muted-foreground mb-4">
-                      Past sessions ({pastSessions.length})
-                    </p>
+                        Past sessions ({pastSessions.length})
+                      </p>
                     {sessLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#bb5309]" />
@@ -733,7 +750,7 @@ export default function AdminDashboard() {
                       <SessionHistoryList
                         sessions={pastSessions}
                         classTypes={classTypes}
-                        instructors={sessionInstructors.map((i) => ({ id: i.id, name: i.name }))}
+                        instructors={sessionInstructorOptions}
                       />
                     )}
                   </TabsContent>

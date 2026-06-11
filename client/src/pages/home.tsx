@@ -93,7 +93,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-0 pt-16 md:pt-0">
-      <Navigation onBookingClick={() => scrollToBookingSection("schedule")} />
+      <Navigation onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })} />
       <HeroCarousel />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
       <ClassesSection onBookingClick={(intent) => handleBookingOpen(intent)} />

@@ -47,9 +47,12 @@ export const instructors = pgTable("instructors", {
   email: text("email"),
   phone: text("phone"),
   emailVerified: boolean("email_verified").notNull().default(false),
+  /** pending | otp-verified | admin-override */
+  verificationMethod: varchar("verification_method", { length: 32 }).notNull().default("pending"),
   phoneVerified: boolean("phone_verified").notNull().default(false),
   emailOtpHash: text("email_otp_hash"),
   emailOtpExpiresAt: timestamp("email_otp_expires_at"),
+  emailVerificationToken: text("email_verification_token"),
   /** One-off UPI/payment QR captured at instructor onboarding (separate from session payment QR library). */
   onboardingQrImageUrl: text("onboarding_qr_image_url"),
   /** pending | active | suspended | blacklisted | expired */

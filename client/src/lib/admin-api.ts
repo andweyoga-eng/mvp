@@ -140,13 +140,13 @@ export function validateSessionForm(form: {
     qrContactEmail: form.paymentMethod === "qr" ? form.qrContactEmail.trim() || null : null,
     publishMode: form.publishMode,
     publishAt: form.publishMode === "later" ? form.publishAt.trim() || null : null,
-    recurrenceKind: (form.sessionFrequency ?? "recurring") === "recurring" ? "weekly" : "once",
+    recurrenceKind: form.recurrenceKind ?? "once",
     occurrenceCount:
-      (form.sessionFrequency ?? "recurring") === "recurring"
+      (form.recurrenceKind ?? "once") === "weekly"
         ? form.occurrenceCount.trim() || "2"
         : 1,
     recurrenceWeekdays:
-      (form.sessionFrequency ?? "recurring") === "recurring"
+      (form.recurrenceKind ?? "once") === "weekly"
         ? form.recurrenceWeekdays
         : [],
   });

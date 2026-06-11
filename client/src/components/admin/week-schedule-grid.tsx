@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
@@ -13,6 +13,11 @@ interface SessionRow {
   maxCapacity?: number;
   currentBookings?: number;
   googleMeetLink?: string | null;
+  deliveryMode?: string | null;
+  sessionFrequency?: string | null;
+  venueAddress?: string | null;
+  venueMapLink?: string | null;
+  venueContactPhone?: string | null;
   razorpayLink?: string | null;
   paymentMethod?: string | null;
   paymentQrCodeId?: string | null;
@@ -39,7 +44,7 @@ function getIsoWeekInfo(date: Date) {
   return { week: weekNo, year: d.getUTCFullYear() };
 }
 
-function startOfWeek(date: Date) {
+export function startOfWeek(date: Date) {
   const s = new Date(date);
   s.setHours(0, 0, 0, 0);
   s.setDate(s.getDate() - s.getDay());
@@ -66,14 +71,25 @@ function formatRange(start: Date) {
 
 export function WeekScheduleGrid({
   sessions,
+  weekStart: controlledWeekStart,
+  onWeekStartChange,
   onEditSession,
   onDeleteSession,
 }: {
   sessions: SessionRow[];
+  /** When set, grid jumps to this week (e.g. after creating a session). */
+  weekStart?: Date;
+  onWeekStartChange?: (start: Date) => void;
   onEditSession?: (session: AdminClassSessionForEdit) => void;
   onDeleteSession?: (session: SessionRow) => void;
 }) {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+
+  useEffect(() => {
+    if (controlledWeekStart) {
+      setWeekStart(startOfWeek(controlledWeekStart));
+    }
+  }, [controlledWeekStart]);
 
   const { week, year } = getIsoWeekInfo(weekStart);
   const weekEnd = useMemo(() => {
@@ -111,6 +127,11 @@ export function WeekScheduleGrid({
     date: s.date,
     maxCapacity: s.maxCapacity ?? 20,
     googleMeetLink: s.googleMeetLink,
+    deliveryMode: s.deliveryMode,
+    sessionFrequency: s.sessionFrequency,
+    venueAddress: s.venueAddress,
+    venueMapLink: s.venueMapLink,
+    venueContactPhone: s.venueContactPhone,
     paymentMethod: s.paymentMethod,
     razorpayLink: s.razorpayLink,
     paymentQrCodeId: s.paymentQrCodeId,
@@ -150,11 +171,21 @@ export function WeekScheduleGrid({
               const n = new Date(weekStart);
               n.setDate(n.getDate() - 7);
               setWeekStart(n);
+              onWeekStartChange?.(n);
             }}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setWeekStart(startOfWeek(new Date()))}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const n = startOfWeek(new Date());
+              setWeekStart(n);
+              onWeekStartChange?.(n);
+            }}
+          >
             This week
           </Button>
           <Button
@@ -165,6 +196,7 @@ export function WeekScheduleGrid({
               const n = new Date(weekStart);
               n.setDate(n.getDate() + 7);
               setWeekStart(n);
+              onWeekStartChange?.(n);
             }}
           >
             <ChevronRight className="h-4 w-4" />

@@ -3,7 +3,11 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { existingBookingBlocksNewBooking } from "../shared/member-booking-duplicate.ts";
+import {
+  existingBookingBlocksNewBooking,
+  bookingCountsTowardCapacity,
+  bookingIsResumableCheckout,
+} from "../shared/member-booking-duplicate.ts";
 import {
   findUpcomingMemberSessionForClass,
   findUpcomingPendingSessionForClass,
@@ -89,6 +93,37 @@ describe("existingBookingBlocksNewBooking (server parity)", () => {
         mappingStatus: "upcoming",
         paymentStatus: "paid",
         classSessionStartMs: NOW_MS - 60_000,
+        nowMs: NOW_MS,
+      }),
+      false,
+    );
+  });
+});
+
+describe("bookingCountsTowardCapacity", () => {
+  it("counts pending reservations toward class capacity", () => {
+    assert.equal(bookingCountsTowardCapacity("pending"), true);
+    assert.equal(bookingCountsTowardCapacity("paid"), true);
+    assert.equal(bookingCountsTowardCapacity("failed"), false);
+  });
+});
+
+describe("bookingIsResumableCheckout", () => {
+  it("allows resuming pending checkout for upcoming sessions", () => {
+    assert.equal(
+      bookingIsResumableCheckout({
+        paymentStatus: "pending",
+        mappingStatus: "upcoming",
+        classSessionStartMs: FUTURE_MS,
+        nowMs: NOW_MS,
+      }),
+      true,
+    );
+    assert.equal(
+      bookingIsResumableCheckout({
+        paymentStatus: "paid",
+        mappingStatus: "upcoming",
+        classSessionStartMs: FUTURE_MS,
         nowMs: NOW_MS,
       }),
       false,

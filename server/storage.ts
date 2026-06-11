@@ -25,6 +25,7 @@ import {
   type InsertSubscription,
   type PaymentQrCode,
   type InsertPaymentQrCode,
+  type InsertAuditLog,
   users,
   classTypes,
   instructors,
@@ -40,12 +41,16 @@ import {
   sessionMoodCheckins,
   sessionJoinEvents,
   userSessionMappings,
+  auditLogs,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, inArray } from "drizzle-orm";
 import { computeProfileCompletionStatus, isAccountProfileComplete, getAccountProfileIncompleteReasons, MIN_HEALTH_UPDATE_CHARS } from "@shared/profileCompleteness";
 import { classifyMemberSessionStatus } from "@shared/member-session-status";
-import { existingBookingBlocksNewBooking } from "@shared/member-booking-duplicate";
+import {
+  bookingIsResumableCheckout,
+  existingBookingBlocksNewBooking,
+} from "@shared/member-booking-duplicate";
 import { getMeetJoinState } from "@shared/session-meet-access";
 import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod } from "@shared/payment-gateway";
 import { hashPassword, verifyPassword } from "./auth";
@@ -232,8 +237,14 @@ export interface IStorage {
     id: string,
     hash: string,
     expiresAt: Date,
+    linkToken: string,
   ): Promise<Instructor | undefined>;
-  markInstructorEmailVerified(id: string): Promise<Instructor | undefined>;
+  getInstructorByEmailVerificationToken(token: string): Promise<Instructor | undefined>;
+  markInstructorEmailVerified(
+    id: string,
+    method: "otp-verified" | "admin-override",
+    options?: { clearOtp?: boolean },
+  ): Promise<Instructor | undefined>;
   markInstructorPhoneVerified(id: string): Promise<Instructor | undefined>;
   updateInstructorStatus(
     id: string,
@@ -271,6 +282,9 @@ export interface IStorage {
   getBooking(id: string): Promise<Booking | undefined>;
   getBookingsByClass(classId: string): Promise<Booking[]>;
   createBooking(booking: InsertBooking): Promise<Booking>;
+  countActiveBookingsForClass(classId: string): Promise<number>;
+  syncClassBookingCount(classId: string): Promise<number>;
+  findResumableBookingForClass(userId: string, classId: string): Promise<Booking | undefined>;
   getUserBookings(userId: string): Promise<Booking[]>;
   userHasUpcomingBookingForClass(userId: string, classId: string): Promise<boolean>;
   updateBookingPaymentStatus(
@@ -341,6 +355,7 @@ export interface IStorage {
   getSubscriptionSummariesForAdmin(): Promise<SubscriptionSummaryRow[]>;
   getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]>;
   incrementSubscriptionUtilization(userId: string, classId: string): Promise<void>;
+  insertAuditLog(entry: InsertAuditLog): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -995,6 +1010,7 @@ export class DatabaseStorage implements IStorage {
     id: string,
     hash: string,
     expiresAt: Date,
+    linkToken: string,
   ): Promise<Instructor | undefined> {
     try {
       const [row] = await db
@@ -1002,6 +1018,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           emailOtpHash: hash,
           emailOtpExpiresAt: expiresAt,
+          emailVerificationToken: linkToken,
           updatedAt: new Date(),
         })
         .where(eq(instructors.id, id))
@@ -1013,14 +1030,40 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async markInstructorEmailVerified(id: string): Promise<Instructor | undefined> {
+  async getInstructorByEmailVerificationToken(
+    token: string,
+  ): Promise<Instructor | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(instructors)
+        .where(eq(instructors.emailVerificationToken, token));
+      return row;
+    } catch (error) {
+      console.error("[DB] Error fetching instructor by verification token:", error);
+      return undefined;
+    }
+  }
+
+  async markInstructorEmailVerified(
+    id: string,
+    method: "otp-verified" | "admin-override",
+    options?: { clearOtp?: boolean },
+  ): Promise<Instructor | undefined> {
+    const clearOtp = options?.clearOtp ?? true;
     try {
       const [row] = await db
         .update(instructors)
         .set({
           emailVerified: true,
-          emailOtpHash: null,
-          emailOtpExpiresAt: null,
+          verificationMethod: method,
+          ...(clearOtp
+            ? {
+                emailOtpHash: null,
+                emailOtpExpiresAt: null,
+                emailVerificationToken: null,
+              }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(instructors.id, id))
@@ -1075,7 +1118,7 @@ export class DatabaseStorage implements IStorage {
 
     const { status, statusNotes } = computeInstructorOperationalStatus(instructor);
     if (instructor.status === status && instructor.statusNotes === statusNotes) {
-      return instructor;
+      return this.getInstructor(id);
     }
     return this.updateInstructorStatus(id, status, statusNotes);
   }
@@ -1099,6 +1142,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             isNull(classes.pausedAt),
+            isNull(classes.cancelledAt),
             or(
               eq(classes.status, "published"),
               and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
@@ -1391,14 +1435,94 @@ export class DatabaseStorage implements IStorage {
         .returning();
 
       await this.ensureUserSessionMapping(booking.userId, booking.classId);
-
-      const classBookings = await this.getBookingsByClass(booking.classId);
-      await this.updateClassBookingCount(booking.classId, classBookings.length);
+      await this.syncClassBookingCount(booking.classId);
 
       return newBooking;
     } catch (error) {
-      console.error('[DB] Error creating booking:', error);
+      console.error("[DB] Error creating booking:", error);
       throw error;
+    }
+  }
+
+  async countActiveBookingsForClass(classId: string): Promise<number> {
+    try {
+      const rows = await db
+        .select({ id: bookings.id })
+        .from(bookings)
+        .leftJoin(
+          userSessionMappings,
+          and(
+            eq(userSessionMappings.userId, bookings.userId),
+            eq(userSessionMappings.classId, bookings.classId),
+          ),
+        )
+        .where(
+          and(
+            eq(bookings.classId, classId),
+            inArray(bookings.paymentStatus, ["pending", "paid", "waived"]),
+            or(isNull(userSessionMappings.status), sql`${userSessionMappings.status} <> 'cancelled'`),
+          ),
+        );
+      return rows.length;
+    } catch (error) {
+      console.error("[DB] Error counting active bookings:", error);
+      return 0;
+    }
+  }
+
+  async syncClassBookingCount(classId: string): Promise<number> {
+    const count = await this.countActiveBookingsForClass(classId);
+    await this.updateClassBookingCount(classId, count);
+    return count;
+  }
+
+  async findResumableBookingForClass(
+    userId: string,
+    classId: string,
+  ): Promise<Booking | undefined> {
+    try {
+      const rows = await db
+        .select({
+          booking: bookings,
+          mappingStatus: userSessionMappings.status,
+          sessionDate: classes.date,
+        })
+        .from(bookings)
+        .innerJoin(classes, eq(bookings.classId, classes.id))
+        .leftJoin(
+          userSessionMappings,
+          and(
+            eq(userSessionMappings.userId, bookings.userId),
+            eq(userSessionMappings.classId, bookings.classId),
+          ),
+        )
+        .where(
+          and(
+            eq(bookings.userId, userId),
+            eq(bookings.classId, classId),
+            eq(bookings.paymentStatus, "pending"),
+          ),
+        )
+        .orderBy(desc(bookings.createdAt))
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) return undefined;
+
+      if (
+        !bookingIsResumableCheckout({
+          paymentStatus: row.booking.paymentStatus,
+          mappingStatus: row.mappingStatus,
+          classSessionStartMs: new Date(row.sessionDate).getTime(),
+        })
+      ) {
+        return undefined;
+      }
+
+      return row.booking;
+    } catch (error) {
+      console.error("[DB] Error finding resumable booking:", error);
+      return undefined;
     }
   }
 
@@ -2260,8 +2384,52 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]> {
-    const all = await this.getSubscriptionSummariesForAdmin();
-    return all.filter((row) => row.userId === userId);
+    const rows = await db
+      .select({
+        id: subscriptions.id,
+        userId: subscriptions.userId,
+        userName: users.name,
+        userEmail: users.email,
+        classTypeId: subscriptions.classTypeId,
+        classTypeName: classTypes.name,
+        subscriptionType: subscriptions.subscriptionType,
+        totalAmountPaise: subscriptions.totalAmountPaise,
+        totalSessions: subscriptions.totalSessions,
+        utilizedSessions: subscriptions.utilizedSessions,
+        refundedSessions: subscriptions.refundedSessions,
+        disputedSessions: subscriptions.disputedSessions,
+        disputesResolved: subscriptions.disputesResolved,
+        waivedSessions: subscriptions.waivedSessions,
+        status: subscriptions.status,
+        expiresAt: subscriptions.expiresAt,
+        createdAt: subscriptions.createdAt,
+      })
+      .from(subscriptions)
+      .innerJoin(users, eq(subscriptions.userId, users.id))
+      .innerJoin(classTypes, eq(subscriptions.classTypeId, classTypes.id))
+      .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.createdAt));
+    return rows.map((r) => ({
+      ...r,
+      expiresAt: r.expiresAt?.toISOString() ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async insertAuditLog(entry: InsertAuditLog): Promise<void> {
+    try {
+      await db.insert(auditLogs).values({
+        userId: entry.userId ?? null,
+        action: entry.action,
+        resourceType: entry.resourceType,
+        resourceId: entry.resourceId ?? null,
+        metadata: entry.metadata ?? null,
+        ipAddress: entry.ipAddress ?? null,
+        userAgent: entry.userAgent ?? null,
+      });
+    } catch (error) {
+      console.error("[AUDIT] Failed to write audit log entry:", error, entry);
+    }
   }
 
   async incrementSubscriptionUtilization(userId: string, classId: string): Promise<void> {
