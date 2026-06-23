@@ -21,6 +21,7 @@ import {
   type BookingIntent,
 } from "@/lib/pending-booking";
 import { normalizeBookingIntent, scrollToBookingSection } from "@/lib/booking-flow";
+import { applyHomeHashScroll } from "@/lib/home-navigation";
 import { useState, useEffect, useRef } from "react";
 
 function parseMoodCaptureFromUrl(): { phase: MoodPhase; classId: string } | null {
@@ -61,6 +62,13 @@ export default function Home() {
     setBookingIntent({});
     clearPendingBooking();
   };
+
+  useEffect(() => {
+    applyHomeHashScroll();
+    const onHashChange = () => applyHomeHashScroll();
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

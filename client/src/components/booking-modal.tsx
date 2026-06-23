@@ -9,6 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, getAuthHeaders, getAuthToken, setAuthToken } from "@/lib/auth";
+import {
+  getCheckoutAuthHeaders,
+  setGuestCheckoutToken,
+  clearGuestCheckoutSession,
+  getGuestCheckoutToken,
+} from "@/lib/guest-checkout";
 import { readResponseJson } from "@/lib/queryClient";
 import {
   filterBookableSessions,
@@ -35,6 +41,7 @@ import {
   formatSessionPrice,
   openRazorpayPayment,
   isValidPaymentUrl,
+  syncPaymentStatusAfterVerifyFailure,
 } from "@/lib/booking-payment";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +68,7 @@ import {
   ManualPaymentSubmittedMessage,
 } from "@/components/manual-payment-reference-block";
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
+import { GuestBookingConfirmedContent } from "@/components/guest-booking-confirmed-dialog";
 import { AlreadyBookedSessionContent } from "@/components/already-booked-session-content";
 import { Badge } from "@/components/ui/badge";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
@@ -98,6 +106,8 @@ export default function BookingModal({
     | "pay"
     | "manual-submitted"
     | "payment-confirmed"
+    | "guest-confirmed"
+    | "email-registered"
     | "success"
     | "failed"
     | "already-booked"
@@ -219,7 +229,14 @@ export default function BookingModal({
     return isTrialOrDropIn(freq);
   }, [selectedSession, displayClass]);
 
-  const canAccessCheckoutUi = !!user || !!getAuthToken();
+  const canAccessCheckoutUi =
+    !!user || !!getAuthToken() || !!getGuestCheckoutToken();
+
+  const checkoutAuthHeaders = () =>
+    getCheckoutAuthHeaders({
+      preferGuest:
+        !!paymentResult?.isGuestCheckout || (!user && !!getGuestCheckoutToken()),
+    });
 
   useEffect(() => {
     if (!isOpen) {
@@ -232,6 +249,7 @@ export default function BookingModal({
       setGuestWaiverAccepted(false);
       setNextBatchPrompt(null);
       setWaitlistEmail("");
+      clearGuestCheckoutSession();
       return;
     }
     const scrollTo = sessionId ? "schedule" : filterClassTypeId ? "teach" : "schedule";
@@ -331,7 +349,7 @@ export default function BookingModal({
           throw {
             status: 409,
             requiresHealthUpdate: true,
-            redirectTo: (result.redirectTo as string) || "/my-account",
+            redirectTo: (result.redirectTo as string) || "/account",
             message: (result.message as string) || "Health profile required",
             code: (result.code as string) || "profile_incomplete",
           };
@@ -350,6 +368,33 @@ export default function BookingModal({
             status: 409,
             code: "already_booked",
             message: (result.message as string) || "You have already booked this session.",
+          };
+        }
+
+        if (response.status === 409 && result.code === "email_registered") {
+          throw {
+            status: 409,
+            code: "email_registered",
+            message:
+              (result.message as string) ||
+              "This email is already registered. Sign in to book this session.",
+          };
+        }
+
+        if (response.status === 409 && result.code === "guest_booking_processing") {
+          throw {
+            status: 409,
+            code: "guest_booking_processing",
+            message: (result.message as string) || "Your booking is being processed.",
+            resumeCheckout: result.resumeCheckout ?? null,
+          };
+        }
+
+        if (response.status === 409 && result.code === "guest_booking_confirmed") {
+          throw {
+            status: 409,
+            code: "guest_booking_confirmed",
+            message: (result.message as string) || "You are already booked for this session.",
           };
         }
 
@@ -379,21 +424,26 @@ export default function BookingModal({
       queryClient.invalidateQueries({ queryKey: ["/api/class-types-availability/upcoming"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
 
-      if (result.token) {
+      const isGuestResult = !!result.isGuestCheckout;
+
+      if (isGuestResult && result.guestCheckoutToken) {
+        setAuthToken(null);
+        setGuestCheckoutToken(result.guestCheckoutToken);
+      } else if (result.token) {
         setAuthToken(result.token);
       }
 
       if (result.useRazorpayCheckout && result.razorpayKeyId) {
         setPaymentResult(result);
         setPaymentStep("pay");
-        if (result.token) {
+        if (!isGuestResult && result.token) {
           await refreshUser();
         }
         await startRazorpayCheckout(result);
         return;
       }
 
-      if (result.token) {
+      if (!isGuestResult && result.token) {
         await refreshUser();
       }
 
@@ -419,6 +469,12 @@ export default function BookingModal({
         return;
       }
 
+      if (isGuestResult) {
+        setPaymentResult(result);
+        setPaymentStep("guest-confirmed");
+        return;
+      }
+
       toast({
         title: "Booking confirmed!",
         description:
@@ -434,6 +490,7 @@ export default function BookingModal({
       message?: string;
       code?: string;
       nextBatch?: { id?: string; date?: string } | null;
+      resumeCheckout?: MemberBookingResult | null;
     }) => {
       if (error.status === 409 && error.requiresHealthUpdate) {
         onClose();
@@ -446,7 +503,7 @@ export default function BookingModal({
         });
 
         setTimeout(() => {
-          setLocation(error.redirectTo || "/my-account");
+          setLocation(error.redirectTo || "/account");
         }, 100);
 
         return;
@@ -471,6 +528,38 @@ export default function BookingModal({
         toast({
           title: "Join the next session",
           description: error.message || TRIAL_DROPIN_MIDSESSION_MESSAGE,
+        });
+        return;
+      }
+
+      if (error.status === 409 && error.code === "email_registered") {
+        setPaymentStep("email-registered");
+        return;
+      }
+
+      if (error.status === 409 && error.code === "guest_booking_processing") {
+        if (error.resumeCheckout?.guestCheckoutToken) {
+          setAuthToken(null);
+          setGuestCheckoutToken(error.resumeCheckout.guestCheckoutToken);
+          setPaymentResult(error.resumeCheckout);
+          setPaymentStep("pay");
+          toast({
+            title: "Payment pending",
+            description: error.message,
+          });
+          return;
+        }
+        toast({
+          title: "Booking in progress",
+          description: error.message,
+        });
+        return;
+      }
+
+      if (error.status === 409 && error.code === "guest_booking_confirmed") {
+        toast({
+          title: "Already booked",
+          description: error.message,
         });
         return;
       }
@@ -518,7 +607,7 @@ export default function BookingModal({
       });
 
       setTimeout(() => {
-        setLocation("/my-account");
+        setLocation("/account");
       }, 100);
 
       return;
@@ -611,11 +700,12 @@ export default function BookingModal({
 
   const handleGoToProfile = () => {
     onClose();
-    setLocation("/my-account");
+    setLocation("/account");
   };
 
   const goToMySessionsUpcoming = () => {
     clearPendingBooking();
+    clearGuestCheckoutSession();
     setPaymentResult(null);
     setPaymentOutcome(null);
     setPaymentStep("pay");
@@ -624,6 +714,25 @@ export default function BookingModal({
     markMemberLandingChecked();
     onClose();
     setLocation(MY_SESSIONS_UPCOMING_URL);
+  };
+
+  const goToHomeCarousel = () => {
+    clearPendingBooking();
+    clearGuestCheckoutSession();
+    setPaymentResult(null);
+    setPaymentOutcome(null);
+    setPaymentStep("pay");
+    setIsPaying(false);
+    setPaymentPhase(null);
+    onClose();
+    setLocation("/");
+    setTimeout(() => {
+      document.getElementById("home")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
+  };
+
+  const handleGuestSignUp = () => {
+    window.location.href = "/api/auth/google";
   };
 
   const startRazorpayCheckout = async (booking: MemberBookingResult) => {
@@ -636,7 +745,7 @@ export default function BookingModal({
     try {
       const orderRes = await fetch("/api/payments/create-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json", ...checkoutAuthHeaders() },
         credentials: "include",
         body: JSON.stringify({ bookingId: booking.bookingId }),
       });
@@ -676,7 +785,7 @@ export default function BookingModal({
           try {
             const verifyRes = await fetch("/api/payments/verify", {
               method: "POST",
-              headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+              headers: { "Content-Type": "application/json", ...checkoutAuthHeaders() },
               credentials: "include",
               body: JSON.stringify({
                 paymentId: orderData.paymentId,
@@ -686,16 +795,27 @@ export default function BookingModal({
               }),
             });
             const verified = await readResponseJson<PaymentVerifyResult>(verifyRes);
-            if (!verifyRes.ok || !verified.success) {
+            let paymentConfirmed = verifyRes.ok && verified.success ? verified : null;
+            if (!paymentConfirmed) {
+              paymentConfirmed = await syncPaymentStatusAfterVerifyFailure(
+                orderData.paymentId,
+                checkoutAuthHeaders(),
+              );
+            }
+            if (!paymentConfirmed) {
               throw new Error(verified.message || "Payment verification failed");
             }
-            setPaymentOutcome(verified);
+            setPaymentOutcome(paymentConfirmed);
             queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
-            toast({
-              title: "You're in!",
-              description: "Payment received — see you on the mat.",
-            });
-            goToMySessionsUpcoming();
+            if (paymentConfirmed.isGuestCheckout || booking.isGuestCheckout) {
+              setPaymentStep("guest-confirmed");
+            } else {
+              toast({
+                title: "You're in!",
+                description: "Payment received — see you on the mat.",
+              });
+              goToMySessionsUpcoming();
+            }
           } catch (err) {
             setPaymentStep("failed");
             toast({
@@ -807,6 +927,7 @@ export default function BookingModal({
 
   useEffect(() => {
     if (paymentStep !== "manual-submitted" || !paymentResult?.bookingId) return;
+    if (paymentResult.isGuestCheckout) return;
     const current = memberSessions.find((s) => s.bookingId === paymentResult.bookingId);
     if (!current || current.paymentStatus !== "paid") return;
     setPaymentOutcome({
@@ -858,6 +979,10 @@ export default function BookingModal({
           <DialogTitle className="text-primary font-bold">
             {paymentStep === "success"
               ? "You're booked!"
+              : paymentStep === "guest-confirmed"
+                ? "You're booked!"
+              : paymentStep === "email-registered"
+                ? "Sign in to book"
               : paymentStep === "payment-confirmed"
                 ? "Payment confirmed"
                 : paymentStep === "already-booked"
@@ -877,6 +1002,38 @@ export default function BookingModal({
               <p className="text-xs mt-2 text-amber-800">{PAYMENT_PROCESSING_FOOTER}</p>
             </AlertDescription>
           </Alert>
+        )}
+
+        {paymentResult && canAccessCheckoutUi && paymentStep === "guest-confirmed" && (
+          <GuestBookingConfirmedContent
+            onSignUp={handleGuestSignUp}
+            onDecline={goToHomeCarousel}
+            onCancel={goToHomeCarousel}
+          />
+        )}
+
+        {paymentStep === "email-registered" && (
+          <div className="space-y-4">
+            <Alert className="border-amber-200 bg-amber-50">
+              <AlertDescription className="text-amber-950">
+                This email is already registered with andWeYoga. Sign in to book this session.
+              </AlertDescription>
+            </Alert>
+            <Button
+              type="button"
+              className="w-full bg-primary hover:bg-primary/90 !text-white font-bold"
+              onClick={() => {
+                window.location.href = "/api/auth/google";
+              }}
+            >
+              Sign in with Google
+            </Button>
+            <AuthHoverPopup>
+              <Button type="button" variant="outline" className="w-full font-bold">
+                Sign In / Sign Up
+              </Button>
+            </AuthHoverPopup>
+          </div>
         )}
 
         {paymentResult && canAccessCheckoutUi && paymentStep === "payment-confirmed" && paymentOutcome && (
@@ -1048,7 +1205,12 @@ export default function BookingModal({
         )}
 
         {paymentResult && canAccessCheckoutUi && paymentStep === "manual-submitted" && (
-          <ManualPaymentSubmittedMessage onViewSessions={goToMySessionsUpcoming} />
+          <ManualPaymentSubmittedMessage
+            isGuestCheckout={!!paymentResult.isGuestCheckout}
+            onSignUp={handleGuestSignUp}
+            onCancel={goToHomeCarousel}
+            onViewSessions={goToMySessionsUpcoming}
+          />
         )}
 
         {paymentResult && canAccessCheckoutUi && paymentStep === "pay" && !paymentOutcome && (
@@ -1095,6 +1257,7 @@ export default function BookingModal({
                 variant="qr"
                 bookingId={paymentResult.bookingId}
                 qrPayment={paymentResult.qrPayment}
+                preferGuestCheckout={!!paymentResult.isGuestCheckout}
                 onSubmitted={() => {
                   setPaymentStep("manual-submitted");
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
@@ -1114,6 +1277,7 @@ export default function BookingModal({
                 variant="payment_link"
                 bookingId={paymentResult.bookingId}
                 paymentLink={paymentResult.razorpayLink}
+                preferGuestCheckout={!!paymentResult.isGuestCheckout}
                 onSubmitted={() => {
                   setPaymentStep("manual-submitted");
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
@@ -1155,7 +1319,7 @@ export default function BookingModal({
           </div>
         )}
 
-        {!paymentResult && !user && !isLoading && (
+        {!paymentResult && !user && !isLoading && paymentStep !== "email-registered" && (
           <div className="text-center space-y-4">
             {hasPreselectedSession && displayClass && preselectedIsBookable && (
               <div className="text-left p-3 bg-muted rounded-md">

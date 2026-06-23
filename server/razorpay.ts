@@ -87,6 +87,7 @@ export function verifyWebhookSignature(rawBody: string | Buffer, signature: stri
 
 export async function fetchRazorpayPayment(paymentId: string): Promise<{
   status: string;
+  order_id: string | null;
   invoice_id: string | null;
   error_description?: string;
   email?: string;
@@ -96,11 +97,16 @@ export async function fetchRazorpayPayment(paymentId: string): Promise<{
   const payment = await rz.payments.fetch(paymentId);
   return {
     status: payment.status,
+    order_id: payment.order_id ?? null,
     invoice_id: payment.invoice_id ?? null,
     error_description: payment.error_description ?? undefined,
     email: payment.email ?? undefined,
     contact: payment.contact ?? undefined,
   };
+}
+
+export function isRazorpayPaymentSuccessful(status: string): boolean {
+  return status === "captured" || status === "authorized";
 }
 
 /** Payer + reference fields for payment history (gateway-agnostic shape). */

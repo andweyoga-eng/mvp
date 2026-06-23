@@ -1,7 +1,13 @@
 import { validateMobileNumber } from '@shared/mobile-validation';
+import {
+  isHealthDisclosureComplete,
+  MAX_HEALTH_CONCERNS_CHARS,
+} from '@shared/health-disclosure';
 
-/** Matches healthUpdateSchema and booking rules */
-export const MIN_HEALTH_UPDATE_CHARS = 10;
+/** @deprecated Prefer MAX_HEALTH_CONCERNS_CHARS / isHealthDisclosureComplete */
+export const MIN_HEALTH_UPDATE_CHARS = MAX_HEALTH_CONCERNS_CHARS;
+
+export { MAX_HEALTH_CONCERNS_CHARS, isHealthDisclosureComplete };
 
 export type AccountProfileCheckInput = {
   emailVerified: boolean;
@@ -38,14 +44,28 @@ function optionalSecondaryOk(
   return validateMobileNumber(digits, cc(countryCode)).isValid;
 }
 
+/** Profile tab fields only (name, phones, email verified) — excludes health disclosure. */
+export function isProfileFieldsSectionComplete(u: AccountProfileCheckInput): boolean {
+  if (!u.emailVerified) return false;
+  if (!(u.name ?? '').trim()) return false;
+  if (!requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) return false;
+  if (!requiredMobileOk(u.emergencyMobile, u.emergencyMobileCountryCode)) return false;
+  if (!optionalSecondaryOk(u.secondaryMobile, u.secondaryMobileCountryCode)) return false;
+  return true;
+}
+
+/** Health disclosure section only. */
+export function isHealthSectionComplete(u: AccountProfileCheckInput): boolean {
+  return isHealthDisclosureComplete(u.healthUpdateText);
+}
+
 export function isAccountProfileComplete(u: AccountProfileCheckInput): boolean {
   if (!u.emailVerified) return false;
   if (!(u.name ?? '').trim()) return false;
   if (!requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) return false;
   if (!requiredMobileOk(u.emergencyMobile, u.emergencyMobileCountryCode)) return false;
   if (!optionalSecondaryOk(u.secondaryMobile, u.secondaryMobileCountryCode)) return false;
-  const h = (u.healthUpdateText ?? '').trim();
-  if (h.length < MIN_HEALTH_UPDATE_CHARS) return false;
+  if (!isHealthDisclosureComplete(u.healthUpdateText)) return false;
   return true;
 }
 
@@ -63,7 +83,7 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
 
   const primaryDigits = (u.primaryMobile ?? '').trim();
   if (!primaryDigits) {
-    reasons.push('Primary mobile is required');
+    reasons.push('Mobile number is required');
   } else {
     const pr = validateMobileNumber(primaryDigits, cc(u.primaryMobileCountryCode));
     if (!pr.isValid) reasons.push(`Primary mobile: ${pr.error ?? 'invalid'}`);
@@ -71,7 +91,7 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
 
   const emergencyDigits = (u.emergencyMobile ?? '').trim();
   if (!emergencyDigits) {
-    reasons.push('Emergency contact mobile is required');
+    reasons.push('Emergency contact is required');
   } else {
     const er = validateMobileNumber(emergencyDigits, cc(u.emergencyMobileCountryCode));
     if (!er.isValid) reasons.push(`Emergency mobile: ${er.error ?? 'invalid'}`);
@@ -83,10 +103,9 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
     if (!sr.isValid) reasons.push(`Secondary mobile: ${sr.error ?? 'invalid'}`);
   }
 
-  const h = (u.healthUpdateText ?? '').trim();
-  if (h.length < MIN_HEALTH_UPDATE_CHARS) {
+  if (!isHealthDisclosureComplete(u.healthUpdateText)) {
     reasons.push(
-      `Health update required (at least ${MIN_HEALTH_UPDATE_CHARS} characters)`,
+      'Health disclosure required — select an option on the Health Update tab',
     );
   }
 

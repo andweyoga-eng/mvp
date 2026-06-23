@@ -66,7 +66,8 @@ export default function HeroCarousel() {
             <div className="absolute inset-0">
               <img 
                 src={slide.image} 
-                alt={`Slide ${index + 1}`}
+                alt=""
+                role="presentation"
                 className="w-full h-full object-cover"
                 data-testid={`carousel-image-${index}`}
               />

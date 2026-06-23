@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getAuthHeaders } from "@/lib/auth";
+import { getCheckoutAuthHeaders } from "@/lib/guest-checkout";
 import { readResponseJson } from "@/lib/queryClient";
 import { openRazorpayPayment } from "@/lib/booking-payment";
 import {
@@ -14,6 +14,10 @@ import {
   normalizeManualPaymentRefInput,
   isValidManualPaymentRef,
 } from "@shared/manual-payment-ack";
+import {
+  GUEST_QR_SUBMITTED_MESSAGE,
+  GUEST_QR_SIGNIN_PROMPT,
+} from "@shared/guest-booking-conflict";
 
 export function ManualPaymentReferenceBlock({
   bookingId,
@@ -21,6 +25,7 @@ export function ManualPaymentReferenceBlock({
   qrPayment,
   paymentLink,
   onSubmitted,
+  preferGuestCheckout = false,
 }: {
   bookingId: string;
   variant: "qr" | "payment_link";
@@ -32,6 +37,7 @@ export function ManualPaymentReferenceBlock({
   };
   paymentLink?: string | null;
   onSubmitted: () => void;
+  preferGuestCheckout?: boolean;
 }) {
   const { toast } = useToast();
   const [refInput, setRefInput] = useState("");
@@ -48,7 +54,7 @@ export function ManualPaymentReferenceBlock({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
+          ...getCheckoutAuthHeaders({ preferGuest: preferGuestCheckout }),
         },
         credentials: "include",
         body: JSON.stringify({ transactionAckNumber: refValue }),
@@ -133,9 +139,37 @@ export function ManualPaymentReferenceBlock({
 
 export function ManualPaymentSubmittedMessage({
   onViewSessions,
+  isGuestCheckout = false,
+  onSignUp,
+  onCancel,
 }: {
   onViewSessions: () => void;
+  isGuestCheckout?: boolean;
+  onSignUp?: () => void;
+  onCancel?: () => void;
 }) {
+  if (isGuestCheckout) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 space-y-2">
+          <p className="font-semibold text-base">Payment reference received</p>
+          <p className="text-sm">{GUEST_QR_SUBMITTED_MESSAGE}</p>
+        </div>
+        <p className="text-sm text-muted-foreground text-center">{GUEST_QR_SIGNIN_PROMPT}</p>
+        <Button
+          type="button"
+          className="w-full bg-primary hover:bg-primary/90 !text-white font-bold"
+          onClick={onSignUp}
+        >
+          Sign up / Sign in
+        </Button>
+        <Button type="button" variant="outline" className="w-full font-bold" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 space-y-2">

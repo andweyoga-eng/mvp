@@ -3,7 +3,7 @@ export interface MemberBookingResult {
   booking: {
     id: string;
     classId: string;
-    userId: string;
+    userId: string | null;
     createdAt: string;
   };
   bookingId: string;
@@ -25,8 +25,11 @@ export interface MemberBookingResult {
   } | null;
   razorpayKeyId?: string | null;
   paymentRequired?: boolean;
-  /** Issued for guest trial/drop-in checkout so Razorpay payment APIs can authenticate */
+  /** Member checkout session token (logged-in users only) */
   token?: string | null;
+  /** Guest trial/drop-in checkout — short-lived booking-scoped token */
+  guestCheckoutToken?: string | null;
+  isGuestCheckout?: boolean;
 }
 
 export interface PaymentVerifyResult {
@@ -41,6 +44,7 @@ export interface PaymentVerifyResult {
   receiptUrl: string | null;
   invoiceUrl: string | null;
   message?: string;
+  isGuestCheckout?: boolean;
 }
 
 export function formatSessionPrice(price: string | number | null | undefined): string | null {
@@ -62,4 +66,27 @@ export function isValidPaymentUrl(url: string | null | undefined): url is string
   } catch {
     return false;
   }
+}
+
+/** Poll server when Razorpay client verify fails but webhook may have confirmed (common with UPI). */
+export async function syncPaymentStatusAfterVerifyFailure(
+  paymentId: string,
+  headers: Record<string, string>,
+): Promise<PaymentVerifyResult | null> {
+  const attempt = async () => {
+    const res = await fetch(`/api/payments/${paymentId}/sync-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      credentials: "include",
+    });
+    const data = (await res.json()) as PaymentVerifyResult;
+    if (!res.ok || !data.success) return null;
+    return data;
+  };
+
+  const immediate = await attempt();
+  if (immediate) return immediate;
+
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  return attempt();
 }

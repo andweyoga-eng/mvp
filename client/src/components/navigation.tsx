@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { navigateToHomeSection } from "@/lib/home-navigation";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
@@ -38,11 +39,8 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  const goToHomeSection = (sectionId: string) => {
+    navigateToHomeSection(sectionId);
     setIsMobileMenuOpen(false);
   };
 
@@ -79,9 +77,15 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
 
           {/* Logo - Center with responsive sizing */}
           <div className="absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
-            <button 
-              onClick={() => scrollToSection('teach')}
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                goToHomeSection("home");
+              }}
+              className="inline-block"
               data-testid="desktop-logo-link"
+              aria-label="andWeYoga home"
             >
               <img 
                 src={logoPath} 
@@ -89,7 +93,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 className="h-10 sm:h-12 md:h-14 w-auto max-w-[120px] sm:max-w-none hover:opacity-80 transition-opacity duration-200"
                 data-testid="logo"
               />
-            </button>
+            </a>
           </div>
 
           {/* Primary actions - Right side */}
@@ -113,7 +117,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                     <Calendar className="w-4 h-4 mr-2" />
                     Book Session
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setLocation('/my-account')} data-testid="nav-dropdown-my-account">
+                  <DropdownMenuItem onClick={() => setLocation('/account')} data-testid="nav-dropdown-my-account">
                     <Settings className="w-4 h-4 mr-2" />
                     My Account
                   </DropdownMenuItem>
@@ -149,55 +153,55 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
 
       {/* Desktop Mobile Navigation Menu */}
       <div 
-        className={`fixed top-16 left-0 z-40 bg-white border-r border-b border-border shadow-2xl transition-all duration-300 ease-in-out mobile-nav-menu ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
+        className={`fixed top-16 left-0 z-50 bg-white border-r border-b border-border shadow-2xl transition-all duration-300 ease-in-out mobile-nav-menu ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
         style={{ width: '220px' }}
         onMouseLeave={() => setIsMobileMenuOpen(false)}
       >
         <div className="px-6 py-6 md:space-y-3 space-y-4 text-center md:text-left">
           <button 
-            onClick={() => scrollToSection('care')}
+            onClick={() => goToHomeSection('care')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-care"
           >
             and We Care
           </button>
           <button 
-            onClick={() => scrollToSection('vibe')}
+            onClick={() => goToHomeSection('vibe')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-vibe"
           >
             and We Vibe
           </button>
           <button 
-            onClick={() => scrollToSection('teach')}
+            onClick={() => goToHomeSection('teach')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-teach"
           >
             and We Teach
           </button>
           <button 
-            onClick={() => scrollToSection('story')}
+            onClick={() => goToHomeSection('story')}
             className="block w-full md:text-left text-center text-base font-bold text-secondary hover:text-primary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-story"
           >
             and Our Story
           </button>
           <button 
-            onClick={() => scrollToSection('believe')}
+            onClick={() => goToHomeSection('believe')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-believe"
           >
             and We Believe
           </button>
           <button 
-            onClick={() => scrollToSection('connect')}
+            onClick={() => goToHomeSection('connect')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-connect"
           >
             and We Connect
           </button>
           <button 
-            onClick={() => scrollToSection('ally')}
+            onClick={() => goToHomeSection('ally')}
             className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
             data-testid="mobile-nav-ally"
           >

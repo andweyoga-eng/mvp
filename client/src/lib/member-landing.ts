@@ -1,7 +1,8 @@
 import { getAuthHeaders } from "@/lib/auth";
 import { getPendingBooking } from "@/lib/pending-booking";
+import { MY_SESSIONS_UPCOMING_URL } from "@/lib/account-routes";
 
-export const MY_SESSIONS_UPCOMING_URL = "/my-account?tab=sessions&sessionsTab=upcoming";
+export { MY_SESSIONS_UPCOMING_URL };
 export const CLASS_SCHEDULE_URL = "/?openBooking=true";
 
 const LANDING_CHECKED_KEY = "awy_member_landing_checked_v1";

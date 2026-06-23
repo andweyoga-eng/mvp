@@ -30,6 +30,8 @@ const SALT_ROUNDS = 12;
 
 export interface AuthRequest extends Request {
   user?: { id: string };
+  /** Set when authenticated via a short-lived guest checkout JWT */
+  guestCheckoutBookingId?: string;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -44,9 +46,35 @@ export function generateToken(userId: string): string {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
 }
 
+const GUEST_CHECKOUT_TOKEN_TTL = '2h';
+
+export function generateGuestCheckoutToken(bookingId: string): string {
+  return jwt.sign({ bookingId, scope: 'guest_checkout' }, JWT_SECRET, {
+    expiresIn: GUEST_CHECKOUT_TOKEN_TTL,
+  });
+}
+
+export function verifyGuestCheckoutToken(token: string): { bookingId: string } | null {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      bookingId?: string;
+      scope?: string;
+    };
+    if (decoded.scope !== 'guest_checkout' || !decoded.bookingId) return null;
+    return { bookingId: decoded.bookingId };
+  } catch {
+    return null;
+  }
+}
+
 export function verifyToken(token: string): { userId: string } | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as { userId: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      userId?: string;
+      scope?: string;
+    };
+    if (decoded.scope === "guest_checkout" || !decoded.userId) return null;
+    return { userId: decoded.userId };
   } catch {
     return null;
   }
@@ -106,12 +134,55 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
 
     if (token) {
       const decoded = verifyToken(token);
-      if (decoded) {
+      if (decoded?.userId) {
         req.user = { id: decoded.userId };
       }
     }
     next();
   } catch {
     next();
+  }
+}
+
+/** Accepts member JWT (cookie/header) or guest checkout JWT (header only). */
+export async function requireBookingAuth(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const cookieToken = (req as any).cookies?.authToken;
+    const authHeader = req.headers.authorization;
+    const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    // Guest checkout JWT in Authorization must win over a stale member cookie.
+    // Guest flow clears localStorage but the auth cookie may still be sent.
+    if (headerToken) {
+      const guestDecoded = verifyGuestCheckoutToken(headerToken);
+      if (guestDecoded) {
+        req.guestCheckoutBookingId = guestDecoded.bookingId;
+        return next();
+      }
+    }
+
+    if (cookieToken) {
+      const decoded = verifyToken(cookieToken);
+      if (decoded?.userId) {
+        req.user = { id: decoded.userId };
+        return next();
+      }
+    }
+
+    if (headerToken) {
+      const memberDecoded = verifyToken(headerToken);
+      if (memberDecoded) {
+        req.user = { id: memberDecoded.userId };
+        return next();
+      }
+    }
+
+    return res.status(401).json({ message: 'Authentication required' });
+  } catch {
+    return res.status(401).json({ message: 'Authentication failed' });
   }
 }

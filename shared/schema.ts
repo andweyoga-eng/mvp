@@ -118,7 +118,12 @@ export const classes = pgTable("classes", {
 export const bookings = pgTable("bookings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   classId: varchar("class_id").notNull().references(() => classes.id),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").references(() => users.id),
+  /** Trial/drop-in checkout without a member account */
+  isGuestCheckout: boolean("is_guest_checkout").notNull().default(false),
+  guestName: text("guest_name"),
+  guestEmail: text("guest_email"),
+  guestPhone: text("guest_phone"),
   /** pending | paid | waived | failed */
   paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
   paymentMethod: varchar("payment_method", { length: 20 }),
@@ -132,7 +137,7 @@ export const bookings = pgTable("bookings", {
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   bookingId: varchar("booking_id").notNull().references(() => bookings.id),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").references(() => users.id),
   classId: varchar("class_id").notNull().references(() => classes.id),
   amountPaise: integer("amount_paise").notNull(),
   currency: varchar("currency", { length: 3 }).notNull().default("INR"),

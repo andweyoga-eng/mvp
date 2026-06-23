@@ -10,8 +10,16 @@ describe("sanity: shared schemas", async () => {
   it("member booking accepts classId only", () => {
     assert.equal(memberBookingBodySchema.safeParse({ classId: "s1" }).success, true);
   });
-  it("insert booking still requires userId for internal use", () => {
-    assert.equal(insertBookingSchema.safeParse({ classId: "s1" }).success, false);
+  it("insert booking accepts guest checkout without userId", () => {
+    assert.equal(
+      insertBookingSchema.safeParse({
+        classId: "s1",
+        isGuestCheckout: true,
+        guestEmail: "guest@example.com",
+        guestName: "Guest",
+      }).success,
+      true,
+    );
   });
 });
 

@@ -54,8 +54,14 @@ import {
 import {
   hashPassword, verifyPassword, generateToken,
   generateExpiringVerificationToken, isVerificationTokenExpired,
-  requireAuth, optionalAuth, type AuthRequest
+  generateGuestCheckoutToken,
+  requireAuth, optionalAuth, requireBookingAuth, type AuthRequest
 } from "./auth";
+import {
+  guestBookingProcessingMessage,
+  GUEST_BOOKING_CONFIRMED_MESSAGE,
+  GUEST_BOOKING_FAILED_MESSAGE,
+} from "@shared/guest-booking-conflict";
 import {
   generateAdminToken,
   requireAdminAuth,
@@ -79,17 +85,24 @@ import {
   usesQrManualVerification,
   type PaymentDisposition,
 } from "@shared/payment-gateway";
-import { markPaymentPaid, confirmQrBookingPayment, verifyManualPayment } from "./payment-service";
+import { markPaymentPaid, confirmQrBookingPayment, verifyManualPayment, getPaidPaymentPayload } from "./payment-service";
+import {
+  canAccessBooking,
+  bookingContactName,
+  bookingContactEmail,
+  bookingContactPhone,
+} from "./booking-access";
 import { MANUAL_PAYMENT_SUBMITTED_COPY } from "@shared/manual-payment-ack";
 
-// ---------------------------------------------------------------------------
-// PRODUCT (POV): In-app health document file uploads are DISABLED until we
-// standardize object storage (S3 / R2 / etc.) and need uploads at scale. Users
-// are directed to email detailed reports instead — see HealthUpdateSection UI.
-// Set ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = true to restore POST /api/objects/upload,
-// GET /objects/*, and PUT /api/health-documents.
-// ---------------------------------------------------------------------------
-const ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = false;
+// Health document uploads: enabled when S3/Replit is configured, or local disk in development.
+// Set ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES=false to disable explicitly.
+import {
+  HealthDocumentUploadError,
+  healthDocumentUploadBodySchema,
+  isHealthDocumentUploadEnabled,
+  streamHealthDocumentForUser,
+  uploadHealthDocumentForUser,
+} from "./health-document-upload";
 
 // ============================================================
 // SECURITY FIX 4: Rate limiting on all auth endpoints.
@@ -258,6 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SECURITY FIX 2: Set token as httpOnly cookie, NOT in URL
       setAuthCookie(res, token);
+      await storage.linkGuestBookingsToUser(user.id, user.email);
       res.redirect('/?loginSuccess=true');
     } catch (error) {
       console.error('Google OAuth callback error:', error);
@@ -288,6 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({ ...userData, password: hashedPassword });
 
       await storage.updateUser(user.id, { emailVerificationToken: verificationToken } as any);
+      await storage.linkGuestBookingsToUser(user.id, user.email);
 
       const logoUrl = `https://${process.env.ALLOWED_ORIGIN || req.get('host')}/attached_assets/Logo%20Transperent%20TM_1756454893432.png`;
       const verificationUrl = `https://${process.env.ALLOWED_ORIGIN || req.get('host')}/api/auth/verify-email?token=${verificationToken}`;
@@ -345,6 +360,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SECURITY FIX 2: Set as httpOnly cookie
       setAuthCookie(res, token);
+
+      await storage.linkGuestBookingsToUser(user.id, user.email);
 
       res.json({
         message: "Login successful",
@@ -546,6 +563,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SECURITY FIX 2: Cookie not URL
       setAuthCookie(res, authToken);
+
+      await storage.linkGuestBookingsToUser(user.id, user.email);
 
       res.json({
         message: "Google sign-in successful",
@@ -1462,11 +1481,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bookings/:id/payment-ack", requireAuth, async (req: any, res) => {
+  app.post("/api/bookings/:id/payment-ack", requireBookingAuth, async (req: AuthRequest, res) => {
     try {
       const { transactionAckNumber } = memberPaymentAckSchema.parse(req.body);
       const booking = await storage.getBooking(req.params.id);
-      if (!booking || booking.userId !== req.user!.id) {
+      if (!booking || !canAccessBooking(req, booking)) {
         return res.status(404).json({ message: "Booking not found" });
       }
       const payMethod = normalizeSessionPaymentMethod(booking.paymentMethod);
@@ -1481,7 +1500,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.submitBookingPaymentAck(
         booking.id,
-        req.user!.id,
+        req.user?.id ?? null,
+        req.guestCheckoutBookingId ?? null,
         transactionAckNumber,
       );
       if (!updated) {
@@ -1498,18 +1518,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
+      console.error("[payment-ack] failed:", error);
       res.status(500).json({ message: "Failed to submit payment reference" });
     }
   });
 
-  app.get("/api/bookings/:id", requireAuth, async (req: any, res) => {
+  app.get("/api/bookings/:id", requireBookingAuth, async (req: AuthRequest, res) => {
     try {
       const booking = await storage.getBooking(req.params.id);
       if (!booking) {
         return res.status(404).json({ message: "Booking not found" });
       }
-      // SECURITY: Users can only see their own bookings
-      if (booking.userId !== req.user!.id) {
+      if (!canAccessBooking(req, booking)) {
         return res.status(403).json({ message: "Forbidden" });
       }
       res.json(booking);
@@ -1564,20 +1584,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: "Guest name and email are required for this booking.",
           });
         }
-        const existing = await storage.getUserByEmail(payload.guestEmail);
-        if (existing) {
-          user = existing;
-        } else {
-          user = await storage.createUser({
-            email: payload.guestEmail.toLowerCase().trim(),
-            name: payload.guestName.trim(),
-            password: crypto.randomUUID(),
-            primaryMobile: payload.guestPhone ?? null,
-            emergencyMobile: payload.guestPhone ?? null,
-            profileCompletionStatus: "complete",
-          } as any);
-          await storage.verifyUserEmail(user.id);
+
+        const guestEmail = payload.guestEmail.toLowerCase().trim();
+        const guestName = payload.guestName.trim();
+        const guestPhone = payload.guestPhone ?? null;
+
+        const existingMember = await storage.getUserByEmail(guestEmail);
+        if (existingMember) {
+          return res.status(409).json({
+            code: "email_registered",
+            message:
+              "This email is already registered with andWeYoga. Sign in to book this session.",
+            redirectTo: "/account",
+          });
         }
+
+        const classTypeForBooking = await storage.getClassType(cls.classTypeId);
+        if (
+          !isSessionBookable(
+            cls.date,
+            classTypeForBooking?.duration,
+            cls.sessionFrequency,
+          )
+        ) {
+          if (isTrialOrDropIn(cls.sessionFrequency)) {
+            const nextSession = await storage.findNextSessionForClassType(
+              cls.classTypeId,
+              new Date(),
+              ["trial", "drop_in"],
+            );
+            return res.status(409).json({
+              code: "session_in_progress_dropin",
+              message: TRIAL_DROPIN_MIDSESSION_MESSAGE,
+              nextSession: nextSession
+                ? { id: nextSession.id, date: nextSession.date }
+                : null,
+            });
+          }
+          return res.status(400).json({ message: "This session is no longer open for booking." });
+        }
+
+        const guestConflict = await storage.getGuestBookingConflict(guestEmail, classId);
+        if (guestConflict.state === "processing") {
+          let resumeCheckout: Record<string, unknown> | null = null;
+          if (guestConflict.canResumePayment && guestConflict.booking) {
+            const existing = guestConflict.booking;
+            const classTypeResume = await storage.getClassType(cls.classTypeId);
+            const instructorResume = await storage.getInstructor(cls.instructorId);
+            const resumeMethod = normalizeSessionPaymentMethod(
+              existing.paymentMethod ?? cls.paymentMethod,
+            );
+            const resumeGateway = getConfiguredCheckoutGateway();
+            const resumeHasPrice =
+              classTypeResume?.price != null &&
+              classTypeResume.price !== "" &&
+              parseFloat(String(classTypeResume.price)) > 0;
+            const resumeCheckoutEnabled =
+              resumeHasPrice && usesHostedCheckout(resumeMethod) && !!resumeGateway;
+            resumeCheckout = {
+              bookingId: existing.id,
+              classId: cls.id,
+              className: classTypeResume?.name ?? "Yoga Session",
+              instructorName: instructorResume?.name ?? "",
+              sessionDate: cls.date,
+              price: classTypeResume?.price ?? null,
+              useRazorpayCheckout: resumeCheckoutEnabled,
+              razorpayKeyId: resumeCheckoutEnabled ? resumeGateway!.getPublicKeyId() : null,
+              isGuestCheckout: true,
+              guestCheckoutToken: generateGuestCheckoutToken(existing.id),
+            };
+          }
+          return res.status(409).json({
+            code: "guest_booking_processing",
+            message: guestBookingProcessingMessage(
+              guestConflict.booking?.paymentMethod ?? cls.paymentMethod,
+            ),
+            existingBookingId: guestConflict.booking?.id ?? null,
+            canResumePayment: guestConflict.canResumePayment ?? false,
+            resumeCheckout,
+          });
+        }
+        if (guestConflict.state === "confirmed") {
+          return res.status(409).json({
+            code: "guest_booking_confirmed",
+            message: GUEST_BOOKING_CONFIRMED_MESSAGE,
+            existingBookingId: guestConflict.booking?.id ?? null,
+          });
+        }
+
+        let resumableGuestBooking =
+          guestConflict.state === "failed" ? guestConflict.booking : undefined;
+        if (guestConflict.state === "failed" && resumableGuestBooking) {
+          await storage.updateBookingPaymentStatus(resumableGuestBooking.id, "pending");
+        }
+        if (!resumableGuestBooking) {
+          resumableGuestBooking = await storage.findResumableGuestBookingForClass(
+            guestEmail,
+            classId,
+          );
+        }
+        if (!resumableGuestBooking) {
+          const activeCount = await storage.syncClassBookingCount(classId);
+          if (activeCount >= cls.maxCapacity) {
+            return res.status(400).json({ message: "Class is fully booked" });
+          }
+        }
+
+        const booking = resumableGuestBooking
+          ? resumableGuestBooking
+          : await storage.createBooking({
+              classId,
+              userId: null,
+              isGuestCheckout: true,
+              guestName,
+              guestEmail,
+              guestPhone,
+            });
+
+        const classType = await storage.getClassType(cls.classTypeId);
+        const instructor = await storage.getInstructor(cls.instructorId);
+        const price = classType?.price ?? null;
+        const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
+        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+        const checkoutGateway = getConfiguredCheckoutGateway();
+        const checkoutEnabled =
+          hasPrice && usesHostedCheckout(sessionPaymentMethod) && !!checkoutGateway;
+
+        if (!hasPrice) {
+          await storage.updateBookingPaymentStatus(booking.id, "waived");
+        }
+
+        if (hasPrice) {
+          const amountPaise = rupeesToPaise(classType!.price);
+          const provider = providerForSessionMethod(sessionPaymentMethod);
+          await storage.ensurePaymentStubForBooking({
+            bookingId: booking.id,
+            userId: null,
+            classId: cls.id,
+            amountPaise,
+            gatewayProvider: provider,
+            payerName: guestName,
+            payerEmail: guestEmail,
+            payerPhone: guestPhone,
+          });
+        }
+
+        let qrPayment: {
+          qrCodeName: string;
+          qrImageUrl: string;
+          contactPhone: string;
+          contactEmail: string;
+        } | null = null;
+
+        if (
+          hasPrice &&
+          usesQrManualVerification(sessionPaymentMethod) &&
+          cls.paymentQrCodeId
+        ) {
+          const qr = await storage.getPaymentQrCode(cls.paymentQrCodeId);
+          if (qr) {
+            qrPayment = {
+              qrCodeName: qr.name,
+              qrImageUrl: qr.imageUrl,
+              contactPhone: cls.qrContactPhone?.trim() || qr.contactPhone || "",
+              contactEmail: cls.qrContactEmail?.trim() || qr.contactEmail || "",
+            };
+          }
+        }
+
+        const usePaymentLink =
+          hasPrice && sessionPaymentMethod === "razorpay_link";
+
+        await sendEmail({
+          to: guestEmail,
+          subject: `Booking reserved — ${classType?.name ?? "Session"}`,
+          html: `<p>Hi ${guestName},</p>
+<p>Your ${cls.sessionFrequency === "trial" ? "trial" : "drop-in"} session has been reserved.</p>
+<p><strong>${classType?.name ?? "Session"}</strong> with ${instructor?.name ?? "Instructor"} on ${new Date(cls.date).toLocaleString("en-IN")}.</p>
+<p>Complete payment to confirm your seat.</p>`,
+        });
+
+        const guestCheckoutToken =
+          checkoutEnabled || hasPrice
+            ? generateGuestCheckoutToken(booking.id)
+            : undefined;
+
+        return res.status(201).json({
+          booking,
+          bookingId: booking.id,
+          classId: cls.id,
+          className: classType?.name ?? "Yoga Session",
+          instructorName: instructor?.name ?? "",
+          sessionDate: cls.date,
+          price,
+          paymentMethod: sessionPaymentMethod,
+          razorpayLink: usePaymentLink ? (cls.razorpayLink ?? null) : null,
+          googleMeetLink: null,
+          useRazorpayCheckout: checkoutEnabled,
+          useQrPayment: !!qrPayment,
+          qrPayment,
+          razorpayKeyId: checkoutEnabled ? checkoutGateway!.getPublicKeyId() : null,
+          paymentRequired: hasPrice,
+          isGuestCheckout: true,
+          guestCheckoutToken: guestCheckoutToken ?? null,
+          resumedPendingBooking: !!resumableGuestBooking,
+        });
       }
 
       if (!user) {
@@ -1593,7 +1804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message:
             "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your health update in My Account before booking.",
           requiresHealthUpdate: true,
-          redirectTo: "/my-account",
+          redirectTo: "/account",
           code: "profile_incomplete"
         });
       }
@@ -1669,7 +1880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({
           message: "You have already booked this session.",
           code: "already_booked",
-          redirectTo: "/my-account?tab=sessions&sessionsTab=upcoming",
+          redirectTo: "/account?sessionsTab=upcoming",
         });
       }
 
@@ -1760,7 +1971,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let checkoutAuthToken: string | undefined;
-      if (checkoutEnabled || isGuestBooking) {
+      if (checkoutEnabled && req.user?.id) {
         checkoutAuthToken = generateToken(user.id);
         setAuthCookie(res, checkoutAuthToken);
       }
@@ -1781,6 +1992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrPayment,
         razorpayKeyId: checkoutEnabled ? checkoutGateway!.getPublicKeyId() : null,
         paymentRequired: hasPrice,
+        isGuestCheckout: false,
         token: checkoutAuthToken ?? null,
         resumedPendingBooking: !!resumableBooking,
       });
@@ -1795,7 +2007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
   // RAZORPAY PAYMENTS
   // ============================================================
-  app.post("/api/payments/create-order", requireAuth, async (req: any, res) => {
+  app.post("/api/payments/create-order", requireBookingAuth, async (req: AuthRequest, res) => {
     try {
       const gateway = getConfiguredCheckoutGateway();
       if (!gateway) {
@@ -1803,16 +2015,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(req.body);
-      const user = await storage.getUser(req.user!.id);
-      if (!user) return res.status(404).json({ message: "User not found" });
-      if (!isUserActive(user)) return respondAccountDeactivated(res);
 
       const booking = await storage.getBooking(bookingId);
-      if (!booking || booking.userId !== req.user!.id) {
+      if (!booking || !canAccessBooking(req, booking)) {
         return res.status(404).json({ message: "Booking not found" });
       }
       if (booking.paymentStatus === "paid") {
         return res.status(400).json({ message: "This booking is already paid" });
+      }
+
+      let payerName: string;
+      let payerEmail: string;
+      let payerPhone: string | null;
+
+      if (booking.isGuestCheckout) {
+        payerName = bookingContactName(booking);
+        payerEmail = bookingContactEmail(booking);
+        payerPhone = bookingContactPhone(booking);
+        if (!payerName || !payerEmail) {
+          return res.status(400).json({ message: "Guest booking contact is incomplete" });
+        }
+      } else {
+        const user = await storage.getUser(req.user!.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+        if (!isUserActive(user)) return respondAccountDeactivated(res);
+        payerName = user.name;
+        payerEmail = user.email;
+        payerPhone = user.primaryMobile ?? null;
       }
 
       const cls = await storage.getClass(booking.classId);
@@ -1849,7 +2078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         receipt: bookingId,
         notes: {
           bookingId,
-          userId: user.id,
+          userId: booking.userId ?? "guest",
           classId: cls.id,
         },
       });
@@ -1860,25 +2089,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             razorpayOrderId: order.orderId,
             gatewayProvider: gateway.id,
             gatewayReference: order.orderId,
-            payerName: user.name,
-            payerEmail: user.email,
-            payerPhone: user.primaryMobile ?? payment.payerPhone,
+            payerName,
+            payerEmail,
+            payerPhone: payerPhone ?? payment.payerPhone,
             status: "created",
             adminDisposition: "pending",
           })) ?? payment;
       } else {
         payment = await storage.createPayment({
           bookingId,
-          userId: user.id,
+          userId: booking.userId ?? null,
           classId: cls.id,
           amountPaise,
           currency: "INR",
           razorpayOrderId: order.orderId,
           gatewayProvider: gateway.id,
           gatewayReference: order.orderId,
-          payerName: user.name,
-          payerEmail: user.email,
-          payerPhone: user.primaryMobile ?? null,
+          payerName,
+          payerEmail,
+          payerPhone,
           status: "created",
           adminDisposition: "pending",
         });
@@ -1900,7 +2129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/payments/verify", requireAuth, async (req: any, res) => {
+  app.post("/api/payments/verify", requireBookingAuth, async (req: AuthRequest, res) => {
     try {
       const body = z
         .object({
@@ -1912,7 +2141,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .parse(req.body);
 
       const payment = await storage.getPaymentById(body.paymentId);
-      if (!payment || payment.userId !== req.user!.id) {
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+
+      const booking = await storage.getBooking(payment.bookingId);
+      if (!booking || !canAccessBooking(req, booking)) {
         return res.status(404).json({ message: "Payment not found" });
       }
 
@@ -1927,16 +2161,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Could not confirm payment" });
       }
 
-      res.json({ success: true, ...result });
+      res.json({
+        success: true,
+        ...result,
+        isGuestCheckout: booking.isGuestCheckout,
+      });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
       console.error("[payments/verify]", error);
+
+      try {
+        const body = req.body as { paymentId?: string };
+        if (body.paymentId) {
+          const payment = await storage.getPaymentById(body.paymentId);
+          const booking = payment ? await storage.getBooking(payment.bookingId) : undefined;
+          if (
+            payment &&
+            booking &&
+            canAccessBooking(req, booking) &&
+            payment.status === "paid"
+          ) {
+            const recovered = await getPaidPaymentPayload(payment.id);
+            if (recovered) {
+              return res.json({
+                success: true,
+                ...recovered,
+                isGuestCheckout: booking.isGuestCheckout,
+                recoveredViaWebhook: true,
+              });
+            }
+          }
+        }
+      } catch (recoveryErr) {
+        console.error("[payments/verify] recovery check failed:", recoveryErr);
+      }
+
       res.status(400).json({
         success: false,
         message: error instanceof Error ? error.message : "Payment verification failed",
       });
+    }
+  });
+
+  app.post("/api/payments/:id/sync-status", requireBookingAuth, async (req: AuthRequest, res) => {
+    try {
+      const payment = await storage.getPaymentById(req.params.id);
+      if (!payment) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      const booking = await storage.getBooking(payment.bookingId);
+      if (!booking || !canAccessBooking(req, booking)) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      const payload = await getPaidPaymentPayload(payment.id);
+      if (!payload) {
+        return res.status(409).json({
+          success: false,
+          message: "Payment is not confirmed yet. Please wait a moment and try again.",
+        });
+      }
+      res.json({
+        success: true,
+        ...payload,
+        isGuestCheckout: booking.isGuestCheckout,
+      });
+    } catch {
+      res.status(500).json({ message: "Could not sync payment status" });
     }
   });
 
@@ -2473,12 +2765,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================
-  // OBJECT STORAGE — health documents (gated; see ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES)
+  // HEALTH DOCUMENTS — upload + download
   // ============================================================
-  if (ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES) {
-    const { ObjectStorageService, ObjectNotFoundError } = await import(
+  if (isHealthDocumentUploadEnabled()) {
+    const { ObjectStorageService } = await import(
       "./objectStorage"
     );
+
+    app.post("/api/health-documents/upload", requireAuth, async (req: any, res) => {
+      try {
+        const body = healthDocumentUploadBodySchema.parse(req.body);
+        const result = await uploadHealthDocumentForUser(req.user!.id, body);
+        res.status(200).json({
+          objectPath: result.objectPath,
+          message: "Document uploaded successfully",
+        });
+      } catch (error) {
+        if (error instanceof HealthDocumentUploadError) {
+          return res.status(error.status).json({ error: error.message });
+        }
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: "Invalid upload payload", details: error.errors });
+        }
+        console.error("Health document upload error:", error);
+        const message =
+          error instanceof Error ? error.message : "Failed to upload document";
+        res.status(500).json({ error: message });
+      }
+    });
 
     app.post("/api/objects/upload", requireAuth, async (req: any, res) => {
       try {
@@ -2496,17 +2810,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     app.get("/objects/:objectPath(*)", requireAuth, async (req: any, res) => {
-      const userId = req.user?.id;
-      const objectStorageService = new ObjectStorageService();
-
       try {
-        await objectStorageService.serveObjectEntity(req.path, userId, res);
+        await streamHealthDocumentForUser(req.path, req.user?.id, res);
       } catch (error) {
         console.error("Error accessing document:", error);
-        if (error instanceof ObjectNotFoundError) {
-          return res.status(404).json({ error: "Document not found" });
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Internal server error" });
         }
-        return res.status(500).json({ error: "Internal server error" });
       }
     });
 

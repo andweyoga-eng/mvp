@@ -45,14 +45,19 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, or, isNull, desc, inArray } from "drizzle-orm";
-import { computeProfileCompletionStatus, isAccountProfileComplete, getAccountProfileIncompleteReasons, MIN_HEALTH_UPDATE_CHARS } from "@shared/profileCompleteness";
+import {
+  computeProfileCompletionStatus,
+  isAccountProfileComplete,
+  getAccountProfileIncompleteReasons,
+  isHealthDisclosureComplete,
+} from "@shared/profileCompleteness";
 import { classifyMemberSessionStatus } from "@shared/member-session-status";
 import {
   bookingIsResumableCheckout,
   existingBookingBlocksNewBooking,
 } from "@shared/member-booking-duplicate";
 import { getMeetJoinState } from "@shared/session-meet-access";
-import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod } from "@shared/payment-gateway";
+import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod, usesHostedCheckout } from "@shared/payment-gateway";
 import { hashPassword, verifyPassword } from "./auth";
 import {
   LEGACY_ADMIN_PASSWORD,
@@ -110,7 +115,7 @@ export interface PendingQrBookingRow {
 export interface PaymentHistoryRow {
   id: string;
   bookingId: string;
-  userId: string;
+  userId: string | null;
   userName: string;
   userEmail: string;
   className: string;
@@ -285,8 +290,22 @@ export interface IStorage {
   countActiveBookingsForClass(classId: string): Promise<number>;
   syncClassBookingCount(classId: string): Promise<number>;
   findResumableBookingForClass(userId: string, classId: string): Promise<Booking | undefined>;
+  findResumableGuestBookingForClass(
+    guestEmail: string,
+    classId: string,
+  ): Promise<Booking | undefined>;
   getUserBookings(userId: string): Promise<Booking[]>;
   userHasUpcomingBookingForClass(userId: string, classId: string): Promise<boolean>;
+  guestHasUpcomingBookingForClass(guestEmail: string, classId: string): Promise<boolean>;
+  getGuestBookingConflict(
+    guestEmail: string,
+    classId: string,
+  ): Promise<{
+    state: import("@shared/guest-booking-conflict").GuestBookingConflictState;
+    booking?: Booking;
+    canResumePayment?: boolean;
+  }>;
+  linkGuestBookingsToUser(userId: string, email: string): Promise<number>;
   updateBookingPaymentStatus(
     bookingId: string,
     paymentStatus: string,
@@ -299,7 +318,7 @@ export interface IStorage {
   updatePayment(id: string, updates: Partial<InsertPayment>): Promise<Payment | undefined>;
   ensurePaymentStubForBooking(params: {
     bookingId: string;
-    userId: string;
+    userId: string | null;
     classId: string;
     amountPaise: number;
     gatewayProvider: string;
@@ -323,7 +342,8 @@ export interface IStorage {
   countClassesByPaymentQrCodeId(qrId: string): Promise<number>;
   submitBookingPaymentAck(
     bookingId: string,
-    userId: string,
+    actorUserId: string | null,
+    guestCheckoutBookingId: string | null,
     transactionAckNumber: string,
   ): Promise<Booking | undefined>;
   getPendingQrBookings(): Promise<PendingQrBookingRow[]>;
@@ -1434,7 +1454,9 @@ export class DatabaseStorage implements IStorage {
         .values({ ...booking, paymentMethod })
         .returning();
 
-      await this.ensureUserSessionMapping(booking.userId, booking.classId);
+      if (booking.userId) {
+        await this.ensureUserSessionMapping(booking.userId, booking.classId);
+      }
       await this.syncClassBookingCount(booking.classId);
 
       return newBooking;
@@ -1526,6 +1548,50 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async findResumableGuestBookingForClass(
+    guestEmail: string,
+    classId: string,
+  ): Promise<Booking | undefined> {
+    try {
+      const normalized = guestEmail.trim().toLowerCase();
+      const rows = await db
+        .select({
+          booking: bookings,
+          sessionDate: classes.date,
+        })
+        .from(bookings)
+        .innerJoin(classes, eq(bookings.classId, classes.id))
+        .where(
+          and(
+            eq(bookings.isGuestCheckout, true),
+            sql`lower(${bookings.guestEmail}) = ${normalized}`,
+            eq(bookings.classId, classId),
+            eq(bookings.paymentStatus, "pending"),
+          ),
+        )
+        .orderBy(desc(bookings.createdAt))
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) return undefined;
+
+      if (
+        !bookingIsResumableCheckout({
+          paymentStatus: row.booking.paymentStatus,
+          mappingStatus: null,
+          classSessionStartMs: new Date(row.sessionDate).getTime(),
+        })
+      ) {
+        return undefined;
+      }
+
+      return row.booking;
+    } catch (error) {
+      console.error("[DB] Error finding resumable guest booking:", error);
+      return undefined;
+    }
+  }
+
   async getUserBookings(userId: string): Promise<Booking[]> {
     try {
       return await db.select().from(bookings).where(eq(bookings.userId, userId));
@@ -1566,6 +1632,116 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("[DB] Error checking existing booking:", error);
       return false;
+    }
+  }
+
+  async guestHasUpcomingBookingForClass(
+    guestEmail: string,
+    classId: string,
+  ): Promise<boolean> {
+    const conflict = await this.getGuestBookingConflict(guestEmail, classId);
+    return conflict.state === "confirmed";
+  }
+
+  async getGuestBookingConflict(
+    guestEmail: string,
+    classId: string,
+  ): Promise<{
+    state: import("@shared/guest-booking-conflict").GuestBookingConflictState;
+    booking?: Booking;
+    canResumePayment?: boolean;
+  }> {
+    try {
+      const cls = await this.getClass(classId);
+      if (!cls || new Date(cls.date).getTime() < Date.now()) {
+        return { state: "none" };
+      }
+
+      const normalized = guestEmail.trim().toLowerCase();
+      const [row] = await db
+        .select()
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.isGuestCheckout, true),
+            sql`lower(${bookings.guestEmail}) = ${normalized}`,
+            eq(bookings.classId, classId),
+            inArray(bookings.paymentStatus, ["pending", "paid", "waived", "failed"]),
+          ),
+        )
+        .orderBy(desc(bookings.createdAt))
+        .limit(1);
+
+      if (!row) return { state: "none" };
+
+      if (row.paymentStatus === "paid" || row.paymentStatus === "waived") {
+        return { state: "confirmed", booking: row };
+      }
+
+      if (row.paymentStatus === "failed") {
+        const sessionStillUpcoming = new Date(cls.date).getTime() >= Date.now();
+        return {
+          state: "failed",
+          booking: row,
+          canResumePayment: sessionStillUpcoming,
+        };
+      }
+
+      if (row.paymentStatus === "pending") {
+        const sessionMethod = normalizeSessionPaymentMethod(row.paymentMethod ?? cls.paymentMethod);
+        const canResumePayment =
+          usesHostedCheckout(sessionMethod) &&
+          bookingIsResumableCheckout({
+            paymentStatus: row.paymentStatus,
+            mappingStatus: null,
+            classSessionStartMs: new Date(cls.date).getTime(),
+          });
+        return { state: "processing", booking: row, canResumePayment };
+      }
+
+      return { state: "none" };
+    } catch (error) {
+      console.error("[DB] Error resolving guest booking conflict:", error);
+      return { state: "none" };
+    }
+  }
+
+  async linkGuestBookingsToUser(userId: string, email: string): Promise<number> {
+    try {
+      const normalized = email.trim().toLowerCase();
+      const guestRows = await db
+        .select()
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.isGuestCheckout, true),
+            sql`lower(${bookings.guestEmail}) = ${normalized}`,
+          ),
+        );
+
+      if (guestRows.length === 0) return 0;
+
+      for (const booking of guestRows) {
+        await db
+          .update(bookings)
+          .set({
+            userId,
+            isGuestCheckout: false,
+          })
+          .where(eq(bookings.id, booking.id));
+
+        await this.ensureUserSessionMapping(userId, booking.classId);
+
+        await db
+          .update(payments)
+          .set({ userId })
+          .where(eq(payments.bookingId, booking.id));
+      }
+
+      return guestRows.length;
+    } catch (error) {
+      console.error("[DB] Error linking guest bookings:", error);
+      return 0;
     }
   }
 
@@ -1651,7 +1827,7 @@ export class DatabaseStorage implements IStorage {
 
   async ensurePaymentStubForBooking(params: {
     bookingId: string;
-    userId: string;
+    userId: string | null;
     classId: string;
     amountPaise: number;
     gatewayProvider: string;
@@ -1683,9 +1859,9 @@ export class DatabaseStorage implements IStorage {
     rows: Array<{
       id: string;
       bookingId: string;
-      userId: string;
-      userName: string;
-      userEmail: string;
+      userId: string | null;
+      userName: string | null;
+      userEmail: string | null;
       className: string;
       sessionDate: Date;
       amountPaise: number | null;
@@ -1699,9 +1875,9 @@ export class DatabaseStorage implements IStorage {
       gatewayPaymentMethod: string | null;
       status: string;
       adminDisposition: string | null;
-      bookingPaymentStatus: string | null;
-      verificationStatus: string | null;
-      transactionAckNumber: string | null;
+      bookingPaymentStatus?: string | null;
+      verificationStatus?: string | null;
+      transactionAckNumber?: string | null;
       receiptUrl: string | null;
       invoiceUrl: string | null;
       paidAt: Date | null;
@@ -1712,8 +1888,8 @@ export class DatabaseStorage implements IStorage {
       id: r.id,
       bookingId: r.bookingId,
       userId: r.userId,
-      userName: r.userName,
-      userEmail: r.userEmail,
+      userName: r.userName ?? r.payerName ?? "Guest",
+      userEmail: r.userEmail ?? r.payerEmail ?? "",
       className: r.className,
       sessionDate: r.sessionDate.toISOString(),
       amountPaise: r.amountPaise,
@@ -1728,9 +1904,9 @@ export class DatabaseStorage implements IStorage {
       status: r.status,
       adminDisposition:
         r.adminDisposition ?? dispositionFromPaymentStatus(r.status),
-      bookingPaymentStatus: r.bookingPaymentStatus,
-      verificationStatus: r.verificationStatus,
-      transactionAckNumber: r.transactionAckNumber,
+      bookingPaymentStatus: r.bookingPaymentStatus ?? null,
+      verificationStatus: r.verificationStatus ?? null,
+      transactionAckNumber: r.transactionAckNumber ?? null,
       receiptUrl: r.receiptUrl,
       invoiceUrl: r.invoiceUrl,
       paidAt: r.paidAt?.toISOString() ?? null,
@@ -1747,6 +1923,8 @@ export class DatabaseStorage implements IStorage {
           userId: payments.userId,
           userName: users.name,
           userEmail: users.email,
+          guestName: bookings.guestName,
+          guestEmail: bookings.guestEmail,
           className: classTypes.name,
           sessionDate: classes.date,
           amountPaise: payments.amountPaise,
@@ -1770,11 +1948,17 @@ export class DatabaseStorage implements IStorage {
         })
         .from(payments)
         .innerJoin(bookings, eq(payments.bookingId, bookings.id))
-        .innerJoin(users, eq(payments.userId, users.id))
+        .leftJoin(users, eq(payments.userId, users.id))
         .innerJoin(classes, eq(payments.classId, classes.id))
         .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
         .orderBy(desc(payments.createdAt));
-      return this.mapPaymentHistoryRows(rows);
+      return this.mapPaymentHistoryRows(
+        rows.map((r) => ({
+          ...r,
+          userName: r.userName ?? r.guestName ?? r.payerName,
+          userEmail: r.userEmail ?? r.guestEmail ?? r.payerEmail,
+        })),
+      );
     } catch (error) {
       console.error("[DB] Error loading admin payment history:", error);
       return [];
@@ -1983,11 +2167,19 @@ export class DatabaseStorage implements IStorage {
 
   async submitBookingPaymentAck(
     bookingId: string,
-    userId: string,
+    actorUserId: string | null,
+    guestCheckoutBookingId: string | null,
     transactionAckNumber: string,
   ): Promise<Booking | undefined> {
     const booking = await this.getBooking(bookingId);
-    if (!booking || booking.userId !== userId) return undefined;
+    if (!booking) return undefined;
+
+    const memberOk = actorUserId && booking.userId === actorUserId;
+    const guestOk =
+      guestCheckoutBookingId &&
+      booking.isGuestCheckout &&
+      booking.id === guestCheckoutBookingId;
+    if (!memberOk && !guestOk) return undefined;
     const method = normalizeSessionPaymentMethod(booking.paymentMethod);
     if (method !== "qr" && method !== "razorpay_link") return undefined;
     if (booking.paymentStatus === "paid") return booking;
@@ -2459,8 +2651,7 @@ export class DatabaseStorage implements IStorage {
 
   // Profile completeness calculation helper
   private calculateProfileCompleteness(user: User): ProfileCompleteness {
-    const healthUpdateComplete =
-      (user.healthUpdateText ?? "").trim().length >= MIN_HEALTH_UPDATE_CHARS;
+    const healthUpdateComplete = isHealthDisclosureComplete(user.healthUpdateText);
     const documentsComplete = user.healthDocumentUrls ? user.healthDocumentUrls.length > 0 : false;
     const emailVerified = user.emailVerified || false;
 

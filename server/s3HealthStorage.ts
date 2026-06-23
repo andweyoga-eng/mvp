@@ -53,7 +53,6 @@ export function assertS3Configured(): void {
   getS3Client();
 }
 
-/** Presigned PUT for a private health document owned by userId. */
 export async function presignHealthDocumentPut(
   userId: string
 ): Promise<{ uploadUrl: string; key: string }> {
@@ -68,6 +67,28 @@ export async function presignHealthDocumentPut(
   });
   const uploadUrl = await getSignedUrl(client, command, { expiresIn: 900 });
   return { uploadUrl, key };
+}
+
+/** Server-side upload (avoids browser CORS issues with presigned PUT). */
+export async function putHealthDocumentBuffer(
+  userId: string,
+  body: Buffer,
+  contentType: string,
+): Promise<{ objectPath: string; key: string }> {
+  assertS3Configured();
+  const bucket = getS3Bucket();
+  const id = randomUUID();
+  const key = `health-documents/${userId}/${id}`;
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return { objectPath: `/objects/${key}`, key };
 }
 
 /**

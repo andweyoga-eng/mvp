@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { razorpayInvoicePdfUrl } from "./razorpay";
+import { razorpayInvoicePdfUrl, fetchRazorpayPayment, isRazorpayPaymentSuccessful } from "./razorpay";
 import { getPaymentGateway } from "./payment-gateways";
 import {
   normalizeSessionPaymentMethod,
@@ -11,6 +11,10 @@ import {
   type PaymentProviderId,
 } from "@shared/payment-gateway";
 import { sendEmail, createSessionConfirmationEmailHTML } from "./email";
+import {
+  bookingContactEmail,
+  bookingContactName,
+} from "./booking-access";
 function formatSessionPrice(price: string | number | null | undefined): string | null {
   if (price === null || price === undefined || price === "") return null;
   const n = typeof price === "string" ? parseFloat(price) : price;
@@ -47,13 +51,31 @@ export async function markPaymentPaid(params: {
   const provider = (payment.gatewayProvider ?? "razorpay") as PaymentProviderId;
   const gateway = getPaymentGateway(provider);
 
+  let signatureOk = !params.razorpaySignature;
   if (params.razorpaySignature && gateway) {
-    const valid = gateway.verifyPayment({
+    signatureOk = gateway.verifyPayment({
       orderId: params.razorpayOrderId,
       paymentId: params.razorpayPaymentId,
       signature: params.razorpaySignature,
     });
-    if (!valid) throw new Error("Invalid payment signature");
+  }
+
+  if (!signatureOk && provider === "razorpay") {
+    try {
+      const remote = await fetchRazorpayPayment(params.razorpayPaymentId);
+      const orderMatches =
+        remote.order_id === params.razorpayOrderId ||
+        remote.order_id === payment.razorpayOrderId;
+      if (isRazorpayPaymentSuccessful(remote.status) && orderMatches) {
+        signatureOk = true;
+      }
+    } catch (err) {
+      console.error("[Payment] Razorpay status fallback failed:", err);
+    }
+  }
+
+  if (params.razorpaySignature && !signatureOk) {
+    throw new Error("Invalid payment signature");
   }
 
   let invoiceUrl: string | null = payment.invoiceUrl ?? null;
@@ -101,18 +123,25 @@ export async function markPaymentPaid(params: {
   if (!updated) return null;
 
   const booking = await storage.getBooking(payment.bookingId);
-  const user = booking ? await storage.getUser(booking.userId) : undefined;
+  const user = booking?.userId
+    ? await storage.getUser(booking.userId)
+    : undefined;
   const cls = await storage.getClass(payment.classId);
   const classType = cls ? await storage.getClassType(cls.classTypeId) : undefined;
   const instructor = cls ? await storage.getInstructor(cls.instructorId) : undefined;
 
-  if (user && cls && classType) {
+  const recipientEmail =
+    user?.email ?? (booking ? bookingContactEmail(booking) : payment.payerEmail);
+  const recipientName =
+    user?.name ?? (booking ? bookingContactName(booking) : payment.payerName) ?? "there";
+
+  if (recipientEmail && cls && classType) {
     const amountLabel = formatSessionPrice(classType.price);
     await sendEmail({
-      to: user.email,
+      to: recipientEmail,
       subject: `You're booked — ${classType.name} · andWeYoga`,
       html: createSessionConfirmationEmailHTML({
-        name: user.name,
+        name: recipientName,
         className: classType.name,
         sessionDate: cls.date.toISOString(),
         instructorName: instructor?.name ?? "your instructor",
@@ -128,17 +157,19 @@ export async function markPaymentPaid(params: {
 async function sendBookingConfirmationEmail(bookingId: string): Promise<void> {
   const booking = await storage.getBooking(bookingId);
   if (!booking) return;
-  const user = await storage.getUser(booking.userId);
+  const user = booking.userId ? await storage.getUser(booking.userId) : undefined;
+  const recipientEmail = user?.email ?? bookingContactEmail(booking);
+  const recipientName = (user?.name ?? bookingContactName(booking)) || "there";
   const cls = await storage.getClass(booking.classId);
   const classType = cls ? await storage.getClassType(cls.classTypeId) : undefined;
   const instructor = cls ? await storage.getInstructor(cls.instructorId) : undefined;
-  if (!user || !cls || !classType) return;
+  if (!recipientEmail || !cls || !classType) return;
   const amountLabel = formatSessionPrice(classType.price);
   await sendEmail({
-    to: user.email,
+    to: recipientEmail,
     subject: `Payment confirmed — ${classType.name} · andWeYoga`,
     html: createSessionConfirmationEmailHTML({
-      name: user.name,
+      name: recipientName,
       className: classType.name,
       sessionDate: cls.date.toISOString(),
       instructorName: instructor?.name ?? "your instructor",
@@ -278,4 +309,13 @@ async function buildPayloadFromPayment(
     receiptUrl: payment.receiptUrl,
     invoiceUrl: payment.invoiceUrl,
   };
+}
+
+/** Returns success payload when webhook confirmed payment before client verify (e.g. UPI). */
+export async function getPaidPaymentPayload(
+  paymentId: string,
+): Promise<PaymentSuccessPayload | null> {
+  const payment = await storage.getPaymentById(paymentId);
+  if (!payment || payment.status !== "paid") return null;
+  return buildPayloadFromPayment(payment);
 }

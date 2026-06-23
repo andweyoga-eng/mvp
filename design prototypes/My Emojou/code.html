@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>andWeYOGa | Emojou - Your Creative Playground</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary": "#ffffff",
+                    "on-background": "#1b1c1b",
+                    "surface-variant": "#e4e2e0",
+                    "surface-container": "#efedec",
+                    "on-primary-fixed-variant": "#503787",
+                    "secondary-fixed": "#ffdbcb",
+                    "surface-container-low": "#f5f3f1",
+                    "tertiary-fixed-dim": "#b3cdb6",
+                    "inverse-surface": "#30302f",
+                    "background": "#fbf9f7",
+                    "secondary-fixed-dim": "#ffb692",
+                    "secondary": "#9a4612",
+                    "tertiary-container": "#314736",
+                    "on-primary-fixed": "#24015a",
+                    "on-error": "#ffffff",
+                    "primary-container": "#4b3282",
+                    "secondary-container": "#fd9259",
+                    "on-secondary-fixed": "#341100",
+                    "on-tertiary-fixed-variant": "#354c3a",
+                    "on-secondary-fixed-variant": "#793000",
+                    "outline": "#7a7581",
+                    "on-secondary": "#ffffff",
+                    "outline-variant": "#cbc4d2",
+                    "surface-container-high": "#eae8e6",
+                    "surface-bright": "#fbf9f7",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#d1bcff",
+                    "surface-tint": "#6850a1",
+                    "surface": "#fbf9f7",
+                    "on-tertiary-container": "#9cb59e",
+                    "surface-container-highest": "#e4e2e0",
+                    "error-container": "#ffdad6",
+                    "error": "#ba1a1a",
+                    "on-surface": "#1b1c1b",
+                    "surface-dim": "#dbdad8",
+                    "on-secondary-container": "#712d00",
+                    "on-surface-variant": "#494550",
+                    "primary-fixed-dim": "#d1bcff",
+                    "on-primary-container": "#baa0f8",
+                    "tertiary": "#1b3120",
+                    "primary-fixed": "#eaddff",
+                    "on-error-container": "#93000a",
+                    "tertiary-fixed": "#cfe9d1",
+                    "on-tertiary": "#ffffff",
+                    "primary": "#34196a",
+                    "on-tertiary-fixed": "#0a2011",
+                    "inverse-on-surface": "#f2f0ee"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xxl": "64px",
+                    "md": "16px",
+                    "xl": "40px",
+                    "gutter": "24px",
+                    "sm": "8px",
+                    "unit": "4px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "container-max": "1280px"
+            },
+            "fontFamily": {
+                    "body-md": ["Inter"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "label-sm": ["Inter"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "label-md": ["Inter"],
+                    "body-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(75, 50, 130, 0.1);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+            transform: translateY(-2px);
+        }
+        .floating-blob {
+            position: absolute;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.3;
+            animation: move 20s infinite alternate;
+        }
+        @keyframes move {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(100px, 100px) scale(1.2); }
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface/70 backdrop-blur-xl border-b border-primary/10 shadow-sm transition-all duration-300 ease-in-out">
+<div class="flex justify-between items-center px-gutter py-md max-w-container-max mx-auto">
+<div class="font-display-lg text-display-lg text-primary tracking-tighter">andWeYOGa</div>
+<div class="hidden md:flex gap-xl items-center">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Sessions</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Calendar</a>
+<a class="font-body-md text-body-md text-primary border-b-2 border-primary pb-1 font-semibold" href="#">Emojou</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Workshops</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Trips</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Explore</a>
+</div>
+<div class="flex items-center gap-md">
+<div class="hidden lg:flex items-center bg-surface-container-low px-md py-xs rounded-full border border-outline-variant/30">
+<span class="material-symbols-outlined text-outline">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-label-md w-40" placeholder="Search vibes..." type="text"/>
+</div>
+<button class="material-symbols-outlined text-primary text-3xl hover:bg-surface-container-high/50 p-sm rounded-full transition-all">account_circle</button>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Hidden by default, triggered by profile) -->
+<aside class="fixed right-0 h-full w-80 z-[60] bg-surface-container-lowest/80 backdrop-blur-2xl border-l border-primary/5 shadow-xl translate-x-full transition-transform duration-500 ease-out flex flex-col p-lg gap-md" id="sideNav">
+<div class="flex items-center gap-md mb-lg">
+<div class="w-12 h-12 rounded-full overflow-hidden border-2 border-primary-container">
+<img class="w-full h-full object-cover" data-alt="A professional close-up studio portrait of a serene yoga instructor with warm, soft lighting, reflecting the calm-tech aesthetic with a clean, high-key white background and neutral tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjUL0ax002Kl68Hi32Nk-lHvy_Lx39lCxIZyFPqlXkK7QLS5BM-SzQstQB6Gnk0rZDs6zva68otEczFNJCnXoK6zpy1UK47fItoxOpT9m8TAMDG1ox4BoNRuPw5lE0pbMuG5OV1M6Ja_ZurpZfZAt-Xzcm87mNsrLJERwX4m_ot6-b_QcFkm8IdS0a5DeWo1RWUDSr-_kEQRgwEoWUzSpXgpyx5No4lFkc4CDdMjs_mQ0Lc-V7CliVTeiaQnQP4Px6GFzsmSw"/>
+</div>
+<div>
+<h3 class="font-headline-md text-primary">My Account</h3>
+<p class="text-label-md text-on-surface-variant">Manage your wellness journey</p>
+</div>
+</div>
+<nav class="flex flex-col gap-sm">
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">person_edit</span>
+<span class="font-label-md">Profile Settings</span>
+</a>
+<a class="flex items-center gap-md p-md bg-primary-container text-on-primary-container rounded-lg font-bold" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-md">Booking History</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md">Payment Methods</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md">Preferences</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-md">Help Center</span>
+</a>
+</nav>
+<div class="mt-auto pt-lg border-t border-outline-variant/20">
+<button class="w-full py-md px-lg bg-secondary text-on-primary rounded-lg font-bold hover:opacity-90 transition-all">Sign Out</button>
+<div class="flex gap-md mt-md justify-center">
+<a class="text-label-sm text-on-surface-variant hover:text-primary" href="#">Privacy Policy</a>
+<a class="text-label-sm text-on-surface-variant hover:text-primary" href="#">Terms</a>
+</div>
+</div>
+</aside>
+<main class="pt-xxl relative">
+<!-- Floating Decor -->
+<div class="floating-blob w-[500px] h-[500px] bg-primary-fixed top-[-100px] left-[-200px] rounded-full"></div>
+<div class="floating-blob w-[400px] h-[400px] bg-secondary-fixed bottom-[100px] right-[-100px] rounded-full" style="animation-delay: -5s"></div>
+<!-- Hero Section -->
+<section class="max-w-container-max mx-auto px-gutter mt-xl">
+<div class="relative w-full h-[500px] md:h-[600px] rounded-xxl overflow-hidden shadow-2xl group">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10"></div>
+<img class="w-full h-full object-cover transform scale-105 group-hover:scale-100 transition-transform duration-1000" data-alt="A cinematic, black and white photograph of several people lying on yoga mats in a serene, sun-drenched studio. The central focus is on brass singing bowls placed on patterned rugs. The atmosphere is deeply meditative, with soft light from a nearby window and a large mandala wall hanging in the background, capturing a moment of profound sound healing and collective relaxation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLtfhQ-xCaMWQrqUmg7VPAob7mN4d2jHZHA9lXEVSZdLvx3d2S4vGgZpEKFdSQZDdD4wsbB6xpe4baTen-yFXCj8c2FljX2tuXdDgNpgELoo0R_AgD6bYa6Ryvy7kV836Ogs8y1rFeHqjAWP4Z0_SD3L2bGmTnJBbrTGBWhc-bCSqF1z7Ro3PACY3lM-B4O9AA9p1Udro3m-VL2gPjXQoWEl_wrLJYhltl7gVuU1wr1chpCOrG4QPDixIlClw6xXcoEAdJ5g0"/>
+<div class="absolute inset-0 z-20 flex flex-col justify-end p-xl md:p-xxl">
+<div class="max-w-3xl">
+<span class="inline-block px-md py-xs bg-primary/20 backdrop-blur-md text-primary-fixed border border-primary-fixed/30 rounded-full font-label-md mb-md">Vibe Check: Zen Mode Engaged</span>
+<h1 class="font-display-lg text-white text-5xl md:text-7xl mb-lg leading-tight">Your Soul's Creative Playground</h1>
+<div class="flex gap-md">
+<button class="bg-primary text-on-primary px-xl py-md rounded-lg font-headline-md hover:scale-105 transition-all shadow-lg">Start Expressing</button>
+<button class="bg-white/20 backdrop-blur-md border border-white/30 text-white px-xl py-md rounded-lg font-headline-md hover:bg-white/30 transition-all">Today's Vibe</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Emojou Content Grid -->
+<section class="max-w-container-max mx-auto px-gutter py-xxl">
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg">
+<!-- Personal Reflections Bento -->
+<div class="md:col-span-8 flex flex-col gap-lg">
+<div class="glass-card rounded-xxl p-xl relative overflow-hidden">
+<div class="absolute top-0 right-0 p-lg opacity-10">
+<span class="material-symbols-outlined text-8xl">edit_note</span>
+</div>
+<h2 class="font-headline-lg text-primary mb-md">Mindful Reflections</h2>
+<textarea class="w-full bg-surface-container-low/50 border-none rounded-xl p-lg font-body-lg text-on-surface-variant focus:ring-2 focus:ring-primary h-48 transition-all resize-none mb-md" placeholder="How does your soul feel today?"></textarea>
+<div class="flex justify-between items-center">
+<div class="flex gap-sm">
+<button class="p-sm glass-card rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors"><span class="material-symbols-outlined">attach_file</span></button>
+<button class="p-sm glass-card rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+<button class="p-sm glass-card rounded-full hover:bg-primary-container hover:text-on-primary-container transition-colors"><span class="material-symbols-outlined">mic</span></button>
+</div>
+<button class="bg-primary text-on-primary px-lg py-sm rounded-lg font-label-md">Save Moment</button>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-lg">
+<div class="glass-card rounded-xxl p-lg">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-tertiary-fixed rounded-lg text-tertiary">
+<span class="material-symbols-outlined">eco</span>
+</div>
+<span class="text-label-sm text-on-surface-variant">Yesterday, 6:45 PM</span>
+</div>
+<h4 class="font-headline-md text-primary mb-sm">Evening Stillness</h4>
+<p class="text-body-md text-on-surface-variant line-clamp-3">Found peace in the gentle hum of the city tonight. The sound bath session really helped clear the mental fog...</p>
+</div>
+<div class="glass-card rounded-xxl p-lg">
+<div class="flex justify-between items-start mb-md">
+<div class="p-sm bg-secondary-fixed rounded-lg text-secondary">
+<span class="material-symbols-outlined">flare</span>
+</div>
+<span class="text-label-sm text-on-surface-variant">3 days ago</span>
+</div>
+<h4 class="font-headline-md text-primary mb-sm">Creative Spark</h4>
+<p class="text-body-md text-on-surface-variant line-clamp-3">Visualizing the flow during Vinyasa today brought so many new ideas for my painting project.</p>
+</div>
+</div>
+</div>
+<!-- Mood Tracker & Vibes Sidebar -->
+<div class="md:col-span-4 flex flex-col gap-lg">
+<div class="glass-card rounded-xxl p-xl">
+<h3 class="font-headline-md text-primary mb-lg">Vibe Tracker</h3>
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<span class="font-label-md">Calm</span>
+<div class="w-2/3 h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[85%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-label-md">Energy</span>
+<div class="w-2/3 h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[40%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-label-md">Focus</span>
+<div class="w-2/3 h-2 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-tertiary-container w-[65%]"></div>
+</div>
+</div>
+</div>
+<div class="mt-xl pt-lg border-t border-outline-variant/20">
+<p class="text-label-sm text-on-surface-variant italic mb-md">"The soul always knows what to do to heal itself. The challenge is to silence the mind."</p>
+</div>
+</div>
+<div class="glass-card rounded-xxl p-xl bg-gradient-to-br from-primary-container to-primary text-on-primary-container border-none shadow-lg">
+<h3 class="font-headline-md mb-md">Daily Intention</h3>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-4xl" data-weight="fill">lightbulb</span>
+<p class="font-body-lg font-semibold">Today I will cultivate gratitude for small wins.</p>
+</div>
+<button class="mt-lg w-full bg-white/20 hover:bg-white/30 backdrop-blur-md text-white py-sm rounded-lg transition-all font-label-md">Set New Goal</button>
+</div>
+</div>
+<!-- Mindful Moments Gallery -->
+<div class="md:col-span-12 mt-lg">
+<div class="flex justify-between items-end mb-xl">
+<div>
+<h2 class="font-headline-lg text-primary">Mindful Moments</h2>
+<p class="text-body-md text-on-surface-variant">A visual diary of your journey through light and breath.</p>
+</div>
+<button class="text-primary font-label-md flex items-center gap-xs hover:gap-sm transition-all">View Full Gallery <span class="material-symbols-outlined">arrow_forward</span></button>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md md:gap-lg">
+<div class="group relative aspect-square rounded-xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="A soft-focus minimalist photo of a single green leaf with dew drops, captured in early morning golden light, symbolizing growth and renewal in a zen-like wellness context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNISOp8M8QqpCTAWlWIQtdyDWM_ZCxAgSceqbZX6YwMsGH9sgI25jjb0knBUKFWcCqcH3E7ZUG_0tWvzctQFznKPeGzRmQUzJADjqtzb261BIUXMuCrsh2EonGrTbZ4YmbZBIWSG7AZGe_BMjNWSwVpOdkWfqe5HV2eIVj-e7p_XEYmjbRhHVf21iZJMPFYa8JOptvOzoGCsZJQxa7jIW_m_vKZ_Yt22PNgrbt7wFuDPK6DJl723BmYdClfq7mDmCn5MBcRz8"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl">favorite</span>
+</div>
+</div>
+<div class="group relative aspect-square rounded-xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Abstract art photography of incense smoke curling in the air against a deep purple background, soft textures and ethereal lighting creating a sense of meditation and spiritual space." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAP6JTsNz7ruQa4TNqySTe-jfD3poUd-KwHslEjEp-fqoqypZIsSio6ikzZFVz5oI-BLYy-wF_lXPfNzAx67uIKm70D5DZxiVPHvyZBT57QQ8dpaB9jnOXHcZ96XND2Y3qGrpcVfpQXs-boY-o99MLw7WAlaGOsZX37eEfIE23m-TMLZ4dq5SSIwrEOcTaO3fD06mi_4qb2AATbP0osq4oBQp7BAb3RImiN9nO7iTMnYLVKg3wrE1-6ikEID6cV2RERT1ogE1U"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl">favorite</span>
+</div>
+</div>
+<div class="group relative aspect-square rounded-xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="A top-down view of a steaming ceramic tea cup on a rustic wooden surface with dried lavender petals scattered around, evoking a warm, comforting atmosphere of slow living and mindfulness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-20Ahu8MLMlzRZSJkPc87BXAmejHn_5teqt4rTbynKZ5LiPrjeYiohYYzhdD84_8xfyppHI8WxkWWBXkTYRcw3HPnLWHjg-L1NszPxQ1N4V0oVM9-n3U-_jJZ2Q3eobl2H1gdXkYx-FZim7FTqNAnYgF2Ej7TIicxvwH1ND_QPbhxb-4a9EhWS0rT6ta8RTfmMZy2PVZJX7le5FKsf2MB34IJfxZAHzpATHYhtd77hefhe49rsxCIXr30BCBxaCdihkJJGm4"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl">favorite</span>
+</div>
+</div>
+<div class="group relative aspect-square rounded-xl overflow-hidden glass-card">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Close-up of a person's hands performing a mudra during meditation, with soft backlighting creating a halo effect, highlighting the peaceful and sacred nature of the practice." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBelR9U71OkX3LBAStZW4CwAEaD7JkbLnakqdWYLDT94Su942y7W3aBwjx6vfHrbvnjSCtutFF9DtZ1UOWOYUb9xG5Ek3FRMv4CHg2UXRJJYDeDdW6z5lNLwv0Gq0oUYSAMnReZYxMbZj6AkRFJz5yGydQ9YadAhFTukO4hcSYYanoQ4_cAfEzXdl76J6W9xX-AMTFksEo7n6nC0vrEdjzDoM3rO7117fD4OfyLdJtpwP9M2o1_Uj0WoUPmtiNSnzUR9cKPDug"/>
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-3xl">favorite</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- FAB -->
+<button class="fixed bottom-lg right-lg w-16 h-16 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center z-50 hover:scale-110 transition-all">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<footer class="bg-surface-container-high py-xxl mt-xxl border-t border-primary/5">
+<div class="max-w-container-max mx-auto px-gutter grid grid-cols-1 md:grid-cols-4 gap-xl">
+<div class="md:col-span-2">
+<div class="font-display-lg text-primary text-3xl tracking-tighter mb-md">andWeYOGa</div>
+<p class="text-body-md text-on-surface-variant max-w-sm">Designing digital sanctuaries for the modern practitioner. Find your balance, express your soul.</p>
+</div>
+<div>
+<h4 class="font-headline-md text-primary mb-lg">Navigate</h4>
+<ul class="space-y-md text-label-md text-on-surface-variant">
+<li><a class="hover:text-primary transition-colors" href="#">Our Story</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Instructor Tools</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Community Feed</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Support Portal</a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-headline-md text-primary mb-lg">Connect</h4>
+<div class="flex gap-md">
+<a class="p-sm bg-surface-container-low rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all" href="#"><span class="material-symbols-outlined">share</span></a>
+<a class="p-sm bg-surface-container-low rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all" href="#"><span class="material-symbols-outlined">alternate_email</span></a>
+</div>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-gutter mt-xxl pt-lg border-t border-outline-variant/30 text-center">
+<p class="text-label-sm text-on-surface-variant">© 2024 andWeYOGa. Built for the mindful mind.</p>
+</div>
+</footer>
+<script>
+        const accountCircle = document.querySelector('button.material-symbols-outlined.text-3xl');
+        const sideNav = document.getElementById('sideNav');
+        let isOpen = false;
+
+        accountCircle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isOpen = !isOpen;
+            sideNav.style.transform = isOpen ? 'translateX(0)' : 'translateX(100%)';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (isOpen && !sideNav.contains(e.target)) {
+                isOpen = false;
+                sideNav.style.transform = 'translateX(100%)';
+            }
+        });
+
+        // Simple scroll effect for header
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 50) {
+                nav.classList.add('py-sm');
+                nav.classList.remove('py-md');
+            } else {
+                nav.classList.add('py-md');
+                nav.classList.remove('py-sm');
+            }
+        });
+    </script>
+</body></html>

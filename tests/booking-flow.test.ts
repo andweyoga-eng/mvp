@@ -88,9 +88,14 @@ describe("memberBookingBodySchema (POST /api/bookings)", () => {
     assert.equal(result.success, false);
   });
 
-  it("old insertBookingSchema fails without userId (regression)", () => {
-    const result = insertBookingSchema.safeParse({ classId: "sess-1" });
-    assert.equal(result.success, false);
+  it("insertBookingSchema accepts guest checkout without userId", () => {
+    const result = insertBookingSchema.safeParse({
+      classId: "sess-1",
+      isGuestCheckout: true,
+      guestName: "Guest User",
+      guestEmail: "guest@example.com",
+    });
+    assert.equal(result.success, true);
   });
 
   it("old insertBookingSchema accepts classId + userId", () => {
