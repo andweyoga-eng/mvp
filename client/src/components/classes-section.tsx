@@ -103,11 +103,13 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
   }
 
   return (
-    <section id="teach" className="py-20 bg-muted">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4">and We Teach</h2>
-          <p className="text-xl text-purple-500 max-w-2xl mx-auto">
+    <section id="teach" className="bg-[#f4f1f8] py-16 md:py-20">
+      <div className="mx-auto w-full max-w-dz px-[clamp(1rem,4vw,1.5rem)]">
+        <div className="mb-10 text-center md:mb-12">
+          <h2 className="font-display text-[clamp(1.875rem,5vw,3.25rem)] font-bold tracking-tight text-primary">
+            and We <span className="font-accent italic font-normal text-dz-secondary">Flow</span>
+          </h2>
+          <p className="mx-auto mt-2.5 max-w-2xl text-dz-muted">
             Discover the perfect class for your practice level and goals
           </p>
         </div>
@@ -129,9 +131,12 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 md:gap-7">
             {classTypes?.map((classType) => (
-              <Card key={classType.id} className="bg-card rounded-lg overflow-hidden shadow-lg hover-scale">
+              <Card
+                key={classType.id}
+                className="overflow-hidden rounded-[22px] border border-dz-glass-border bg-white shadow-dz-ambient transition hover:-translate-y-1 hover:shadow-lg"
+              >
                 <div className="relative">
                   <img
                     src={classType.imageUrl || "/api/placeholder/600/300"}
@@ -140,34 +145,34 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                     data-testid={`class-image-${classType.id}`}
                   />
                   {!hasUpcomingSession(classType.id) && (
-                    <Badge className="absolute left-2 top-2 bg-amber-600 text-white">
+                    <Badge className="absolute left-3 top-3 bg-dz-secondary text-white">
                       Coming Soon
                     </Badge>
                   )}
                   {hasUpcomingSession(classType.id) && frequencyBadge(classType.id) && (
-                    <Badge className="absolute right-2 top-2 bg-[#3d1b80] text-white">
+                    <Badge className="absolute right-3 top-3 bg-primary text-white">
                       {frequencyBadge(classType.id)}
                     </Badge>
                   )}
                 </div>
-                <CardContent className="p-6">
+                <CardContent className="flex flex-1 flex-col p-6">
                   <h3
-                    className="text-2xl font-bold text-primary mb-2"
+                    className="mb-2 font-display text-2xl font-bold text-primary"
                     data-testid={`class-name-${classType.id}`}
                   >
                     {classType.name}
                   </h3>
-                  <p className="text-purple-600 mb-4" data-testid={`class-description-${classType.id}`}>
+                  <p className="mb-4 flex-1 text-sm text-dz-muted" data-testid={`class-description-${classType.id}`}>
                     {classType.description}
                   </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-secondary font-bold" data-testid={`class-price-${classType.id}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>
                       ₹{classType.price}/session
                     </span>
                     {hasUpcomingSession(classType.id) ? (
                       <Button
                         onClick={() => handleClassBooking(classType.id)}
-                        className="bg-primary hover:bg-primary/90 !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold"
+                        className="rounded-xl bg-primary px-4 font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90"
                         data-testid={`book-button-${classType.id}`}
                       >
                         Book Now
@@ -175,7 +180,7 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                     ) : (
                       <Button
                         onClick={() => setNotifyType(classType)}
-                        className="bg-[#bb5309] hover:bg-[#9a4508] !text-white px-4 py-2 rounded-full transition-all duration-200 font-bold"
+                        className="rounded-xl bg-dz-secondary px-4 font-semibold text-white hover:bg-dz-secondary/90"
                         data-testid={`notify-button-${classType.id}`}
                       >
                         Notify me

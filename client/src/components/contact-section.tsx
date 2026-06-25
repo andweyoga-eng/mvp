@@ -1,67 +1,51 @@
 import { Mail, Phone, Clock, Instagram } from "lucide-react";
+import { SectionHeading } from "@/components/digital-zen/section-heading";
+import { PageContainer } from "@/components/digital-zen/page-container";
+
+const contacts = [
+  { icon: Mail, label: "Email Us", value: "mudit@andweyoga.com" },
+  { icon: Phone, label: "Call Us", value: "+91 9513022331" },
+  { icon: Clock, label: "Business Hours", value: "9 AM - 5 PM IST" },
+  {
+    icon: Instagram,
+    label: "Follow Us",
+    value: "@andweyoga",
+    href: "https://www.instagram.com/andweyoga/",
+  },
+];
 
 export default function ContactSection() {
   return (
-    <section id="connect" className="py-20 bg-gradient-to-b from-purple-50 to-white">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4">and We Connect</h2>
-          <p className="text-lg text-purple-500 max-w-3xl mx-auto">
-            Ready to begin your journey? Connect with us for group sessions, personal training, or corporate bookings.
-          </p>
+    <section id="contact" className="bg-dz-surface py-16 md:py-20">
+      <PageContainer>
+        <SectionHeading
+          title="Let's"
+          accent="Connect"
+          subtitle="Ready to begin your journey? Reach out for group sessions, personal training, or corporate bookings."
+        />
+        <div className="mx-auto grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {contacts.map((item) => (
+            <div key={item.label} className="text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-white shadow-dz-primary">
+                <item.icon className="h-7 w-7" />
+              </div>
+              <h4 className="font-display text-lg font-semibold text-primary">{item.label}</h4>
+              {item.href ? (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1.5 inline-block text-sm text-dz-muted hover:text-primary"
+                >
+                  {item.value}
+                </a>
+              ) : (
+                <p className="mt-1.5 text-sm text-dz-muted">{item.value}</p>
+              )}
+            </div>
+          ))}
         </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
-          {/* Email Us */}
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center">
-              <Mail className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-primary mb-2">Email Us</h3>
-            <p className="text-purple-600 text-sm">
-              mudit@andweyoga.com
-            </p>
-          </div>
-
-          {/* Call Us */}
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center">
-              <Phone className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-primary mb-2">Call Us</h3>
-            <p className="text-purple-600 text-sm">
-              +91 9513022331
-            </p>
-          </div>
-
-          {/* Business Hours */}
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center">
-              <Clock className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-primary mb-2">Business Hours</h3>
-            <p className="text-purple-600 text-sm">
-              9 AM - 5 PM IST
-            </p>
-          </div>
-
-          {/* Follow Us */}
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 bg-primary rounded-full flex items-center justify-center">
-              <Instagram className="w-8 h-8 text-white" />
-            </div>
-            <h3 className="text-xl font-bold text-primary mb-2">Follow Us</h3>
-            <a 
-              href="https://www.instagram.com/andweyoga/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-purple-600 text-sm hover:text-purple-800 transition-colors"
-            >
-              @andweyoga
-            </a>
-          </div>
-        </div>
-      </div>
+      </PageContainer>
     </section>
   );
 }

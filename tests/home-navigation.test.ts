@@ -30,8 +30,9 @@ describe("home navigation", () => {
       join(root, "client/src/components/navigation.tsx"),
       "utf8",
     );
-    assert.match(source, /goToHomeSection\('care'\)/);
-    assert.match(source, /goToHomeSection\('connect'\)/);
+    assert.match(source, /id: "care"/);
+    assert.match(source, /id: "connect"/);
+    assert.match(source, /goToHomeSection\(link\.id\)/);
     assert.doesNotMatch(source, /scrollToSection/);
   });
 

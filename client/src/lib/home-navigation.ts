@@ -1,4 +1,4 @@
-const HEADER_HEIGHT = 64;
+const HEADER_HEIGHT = 76;
 
 export function isOnHomePage(): boolean {
   const path = window.location.pathname;

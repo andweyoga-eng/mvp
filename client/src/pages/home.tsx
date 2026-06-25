@@ -23,6 +23,15 @@ import {
 import { normalizeBookingIntent, scrollToBookingSection } from "@/lib/booking-flow";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
+
+/** Signed-in members complete checkout on the Reserve page; guests use the inline modal. */
+function reserveHref(intent: BookingIntent): string | null {
+  if (intent.sessionId) return `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=home`;
+  if (intent.classTypeId)
+    return `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=home`;
+  return null;
+}
 
 function parseMoodCaptureFromUrl(): { phase: MoodPhase; classId: string } | null {
   const params = new URLSearchParams(window.location.search);
@@ -44,6 +53,7 @@ function clearMoodCaptureUrl() {
 
 export default function Home() {
   const { user, isLoading: authLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
@@ -51,6 +61,12 @@ export default function Home() {
 
   const handleBookingOpen = (input?: string | BookingIntent) => {
     const intent = normalizeBookingIntent(input);
+    // Signed-in members go straight to the full-page Reserve checkout.
+    const href = reserveHref(intent);
+    if (user && href) {
+      setLocation(href);
+      return;
+    }
     setPendingBooking(intent);
     setBookingIntent(intent);
     setIsBookingModalOpen(true);
@@ -91,27 +107,34 @@ export default function Home() {
     if (!pending) return;
     if (!pending.sessionId && !pending.classTypeId && !pending.scrollTo) return;
     resumedBookingRef.current = true;
+    // A signed-in member resuming a booking finishes checkout on the Reserve page.
+    const href = reserveHref(pending);
+    if (href) {
+      clearPendingBooking();
+      setLocation(href);
+      return;
+    }
     setBookingIntent(pending);
     setIsBookingModalOpen(true);
     setTimeout(
       () => scrollToBookingSection(pending.scrollTo ?? (pending.sessionId ? "schedule" : "teach")),
       150,
     );
-  }, [user, authLoading]);
+  }, [user, authLoading, setLocation]);
 
   return (
-    <div className="min-h-screen bg-background pb-24 md:pb-0 pt-16 md:pt-0">
+    <div className="min-h-screen bg-dz-surface pb-24 md:pb-0">
       <Navigation onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })} />
       <HeroCarousel />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
       <ClassesSection onBookingClick={(intent) => handleBookingOpen(intent)} />
-      <AllySection />
       <CareSection />
       <VibeSection />
       <BelieveSection />
       <ConnectSection />
       <AboutSection />
       <StorySection />
+      <AllySection />
       <ContactSection />
       <Footer />
       <BookingModal

@@ -1,22 +1,23 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { Clock, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
 import {
   formatScheduleDayHeader,
   getRollingWeekDateRange,
 } from "@shared/schedule-display";
+import { SectionHeading } from "@/components/digital-zen/section-heading";
+import { GlassCard } from "@/components/digital-zen/glass-card";
+import { PageContainer } from "@/components/digital-zen/page-container";
 import hathaYogaImg from "@assets/hatha yoga_1756809174781.jpg";
 import hyyocrossImg from "@assets/Hyyocross_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
+import { cn } from "@/lib/utils";
 
 interface ClassType {
   id: string;
@@ -34,10 +35,7 @@ interface ScheduleDay {
     id: string;
     date: Date;
     classType: ClassType;
-    instructor: {
-      id: string;
-      name: string;
-    };
+    instructor: { id: string; name: string };
     currentBookings: number;
     maxCapacity: number;
     sessionFrequency?: string | null;
@@ -49,14 +47,62 @@ interface ScheduleSectionProps {
   onBookingClick: (classId?: string) => void;
 }
 
+const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] as const;
+
+/**
+ * Minimum number of cards required to render the "Available Today" carousel.
+ * Below this we hide the whole block so a lone card with empty space never shows.
+ */
+const MIN_AVAILABLE_TODAY_CARDS = 3;
+
+const CLASS_IMAGES: Record<string, string> = {
+  "Hatha Yoga": hathaYogaImg,
+  Hyyocross: hyyocrossImg,
+  Meditation: meditationImg,
+  "Sound Therapy": soundtherapyImg,
+};
+
+function classImageFor(name: string): string | undefined {
+  return CLASS_IMAGES[name];
+}
+
+function sameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function instructorInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps) {
-  const [selectedClass, setSelectedClass] = useState<ClassType | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const availCarouselRef = useRef<HTMLDivElement>(null);
+  const weeklyListRef = useRef<HTMLDivElement>(null);
+  const weeklyHeaderRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
+
   const { data: weeklySchedule, isLoading, error } = useQuery<ScheduleDay[]>({
-    queryKey: ['/api/schedule/week'],
+    queryKey: ["/api/schedule/week"],
     refetchInterval: 15000,
     refetchOnWindowFocus: true,
+  });
+
+  const { data: promotions } = useQuery<
+    Array<{ promotionId: string; position: number; session: ScheduleDay["classes"][number] }>
+  >({
+    queryKey: ["/api/carousel/promotions"],
+    refetchInterval: 30000,
   });
 
   const upcomingSchedule = useMemo(
@@ -66,253 +112,504 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
 
   const rollingWeek = useMemo(() => getRollingWeekDateRange(), []);
 
-  const getClassDescriptions = () => {
-    return {
-      "Hatha Yoga": {
-        description: "Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques. This gentle practice emphasizes alignment, flexibility, and mindfulness. Each pose is held for several breaths, allowing you to build strength and stability while learning proper form. Our certified instructors provide personalized guidance to ensure you feel comfortable and supported throughout your practice.",
-        imageUrl: hathaYogaImg
-      },
-      "Hyyocross": {
-        description: "A dynamic hybrid fitness experience combining yoga with cross-training elements including weights, aerobics, Zumba, and Bhangra. Yoga remains the foundation, but each class varies based on participant demographics and energy levels. This high-energy session builds strength, improves cardiovascular health, and enhances flexibility while keeping you engaged with diverse movement patterns.",
-        imageUrl: hyyocrossImg
-      },
-      "Meditation": {
-        description: "Find inner peace and mental clarity through guided meditation practices. These sessions focus on various techniques including mindfulness, breathwork, and visualization to reduce stress and enhance emotional well-being. Whether you're a beginner or experienced meditator, our tranquil environment and expert guidance will help you develop a deeper connection with yourself.",
-        imageUrl: meditationImg
-      },
-      "Sound Therapy": {
-        description: "Experience the healing power of sound through therapeutic vibrations using singing bowls, gongs, and crystal instruments. These sessions promote deep relaxation, stress recovery, and emotional healing. The resonant frequencies help balance your energy centers and create a meditative state that supports overall wellness and mental clarity.",
-        imageUrl: soundtherapyImg
-      }
-    };
-  };
+  const todaySessions = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = upcomingSchedule.find((d) => {
+      const first = d.classes[0];
+      return first ? sameCalendarDay(new Date(first.date), today) : false;
+    });
+    return day?.classes ?? [];
+  }, [upcomingSchedule]);
 
-  const formatTimeIST = (date: Date) => {
-    return new Date(date).toLocaleTimeString('en-IN', {
-      hour: 'numeric',
-      minute: '2-digit',
+  /**
+   * The cards shown in the "Available Today" carousel.
+   * When super admins have live promotions, those sessions are merged into
+   * today's sessions at their configured placement. Otherwise we fall back to
+   * the regular today's-sessions rotation.
+   */
+  const carouselSessions = useMemo(() => {
+    const active = promotions ?? [];
+    if (active.length === 0) return todaySessions;
+    const sorted = [...active].sort((a, b) => a.position - b.position);
+    const promotedIds = new Set(sorted.map((p) => p.session.id));
+    const base = todaySessions.filter((s) => !promotedIds.has(s.id));
+    for (const p of sorted) {
+      const idx = Math.min(Math.max(p.position, 0), base.length);
+      base.splice(idx, 0, p.session);
+    }
+    return base;
+  }, [promotions, todaySessions]);
+
+  const sessionsByDateKey = useMemo(() => {
+    const map = new Map<string, ScheduleDay["classes"]>();
+    for (const day of upcomingSchedule) {
+      const first = day.classes[0];
+      if (!first) continue;
+      const key = new Date(first.date).toDateString();
+      map.set(key, day.classes);
+    }
+    return map;
+  }, [upcomingSchedule]);
+
+  const formatTimeIST = (date: Date) =>
+    new Date(date).toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
       hour12: true,
-      timeZone: 'Asia/Kolkata'
+      timeZone: "Asia/Kolkata",
     });
+
+  const scrollCarousel = (dir: "left" | "right") => {
+    const el = availCarouselRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
   };
 
-  const formatLocalTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+  const jumpToWeeklyDay = (dateKey: string) => {
+    const header = weeklyHeaderRefs.current.get(dateKey);
+    if (!header) return;
+    header.scrollIntoView({ behavior: "smooth", block: "start" });
+    setHighlightedDayKey(dateKey);
+    window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
   };
 
-  const handleMoreClick = (classType: ClassType) => {
-    setSelectedClass(classType);
-    setIsModalOpen(true);
-  };
+  const calendarCells = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const startPad = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{
+      day: number | null;
+      date?: Date;
+      dateKey?: string;
+      hasSessions?: boolean;
+      soldOut?: boolean;
+      isToday?: boolean;
+      thumbnailUrl?: string;
+    }> = [];
 
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    setSelectedClass(null);
-  };
+    for (let i = 0; i < startPad; i++) cells.push({ day: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const key = date.toDateString();
+      const sessions = sessionsByDateKey.get(key) ?? [];
+      const hasSessions = sessions.length > 0;
+      const soldOut =
+        hasSessions && sessions.every((s) => s.currentBookings >= s.maxCapacity);
+      const thumbnailUrl = hasSessions
+        ? classImageFor(sessions[0].classType.name)
+        : undefined;
+      cells.push({
+        day: d,
+        date,
+        dateKey: key,
+        hasSessions,
+        soldOut,
+        isToday: sameCalendarDay(date, new Date()),
+        thumbnailUrl,
+      });
+    }
+    return cells;
+  }, [calendarMonth, sessionsByDateKey]);
+
+  const monthLabel = calendarMonth.toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const todayLabel = new Date().toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  });
+
+  const weeklyRows = useMemo(() => {
+    const rows: Array<
+      | { type: "header"; label: string; dateKey: string }
+      | {
+          type: "session";
+          title: string;
+          meta: string;
+          badge: string | null;
+          initials: string;
+          soldOut: boolean;
+          sessionId: string;
+          classType: ClassType;
+        }
+    > = [];
+    for (const day of upcomingSchedule) {
+      const first = day.classes[0];
+      if (!first) continue;
+      rows.push({
+        type: "header",
+        label: formatScheduleDayHeader(first.date),
+        dateKey: new Date(first.date).toDateString(),
+      });
+      for (const cls of day.classes) {
+        const soldOut = cls.currentBookings >= cls.maxCapacity;
+        rows.push({
+          type: "session",
+          title: cls.classType.name,
+          meta: `${formatTimeIST(cls.date)} · ${cls.instructor.name}`,
+          badge: getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode),
+          initials: instructorInitials(cls.instructor.name),
+          soldOut,
+          sessionId: cls.id,
+          classType: {
+            id: cls.classType.id,
+            name: cls.classType.name,
+            description: "",
+            duration: 60,
+            price: cls.classType.price,
+          },
+        });
+      }
+    }
+    return rows;
+  }, [upcomingSchedule]);
 
   if (error) {
     return (
-      <section id="schedule" className="py-20 bg-background">
-        <div className="container mx-auto px-4">
-          <div className="text-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-destructive mb-4">
-              Unable to Load Schedule
-            </h2>
-            <p className="text-xl text-purple-600">
-              Please try again later or contact support if the problem persists.
-            </p>
-          </div>
-        </div>
+      <section id="schedule" className="relative bg-dz-surface py-16 md:py-20">
+        <PageContainer className="text-center">
+          <h2 className="font-display text-3xl font-bold text-destructive">Unable to Load Schedule</h2>
+          <p className="mt-2 text-dz-muted">Please try again later.</p>
+        </PageContainer>
       </section>
     );
   }
 
   return (
-    <section id="schedule" className="py-20 bg-background">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4 text-center">
-            Week {rollingWeek.weekNumber} ({rollingWeek.label}) Schedule
-          </h2>
-          <p className="text-xl text-purple-500 max-w-2xl mx-auto">
-            Find the perfect time for your practice
-          </p>
-        </div>
+    <section id="schedule" className="relative bg-dz-surface py-12 md:py-20">
+      <div
+        className="pointer-events-none absolute right-[-8%] top-[6%] h-[520px] w-[520px] rounded-[60%_40%_30%_70%/60%_30%_70%_40%] bg-primary/5 blur-[80px]"
+        aria-hidden
+      />
+      <PageContainer className="relative">
+        <SectionHeading
+          title={`Week ${rollingWeek.weekNumber}`}
+          accent="Schedule"
+          subtitle={`Find the perfect time for your practice — ${rollingWeek.label}`}
+        />
 
-        <div className="max-w-4xl mx-auto">
-          <Card className="bg-card rounded-lg shadow-lg overflow-hidden">
-            <div className="bg-primary text-primary-foreground p-6 text-center">
-              <h3 className="text-2xl font-bold">This Week's Classes</h3>
+        {/* Available Today — only shown when enough cards exist to fill the first fold */}
+        {(isLoading || carouselSessions.length >= MIN_AVAILABLE_TODAY_CARDS) && (
+        <GlassCard className="mb-6 p-6">
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <div className="flex items-baseline gap-2.5">
+              <h3 className="font-display text-xl font-semibold text-foreground">Available Today</h3>
+              <span className="text-sm font-medium text-dz-muted">{todayLabel}</span>
             </div>
-            
-            <CardContent className="p-6">
-              {isLoading ? (
-                <div className="space-y-6">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <div key={index} className="border-b border-border pb-6 mb-6 last:border-b-0 last:mb-0">
-                      <Skeleton className="h-6 w-24 mb-4" />
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Skeleton className="h-20 w-full rounded-lg" />
-                        <Skeleton className="h-20 w-full rounded-lg" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : upcomingSchedule.length > 0 ? (
-                <div className="space-y-6">
-                  {upcomingSchedule.map((day) => (
-                    <div key={day.day} className="border-b border-border pb-6 mb-6 last:border-b-0 last:mb-0">
-                      <div className="mb-4 flex items-center gap-3">
-                        <div className="h-px flex-1 bg-border" />
-                        <p
-                          className="text-sm font-semibold text-primary tracking-wide px-2"
-                          data-testid={`schedule-day-${day.day}`}
-                        >
-                          {formatScheduleDayHeader(day.date)}
-                        </p>
-                        <div className="h-px flex-1 bg-border" />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {day.classes.map((cls) => {
-                          const descriptions = getClassDescriptions();
-                          const classDesc = descriptions[cls.classType.name as keyof typeof descriptions];
-                          return (
-                            <div key={cls.id} className="p-3 bg-card rounded-lg shadow-md border">
-                              {/* First Line: Heading and Instructor */}
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex-1">
-                                  <h5 className="text-base font-bold text-primary" data-testid={`class-name-${cls.id}`}>
-                                    {cls.classType.name}
-                                  </h5>
-                                  <p className="text-sm text-purple-600" data-testid={`instructor-${cls.id}`}>
-                                    With {cls.instructor.name}
-                                  </p>
-                                  {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode) && (
-                                    <Badge className="mt-1 bg-[#3d1b80] text-white">
-                                      {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode)}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="text-right">
-                                  <Tooltip>
-                                    <TooltipTrigger>
-                                      <div className="flex items-center gap-1 text-sm font-medium">
-                                        <Clock className="h-4 w-4" />
-                                        <span data-testid={`class-time-${cls.id}`}>
-                                          {formatTimeIST(cls.date)} IST
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Local time: {formatLocalTime(cls.date)}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              </div>
-                              
-                              {/* Second Line: Price, Spots, and Buttons */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                  <span className="text-lg font-bold text-primary">
-                                    ₹{cls.classType.price || (cls.classType.name === 'Hatha Yoga' ? 500 : cls.classType.name === 'Meditation' ? 400 : cls.classType.name === 'Sound Therapy' ? 800 : 600)}
-                                  </span>
-                                  <span className="text-xs text-purple-600" data-testid={`capacity-${cls.id}`}>
-                                    {cls.currentBookings}/{cls.maxCapacity} spots filled
-                                  </span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    onClick={() => handleMoreClick({
-                                      id: cls.classType.id,
-                                      name: cls.classType.name,
-                                      description: classDesc?.description || '',
-                                      duration: cls.classType.name === 'Meditation' ? 45 : 60,
-                                      price: cls.classType.price || (cls.classType.name === 'Hatha Yoga' ? 500 : cls.classType.name === 'Meditation' ? 400 : cls.classType.name === 'Sound Therapy' ? 800 : 600),
-                                      imageUrl: classDesc?.imageUrl
-                                    })}
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs border-primary text-primary hover:bg-primary hover:text-white font-bold"
-                                    data-testid={`more-info-${cls.id}`}
-                                  >
-                                    ...More
-                                  </Button>
-                                  <Button
-                                    onClick={() => onBookingClick(cls.id)}
-                                    size="sm"
-                                    className="bg-primary text-white font-bold hover:bg-primary/90 text-xs"
-                                    disabled={cls.currentBookings >= cls.maxCapacity}
-                                    data-testid={`book-class-${cls.id}`}
-                                  >
-                                    {cls.currentBookings >= cls.maxCapacity ? "Full" : "Book"}
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <h3 className="text-2xl font-semibold text-purple-600 mb-4">
-                    No upcoming classes this week
-                  </h3>
-                  <p className="text-purple-600">
-                    Please check back later for new sessions.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+            <span className="text-sm font-semibold text-primary">
+              {carouselSessions.length} live session{carouselSessions.length === 1 ? "" : "s"}
+            </span>
+          </div>
 
-      {/* Class Description Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-primary text-center">
-              {selectedClass?.name}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedClass && (
-            <div className="text-center space-y-4">
-              <img
-                src={selectedClass.imageUrl}
-                alt={selectedClass.name}
-                className="w-full h-48 object-cover rounded-lg mx-auto"
-                onError={(e) => {
-                  console.log('Image failed to load:', selectedClass.imageUrl);
-                  e.currentTarget.src = '/api/placeholder/400/300';
-                }}
-              />
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-primary">
-                  {selectedClass.name}
-                </h3>
-                <p className="text-lg font-semibold">
-                  Duration: {selectedClass.duration} minutes
-                </p>
-                <p className="text-xl font-bold text-primary">
-                  ₹{selectedClass.price}
-                </p>
-              </div>
-              <div className="text-center">
-                <p className="text-purple-600 leading-relaxed">
-                  {selectedClass.description}
-                </p>
+          {isLoading ? (
+            <div className="flex gap-4 overflow-hidden">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-64 w-[286px] shrink-0 rounded-2xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="relative px-8">
+              <button
+                type="button"
+                onClick={() => scrollCarousel("left")}
+                className="absolute left-0 top-1/2 z-[5] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-white/95 text-primary shadow-md transition hover:bg-primary hover:text-white"
+                aria-label="Previous sessions"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCarousel("right")}
+                className="absolute right-0 top-1/2 z-[5] flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-white/95 text-primary shadow-md transition hover:bg-primary hover:text-white"
+                aria-label="Next sessions"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <div
+                ref={availCarouselRef}
+                className="scrollbar-hide flex snap-x snap-proximity gap-4 overflow-x-auto pb-1"
+              >
+                {carouselSessions.map((cls) => {
+                  const imageUrl = classImageFor(cls.classType.name);
+                  const soldOut = cls.currentBookings >= cls.maxCapacity;
+                  return (
+                    <div
+                      key={cls.id}
+                      className="w-[286px] shrink-0 snap-start overflow-hidden rounded-2xl border border-transparent bg-muted transition hover:border-primary/15 hover:bg-white hover:shadow-dz-ambient"
+                    >
+                      <div
+                        className="relative flex h-32 items-center justify-center bg-gradient-to-br from-primary/20 to-dz-secondary/30"
+                        style={
+                          imageUrl
+                            ? {
+                                backgroundImage: `url(${imageUrl})`,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center",
+                              }
+                            : undefined
+                        }
+                      >
+                        {soldOut ? (
+                          <span className="absolute left-3 top-3 rounded-lg bg-destructive px-2.5 py-1 text-xs font-semibold text-white">
+                            Sold Out
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="p-4">
+                        <div className="mb-2.5 flex items-start justify-between gap-2">
+                          <div>
+                            <div className="mb-1 flex items-center gap-1 text-dz-secondary">
+                              <Clock className="h-4 w-4" />
+                              <span className="text-xs font-semibold">
+                                {formatTimeIST(cls.date)}
+                              </span>
+                            </div>
+                            <h4 className="font-display text-lg font-semibold">{cls.classType.name}</h4>
+                          </div>
+                          <span className="whitespace-nowrap font-bold text-primary">
+                            ₹{cls.classType.price}
+                          </span>
+                        </div>
+                        <div className="mb-3.5 flex items-center gap-2.5">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
+                            {instructorInitials(cls.instructor.name)}
+                          </div>
+                          <span className="text-sm text-dz-muted">{cls.instructor.name}</span>
+                        </div>
+                        <Button
+                          className="w-full rounded-xl bg-primary font-semibold shadow-dz-primary hover:bg-primary/90"
+                          disabled={soldOut}
+                          onClick={() => onBookingClick(cls.id)}
+                          data-testid={`book-class-${cls.id}`}
+                        >
+                          {soldOut ? "Sold Out" : "Book Now"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </GlassCard>
+        )}
+
+        <div className="flex flex-wrap items-stretch gap-6">
+          {/* Compact calendar */}
+          <GlassCard className="flex min-w-[min(100%,400px)] flex-1 flex-col p-4 md:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <h3 className="font-display text-lg font-semibold">{monthLabel}</h3>
+                <div className="flex gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCalendarMonth(
+                        (m) => new Date(m.getFullYear(), m.getMonth() - 1, 1),
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-dz-muted hover:bg-primary/5 hover:text-primary"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCalendarMonth(
+                        (m) => new Date(m.getFullYear(), m.getMonth() + 1, 1),
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-dz-muted hover:bg-primary/5 hover:text-primary"
+                    aria-label="Next month"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  setCalendarMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+                }}
+                className="rounded-full border border-primary/20 px-4 py-1.5 text-sm font-semibold text-primary hover:bg-primary/5"
+              >
+                Today
+              </button>
+            </div>
+            <div className="mb-1 grid grid-cols-7 border-b border-primary/5 pb-2 text-center">
+              {WEEKDAYS.map((d, i) => (
+                <div
+                  key={d}
+                  className={cn(
+                    "text-[10px] font-semibold tracking-wider",
+                    i >= 5 ? "text-dz-secondary" : "text-dz-muted",
+                  )}
+                >
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-y-1">
+              {calendarCells.map((cell, i) => {
+                if (cell.day == null) return <div key={i} className="min-h-[46px]" />;
+
+                if (!cell.hasSessions) {
+                  return (
+                    <div
+                      key={i}
+                      className="flex min-h-[46px] flex-col items-center justify-start py-1"
+                    >
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full text-sm",
+                          cell.isToday
+                            ? "bg-primary font-semibold text-white"
+                            : "text-foreground",
+                        )}
+                      >
+                        {cell.day}
+                      </span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={i}
+                    className="flex min-h-[46px] flex-col items-center justify-start py-1"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => cell.dateKey && jumpToWeeklyDay(cell.dateKey)}
+                      className="group flex flex-col items-center gap-1"
+                      aria-label={`View sessions on ${monthLabel} ${cell.day}`}
+                      data-testid={`calendar-day-${cell.day}`}
+                    >
+                      <span
+                        className={cn(
+                          "relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg border text-sm font-semibold leading-none transition",
+                          cell.isToday
+                            ? "border-primary bg-primary text-white"
+                            : "border-primary/40 text-foreground group-hover:border-primary",
+                        )}
+                      >
+                        {cell.thumbnailUrl && !cell.isToday ? (
+                          <img
+                            src={cell.thumbnailUrl}
+                            alt=""
+                            aria-hidden
+                            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-20"
+                          />
+                        ) : null}
+                        <span className="relative">{cell.day}</span>
+                      </span>
+                      {cell.soldOut ? (
+                        <span className="text-[8px] font-bold uppercase tracking-wide text-destructive">
+                          Sold out
+                        </span>
+                      ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-4 border-t border-primary/5 pt-3 text-xs text-dz-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Tap a day to view its sessions
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                Sold out
+              </span>
+            </div>
+          </GlassCard>
+
+          {/* Weekly schedule */}
+          <GlassCard className="flex min-w-[min(100%,400px)] flex-1 flex-col p-4 md:p-6">
+            <div className="mb-3.5 flex items-center justify-between">
+              <h3 className="font-display text-lg font-semibold">Weekly Schedule</h3>
+              <span className="text-xs font-medium text-dz-muted">All classes this week</span>
+            </div>
+            <div
+              ref={weeklyListRef}
+              className="max-h-[320px] flex-1 overflow-y-auto pr-2"
+            >
+              {isLoading ? (
+                <div className="space-y-3 p-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full rounded-xl" />
+                  ))}
+                </div>
+              ) : weeklyRows.length > 0 ? (
+                weeklyRows.map((row, i) =>
+                  row.type === "header" ? (
+                    <div
+                      key={`h-${i}`}
+                      ref={(el) => {
+                        if (el) weeklyHeaderRefs.current.set(row.dateKey, el);
+                        else weeklyHeaderRefs.current.delete(row.dateKey);
+                      }}
+                      className={cn(
+                        "sticky top-0 z-[1] border-b border-primary/5 bg-white/90 py-2 text-[11px] font-bold uppercase tracking-wider text-primary backdrop-blur-sm transition-colors",
+                        highlightedDayKey === row.dateKey &&
+                          "rounded-md bg-primary/10 px-2",
+                      )}
+                    >
+                      {row.label}
+                    </div>
+                  ) : (
+                    <div
+                      key={`s-${row.sessionId}-${i}`}
+                      className="flex items-center gap-3 border-b border-primary/5 py-2.5 last:border-0"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
+                        {row.initials}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={cn(
+                            "font-display text-sm font-semibold",
+                            row.soldOut ? "text-dz-muted line-through" : "text-foreground",
+                          )}
+                        >
+                          {row.title}
+                        </div>
+                        <div className="text-xs text-dz-muted">{row.meta}</div>
+                      </div>
+                      {row.badge ? (
+                        <Badge className="shrink-0 bg-primary text-white">{row.badge}</Badge>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
+                        disabled={row.soldOut}
+                        onClick={() => onBookingClick(row.sessionId)}
+                        data-testid={`book-class-${row.sessionId}`}
+                      >
+                        {row.soldOut ? "Full" : "Book"}
+                      </Button>
+                    </div>
+                  ),
+                )
+              ) : (
+                <p className="py-8 text-center text-sm text-dz-muted">No upcoming classes this week.</p>
+              )}
+            </div>
+          </GlassCard>
+        </div>
+      </PageContainer>
     </section>
   );
 }
