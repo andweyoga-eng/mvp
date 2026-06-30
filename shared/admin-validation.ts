@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { INSTRUCTOR_LICENSE_STATUSES } from "./instructor-compliance";
+import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "./schema";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -115,6 +116,7 @@ export const adminCreateClassTypeSchema = z.object({
     .min(1, "Duration must be at least 1 minute")
     .max(480, "Duration cannot exceed 8 hours"),
   imageUrl: optionalHttpsUrl,
+  intensity: z.enum(CLASS_INTENSITIES).default(DEFAULT_CLASS_INTENSITY),
 });
 
 export const adminCreateInstructorSchema = z.object({

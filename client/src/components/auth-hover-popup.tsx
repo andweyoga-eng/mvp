@@ -35,7 +35,8 @@ export function AuthChoiceDialog({
     } catch {
       /* ignore */
     }
-    window.location.href = "/api/auth/google";
+    // Pass the preference to the server so it can set a persistent vs session cookie.
+    window.location.href = `/api/auth/google?keep=${keepSignedIn ? "1" : "0"}`;
   };
 
   const handleContinueAsGuest = () => {

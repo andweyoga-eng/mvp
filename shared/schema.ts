@@ -29,6 +29,11 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Practice intensity used for filtering on the member Calendar. */
+export const CLASS_INTENSITIES = ["Gentle", "Moderate", "Dynamic", "Restorative"] as const;
+export type ClassIntensity = (typeof CLASS_INTENSITIES)[number];
+export const DEFAULT_CLASS_INTENSITY: ClassIntensity = "Moderate";
+
 export const classTypes = pgTable("class_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -36,6 +41,8 @@ export const classTypes = pgTable("class_types", {
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   duration: integer("duration").notNull(), // in minutes
   imageUrl: text("image_url"),
+  /** Gentle | Moderate | Dynamic | Restorative */
+  intensity: varchar("intensity", { length: 24 }).notNull().default(DEFAULT_CLASS_INTENSITY),
 });
 
 export const instructors = pgTable("instructors", {
@@ -113,6 +120,27 @@ export const classes = pgTable("classes", {
   seriesId: varchar("series_id"),
   externalProvider: varchar("external_provider", { length: 32 }),
   externalEventId: text("external_event_id"),
+});
+
+/**
+ * Manually curated "Available Today" carousel promotions (super admin only).
+ * When one or more promotions are live (enabled & now within [startAt, endAt]),
+ * the referenced sessions are merged into the home carousel at their `position`.
+ * When none are live the public site falls back to the regular today's sessions.
+ */
+export const carouselPromotions = pgTable("carousel_promotions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  classId: varchar("class_id").notNull().references(() => classes.id),
+  /** 0-based placement within the carousel rotation */
+  position: integer("position").notNull().default(0),
+  /** When the promotion goes live (date + time of making it live) */
+  startAt: timestamp("start_at").notNull(),
+  /** When the promotion expires */
+  endAt: timestamp("end_at").notNull(),
+  /** Manual on/off without deleting */
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const bookings = pgTable("bookings", {
@@ -372,7 +400,9 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   updatedAt: true,
 });
 
-export const insertClassTypeSchema = createInsertSchema(classTypes).omit({
+export const insertClassTypeSchema = createInsertSchema(classTypes, {
+  intensity: z.enum(CLASS_INTENSITIES).default(DEFAULT_CLASS_INTENSITY),
+}).omit({
   id: true,
 });
 
@@ -416,6 +446,29 @@ export const insertContactMessageSchema = createInsertSchema(contactMessages).om
   createdAt: true,
 });
 
+export const insertCarouselPromotionSchema = createInsertSchema(carouselPromotions, {
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+  position: z.coerce.number().int().min(0).max(99),
+})
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .refine((v) => v.endAt > v.startAt, {
+    message: "End time must be after the start time",
+    path: ["endAt"],
+  });
+
+export const updateCarouselPromotionSchema = createInsertSchema(carouselPromotions, {
+  startAt: z.coerce.date(),
+  endAt: z.coerce.date(),
+  position: z.coerce.number().int().min(0).max(99),
+})
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .partial()
+  .refine((v) => !(v.startAt && v.endAt) || v.endAt > v.startAt, {
+    message: "End time must be after the start time",
+    path: ["endAt"],
+  });
+
 // Original types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -438,6 +491,9 @@ export type MemberBookingBody = z.infer<typeof memberBookingBodySchema>;
 export type MemberPaymentAck = z.infer<typeof memberPaymentAckSchema>;
 export type PaymentQrCode = typeof paymentQrCodes.$inferSelect;
 export type InsertPaymentQrCode = z.infer<typeof insertPaymentQrCodeSchema>;
+export type CarouselPromotion = typeof carouselPromotions.$inferSelect;
+export type InsertCarouselPromotion = z.infer<typeof insertCarouselPromotionSchema>;
+export type UpdateCarouselPromotion = z.infer<typeof updateCarouselPromotionSchema>;
 export type ContactMessage = typeof contactMessages.$inferSelect;
 export type InsertContactMessage = z.infer<typeof insertContactMessageSchema>;
 

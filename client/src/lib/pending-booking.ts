@@ -5,7 +5,7 @@ export type BookingScrollTarget = "schedule" | "teach";
 export interface BookingIntent {
   /** Scheduled session id (from Week Schedule → Book). */
   sessionId?: string;
-  /** Class type id (from and We Teach → Book Now). */
+  /** Class type id (from and We Flow → Book Now). */
   classTypeId?: string;
   /** Where to scroll when reopening after login. */
   scrollTo?: BookingScrollTarget;

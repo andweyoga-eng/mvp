@@ -28,6 +28,7 @@ import { Plus, Pencil, Trash2, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/admin-api";
 import { FormErrorSummary } from "@/components/admin/field-error";
+import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "@shared/schema";
 
 export interface ClassType {
   id: string;
@@ -36,6 +37,7 @@ export interface ClassType {
   price: string;
   duration: number;
   imageUrl: string | null;
+  intensity: string;
 }
 
 type ClassTypeForm = {
@@ -44,6 +46,16 @@ type ClassTypeForm = {
   price: string;
   duration: string;
   imageUrl: string;
+  intensity: string;
+};
+
+const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
+  name: "",
+  description: "",
+  price: "",
+  duration: "60",
+  imageUrl: "",
+  intensity: DEFAULT_CLASS_INTENSITY,
 };
 
 function classTypeToForm(ct: ClassType): ClassTypeForm {
@@ -53,6 +65,7 @@ function classTypeToForm(ct: ClassType): ClassTypeForm {
     price: String(ct.price),
     duration: String(ct.duration),
     imageUrl: ct.imageUrl ?? "",
+    intensity: ct.intensity ?? DEFAULT_CLASS_INTENSITY,
   };
 }
 
@@ -122,13 +135,34 @@ function ClassTypeFormFields({
           {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
         </div>
       </div>
-      <div>
-        <Label>Image URL (optional)</Label>
-        <Input
-          value={form.imageUrl}
-          onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-          placeholder="https://..."
-        />
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>
+            Intensity <span className="text-red-500">*</span>
+          </Label>
+          <select
+            value={form.intensity}
+            onChange={(e) => setForm((f) => ({ ...f, intensity: e.target.value }))}
+            className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ${
+              errors.intensity ? "border-red-500" : "border-input"
+            }`}
+          >
+            {CLASS_INTENSITIES.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          {errors.intensity && <p className="text-xs text-red-500 mt-1">{errors.intensity}</p>}
+        </div>
+        <div>
+          <Label>Image URL (optional)</Label>
+          <Input
+            value={form.imageUrl}
+            onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
+            placeholder="https://..."
+          />
+        </div>
       </div>
     </>
   );
@@ -136,13 +170,7 @@ function ClassTypeFormFields({
 
 function CreateClassTypeButton({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<ClassTypeForm>({
-    name: "",
-    description: "",
-    price: "",
-    duration: "60",
-    imageUrl: "",
-  });
+  const [form, setForm] = useState<ClassTypeForm>(EMPTY_CLASS_TYPE_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
@@ -161,7 +189,7 @@ function CreateClassTypeButton({ onCreated }: { onCreated: () => void }) {
     },
     onSuccess: () => {
       toast({ title: "Session type created", description: `${form.name} added.` });
-      setForm({ name: "", description: "", price: "", duration: "60", imageUrl: "" });
+      setForm(EMPTY_CLASS_TYPE_FORM);
       setErrors({});
       setOpen(false);
       onCreated();
@@ -341,7 +369,7 @@ function DeleteClassTypeButton({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {classType.name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes the session type from the and We Teach catalogue. You cannot delete a type
+            This removes the session type from the and We Flow catalogue. You cannot delete a type
             that still has scheduled sessions.
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -413,6 +441,11 @@ export function SessionTypesPanel({
                     <Badge variant="outline" className="text-gray-600">
                       {ct.duration} min
                     </Badge>
+                    {ct.intensity && (
+                      <Badge variant="outline" className="text-[#9a4612] border-[#9a4612]">
+                        {ct.intensity}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <EditClassTypeDialog classType={ct} onUpdated={onDataChange} />

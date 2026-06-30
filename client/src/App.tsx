@@ -8,9 +8,17 @@ import { PaymentVerifiedProvider } from "@/components/payment-verified-provider"
 import { DeactivatedAccountDialog } from "@/components/deactivated-account-dialog";
 import { useState, useEffect, type ReactNode } from "react";
 import { AdminAuthProvider } from "@/components/admin-auth-provider";
+import { useLocation } from "wouter";
 import Home from "@/pages/home";
-import AccountApp from "@/pages/account";
-import MyAccountRedirect from "@/pages/my-account";
+import Dashboard from "@/pages/dashboard";
+import CalendarPage from "@/pages/calendar";
+import Workshops from "@/pages/workshops";
+import Trips from "@/pages/trips";
+import Explore from "@/pages/explore";
+import Emojou from "@/pages/emojou";
+import Reserve from "@/pages/reserve";
+import MyAccount from "@/pages/my-account";
+import { mapLegacyAccountUrl } from "@/lib/account-routes";
 import ResetPassword from "@/pages/reset-password";
 import AdminLogin from "@/pages/admin-login";
 import AdminDashboard from "@/pages/admin-dashboard";
@@ -18,16 +26,35 @@ import SessionFeedback from "@/pages/session-feedback";
 import NotFound from "@/pages/not-found";
 import { MemberPostAuthLanding } from "@/components/member-post-auth-landing";
 
+/** Legacy `/account/*` URLs now resolve to the single `/my-account` page anchor. */
+function LegacyAccountRedirect() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation(
+      mapLegacyAccountUrl(window.location.pathname, window.location.search),
+      { replace: true },
+    );
+  }, [setLocation]);
+  return null;
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/account/profile" component={AccountApp} />
-      <Route path="/account/health" component={AccountApp} />
-      <Route path="/account/subscriptions" component={AccountApp} />
-      <Route path="/account/payments" component={AccountApp} />
-      <Route path="/account" component={AccountApp} />
-      <Route path="/my-account" component={MyAccountRedirect} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/calendar" component={CalendarPage} />
+      <Route path="/workshops" component={Workshops} />
+      <Route path="/trips" component={Trips} />
+      <Route path="/explore" component={Explore} />
+      <Route path="/emojou" component={Emojou} />
+      <Route path="/reserve" component={Reserve} />
+      <Route path="/my-account" component={MyAccount} />
+      <Route path="/account/profile" component={LegacyAccountRedirect} />
+      <Route path="/account/health" component={LegacyAccountRedirect} />
+      <Route path="/account/subscriptions" component={LegacyAccountRedirect} />
+      <Route path="/account/payments" component={LegacyAccountRedirect} />
+      <Route path="/account" component={LegacyAccountRedirect} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/admin/dashboard" component={AdminDashboard} />

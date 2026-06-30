@@ -3,6 +3,12 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import type { Express } from 'express';
 import { storage } from './storage';
+import {
+  AUTH_COOKIE_NAME,
+  OAUTH_KEEP_COOKIE_NAME,
+  buildAuthCookieOptions,
+  keepSignedInFromValue,
+} from './auth-cookie';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -67,14 +73,13 @@ export function setupGoogleAuth(app: Express) {
       const user = req.user as any;
       const token = generateToken(user.id);
 
-      res.cookie('authToken', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      // Honour the "Keep me signed in" preference captured at sign-in start:
+      // ON → persistent 7-day cookie; OFF → session cookie cleared on browser close.
+      const keepSignedIn = keepSignedInFromValue((req as any).cookies?.[OAUTH_KEEP_COOKIE_NAME]);
+      res.clearCookie(OAUTH_KEEP_COOKIE_NAME);
+      res.cookie(AUTH_COOKIE_NAME, token, buildAuthCookieOptions(keepSignedIn));
 
-      res.redirect('/?loginSuccess=true');
+      res.redirect('/dashboard?loginSuccess=true');
     }
   );
 }

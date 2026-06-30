@@ -248,7 +248,7 @@ Run on localhost or Railway after deploy.
 - [ ] Open `https://<host>/admin/login` (or `http://localhost:3000/admin/login`)
 - [ ] Login succeeds; redirected to `/admin/dashboard`
 - [ ] **Users** tab loads; totals match complete/incomplete badges
-- [ ] **Class Types** — create entry; visible on public “and We Teach” section
+- [ ] **Class Types** — create entry; visible on public “and We Flow” section
 - [ ] **Instructors** — create entry
 - [ ] **Sessions** — create session (requires class type + instructor); visible on `GET /api/schedule/week`
 - [ ] Logout clears session; dashboard requires login again

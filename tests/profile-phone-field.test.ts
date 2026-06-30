@@ -35,24 +35,24 @@ describe("profile phone field mobile layout", () => {
     assert.match(source, /hidden truncate text-xs md:inline/);
   });
 
-  it("uses shortened placeholders and validation copy", () => {
+  it("uses shortened placeholders and validation copy on the account page", () => {
     const account = readFileSync(
-      join(root, "client/src/components/account/account-profile-page.tsx"),
+      join(root, "client/src/pages/my-account.tsx"),
       "utf8",
     );
-    assert.match(account, /placeholder="Mobile number"/);
-    assert.match(account, /placeholder="Secondary number"/);
-    assert.match(account, /placeholder="Emergency number"/);
+    assert.match(account, /placeholder: "Mobile number"/);
+    assert.match(account, /placeholder: "Secondary number"/);
+    assert.match(account, /placeholder: "Emergency number"/);
     assert.doesNotMatch(account, /Enter mobile number/);
     assert.doesNotMatch(account, /absolute -bottom-5/);
   });
 
-  it("submit button is full width with mobile height via sticky actions", () => {
+  it("contact info save button is full width", () => {
     const account = readFileSync(
-      join(root, "client/src/components/account/account-profile-page.tsx"),
+      join(root, "client/src/pages/my-account.tsx"),
       "utf8",
     );
-    assert.match(account, /AccountStickyActions/);
-    assert.match(account, /h-12 w-full/);
+    assert.match(account, /update-profile-button/);
+    assert.match(account, /w-full rounded-full bg-primary/);
   });
 });

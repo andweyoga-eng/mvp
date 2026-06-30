@@ -1,3 +1,5 @@
+import { navigate } from "wouter/use-browser-location";
+
 const HEADER_HEIGHT = 76;
 
 export function isOnHomePage(): boolean {
@@ -22,8 +24,11 @@ export function navigateToHomeSection(sectionId: string): void {
     return;
   }
 
+  // Client-side navigation (no full reload) so the auth session is preserved and
+  // the header doesn't flash the logged-out "Book Session" CTA. Home's mount
+  // effect reads the hash via applyHomeHashScroll() and scrolls to the section.
   const hash = sectionId === "home" ? "" : `#${sectionId}`;
-  window.location.assign(`/${hash}`);
+  navigate(`/${hash}`);
 }
 
 /** Apply `/#section` scroll after home mounts (e.g. from AWY menu on another page). */

@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  mapLegacyMyAccountUrl,
+  mapLegacyAccountUrl,
   MY_SESSIONS_UPCOMING_URL,
-  getAccountSectionFromPath,
+  myAccountHref,
+  anchorFromLegacyTab,
 } from "../client/src/lib/account-routes.ts";
 import {
   isProfileFieldsSectionComplete,
@@ -15,21 +16,27 @@ import { HEALTH_NO_CONCERNS_TEXT } from "../shared/health-disclosure.ts";
 
 const root = join(import.meta.dirname, "..");
 
-describe("account routes", () => {
-  it("maps legacy tab URLs to /account paths", () => {
-    assert.equal(mapLegacyMyAccountUrl("/my-account", "?tab=profile"), "/account/profile");
-    assert.equal(mapLegacyMyAccountUrl("/my-account", "?tab=health"), "/account/health");
-    assert.equal(
-      mapLegacyMyAccountUrl("/my-account", "?tab=sessions&sessionsTab=upcoming"),
-      "/account?sessionsTab=upcoming",
-    );
-    assert.equal(MY_SESSIONS_UPCOMING_URL, "/account?sessionsTab=upcoming");
+describe("account routes — single-page anchors", () => {
+  it("maps legacy /account paths to /my-account anchors", () => {
+    assert.equal(mapLegacyAccountUrl("/account/profile", ""), "/my-account#profile");
+    assert.equal(mapLegacyAccountUrl("/account/health", ""), "/my-account#health");
+    assert.equal(mapLegacyAccountUrl("/account/payments", ""), "/my-account#payments");
+    assert.equal(mapLegacyAccountUrl("/account/subscriptions", ""), "/my-account#payments");
+    assert.equal(mapLegacyAccountUrl("/account", "?sessionsTab=upcoming"), "/my-account#sessions");
   });
 
-  it("resolves account sections from pathname", () => {
-    assert.equal(getAccountSectionFromPath("/account"), "sessions");
-    assert.equal(getAccountSectionFromPath("/account/profile"), "profile");
-    assert.equal(getAccountSectionFromPath("/account/health"), "health");
+  it("maps legacy ?tab= query to the matching anchor", () => {
+    assert.equal(mapLegacyAccountUrl("/account", "?tab=profile"), "/my-account#profile");
+    assert.equal(mapLegacyAccountUrl("/account", "?tab=health"), "/my-account#health");
+    assert.equal(anchorFromLegacyTab("subscriptions"), "payments");
+    assert.equal(anchorFromLegacyTab("sessions"), "sessions");
+    assert.equal(anchorFromLegacyTab("bogus"), null);
+  });
+
+  it("exposes the canonical sessions deep-link", () => {
+    assert.equal(MY_SESSIONS_UPCOMING_URL, "/my-account#sessions");
+    assert.equal(myAccountHref("payments"), "/my-account#payments");
+    assert.equal(myAccountHref(), "/my-account");
   });
 });
 
@@ -47,41 +54,46 @@ describe("account section completeness", () => {
   it("tracks profile fields separately from health", () => {
     assert.equal(isProfileFieldsSectionComplete(base), true);
     assert.equal(isHealthSectionComplete(base), true);
-    assert.equal(
-      isProfileFieldsSectionComplete({ ...base, name: "" }),
-      false,
-    );
-    assert.equal(
-      isHealthSectionComplete({ ...base, healthUpdateText: "" }),
-      false,
-    );
+    assert.equal(isProfileFieldsSectionComplete({ ...base, name: "" }), false);
+    assert.equal(isHealthSectionComplete({ ...base, healthUpdateText: "" }), false);
   });
 });
 
-describe("account navigation UI structure", () => {
-  it("removes horizontal tabs from account pages", () => {
-    const accountApp = readFileSync(join(root, "client/src/pages/account/index.tsx"), "utf8");
-    assert.doesNotMatch(accountApp, /TabsList/);
-    assert.match(accountApp, /AccountHeader/);
-    assert.match(accountApp, /AccountSidebar/);
-  });
-
-  it("lists menu items in spec order with plural subscriptions label", () => {
-    const menu = readFileSync(
-      join(root, "client/src/components/account/account-menu-items.tsx"),
-      "utf8",
-    );
-    assert.match(menu, /My Profile/);
-    assert.match(menu, /Health Update/);
-    assert.match(menu, /My Subscriptions/);
-    assert.match(menu, /Payment History/);
-    assert.doesNotMatch(menu, /My Subscription[^s]/);
-  });
-
-  it("registers /account routes and legacy redirect", () => {
+describe("account migration — single page + one drawer", () => {
+  it("/my-account is a real page route and /account/* redirects to it", () => {
     const app = readFileSync(join(root, "client/src/App.tsx"), "utf8");
-    assert.match(app, /path="\/account\/profile"/);
-    assert.match(app, /path="\/my-account"/);
-    assert.match(app, /MyAccountRedirect/);
+    assert.match(app, /path="\/my-account" component=\{MyAccount\}/);
+    assert.match(app, /LegacyAccountRedirect/);
+    // The legacy multi-route account app must be gone.
+    assert.doesNotMatch(app, /AccountApp/);
+    assert.doesNotMatch(app, /MyAccountRedirect/);
+  });
+
+  it("My Account page renders all six section anchors", () => {
+    const page = readFileSync(join(root, "client/src/pages/my-account.tsx"), "utf8");
+    for (const id of ["profile", "health", "sessions", "payments", "preferences", "security"]) {
+      assert.match(page, new RegExp(`id="${id}"`), `missing #${id} section`);
+    }
+    // Payments is one section with Methods + History sub-tabs.
+    assert.match(page, /payments-tab-methods/);
+    assert.match(page, /payments-tab-history/);
+  });
+
+  it("the single account drawer deep-links into the page (no legacy routes)", () => {
+    const drawer = readFileSync(join(root, "client/src/components/account-drawer.tsx"), "utf8");
+    assert.match(drawer, /myAccountHref\("profile"\)/);
+    assert.match(drawer, /myAccountHref\("health"\)/);
+    assert.match(drawer, /myAccountHref\("sessions"\)/);
+    assert.match(drawer, /myAccountHref\("payments"\)/);
+    assert.match(drawer, /Book Sessions/);
+    assert.doesNotMatch(drawer, /My Subscriptions/);
+    assert.doesNotMatch(drawer, /\/account\//);
+  });
+
+  it("navigation no longer has the 'My Dashboard' dropdown — it opens the drawer", () => {
+    const nav = readFileSync(join(root, "client/src/components/navigation.tsx"), "utf8");
+    assert.match(nav, /AccountDrawer/);
+    assert.doesNotMatch(nav, /My Dashboard/);
+    assert.doesNotMatch(nav, /\/account\/profile/);
   });
 });

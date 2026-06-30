@@ -40,7 +40,7 @@ Implementation: per-number **Verify** controls are not rendered on My Account â†
 
 ### Milestone: Responsive Mobile Navigation Implementation âœ… LOCKED
 - **Desktop/Tablet Navigation**: Header remains at top with sandwich menu, logo, and "Book Session" button
-- **Mobile Navigation Layout**: Bottom navigation bar with sandwich menu (left), centered logo linked to "and We Teach", compact "Book" button (right)
+- **Mobile Navigation Layout**: Bottom navigation bar with sandwich menu (left), centered logo linked to "and We Flow", compact "Book" button (right)
 - **Mobile Menu Expansion**: Menu slides up from bottom with full-width overlay, centered text alignment
 - **Menu Item Ordering**: Exact sequence as specified - Care, Vibe, Teach, Story (orange), Believe, Connect, Meet Yogis
 - **Responsive Carousel**: Starts from top edge on mobile (no header space), maintains top margin on desktop/tablet

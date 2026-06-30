@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
-  Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield
+  Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
+  GalleryHorizontalEnd
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders } from "@/lib/admin-api";
@@ -28,6 +29,7 @@ import { CancelSessionDialog } from "@/components/admin/cancel-session-dialog";
 import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
+import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
 import {
   PaymentQrCodesPanel,
   QrCodesCreateToolbar,
@@ -69,7 +71,7 @@ interface AdminUsersResponse {
   users: User[]; totalUsers: number; completeProfiles: number; incompleteProfiles: number;
 }
 interface ClassType {
-  id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null;
+  id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null; intensity: string;
 }
 interface ClassSession {
   id: string;
@@ -668,6 +670,9 @@ export default function AdminDashboard() {
                     <TabsTrigger value="session-types" className={adminSectionTabTrigger}>
                       <Layers className="w-4 h-4 mr-2" /> Session Type
                     </TabsTrigger>
+                    <TabsTrigger value="carousel" className={adminSectionTabTrigger}>
+                      <GalleryHorizontalEnd className="w-4 h-4 mr-2" /> Carousel
+                    </TabsTrigger>
                     <TabsTrigger value="waitlisted-users" className={adminSectionTabTrigger}>
                       <Users className="w-4 h-4 mr-2" /> Wait Listed users
                     </TabsTrigger>
@@ -761,6 +766,10 @@ export default function AdminDashboard() {
                       isLoading={ctLoading}
                       onDataChange={() => refetchCT()}
                     />
+                  </TabsContent>
+
+                  <TabsContent value="carousel">
+                    <CarouselPromotionsPanel sessions={upcomingSessions} />
                   </TabsContent>
 
                   <TabsContent value="waitlisted-users">

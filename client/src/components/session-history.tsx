@@ -24,6 +24,8 @@ import {
   type MemberSession,
 } from '@/lib/member-sessions';
 import { Download, Video, ExternalLink } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getMeetJoinMessage } from '@shared/session-meet-access';
 import {
   canRetrySessionPayment,
   defaultPaymentRetryDeps,
@@ -228,25 +230,39 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
           {session.paymentStatus === "paid" &&
             session.googleMeetLink &&
             session.meetJoinState !== "hidden" && (
-              session.meetJoinState === "active" ? (
-                <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                  <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
-                    <Video className="h-3 w-3 mr-1" />
-                    Join session
-                  </a>
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs opacity-50 cursor-not-allowed"
-                  disabled
-                  title="Join opens 1 hour before the session and closes when the session ends"
-                >
-                  <Video className="h-3 w-3 mr-1" />
-                  Join session
-                </Button>
-              )
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {session.meetJoinState === "active" ? (
+                    <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                      <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
+                        <Video className="h-3 w-3 mr-1" />
+                        Join session
+                      </a>
+                    </Button>
+                  ) : (
+                    <span tabIndex={0} className="inline-flex">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs opacity-50 cursor-not-allowed"
+                        disabled
+                      >
+                        <Video className="h-3 w-3 mr-1" />
+                        Join session
+                      </Button>
+                    </span>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[260px] text-center">
+                  {getMeetJoinMessage({
+                    sessionStart: new Date(session.date),
+                    sessionDurationMinutes: session.sessionDurationMinutes ?? 60,
+                    isPaid:
+                      session.paymentStatus === "paid" || session.paymentStatus === "waived",
+                    hasMeetLink: !!session.googleMeetLink,
+                  })}
+                </TooltipContent>
+              </Tooltip>
             )}
           {session.invoiceUrl && (
             <Button asChild size="sm" variant="ghost" className="h-7 text-xs">

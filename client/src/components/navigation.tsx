@@ -1,27 +1,12 @@
 import { useState } from "react";
-import {
-  LogOut,
-  Settings,
-  AlertTriangle,
-  Sparkles,
-  ChevronDown,
-  Menu,
-  Grid3X3,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Sparkles, Menu, X } from "lucide-react";
 import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
-import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { AuthChoiceDialog } from "@/components/auth-hover-popup";
+import { AccountDrawer } from "@/components/account-drawer";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
@@ -42,9 +27,9 @@ const DRAWER_LINKS = [
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
-  const { user, logout } = useAuth();
-  const [, setLocation] = useLocation();
+  const { user, isLoading: authLoading } = useAuth();
   const { celebrationCount, openCelebrationFromMenu } = usePaymentVerifiedCelebrations();
 
   const isProfileComplete = isAuthUserProfileComplete(user);
@@ -102,50 +87,28 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           </a>
 
           <div className="relative flex flex-shrink-0 items-center">
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    className={`rounded-full px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-4 sm:text-sm ${
-                      !isProfileComplete
-                        ? "bg-orange-600 hover:bg-orange-700"
-                        : "bg-primary hover:bg-primary/90"
-                    }`}
-                    data-testid="nav-my-account"
-                  >
-                    {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
-                    My Account
-                    <ChevronDown className="ml-1 h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-52 rounded-2xl border-dz-glass-border bg-dz-surface/97 backdrop-blur-[20px]"
-                >
-                  <DropdownMenuItem
-                    onClick={() => setLocation("/dashboard")}
-                    data-testid="nav-dropdown-my-hub"
-                  >
-                    <Grid3X3 className="mr-2 h-4 w-4" />
-                    My Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setLocation("/account/profile")}
-                    data-testid="nav-dropdown-my-account"
-                  >
-                    <Settings className="mr-2 h-4 w-4" />
-                    My Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={logout}
-                    className="text-destructive focus:text-destructive"
-                    data-testid="nav-dropdown-sign-out"
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {authLoading ? (
+              // Hold the slot until auth resolves so we never flash the wrong CTA
+              // (e.g. "Book Session" before "My Account") on a cold load/refresh.
+              <div
+                className="h-9 w-[118px] rounded-full bg-primary/10 sm:w-[136px]"
+                aria-hidden
+                data-testid="nav-auth-loading"
+              />
+            ) : user ? (
+              <Button
+                className={`rounded-full px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-4 sm:text-sm ${
+                  !isProfileComplete
+                    ? "bg-orange-600 hover:bg-orange-700"
+                    : "bg-primary hover:bg-primary/90"
+                }`}
+                data-testid="nav-my-account"
+                onClick={() => setAccountDrawerOpen(true)}
+              >
+                {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
+                My Account
+                <Menu className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
             ) : (
               <>
                 <Button
@@ -218,6 +181,10 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
           </div>
         )}
       </aside>
+
+      {user && (
+        <AccountDrawer open={accountDrawerOpen} onOpenChange={setAccountDrawerOpen} />
+      )}
     </>
   );
 }

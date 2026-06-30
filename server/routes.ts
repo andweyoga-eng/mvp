@@ -30,6 +30,12 @@ import {
 } from "@shared/instructor-compliance";
 import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
 import {
+  OAUTH_KEEP_COOKIE_NAME,
+  buildAuthCookieOptions,
+  buildOAuthKeepCookieOptions,
+  keepSignedInFromValue,
+} from "./auth-cookie";
+import {
   buildInstructorVerifyEmailUrl,
   createInstructorEmailVerifiedHTML,
   createInstructorOtpPayload,
@@ -42,6 +48,8 @@ import {
   memberBookingBodySchema,
   memberPaymentAckSchema,
   insertContactMessageSchema,
+  insertCarouselPromotionSchema,
+  updateCarouselPromotionSchema,
   registerUserSchema,
   loginUserSchema,
   updateProfileSchema,
@@ -173,13 +181,10 @@ const adminLoginRateLimit = adminRateLimitMiddleware(30, 15 * 60 * 1000);
 // Helper: set auth cookie securely
 // SECURITY FIX 2: Tokens go into httpOnly cookies, not URLs.
 // ============================================================
-function setAuthCookie(res: Response, token: string) {
-  res.cookie('authToken', token, {
-    httpOnly: true,          // JS cannot read this cookie — prevents XSS token theft
-    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-    sameSite: 'lax',         // CSRF protection
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in ms
-  });
+function setAuthCookie(res: Response, token: string, persistent: boolean = true) {
+  // Token goes in an httpOnly cookie (not the URL) to prevent XSS token theft.
+  // "Keep me signed in" ON → persistent 7-day cookie; OFF → session cookie.
+  res.cookie('authToken', token, buildAuthCookieOptions(persistent));
 }
 
 /**
@@ -201,6 +206,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GOOGLE OAUTH ROUTES
   // ============================================================
   app.get('/api/auth/google', (req, res) => {
+    // "Keep me signed in" preference (default ON) is stashed in a short-lived
+    // cookie so the OAuth callback can choose a persistent vs session cookie.
+    const keepSignedIn = keepSignedInFromValue(req.query.keep);
+    res.cookie(OAUTH_KEEP_COOKIE_NAME, keepSignedIn ? '1' : '0', buildOAuthKeepCookieOptions());
     const redirectUri = googleOauthRedirectUri(req);
     const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
       `client_id=${process.env.GOOGLE_CLIENT_ID}&` +
@@ -269,10 +278,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = generateToken(user.id);
 
-      // SECURITY FIX 2: Set token as httpOnly cookie, NOT in URL
-      setAuthCookie(res, token);
+      // SECURITY FIX 2: Set token as httpOnly cookie, NOT in URL.
+      // Honour the "Keep me signed in" preference captured at sign-in start.
+      const keepSignedIn = keepSignedInFromValue(req.cookies?.[OAUTH_KEEP_COOKIE_NAME]);
+      res.clearCookie(OAUTH_KEEP_COOKIE_NAME);
+      setAuthCookie(res, token, keepSignedIn);
       await storage.linkGuestBookingsToUser(user.id, user.email);
-      res.redirect('/?loginSuccess=true');
+      res.redirect('/dashboard?loginSuccess=true');
     } catch (error) {
       console.error('Google OAuth callback error:', error);
       res.redirect('/?error=google_auth_failed');
@@ -668,6 +680,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/class-types/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const updates = adminCreateClassTypeSchema.partial().parse(req.body);
+      const existing = await storage.getClassType(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Class type not found" });
+      }
+      const updated = await storage.updateClassType(req.params.id, updates);
+      if (!updated) {
+        return res.status(500).json({ message: "Failed to update class type" });
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update class type" });
+    }
+  });
+
   // SECURITY (BUG-03 / SEC-01): requireSuperAdminAuth — only super_admin may
   // suspend, blacklist, or re-activate instructors. Regular admins get 403.
   app.patch(
@@ -767,6 +802,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Class type deleted" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete class type" });
+    }
+  });
+
+  // ============================================================
+  // CAROUSEL PROMOTIONS (super admin only)
+  // Curate which sessions fill the home "Available Today" carousel,
+  // their placement, and the live window (start/end date + time).
+  // ============================================================
+  async function summarizeCarouselPromotion(promotion: Awaited<ReturnType<typeof storage.getCarouselPromotion>>) {
+    if (!promotion) return null;
+    const cls = await storage.getClass(promotion.classId);
+    const classType = cls ? await storage.getClassType(cls.classTypeId) : undefined;
+    const instructor = cls ? await storage.getInstructor(cls.instructorId) : undefined;
+    return {
+      ...promotion,
+      session: cls
+        ? {
+            id: cls.id,
+            date: cls.date,
+            className: classType?.name ?? "Unknown session",
+            instructorName: instructor?.name ?? "Unknown instructor",
+          }
+        : null,
+    };
+  }
+
+  app.get("/api/admin/carousel-promotions", requireSuperAdminAuth, async (_req, res) => {
+    try {
+      const promotions = await storage.getCarouselPromotions();
+      const out = await Promise.all(promotions.map((p) => summarizeCarouselPromotion(p)));
+      res.json(out);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch carousel promotions" });
+    }
+  });
+
+  app.post("/api/admin/carousel-promotions", requireSuperAdminAuth, async (req, res) => {
+    try {
+      const data = insertCarouselPromotionSchema.parse(req.body);
+      const cls = await storage.getClass(data.classId);
+      if (!cls) {
+        return res.status(400).json({ message: "Selected session no longer exists" });
+      }
+      const created = await storage.createCarouselPromotion(data);
+      const summary = await summarizeCarouselPromotion(created);
+      res.status(201).json(summary);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to create carousel promotion" });
+    }
+  });
+
+  app.patch("/api/admin/carousel-promotions/:id", requireSuperAdminAuth, async (req, res) => {
+    try {
+      const updates = updateCarouselPromotionSchema.parse(req.body);
+      const existing = await storage.getCarouselPromotion(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ message: "Promotion not found" });
+      }
+      if (updates.classId) {
+        const cls = await storage.getClass(updates.classId);
+        if (!cls) {
+          return res.status(400).json({ message: "Selected session no longer exists" });
+        }
+      }
+      const updated = await storage.updateCarouselPromotion(req.params.id, updates);
+      const summary = await summarizeCarouselPromotion(updated);
+      res.json(summary);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update carousel promotion" });
+    }
+  });
+
+  app.delete("/api/admin/carousel-promotions/:id", requireSuperAdminAuth, async (req, res) => {
+    try {
+      const result = await storage.deleteCarouselPromotion(req.params.id);
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Cannot delete promotion" });
+      }
+      res.json({ message: "Promotion deleted" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete carousel promotion" });
     }
   });
 
@@ -1442,6 +1570,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public: live super-admin carousel promotions for the "Available Today" rotation.
+  // Returns enriched, bookable sessions ordered by their configured placement.
+  // When empty, the client falls back to the regular today's-sessions carousel.
+  app.get("/api/carousel/promotions", async (_req, res) => {
+    try {
+      const promotions = await storage.getActiveCarouselPromotions();
+      const out: Array<{ promotionId: string; position: number; session: unknown }> = [];
+      for (const promotion of promotions) {
+        const cls = await storage.getClass(promotion.classId);
+        const session = await enrichPublicClassForBooking(cls);
+        if (session) {
+          out.push({
+            promotionId: promotion.id,
+            position: promotion.position,
+            session,
+          });
+        }
+      }
+      res.json(out);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch carousel promotions" });
+    }
+  });
+
   // ============================================================
   // BOOKINGS
   // SECURITY FIX 3: GET all bookings now requires admin auth.
@@ -1595,7 +1747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: "email_registered",
             message:
               "This email is already registered with andWeYoga. Sign in to book this session.",
-            redirectTo: "/account",
+            redirectTo: "/my-account#profile",
           });
         }
 
@@ -1804,7 +1956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message:
             "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your health update in My Account before booking.",
           requiresHealthUpdate: true,
-          redirectTo: "/account",
+          redirectTo: "/my-account#profile",
           code: "profile_incomplete"
         });
       }
@@ -1880,7 +2032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({
           message: "You have already booked this session.",
           code: "already_booked",
-          redirectTo: "/account?sessionsTab=upcoming",
+          redirectTo: "/my-account#sessions",
         });
       }
 

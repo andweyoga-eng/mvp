@@ -25,6 +25,9 @@ import {
   type InsertSubscription,
   type PaymentQrCode,
   type InsertPaymentQrCode,
+  type CarouselPromotion,
+  type InsertCarouselPromotion,
+  type UpdateCarouselPromotion,
   type InsertAuditLog,
   users,
   classTypes,
@@ -38,6 +41,7 @@ import {
   adminProfiles,
   classTypeNotifyRequests,
   subscriptions,
+  carouselPromotions,
   sessionMoodCheckins,
   sessionJoinEvents,
   userSessionMappings,
@@ -214,6 +218,17 @@ export interface IStorage {
   deleteClassType(id: string): Promise<{ ok: boolean; message?: string }>;
   countClassesByClassTypeId(classTypeId: string): Promise<number>;
   getClassTypeIdsWithUpcomingSessions(): Promise<string[]>;
+
+  // Carousel promotions (super admin curated "Available Today" cards)
+  getCarouselPromotions(): Promise<CarouselPromotion[]>;
+  getActiveCarouselPromotions(now?: Date): Promise<CarouselPromotion[]>;
+  getCarouselPromotion(id: string): Promise<CarouselPromotion | undefined>;
+  createCarouselPromotion(promotion: InsertCarouselPromotion): Promise<CarouselPromotion>;
+  updateCarouselPromotion(
+    id: string,
+    updates: UpdateCarouselPromotion,
+  ): Promise<CarouselPromotion | undefined>;
+  deleteCarouselPromotion(id: string): Promise<{ ok: boolean; message?: string }>;
   createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest>;
   getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]>;
   updateNotifyRequestEmailStatus(
@@ -794,6 +809,93 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("[DB] Error loading class type availability:", error);
       return [];
+    }
+  }
+
+  // Carousel promotions
+  async getCarouselPromotions(): Promise<CarouselPromotion[]> {
+    try {
+      return await db
+        .select()
+        .from(carouselPromotions)
+        .orderBy(carouselPromotions.position, carouselPromotions.startAt);
+    } catch (error) {
+      console.error("[DB] Error getting carousel promotions:", error);
+      return [];
+    }
+  }
+
+  async getActiveCarouselPromotions(now: Date = new Date()): Promise<CarouselPromotion[]> {
+    try {
+      return await db
+        .select()
+        .from(carouselPromotions)
+        .where(
+          and(
+            eq(carouselPromotions.enabled, true),
+            lte(carouselPromotions.startAt, now),
+            gte(carouselPromotions.endAt, now),
+          ),
+        )
+        .orderBy(carouselPromotions.position, carouselPromotions.startAt);
+    } catch (error) {
+      console.error("[DB] Error getting active carousel promotions:", error);
+      return [];
+    }
+  }
+
+  async getCarouselPromotion(id: string): Promise<CarouselPromotion | undefined> {
+    try {
+      const [promotion] = await db
+        .select()
+        .from(carouselPromotions)
+        .where(eq(carouselPromotions.id, id));
+      return promotion || undefined;
+    } catch (error) {
+      console.error("[DB] Error getting carousel promotion:", error);
+      return undefined;
+    }
+  }
+
+  async createCarouselPromotion(
+    promotion: InsertCarouselPromotion,
+  ): Promise<CarouselPromotion> {
+    try {
+      const [created] = await db
+        .insert(carouselPromotions)
+        .values(promotion)
+        .returning();
+      return created;
+    } catch (error) {
+      console.error("[DB] Error creating carousel promotion:", error);
+      throw error;
+    }
+  }
+
+  async updateCarouselPromotion(
+    id: string,
+    updates: UpdateCarouselPromotion,
+  ): Promise<CarouselPromotion | undefined> {
+    try {
+      const [updated] = await db
+        .update(carouselPromotions)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(carouselPromotions.id, id))
+        .returning();
+      return updated || undefined;
+    } catch (error) {
+      console.error("[DB] Error updating carousel promotion:", error);
+      throw error;
+    }
+  }
+
+  async deleteCarouselPromotion(id: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      await db.delete(carouselPromotions).where(eq(carouselPromotions.id, id));
+      return { ok: true };
+    } catch (error) {
+      console.error("[DB] Error deleting carousel promotion:", error);
+      return { ok: false, message: "Failed to delete promotion" };
     }
   }
 

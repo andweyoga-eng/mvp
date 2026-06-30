@@ -79,7 +79,7 @@ interface BookingModalProps {
   onClose: () => void;
   /** Scheduled session id (from Week Schedule). */
   sessionId?: string | null;
-  /** Class type id (from and We Teach). User picks an upcoming session of this type. */
+  /** Class type id (from and We Flow). User picks an upcoming session of this type. */
   filterClassTypeId?: string | null;
 }
 
@@ -349,7 +349,7 @@ export default function BookingModal({
           throw {
             status: 409,
             requiresHealthUpdate: true,
-            redirectTo: (result.redirectTo as string) || "/account",
+            redirectTo: (result.redirectTo as string) || "/my-account#profile",
             message: (result.message as string) || "Health profile required",
             code: (result.code as string) || "profile_incomplete",
           };
@@ -503,7 +503,7 @@ export default function BookingModal({
         });
 
         setTimeout(() => {
-          setLocation(error.redirectTo || "/account");
+          setLocation(error.redirectTo || "/my-account#profile");
         }, 100);
 
         return;
@@ -607,7 +607,7 @@ export default function BookingModal({
       });
 
       setTimeout(() => {
-        setLocation("/account");
+        setLocation("/my-account#profile");
       }, 100);
 
       return;
@@ -700,7 +700,7 @@ export default function BookingModal({
 
   const handleGoToProfile = () => {
     onClose();
-    setLocation("/account");
+    setLocation("/my-account#profile");
   };
 
   const goToMySessionsUpcoming = () => {
