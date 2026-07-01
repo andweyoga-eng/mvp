@@ -22,6 +22,7 @@ import {
 } from "@/lib/pending-booking";
 import { normalizeBookingIntent, scrollToBookingSection } from "@/lib/booking-flow";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
+import { setGuestCheckoutToken } from "@/lib/guest-checkout";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 
@@ -56,6 +57,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
+  const [resumeBookingId, setResumeBookingId] = useState<string | null>(null);
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
   const resumedBookingRef = useRef(false);
 
@@ -76,6 +78,7 @@ export default function Home() {
   const handleBookingClose = () => {
     setIsBookingModalOpen(false);
     setBookingIntent({});
+    setResumeBookingId(null);
     clearPendingBooking();
   };
 
@@ -88,9 +91,35 @@ export default function Home() {
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    const resumeId = urlParams.get("resumeBookingId");
+    const guestToken = urlParams.get("guestCheckoutToken");
+
+    if (resumeId && guestToken) {
+      setGuestCheckoutToken(guestToken);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resumeBookingId");
+      url.searchParams.delete("guestCheckoutToken");
+      url.searchParams.delete("openBooking");
+      window.history.replaceState(
+        {},
+        document.title,
+        `${url.pathname}${url.search}${url.hash || ""}`,
+      );
+      setResumeBookingId(resumeId);
+      setIsBookingModalOpen(true);
+      setTimeout(() => scrollToBookingSection("schedule"), 100);
+      return;
+    }
+
     if (urlParams.get("openBooking") === "true") {
+      const sessionId = urlParams.get("sessionId");
+      const classTypeId = urlParams.get("classTypeId");
       window.history.replaceState({}, document.title, window.location.pathname);
-      handleBookingOpen({ scrollTo: "schedule" });
+      handleBookingOpen({
+        scrollTo: classTypeId ? "teach" : "schedule",
+        ...(sessionId ? { sessionId } : {}),
+        ...(classTypeId ? { classTypeId } : {}),
+      });
     }
   }, []);
 
@@ -102,24 +131,37 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (authLoading || !user || resumedBookingRef.current) return;
+    if (authLoading || resumedBookingRef.current) return;
     const pending = getPendingBooking();
     if (!pending) return;
     if (!pending.sessionId && !pending.classTypeId && !pending.scrollTo) return;
-    resumedBookingRef.current = true;
-    // A signed-in member resuming a booking finishes checkout on the Reserve page.
-    const href = reserveHref(pending);
-    if (href) {
-      clearPendingBooking();
-      setLocation(href);
+
+    if (user) {
+      resumedBookingRef.current = true;
+      const href = reserveHref(pending);
+      if (href) {
+        clearPendingBooking();
+        setLocation(href);
+        return;
+      }
+      setBookingIntent(pending);
+      setIsBookingModalOpen(true);
+      setTimeout(
+        () => scrollToBookingSection(pending.scrollTo ?? (pending.sessionId ? "schedule" : "teach")),
+        150,
+      );
       return;
     }
-    setBookingIntent(pending);
-    setIsBookingModalOpen(true);
-    setTimeout(
-      () => scrollToBookingSection(pending.scrollTo ?? (pending.sessionId ? "schedule" : "teach")),
-      150,
-    );
+
+    if (pending.sessionId || pending.classTypeId) {
+      resumedBookingRef.current = true;
+      setBookingIntent(pending);
+      setIsBookingModalOpen(true);
+      setTimeout(
+        () => scrollToBookingSection(pending.scrollTo ?? (pending.sessionId ? "schedule" : "teach")),
+        150,
+      );
+    }
   }, [user, authLoading, setLocation]);
 
   return (
@@ -142,6 +184,7 @@ export default function Home() {
         onClose={handleBookingClose}
         sessionId={bookingIntent.sessionId ?? null}
         filterClassTypeId={bookingIntent.classTypeId ?? null}
+        resumeBookingId={resumeBookingId}
       />
       {moodCapture && (
         <MoodCaptureDialog

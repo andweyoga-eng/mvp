@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,10 +28,18 @@ import {
 } from "@shared/booking-eligibility";
 import {
   sanitizeGuestPhoneInput,
-  validateOptionalGuestPhone,
+  validateRequiredGuestPhone,
 } from "@shared/guest-phone";
+import {
+  type GuestFieldKey,
+  validateGuestField,
+  validateGuestForm,
+  guestFormHasErrors,
+  firstGuestFormError,
+} from "@shared/guest-booking-form";
 import { MAX_TEXT_LENGTH, limitTextInput } from "@shared/input-limits";
 import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, User, ExternalLink, CreditCard, Sparkles, Video, Download } from "lucide-react";
@@ -69,10 +77,16 @@ import {
 } from "@/components/manual-payment-reference-block";
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { GuestBookingConfirmedContent } from "@/components/guest-booking-confirmed-dialog";
+import { LEGAL_CONFIG } from "@shared/legal-config";
+import { GUEST_QR_VERIFICATION_TAT } from "@shared/guest-booking-conflict";
+import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
+import { detectConsentLanguage } from "@/lib/consent-language";
+import { Link } from "wouter";
 import { AlreadyBookedSessionContent } from "@/components/already-booked-session-content";
 import { Badge } from "@/components/ui/badge";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
 import { DEFAULT_SESSION_DURATION_MINUTES } from "@shared/session-window";
+import { cn } from "@/lib/utils";
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -81,6 +95,8 @@ interface BookingModalProps {
   sessionId?: string | null;
   /** Class type id (from and We Flow). User picks an upcoming session of this type. */
   filterClassTypeId?: string | null;
+  /** Resume payment for an existing held booking (email retry link). */
+  resumeBookingId?: string | null;
 }
 
 interface EnrichedClass extends Class {
@@ -96,6 +112,7 @@ export default function BookingModal({
   onClose,
   sessionId,
   filterClassTypeId,
+  resumeBookingId,
 }: BookingModalProps) {
   const [formData, setFormData] = useState({
     classId: sessionId || "",
@@ -125,15 +142,67 @@ export default function BookingModal({
     email: "",
     phone: "",
   });
-  const [guestWaiverAccepted, setGuestWaiverAccepted] = useState(false);
+  const [guestFieldErrors, setGuestFieldErrors] = useState<Record<GuestFieldKey, string>>({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [guestFormBanner, setGuestFormBanner] = useState("");
+  const [guestConsent, setGuestConsent] = useState({
+    profile: false,
+    terms: false,
+    age: false,
+  });
+  const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
+  const guestCopy = CONSENT_COPY[consentLang];
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
   const [waitlistEmail, setWaitlistEmail] = useState("");
+  const resumeCheckoutStartedRef = useRef(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isLoading, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
 
+  const clearGuestFormError = () => setGuestFormBanner("");
+
+  const updateGuestField = (field: GuestFieldKey, value: string) => {
+    setGuestBooking((g) => ({ ...g, [field]: value }));
+    setGuestFieldErrors((e) => ({ ...e, [field]: "" }));
+    clearGuestFormError();
+  };
+
+  const handleGuestFieldBlur = (field: GuestFieldKey) => {
+    const message = validateGuestField(field, guestBooking[field]) ?? "";
+    setGuestFieldErrors((e) => ({ ...e, [field]: message }));
+  };
+
+  const showGuestCheckoutError = (
+    message: string,
+    fieldErrors?: Partial<Record<GuestFieldKey, string>>,
+  ) => {
+    setGuestFormBanner(message);
+    if (fieldErrors) {
+      setGuestFieldErrors((prev) => ({ ...prev, ...fieldErrors }));
+    }
+  };
+
+  const validateGuestCheckoutForm = (): boolean => {
+    const errors = validateGuestForm(guestBooking);
+    setGuestFieldErrors(errors);
+    if (guestFormHasErrors(errors)) {
+      showGuestCheckoutError(
+        firstGuestFormError(errors) ?? "Please fix the highlighted fields before continuing.",
+      );
+      return false;
+    }
+    if (!guestConsent.terms || !guestConsent.age) {
+      showGuestCheckoutError("Please accept the terms and age declaration before payment.");
+      return false;
+    }
+    clearGuestFormError();
+    return true;
+  };
   const isProfileComplete = isAuthUserProfileComplete(user);
   const hasPreselectedSession = !!sessionId;
   const hasClassTypeFilter = !!filterClassTypeId && !sessionId;
@@ -200,6 +269,13 @@ export default function BookingModal({
     ) &&
     displayClass.currentBookings < displayClass.maxCapacity;
 
+  const guestPreselectedLoading =
+    hasPreselectedSession &&
+    !hasClassTypeFilter &&
+    !displayClass &&
+    !selectedClassError &&
+    (selectedClassLoading || allClasses === undefined);
+
   const resolvedSessionId = formData.classId || sessionId || "";
   const selectedSession = useMemo(() => {
     if (!resolvedSessionId) return undefined;
@@ -246,9 +322,12 @@ export default function BookingModal({
       setAlreadyBookedView(null);
       setIsPaying(false);
       setPaymentPhase(null);
-      setGuestWaiverAccepted(false);
+      setGuestConsent({ profile: false, terms: false, age: false });
+      setGuestFieldErrors({ name: "", email: "", phone: "" });
+      setGuestFormBanner("");
       setNextBatchPrompt(null);
       setWaitlistEmail("");
+      resumeCheckoutStartedRef.current = false;
       clearGuestCheckoutSession();
       return;
     }
@@ -518,7 +597,9 @@ export default function BookingModal({
         setAlreadyBookedView({
           className: existing?.className ?? chosen?.classType.name ?? "This session",
           instructorName: existing?.instructorName ?? chosen?.instructor.name ?? "",
-          sessionDate: existing?.date ?? chosen?.date ?? new Date().toISOString(),
+          sessionDate: toSessionDateString(
+            existing?.date ?? chosen?.date ?? new Date().toISOString(),
+          ),
         });
         setPaymentStep("already-booked");
         return;
@@ -547,6 +628,9 @@ export default function BookingModal({
             title: "Payment pending",
             description: error.message,
           });
+          if (error.resumeCheckout.useRazorpayCheckout && error.resumeCheckout.razorpayKeyId) {
+            void startRazorpayCheckout(error.resumeCheckout);
+          }
           return;
         }
         toast({
@@ -578,6 +662,16 @@ export default function BookingModal({
             : null,
         );
         setPaymentStep("next-batch");
+        return;
+      }
+
+      if (!user) {
+        const message = error.message || "Please try again or contact support.";
+        const fieldErrors: Partial<Record<GuestFieldKey, string>> = {};
+        if (/email/i.test(message)) fieldErrors.email = message;
+        if (/phone|mobile/i.test(message)) fieldErrors.phone = message;
+        if (/name/i.test(message)) fieldErrors.name = message;
+        showGuestCheckoutError(message, fieldErrors);
         return;
       }
 
@@ -661,38 +755,18 @@ export default function BookingModal({
       return;
     }
 
-    const payload: Record<string, string> = { classId };
+    const payload: Record<string, string | boolean> = { classId };
     if (!user && canGuestBook) {
+      if (!validateGuestCheckoutForm()) return;
+      const phoneCheck = validateRequiredGuestPhone(guestBooking.phone);
+      if (!phoneCheck.ok) return;
       payload.guestName = guestBooking.name.trim();
       payload.guestEmail = guestBooking.email.trim();
-      if (!payload.guestName || !payload.guestEmail) {
-        toast({
-          title: "Guest details required",
-          description: "Please enter your name and email to continue.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const phoneCheck = validateOptionalGuestPhone(guestBooking.phone);
-      if (!phoneCheck.ok) {
-        toast({
-          title: "Invalid phone number",
-          description: phoneCheck.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      if (phoneCheck.normalized) {
-        payload.guestPhone = phoneCheck.normalized;
-      }
-      if (!guestWaiverAccepted) {
-        toast({
-          title: "Accept terms to continue",
-          description: "Please review and accept the terms and waiver before payment.",
-          variant: "destructive",
-        });
-        return;
-      }
+      payload.guestPhone = phoneCheck.normalized;
+      payload.guestConsentProfile = true;
+      payload.guestConsentTerms = true;
+      payload.guestConsentAge = true;
+      payload.consentVersion = LEGAL_CONFIG.documentVersion;
     }
 
     bookingMutation.mutate(payload as { classId: string });
@@ -829,14 +903,55 @@ export default function BookingModal({
           }
         },
         onDismiss: () => {
-          setIsPaying(false);
-          setPaymentPhase(null);
-          setPaymentStep("failed");
-          toast({
-            title: "Payment not completed",
-            description: "Your spot is still reserved. Retry payment when ready.",
-            variant: "destructive",
-          });
+          void (async () => {
+            setIsPaying(false);
+            setPaymentPhase(null);
+            try {
+              await fetch(`/api/bookings/${booking.bookingId}/cancel-checkout`, {
+                method: "PATCH",
+                credentials: "include",
+                headers: getCheckoutAuthHeaders({ preferGuest: true }),
+              });
+              clearGuestCheckoutSession();
+              setPaymentResult(null);
+              setPaymentStep("pay");
+              toast({
+                title: "Checkout cancelled",
+                description: "Your spot has been released.",
+              });
+            } catch {
+              toast({
+                title: "Could not cancel checkout",
+                variant: "destructive",
+              });
+            }
+          })();
+        },
+        onPaymentFailed: () => {
+          void (async () => {
+            setIsPaying(false);
+            setPaymentPhase(null);
+            setPaymentStep("failed");
+            try {
+              await fetch(`/api/bookings/${booking.bookingId}/payment-failed`, {
+                method: "POST",
+                credentials: "include",
+                headers: getCheckoutAuthHeaders({ preferGuest: true }),
+              });
+              toast({
+                title: "Payment failed",
+                description:
+                  "We've held your spot for 10 minutes. Check your email for a retry link.",
+                variant: "destructive",
+              });
+            } catch {
+              toast({
+                title: "Payment failed",
+                description: "Check your email or try again shortly.",
+                variant: "destructive",
+              });
+            }
+          })();
         },
       });
     } catch (err) {
@@ -850,6 +965,80 @@ export default function BookingModal({
       });
     }
   };
+
+  useEffect(() => {
+    if (!isOpen || !resumeBookingId) return;
+    if (resumeCheckoutStartedRef.current) return;
+    resumeCheckoutStartedRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/bookings/${resumeBookingId}/resume-checkout`, {
+          headers: getCheckoutAuthHeaders({ preferGuest: true }),
+          credentials: "include",
+        });
+        const data = await readResponseJson<
+          MemberBookingResult & {
+            guestName?: string;
+            guestEmail?: string;
+            guestPhone?: string;
+            message?: string;
+          }
+        >(res);
+        if (cancelled) return;
+
+        if (!res.ok) {
+          toast({
+            title: "Cannot resume payment",
+            description: data.message || "This checkout session is no longer available.",
+            variant: "destructive",
+          });
+          onClose();
+          return;
+        }
+
+        if (data.guestCheckoutToken) {
+          setAuthToken(null);
+          setGuestCheckoutToken(data.guestCheckoutToken);
+        }
+        if (data.guestName || data.guestEmail || data.guestPhone) {
+          setGuestBooking({
+            name: data.guestName ?? "",
+            email: data.guestEmail ?? "",
+            phone: data.guestPhone ?? "",
+          });
+        }
+        if (data.classId) {
+          setFormData({ classId: data.classId });
+        }
+        setPaymentResult(data);
+        setPaymentStep("pay");
+
+        if (data.useRazorpayCheckout && data.razorpayKeyId) {
+          await startRazorpayCheckout(data);
+        } else {
+          toast({
+            title: "Payment pending",
+            description: "Complete payment using the options shown.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          toast({
+            title: "Could not resume checkout",
+            description: "Please try the link again or contact support.",
+            variant: "destructive",
+          });
+          onClose();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, resumeBookingId, onClose, toast]);
 
   const formatClassOption = (cls: EnrichedClass) => {
     const date = new Date(cls.date);
@@ -1263,8 +1452,9 @@ export default function BookingModal({
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
                   toast({
                     title: "Reference submitted",
-                    description:
-                      "Our team will confirm within about 5 minutes during verification hours.",
+                    description: paymentResult.isGuestCheckout
+                      ? `We'll verify your payment within ${GUEST_QR_VERIFICATION_TAT} and send session details by email and SMS.`
+                      : "Our team will confirm within about 5 minutes during verification hours.",
                   });
                 }}
               />
@@ -1283,8 +1473,9 @@ export default function BookingModal({
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
                   toast({
                     title: "Reference submitted",
-                    description:
-                      "Our team will confirm within about 5 minutes during verification hours.",
+                    description: paymentResult.isGuestCheckout
+                      ? `We'll verify your payment within ${GUEST_QR_VERIFICATION_TAT} and send session details by email and SMS.`
+                      : "Our team will confirm within about 5 minutes during verification hours.",
                   });
                 }}
               />
@@ -1321,124 +1512,180 @@ export default function BookingModal({
 
         {!paymentResult && !user && !isLoading && paymentStep !== "email-registered" && (
           <div className="text-center space-y-4">
-            {hasPreselectedSession && displayClass && preselectedIsBookable && (
-              <div className="text-left p-3 bg-muted rounded-md">
-                <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(displayClass.date).toLocaleDateString()} at{" "}
-                  {new Date(displayClass.date).toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
-                  })}
-                </p>
+            {guestPreselectedLoading ? (
+              <div className="space-y-3 text-left" data-testid="guest-booking-loading">
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-24 w-full rounded-md" />
+                <Skeleton className="h-11 w-full rounded-xl" />
               </div>
-            )}
-            {hasClassTypeFilter && (
-              <p className="text-sm text-purple-600 font-medium">
-                {filteredClassType
-                  ? `Sign in to book ${filteredClassType.name}`
-                  : "Sign in to book this class type"}
-              </p>
-            )}
-            {canGuestBook && hasPreselectedSession && displayClass && !preselectedIsBookable ? (
-              <Alert className="border-amber-200 bg-amber-50 text-left">
-                <AlertDescription className="text-amber-950 text-sm">
-                  {isTrialOrDropIn(displayClass.sessionFrequency)
-                    ? TRIAL_DROPIN_MIDSESSION_MESSAGE
-                    : "This session is no longer open for booking. Please pick another time from the schedule."}
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {canGuestBook && hasPreselectedSession && displayClass && preselectedIsBookable ? (
+            ) : canGuestBook && hasPreselectedSession && displayClass && preselectedIsBookable ? (
               <div className="space-y-3 text-left">
+                <div className="text-left p-3 bg-muted rounded-md">
+                  <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(displayClass.date).toLocaleDateString()} at{" "}
+                    {new Date(displayClass.date).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
+                  </p>
+                </div>
                 <Alert className="border-green-200 bg-green-50">
                   <AlertDescription className="text-green-900">
                     Guest booking is enabled for this {guestEligibleSession?.sessionFrequency === "trial" ? "trial" : "drop-in"} session.
                   </AlertDescription>
                 </Alert>
+                {guestFormBanner ? (
+                  <Alert variant="destructive" data-testid="guest-form-error-banner">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{guestFormBanner}</AlertDescription>
+                  </Alert>
+                ) : null}
                 <div className="space-y-2">
-                  <Label>Name</Label>
+                  <Label>
+                    Name <span className="text-dz-secondary">*</span>
+                  </Label>
                   <Input
                     value={guestBooking.name}
                     maxLength={MAX_TEXT_LENGTH.guestName}
                     onChange={(e) =>
-                      setGuestBooking((g) => ({
-                        ...g,
-                        name: limitTextInput(e.target.value, MAX_TEXT_LENGTH.guestName),
-                      }))
+                      updateGuestField(
+                        "name",
+                        limitTextInput(e.target.value, MAX_TEXT_LENGTH.guestName),
+                      )
                     }
+                    onBlur={() => handleGuestFieldBlur("name")}
                     placeholder="Your name"
+                    aria-invalid={!!guestFieldErrors.name}
+                    className={cn(guestFieldErrors.name && "border-destructive focus-visible:ring-destructive")}
+                    data-testid="guest-name-input"
                   />
+                  {guestFieldErrors.name ? (
+                    <p className="text-xs text-destructive" data-testid="guest-name-error">
+                      {guestFieldErrors.name}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Email</Label>
+                  <Label>
+                    Email <span className="text-dz-secondary">*</span>
+                  </Label>
                   <Input
+                    type="email"
                     value={guestBooking.email}
                     maxLength={MAX_TEXT_LENGTH.guestEmail}
                     onChange={(e) =>
-                      setGuestBooking((g) => ({
-                        ...g,
-                        email: limitTextInput(e.target.value, MAX_TEXT_LENGTH.guestEmail),
-                      }))
+                      updateGuestField(
+                        "email",
+                        limitTextInput(e.target.value, MAX_TEXT_LENGTH.guestEmail),
+                      )
                     }
+                    onBlur={() => handleGuestFieldBlur("email")}
                     placeholder="you@example.com"
+                    aria-invalid={!!guestFieldErrors.email}
+                    className={cn(guestFieldErrors.email && "border-destructive focus-visible:ring-destructive")}
+                    data-testid="guest-email-input"
                   />
+                  {guestFieldErrors.email ? (
+                    <p className="text-xs text-destructive" data-testid="guest-email-error">
+                      {guestFieldErrors.email}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone (optional)</Label>
+                  <Label>
+                    Phone <span className="text-dz-secondary">*</span>
+                  </Label>
                   <Input
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel"
                     maxLength={10}
+                    required
                     value={guestBooking.phone}
-                    onChange={(e) =>
-                      setGuestBooking((g) => ({
-                        ...g,
-                        phone: sanitizeGuestPhoneInput(e.target.value),
-                      }))
-                    }
+                    onChange={(e) => updateGuestField("phone", sanitizeGuestPhoneInput(e.target.value))}
+                    onBlur={() => handleGuestFieldBlur("phone")}
                     placeholder="9876543210"
+                    aria-invalid={!!guestFieldErrors.phone}
+                    className={cn(guestFieldErrors.phone && "border-destructive focus-visible:ring-destructive")}
+                    data-testid="guest-phone-input"
                   />
-                  <p className="text-xs text-muted-foreground">10-digit mobile only, or leave blank.</p>
+                  {guestFieldErrors.phone ? (
+                    <p className="text-xs text-destructive" data-testid="guest-phone-error">
+                      {guestFieldErrors.phone}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">10-digit mobile number required.</p>
+                  )}
                 </div>
-                <div className="rounded-md border bg-muted/40 p-3 space-y-2">
-                  <p className="text-sm font-semibold text-primary">
-                    Terms, indemnity and safety waiver
-                  </p>
-                  <div className="max-h-28 overflow-y-auto text-xs text-muted-foreground space-y-2 pr-1">
-                    <p>
-                      By continuing as a guest, you confirm participation is voluntary, you are
-                      medically fit for yoga/fitness activity, and you will follow instructor
-                      safety guidance.
-                    </p>
-                    <p>
-                      You acknowledge and accept inherent physical risks including strain, injury,
-                      or other health incidents. andWeYoga / Ashtanga Welltech are not liable for
-                      losses from undisclosed conditions, non-compliance with instructions, or
-                      unsafe conduct.
-                    </p>
-                    <p>
-                      You agree to indemnify and hold harmless andWeYoga / Ashtanga Welltech,
-                      instructors, and venue partners against third-party claims arising from your
-                      participation, to the extent permitted by law.
-                    </p>
+                <div className="rounded-md border bg-muted/40 p-3 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-primary">{guestCopy.guestConsentHeading}</p>
+                    <div className="flex rounded-md border border-dz-glass-border bg-white/80 p-0.5 text-[10px] font-semibold">
+                      {(["en", "kn"] as const).map((code) => (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => setConsentLang(code)}
+                          className={cn(
+                            "rounded px-2 py-0.5",
+                            consentLang === code ? "bg-primary text-white" : "text-dz-muted",
+                          )}
+                        >
+                          {code === "en" ? "EN" : "ಕನ್ನಡ"}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={guestWaiverAccepted}
-                      onChange={(e) => setGuestWaiverAccepted(e.target.checked)}
-                    />
-                    I agree to terms and conditions
-                  </label>
+                  <ConsentCheckbox
+                    checked={guestConsent.profile}
+                    onChange={(v) => setGuestConsent((g) => ({ ...g, profile: v }))}
+                    testId="guest-consent-profile"
+                    label={guestCopy.cb1Profile}
+                    className="border-0 bg-transparent p-0"
+                  />
+                  <ConsentCheckbox
+                    checked={guestConsent.terms}
+                    onChange={(v) => setGuestConsent((g) => ({ ...g, terms: v }))}
+                    testId="guest-consent-terms"
+                    className="border-0 bg-transparent p-0"
+                    label={
+                      <>
+                        {guestCopy.cb2TermsPrefix}{" "}
+                        <Link href="/terms" target="_blank" className="text-primary underline">
+                          {guestCopy.cb2TermsLink}
+                        </Link>{" "}
+                        {guestCopy.cb2And}{" "}
+                        <Link href="/privacy" target="_blank" className="text-primary underline">
+                          {guestCopy.cb2PrivacyLink}
+                        </Link>
+                        .
+                      </>
+                    }
+                  />
+                  <ConsentCheckbox
+                    checked={guestConsent.age}
+                    onChange={(v) => setGuestConsent((g) => ({ ...g, age: v }))}
+                    testId="guest-consent-age"
+                    label={guestCopy.cb3Age}
+                    className="border-0 bg-transparent p-0"
+                  />
                 </div>
                 <div className="flex gap-2">
                   <Button
                     className="w-full bg-primary !text-white"
                     onClick={handleSubmit}
-                    disabled={!guestWaiverAccepted || bookingMutation.isPending || isPaying}
+                    disabled={
+                      !guestConsent.terms ||
+                      !guestConsent.age ||
+                      guestBooking.phone.length !== 10 ||
+                      bookingMutation.isPending ||
+                      isPaying
+                    }
                   >
                     {bookingMutation.isPending ? "Reserving…" : "Continue to payment"}
                   </Button>
@@ -1449,8 +1696,51 @@ export default function BookingModal({
                   </AuthHoverPopup>
                 </div>
               </div>
+            ) : canGuestBook && hasPreselectedSession && displayClass && !preselectedIsBookable ? (
+              <Alert className="border-amber-200 bg-amber-50 text-left">
+                <AlertDescription className="text-amber-950 text-sm">
+                  {isTrialOrDropIn(displayClass.sessionFrequency)
+                    ? TRIAL_DROPIN_MIDSESSION_MESSAGE
+                    : "This session is no longer open for booking. Please pick another time from the schedule."}
+                </AlertDescription>
+              </Alert>
+            ) : hasPreselectedSession && displayClass && !canGuestBook ? (
+              <>
+                <div className="text-left p-3 bg-muted rounded-md">
+                  <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(displayClass.date).toLocaleDateString()} at{" "}
+                    {new Date(displayClass.date).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
+                  </p>
+                </div>
+                <p className="text-purple-600 font-medium">
+                  Sign in to book this session, or choose a trial or drop-in from the schedule below.
+                </p>
+                <AuthHoverPopup onContinueAsGuest={() => onClose()}>
+                  <Button
+                    className="bg-primary !text-white font-bold hover:bg-primary/90 w-full"
+                    data-testid="show-auth-hover"
+                  >
+                    Sign In / Sign Up
+                  </Button>
+                </AuthHoverPopup>
+                <Button type="button" variant="outline" className="w-full" onClick={onClose}>
+                  View schedule
+                </Button>
+              </>
             ) : (
               <>
+                {hasClassTypeFilter && (
+                  <p className="text-sm text-purple-600 font-medium">
+                    {filteredClassType
+                      ? `Sign in to book ${filteredClassType.name}`
+                      : "Sign in to book this class type"}
+                  </p>
+                )}
                 <p className="text-purple-600 font-medium">
                   {hasClassTypeFilter
                     ? "Sign in to book this class type, or pick a trial or drop-in session from the schedule."
@@ -1632,4 +1922,8 @@ export default function BookingModal({
       </DialogContent>
     </Dialog>
   );
+}
+
+function toSessionDateString(value: string | Date): string {
+  return typeof value === "string" ? value : value.toISOString();
 }

@@ -34,6 +34,7 @@ export interface RazorpayCheckoutParams {
     razorpay_signature: string;
   }) => void;
   onDismiss?: () => void;
+  onPaymentFailed?: () => void;
   onModalOpen?: () => void;
 }
 
@@ -58,7 +59,7 @@ export async function openRazorpayCheckout(params: RazorpayCheckoutParams): Prom
 
   const rzp = new window.Razorpay(options);
   rzp.on("payment.failed", () => {
-    params.onDismiss?.();
+    params.onPaymentFailed?.();
   });
   params.onModalOpen?.();
   rzp.open();

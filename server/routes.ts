@@ -34,7 +34,25 @@ import {
   buildAuthCookieOptions,
   buildOAuthKeepCookieOptions,
   keepSignedInFromValue,
+  PENDING_CONSENT_COOKIE_NAME,
 } from "./auth-cookie";
+import {
+  registerConsentRoutes,
+  applyPendingConsentForNewUser,
+  parseGuestBookingConsent,
+  parseHealthDataConsent,
+} from "./consent-routes";
+import { consentVersion, requestMeta, validateOnboardingDateOfBirth } from "./consent";
+import { isAdult } from "@shared/consent";
+import { parseHealthHistory, type HealthHistoryEntry } from "@shared/health-disclosure";
+import {
+  applyPaymentFailureHold,
+  cancelGuestCheckout,
+  expirePaymentHolds,
+} from "./booking-hold-service";
+import { buildResumeCheckoutPayload, bookingCanResumeCheckout } from "./resume-checkout";
+import { paginationQuerySchema, buildPaginatedResponse } from "@shared/admin-pagination";
+import { REQUIRED_PHONE_MESSAGE } from "@shared/guest-phone";
 import {
   buildInstructorVerifyEmailUrl,
   createInstructorEmailVerifiedHTML,
@@ -46,6 +64,7 @@ import {
 import { MOOD_OPTIONS } from "@shared/mood";
 import {
   memberBookingBodySchema,
+  createBookingRequestSchema,
   memberPaymentAckSchema,
   insertContactMessageSchema,
   insertCarouselPromotionSchema,
@@ -84,7 +103,12 @@ import {
   createPasswordResetEmailHTML,
 } from "./email";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
-import { isUserActive, respondAccountDeactivated } from "./account";
+import {
+  ensureUserCanAuthenticate,
+  isUserActive,
+  respondAccountClosed,
+  respondAccountDeactivated,
+} from "./account";
 import { getConfiguredCheckoutGateway, rupeesToPaise } from "./payment-gateways";
 import {
   normalizeSessionPaymentMethod,
@@ -202,6 +226,8 @@ function googleOauthRedirectUri(req: Request): string {
 export async function registerRoutes(app: Express): Promise<Server> {
   await storageReady;
 
+  registerConsentRoutes(app);
+
   // ============================================================
   // GOOGLE OAUTH ROUTES
   // ============================================================
@@ -255,6 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!googleUser.email) throw new Error('Failed to get user email');
 
       let user = await storage.getUserByEmail(googleUser.email);
+      let isNewGoogleUser = false;
 
       if (!user) {
         const userData = {
@@ -270,10 +297,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         user = await storage.createUser(userData);
         await storage.verifyUserEmail(user.id);
+        isNewGoogleUser = true;
       }
 
       if (!isUserActive(user)) {
-        return res.redirect('/?error=account_deactivated');
+        const eligibility = await ensureUserCanAuthenticate(storage, user);
+        if (!eligibility.ok) {
+          return res.redirect('/?error=account_deactivated');
+        }
+        user = eligibility.user;
+        if (eligibility.treatAsNewUser) {
+          isNewGoogleUser = true;
+        }
       }
 
       const token = generateToken(user.id);
@@ -284,7 +319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.clearCookie(OAUTH_KEEP_COOKIE_NAME);
       setAuthCookie(res, token, keepSignedIn);
       await storage.linkGuestBookingsToUser(user.id, user.email);
-      res.redirect('/dashboard?loginSuccess=true');
+      res.redirect(`/dashboard?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
       res.redirect('/?error=google_auth_failed');
@@ -302,7 +337,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const existingUser = await storage.getUserByEmail(validatedData.email);
       if (existingUser) {
-        return res.status(400).json({ message: "User already exists with this email" });
+        if (isUserActive(existingUser)) {
+          return res.status(400).json({ message: "User already exists with this email" });
+        }
+        const hasErasure = await storage.userHasErasureHistory(existingUser.id);
+        if (!hasErasure) {
+          return res.status(400).json({ message: "User already exists with this email" });
+        }
+        await storage.reopenAccountAfterSelfErasure(existingUser.id);
+        const hashedPassword = await hashPassword(validatedData.password);
+        const verificationToken = generateExpiringVerificationToken();
+        const { confirmPassword, ...userData } = validatedData;
+        const updated = await storage.updateUser(existingUser.id, {
+          ...userData,
+          password: hashedPassword,
+          emailVerified: false,
+          emailVerificationToken: verificationToken,
+        } as any);
+        if (!updated) {
+          return res.status(500).json({ message: "Failed to register user" });
+        }
+        await storage.linkGuestBookingsToUser(updated.id, updated.email);
+
+        const logoUrl = `https://${process.env.ALLOWED_ORIGIN || req.get('host')}/attached_assets/Logo%20Transperent%20TM_1756454893432.png`;
+        const verificationUrl = `https://${process.env.ALLOWED_ORIGIN || req.get('host')}/api/auth/verify-email?token=${verificationToken}`;
+        const emailHTML = createVerificationEmailHTML(updated.name, verificationUrl, logoUrl);
+
+        const emailSent = await sendEmail({
+          to: updated.email,
+          subject: "Welcome back to andWeYoga - Verify Your Email",
+          html: emailHTML,
+        });
+
+        if (!emailSent) {
+          console.error('Failed to send verification email to:', updated.email);
+        }
+
+        return res.status(201).json({
+          message: "Registration successful! Please check your email to verify your account.",
+          user: {
+            id: updated.id,
+            email: updated.email,
+            name: updated.name,
+            emailVerified: updated.emailVerified,
+          },
+        });
       }
 
       const hashedPassword = await hashPassword(validatedData.password);
@@ -347,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = loginUserSchema.parse(req.body);
 
-      const user = await storage.getUserByEmail(validatedData.email);
+      let user = await storage.getUserByEmail(validatedData.email);
       if (!user) {
         // SECURITY FIX 6: Always return the same message regardless of
         // whether the email exists or the password is wrong.
@@ -365,7 +444,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!isUserActive(user)) {
-        return respondAccountDeactivated(res);
+        const eligibility = await ensureUserCanAuthenticate(storage, user);
+        if (!eligibility.ok) {
+          return respondAccountDeactivated(res);
+        }
+        user = eligibility.user;
       }
 
       const token = generateToken(user.id);
@@ -426,7 +509,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
       if (!isUserActive(user)) {
+        const hasErasure = await storage.userHasErasureHistory(user.id);
         res.clearCookie("authToken");
+        if (hasErasure) {
+          return respondAccountClosed(res);
+        }
         return respondAccountDeactivated(res);
       }
       const reconciled = await storage.recomputeProfileCompletionStatus(req.user!.id);
@@ -445,6 +532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emergencyMobileCountryCode: user.emergencyMobileCountryCode,
         healthUpdateText: user.healthUpdateText,
         healthDocumentUrls: user.healthDocumentUrls,
+        healthUpdateHistory: parseHealthHistory(user.healthUpdateHistory),
+        dateOfBirth: user.dateOfBirth,
         profileCompletionStatus: user.profileCompletionStatus,
         healthUpdateLastModified: user.healthUpdateLastModified
       });
@@ -455,7 +544,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/auth/profile", requireAuth, async (req: AuthRequest, res) => {
     try {
+      const existing = await storage.getUser(req.user!.id);
+      if (!existing) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       const validatedData = updateProfileSchema.parse(req.body);
+
+      if (validatedData.dateOfBirth) {
+        const ageCheck = validateOnboardingDateOfBirth(validatedData.dateOfBirth);
+        if (!ageCheck.ok) {
+          return res.status(400).json({
+            message:
+              ageCheck.code === "underage"
+                ? "You must be 18 or older to use andWeYoga."
+                : "Please enter a valid date of birth.",
+          });
+        }
+        if (existing.dateOfBirth && existing.dateOfBirth !== validatedData.dateOfBirth) {
+          return res.status(400).json({ message: "Date of birth cannot be changed once set." });
+        }
+      }
+
       let updatedUser = await storage.updateUser(req.user!.id, validatedData);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
@@ -478,6 +588,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode,
           healthUpdateText: updatedUser.healthUpdateText,
           healthDocumentUrls: updatedUser.healthDocumentUrls,
+          healthUpdateHistory: parseHealthHistory(updatedUser.healthUpdateHistory),
+          dateOfBirth: updatedUser.dateOfBirth,
           profileCompletionStatus: updatedUser.profileCompletionStatus,
           healthUpdateLastModified: updatedUser.healthUpdateLastModified,
         }
@@ -503,7 +615,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found' });
       }
 
+      if (existing.dateOfBirth) {
+        if (!isAdult(existing.dateOfBirth)) {
+          return res.status(403).json({
+            error: "Health data cannot be collected for accounts that do not meet the age requirement.",
+          });
+        }
+      }
+
+      const hasHealthConsent = await storage.userHasActiveConsent(userId, "health_data");
+      if (!hasHealthConsent) {
+        try {
+          parseHealthDataConsent(req.body);
+        } catch {
+          return res.status(400).json({
+            error: "Health data consent is required before saving health information.",
+            code: "health_consent_required",
+          });
+        }
+      }
+
       const healthUpdateData = healthUpdateSchema.parse(req.body);
+      const newText = healthUpdateData.healthUpdateText.trim();
+      const existingText = (existing.healthUpdateText ?? "").trim();
+      let healthUpdateHistory = parseHealthHistory(existing.healthUpdateHistory);
+
+      if (existingText && existingText !== newText) {
+        const archived: HealthHistoryEntry = {
+          text: existing.healthUpdateText!,
+          savedAt:
+            existing.healthUpdateLastModified instanceof Date
+              ? existing.healthUpdateLastModified.toISOString()
+              : typeof existing.healthUpdateLastModified === "string"
+                ? existing.healthUpdateLastModified
+                : new Date().toISOString(),
+          documentUrls: existing.healthDocumentUrls ?? [],
+        };
+        healthUpdateHistory = [archived, ...healthUpdateHistory].slice(0, 5);
+      }
+
       const mergedForStatus = {
         ...existing,
         healthUpdateText: healthUpdateData.healthUpdateText,
@@ -515,12 +665,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedUser = await storage.updateUserHealthData(userId, {
         healthUpdateText: healthUpdateData.healthUpdateText,
         healthDocumentUrls: healthUpdateData.healthDocumentUrls || [],
+        healthUpdateHistory,
         profileCompletionStatus,
         healthUpdateLastModified: new Date().toISOString()
       });
 
       if (!updatedUser) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (!hasHealthConsent) {
+        const meta = requestMeta(req);
+        await storage.insertConsentLog({
+          userId,
+          consentType: "health_data",
+          action: "opt_in",
+          consentVersion: consentVersion(),
+          ...meta,
+        });
       }
 
       res.json({
@@ -925,10 +1087,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/instructors", requireAdminAuth, async (_req, res) => {
+  app.get("/api/admin/instructors", requireAdminAuth, async (req, res) => {
     try {
-      const instructors = await storage.getAllInstructors();
-      res.json(instructors);
+      const { page, pageSize } = paginationQuerySchema.parse(req.query);
+      const { rows, total } = await storage.getAllInstructorsPaginated(page, pageSize);
+      res.json(buildPaginatedResponse(rows, total, page, pageSize));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch instructors" });
     }
@@ -1542,7 +1705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const dayClasses = await storage.getClassesByDate(currentDay);
         const enrichedClasses = (
           await Promise.all(dayClasses.map((cls) => enrichPublicClassForBooking(cls)))
-        ).filter(Boolean);
+        ).filter((cls): cls is NonNullable<typeof cls> => cls != null);
 
         const now = Date.now();
         const upcomingClasses = enrichedClasses
@@ -1603,8 +1766,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY FIX 3: Admin only — full booking list
   app.get("/api/bookings", requireAdminAuth, async (req, res) => {
     try {
-      const bookings = await storage.getAllBookings();
-      res.json(bookings);
+      const { page, pageSize } = paginationQuerySchema.parse(req.query);
+      const { rows, total } = await storage.getAllBookingsPaginated(page, pageSize);
+      res.json(buildPaginatedResponse(rows, total, page, pageSize));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch bookings" });
     }
@@ -1690,26 +1854,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /** Resume Razorpay checkout for a held pending/failed booking (email retry links). */
+  app.get("/api/bookings/:id/resume-checkout", requireBookingAuth, async (req: AuthRequest, res) => {
+    try {
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      if (!canAccessBooking(req, booking)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const cls = await storage.getClass(booking.classId);
+      if (!cls) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+
+      if (!bookingCanResumeCheckout(booking, cls)) {
+        return res.status(409).json({
+          code: "checkout_not_resumable",
+          message: "This payment hold has expired or checkout can no longer be resumed.",
+        });
+      }
+
+      const classType = await storage.getClassType(cls.classTypeId);
+      const instructor = await storage.getInstructor(cls.instructorId);
+      res.json(
+        buildResumeCheckoutPayload({
+          booking,
+          cls,
+          classType,
+          instructor,
+        }),
+      );
+    } catch {
+      res.status(500).json({ message: "Failed to load checkout" });
+    }
+  });
+
+  /** Guest voluntarily exits Razorpay checkout — release spot immediately (SPEC-02). */
+  app.patch("/api/bookings/:id/cancel-checkout", requireBookingAuth, async (req: AuthRequest, res) => {
+    try {
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      if (!canAccessBooking(req, booking)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const updated = await cancelGuestCheckout(booking.id);
+      res.json({ booking: updated, message: "Checkout cancelled; your spot has been released." });
+    } catch {
+      res.status(500).json({ message: "Failed to cancel checkout" });
+    }
+  });
+
+  /** Gateway payment failure — 10-minute hold + guest notification (SPEC-01). */
+  app.post("/api/bookings/:id/payment-failed", requireBookingAuth, async (req: AuthRequest, res) => {
+    try {
+      const booking = await storage.getBooking(req.params.id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+      if (!canAccessBooking(req, booking)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const updated = await applyPaymentFailureHold(booking.id);
+      res.json({ booking: updated, message: "Payment hold applied." });
+    } catch {
+      res.status(500).json({ message: "Failed to apply payment hold" });
+    }
+  });
+
   app.post("/api/bookings", optionalAuth, async (req: any, res) => {
     try {
-      const payload = z
-        .object({
-          classId: z.string().min(1),
-          guestEmail: z.string().trim().email().max(120).optional(),
-          guestName: z.string().trim().min(1).max(80).optional(),
-          guestPhone: z
-            .string()
-            .optional()
-            .transform((v) => (v ?? "").replace(/\D/g, "").slice(0, 10)),
-        })
-        .refine(
-          (data) => !data.guestPhone || data.guestPhone.length === 10,
-          {
-            message: "Guest phone must be exactly 10 digits, or omitted.",
-            path: ["guestPhone"],
-          },
-        )
-        .parse(req.body);
+      const payload = createBookingRequestSchema.parse(req.body);
       const { classId } = payload;
 
       const cls = await storage.getClass(classId);
@@ -1739,7 +1958,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const guestEmail = payload.guestEmail.toLowerCase().trim();
         const guestName = payload.guestName.trim();
-        const guestPhone = payload.guestPhone ?? null;
+        if (!payload.guestPhone) {
+          return res.status(400).json({ message: REQUIRED_PHONE_MESSAGE });
+        }
+        const guestPhone = payload.guestPhone;
+
+        try {
+          parseGuestBookingConsent({
+            guestConsentProfile: payload.guestConsentProfile,
+            guestConsentTerms: payload.guestConsentTerms,
+            guestConsentAge: payload.guestConsentAge,
+            consentVersion: payload.consentVersion ?? consentVersion(),
+          });
+        } catch {
+          return res.status(400).json({
+            message: "Guest booking requires profile, terms, and age declaration consent.",
+            code: "guest_consent_required",
+          });
+        }
 
         const existingMember = await storage.getUserByEmail(guestEmail);
         if (existingMember) {
@@ -1783,28 +2019,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const existing = guestConflict.booking;
             const classTypeResume = await storage.getClassType(cls.classTypeId);
             const instructorResume = await storage.getInstructor(cls.instructorId);
-            const resumeMethod = normalizeSessionPaymentMethod(
-              existing.paymentMethod ?? cls.paymentMethod,
-            );
-            const resumeGateway = getConfiguredCheckoutGateway();
-            const resumeHasPrice =
-              classTypeResume?.price != null &&
-              classTypeResume.price !== "" &&
-              parseFloat(String(classTypeResume.price)) > 0;
-            const resumeCheckoutEnabled =
-              resumeHasPrice && usesHostedCheckout(resumeMethod) && !!resumeGateway;
-            resumeCheckout = {
-              bookingId: existing.id,
-              classId: cls.id,
-              className: classTypeResume?.name ?? "Yoga Session",
-              instructorName: instructorResume?.name ?? "",
-              sessionDate: cls.date,
-              price: classTypeResume?.price ?? null,
-              useRazorpayCheckout: resumeCheckoutEnabled,
-              razorpayKeyId: resumeCheckoutEnabled ? resumeGateway!.getPublicKeyId() : null,
-              isGuestCheckout: true,
-              guestCheckoutToken: generateGuestCheckoutToken(existing.id),
-            };
+            resumeCheckout = buildResumeCheckoutPayload({
+              booking: existing,
+              cls,
+              classType: classTypeResume,
+              instructor: instructorResume,
+            });
           }
           return res.status(409).json({
             code: "guest_booking_processing",
@@ -1824,17 +2044,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
 
-        let resumableGuestBooking =
-          guestConflict.state === "failed" ? guestConflict.booking : undefined;
-        if (guestConflict.state === "failed" && resumableGuestBooking) {
-          await storage.updateBookingPaymentStatus(resumableGuestBooking.id, "pending");
-        }
-        if (!resumableGuestBooking) {
-          resumableGuestBooking = await storage.findResumableGuestBookingForClass(
-            guestEmail,
-            classId,
-          );
-        }
+        const resumableGuestBooking = await storage.findResumableGuestBookingForClass(
+          guestEmail,
+          classId,
+        );
         if (!resumableGuestBooking) {
           const activeCount = await storage.syncClassBookingCount(classId);
           if (activeCount >= cls.maxCapacity) {
@@ -1852,6 +2065,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
               guestEmail,
               guestPhone,
             });
+
+        if (!resumableGuestBooking) {
+          const meta = requestMeta(req);
+          await storage.recordGuestBookingConsents({
+            bookingId: booking.id,
+            consentVersion: payload.consentVersion ?? consentVersion(),
+            ...meta,
+          });
+        }
 
         const classType = await storage.getClassType(cls.classTypeId);
         const instructor = await storage.getInstructor(cls.instructorId);
@@ -2572,12 +2794,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/users", requireAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
-      const usersWithCompleteness = await storage.getUsersWithCompleteness();
+      const { page, pageSize } = paginationQuerySchema.parse(req.query);
+      const { rows, total } = await storage.getUsersWithCompletenessPaginated(page, pageSize);
+      const allForStats = await storage.getUsersWithCompleteness();
+      const completeProfiles = allForStats.filter((u) => u.completeness.isComplete).length;
       res.json({
-        users: usersWithCompleteness,
-        totalUsers: usersWithCompleteness.length,
-        completeProfiles: usersWithCompleteness.filter((u: any) => u.completeness.isComplete).length,
-        incompleteProfiles: usersWithCompleteness.filter((u: any) => !u.completeness.isComplete).length
+        ...buildPaginatedResponse(rows, total, page, pageSize),
+        stats: {
+          completeProfiles,
+          incompleteProfiles: allForStats.length - completeProfiles,
+        },
       });
     } catch (error) {
       console.error('Admin get users error:', error);
@@ -2653,24 +2879,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/classes", requireAdminAuth, async (_req, res) => {
+  app.get("/api/admin/classes", requireAdminAuth, async (req, res) => {
     try {
-      const all = await storage.getAllClasses();
+      const { page, pageSize } = paginationQuerySchema.parse(req.query);
+      const { rows: all, total } = await storage.getAllClassesPaginated(page, pageSize);
       const enriched = await Promise.all(
         all.map(async (cls) => {
           const [classType, instructor, currentBookings] = await Promise.all([
             storage.getClassType(cls.classTypeId),
             storage.getInstructor(cls.instructorId),
-            // FIX: currentBookings was never fetched — the cancel dialog
-            // never opened because bookingCount was always 0 (undefined ?? 0).
-            storage.countBookingsForClass(cls.id),
+            storage.syncClassBookingCount(cls.id),
           ]);
           return { ...cls, classType, instructor, currentBookings };
         }),
       );
-      res.json(enriched);
+      res.json(buildPaginatedResponse(enriched, total, page, pageSize));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch admin classes" });
+    }
+  });
+
+  app.get("/api/admin/class-types", requireAdminAuth, async (req, res) => {
+    try {
+      const { page, pageSize } = paginationQuerySchema.parse(req.query);
+      const { rows, total } = await storage.getAllClassTypesPaginated(page, pageSize);
+      res.json(buildPaginatedResponse(rows, total, page, pageSize));
+    } catch {
+      res.status(500).json({ message: "Failed to fetch class types" });
     }
   });
 
@@ -2704,10 +2939,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.delete("/api/admin/users/:id", requireAdminAuth, async (req, res) => {
-    const user = await storage.setUserActive(req.params.id, false);
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ message: "User deactivated (soft remove). Hard delete not enabled.", user });
+  app.delete("/api/admin/users/:id", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const result = await storage.deleteUserPermanently(req.params.id);
+      if (!result.ok) {
+        return res.status(result.message === "User not found" ? 404 : 500).json({
+          message: result.message ?? "Failed to delete user",
+        });
+      }
+      res.json({ message: "User and related records deleted permanently." });
+    } catch {
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.post("/api/admin/users/bulk-delete", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const body = z.object({ ids: z.array(z.string().min(1)).min(1) }).parse(req.body);
+      const uniqueIds = [...new Set(body.ids)];
+      const result = await storage.deleteUsersPermanently(uniqueIds);
+      res.json({
+        message: `Deleted ${result.deleted.length} user(s).`,
+        ...result,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "ids array is required" });
+      }
+      res.status(500).json({ message: "Failed to bulk delete users" });
+    }
   });
 
   app.patch("/api/admin/classes/:id", requireAdminAuth, async (req, res) => {
@@ -2999,5 +3259,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   const httpServer = createServer(app);
+
+  // SPEC-01: expire payment holds every 2 minutes
+  setInterval(() => {
+    void expirePaymentHolds().catch((err) =>
+      console.error("[cron] expirePaymentHolds failed:", err),
+    );
+  }, 2 * 60 * 1000);
+
   return httpServer;
 }

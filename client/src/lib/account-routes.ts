@@ -12,6 +12,7 @@ export const ACCOUNT_ANCHORS = {
   payments: "payments",
   preferences: "preferences",
   security: "security",
+  privacy: "privacy",
 } as const;
 
 export type AccountAnchor = keyof typeof ACCOUNT_ANCHORS;
@@ -33,14 +34,14 @@ export function mapLegacyAccountUrl(pathname: string, search: string): string {
 
   if (pathname === "/account/profile" || tab === "profile") return myAccountHref("profile");
   if (pathname === "/account/health" || tab === "health") return myAccountHref("health");
-  if (
-    pathname === "/account/payments" ||
+  if (pathname === "/account/payments" ||
     pathname === "/account/subscriptions" ||
     tab === "payments" ||
     tab === "subscriptions"
   ) {
     return myAccountHref("payments");
   }
+  if (pathname === "/account/privacy" || tab === "privacy") return myAccountHref("privacy");
   // `/account`, `/account?sessionsTab=…`, or `?tab=sessions` → Sessions section.
   return myAccountHref("sessions");
 }
@@ -57,6 +58,8 @@ export function anchorFromLegacyTab(tab: string | null | undefined): AccountAnch
       return "payments";
     case "sessions":
       return "sessions";
+    case "privacy":
+      return "privacy";
     default:
       return null;
   }

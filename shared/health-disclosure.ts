@@ -99,6 +99,34 @@ export function validateHealthDisclosureDraft(
 const ALLOWED_DISCLOSURE_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png']);
 const ALLOWED_DISCLOSURE_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
+/** Archived health note (max 5 per account). */
+export type HealthHistoryEntry = {
+  text: string;
+  savedAt: string;
+  documentUrls: string[];
+};
+
+export function parseHealthHistory(raw: unknown): HealthHistoryEntry[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter(
+      (e): e is HealthHistoryEntry =>
+        !!e &&
+        typeof e === "object" &&
+        typeof (e as HealthHistoryEntry).text === "string" &&
+        typeof (e as HealthHistoryEntry).savedAt === "string",
+    );
+  }
+  if (typeof raw === "string") {
+    try {
+      return parseHealthHistory(JSON.parse(raw));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function isAllowedHealthDisclosureFile(file: File): boolean {
   const ext = file.name.includes('.')
     ? file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()

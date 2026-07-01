@@ -10,7 +10,7 @@ export function MemberPostAuthLanding() {
 
   useEffect(() => {
     if (isLoading || !user) return;
-    void applyPostLoginLandingIfNeeded(pathname, setLocation);
+    void applyPostLoginLandingIfNeeded(pathname, setLocation, user);
   }, [user, isLoading, pathname, setLocation]);
 
   return null;

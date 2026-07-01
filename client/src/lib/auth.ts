@@ -14,6 +14,8 @@ export interface User {
   // Health Update fields - mandatory for booking sessions
   healthUpdateText?: string | null;
   healthDocumentUrls?: string[] | null;
+  healthUpdateHistory?: import("@shared/health-disclosure").HealthHistoryEntry[] | null;
+  dateOfBirth?: string | null;
   profileCompletionStatus: 'incomplete' | 'complete';
   healthUpdateLastModified?: string | null;
 }
@@ -24,7 +26,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (userData: RegisterData) => Promise<void>;
-  updateProfile: (userData: ProfileData) => Promise<void>;
+  updateProfile: (userData: ProfileData, options?: { successTitle?: string }) => Promise<void>;
   /** Re-fetch /api/auth/me (cookie or Bearer), e.g. after health save */
   refreshUser: () => Promise<void>;
 }
@@ -50,7 +52,7 @@ export interface ProfileData {
   secondaryMobileCountryCode?: string;
   emergencyMobile: string;
   emergencyMobileCountryCode: string;
-  // Health Update fields
+  dateOfBirth?: string;
   healthUpdateText?: string;
   healthDocumentUrls?: string[];
 }

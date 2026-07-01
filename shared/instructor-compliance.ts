@@ -266,6 +266,8 @@ export function canInstructorTakeSessions(
   instructor: Pick<
     Instructor,
     | "status"
+    | "email"
+    | "phone"
     | "emailVerified"
     | "phoneVerified"
     | "onboardingQrImageUrl"

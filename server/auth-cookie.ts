@@ -11,11 +11,19 @@
 
 export const AUTH_COOKIE_NAME = "authToken";
 export const OAUTH_KEEP_COOKIE_NAME = "awy_oauth_keep";
+export const PENDING_CONSENT_COOKIE_NAME = "awy_pending_consent";
 
 /** Persistent auth cookie lifetime: 7 days. */
 export const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** The keep-preference cookie only needs to survive the OAuth round-trip. */
 export const OAUTH_KEEP_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
+/** Pending onboarding consent survives the OAuth round-trip. */
+export const PENDING_CONSENT_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
+
+export interface PendingOnboardingConsent {
+  dateOfBirth: string;
+  consentVersion: string;
+}
 
 export interface AuthCookieOptions {
   httpOnly: true;
@@ -59,4 +67,26 @@ export function buildOAuthKeepCookieOptions(
  */
 export function keepSignedInFromValue(value: unknown): boolean {
   return value !== "0";
+}
+
+export function buildPendingConsentCookieOptions(
+  isProduction: boolean = process.env.NODE_ENV === "production",
+): AuthCookieOptions {
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: PENDING_CONSENT_COOKIE_MAX_AGE_MS,
+  };
+}
+
+export function parsePendingConsentCookie(raw: unknown): PendingOnboardingConsent | null {
+  if (typeof raw !== "string" || !raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as PendingOnboardingConsent;
+    if (!parsed?.dateOfBirth || !parsed?.consentVersion) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }

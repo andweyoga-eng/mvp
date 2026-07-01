@@ -16,7 +16,11 @@ import {
 } from "@shared/manual-payment-ack";
 import {
   GUEST_QR_SUBMITTED_MESSAGE,
+  GUEST_QR_SUBMITTED_ASSISTANCE_MESSAGE,
   GUEST_QR_SIGNIN_PROMPT,
+  GUEST_QR_SUPPORT_WHATSAPP,
+  GUEST_QR_SUPPORT_WHATSAPP_HREF,
+  GUEST_QR_VERIFICATION_TAT,
 } from "@shared/guest-booking-conflict";
 
 export function ManualPaymentReferenceBlock({
@@ -151,9 +155,24 @@ export function ManualPaymentSubmittedMessage({
   if (isGuestCheckout) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 space-y-2">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-950 space-y-3">
           <p className="font-semibold text-base">Payment reference received</p>
           <p className="text-sm">{GUEST_QR_SUBMITTED_MESSAGE}</p>
+          <p className="text-sm">
+            {GUEST_QR_SUBMITTED_ASSISTANCE_MESSAGE}{" "}
+            <a
+              href={GUEST_QR_SUPPORT_WHATSAPP_HREF}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-primary underline"
+            >
+              WhatsApp {GUEST_QR_SUPPORT_WHATSAPP}
+            </a>
+            .
+          </p>
+          <p className="text-xs text-amber-900/80 border-t border-amber-200/80 pt-2">
+            Typical verification time: {GUEST_QR_VERIFICATION_TAT}.
+          </p>
         </div>
         <p className="text-sm text-muted-foreground text-center">{GUEST_QR_SIGNIN_PROMPT}</p>
         <Button

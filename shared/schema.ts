@@ -1,7 +1,8 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
+import { pgTable, text, varchar, integer, timestamp, decimal, boolean, jsonb } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { createInsertSchema } from "drizzle-zod";
+import type { HealthHistoryEntry } from "./health-disclosure";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -19,12 +20,16 @@ export const users = pgTable("users", {
   healthDocumentUrls: text("health_document_urls").array(),
   profileCompletionStatus: text("profile_completion_status").default("incomplete"), // 'incomplete', 'complete'
   healthUpdateLastModified: timestamp("health_update_last_modified"),
+  /** Archived health notes (max 5); see HealthHistoryEntry */
+  healthUpdateHistory: jsonb("health_update_history").$type<HealthHistoryEntry[]>(),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
   resetToken: text("reset_token"),
   resetTokenExpiry: timestamp("reset_token_expiry"),
   isActive: boolean("is_active").notNull().default(true),
   sessionAttendanceCount: integer("session_attendance_count").notNull().default(0),
+  /** Required for DPDPA age gate; collected at onboarding consent (Ch. 7). */
+  dateOfBirth: text("date_of_birth"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -152,14 +157,46 @@ export const bookings = pgTable("bookings", {
   guestName: text("guest_name"),
   guestEmail: text("guest_email"),
   guestPhone: text("guest_phone"),
-  /** pending | paid | waived | failed */
-  paymentStatus: varchar("payment_status", { length: 20 }).notNull().default("pending"),
+  /** When set, a failed gateway payment holds the spot until this time (SPEC-01). */
+  heldUntil: timestamp("held_until"),
+  /** pending | paid | waived | failed | hold_expired | cancelled_by_user */
+  paymentStatus: varchar("payment_status", { length: 24 }).notNull().default("pending"),
   paymentMethod: varchar("payment_method", { length: 20 }),
   transactionAckNumber: text("transaction_ack_number"),
   /** pending | confirmed — manual QR verification */
   verificationStatus: varchar("verification_status", { length: 20 }),
   ackSubmittedAt: timestamp("ack_submitted_at"),
+  /** Guest checkout consent flags (Ch. 7 §3) — one row per booking, not user. */
+  guestConsentProfile: boolean("guest_consent_profile"),
+  guestConsentTerms: boolean("guest_consent_terms"),
+  guestConsentAge: boolean("guest_consent_age"),
+  guestConsentAt: timestamp("guest_consent_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** Append-only consent audit trail (Ch. 7 §5). Never update or delete rows. */
+export const consentAuditLogs = pgTable("consent_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  bookingId: varchar("booking_id").references(() => bookings.id),
+  consentType: varchar("consent_type", { length: 32 }).notNull(),
+  action: varchar("action", { length: 16 }).notNull(),
+  consentVersion: varchar("consent_version", { length: 64 }).notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  timestampUtc: timestamp("timestamp_utc").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** Account erasure requests — processed within 30 days (Ch. 5). */
+export const erasureRequests = pgTable("erasure_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  requestedAt: timestamp("requested_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  scheduledErasureAt: timestamp("scheduled_erasure_at").notNull(),
+  completedAt: timestamp("completed_at"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
 });
 
 export const payments = pgTable("payments", {
@@ -349,6 +386,7 @@ export const updateProfileSchema = createInsertSchema(users).pick({
   emergencyMobileCountryCode: true,
   healthUpdateText: true,
   healthDocumentUrls: true,
+  dateOfBirth: true,
 });
 
 // Health Update validation schema with mandatory text field
@@ -423,6 +461,26 @@ export const insertBookingSchema = createInsertSchema(bookings).omit({
 /** Member POST /api/bookings — only classId; userId is taken from the auth session. */
 export const memberBookingBodySchema = z.object({
   classId: z.string().min(1, "Class is required"),
+});
+
+/** Guest phone on POST /api/bookings (required only for guest checkout). */
+export const guestPhoneSchema = z
+  .string()
+  .min(1, "A valid 10-digit mobile number is required to complete your booking.")
+  .transform((v) => v.replace(/\D/g, "").slice(0, 10))
+  .refine((v) => v.length === 10, {
+    message: "A valid 10-digit mobile number is required to complete your booking.",
+  });
+
+/** POST /api/bookings — members send classId only; guests add contact + consent fields. */
+export const createBookingRequestSchema = memberBookingBodySchema.extend({
+  guestEmail: z.string().trim().email().max(120).optional(),
+  guestName: z.string().trim().min(1).max(80).optional(),
+  guestPhone: guestPhoneSchema.optional(),
+  guestConsentProfile: z.boolean().optional(),
+  guestConsentTerms: z.boolean().optional(),
+  guestConsentAge: z.boolean().optional(),
+  consentVersion: z.string().optional(),
 });
 
 export const memberPaymentAckSchema = z.object({
@@ -512,3 +570,5 @@ export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect
 export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type ConsentAuditLog = typeof consentAuditLogs.$inferSelect;
+export type ErasureRequest = typeof erasureRequests.$inferSelect;

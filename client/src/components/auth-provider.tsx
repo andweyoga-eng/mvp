@@ -3,6 +3,10 @@ import { AuthContext, type User, type RegisterData, type ProfileData, getAuthTok
 import { apiRequest } from '@/lib/queryClient';
 import { clearMemberLandingCheck } from '@/lib/member-landing';
 import { useToast } from '@/hooks/use-toast';
+import { fetchMyConsentStatus } from '@/lib/consent-api';
+import { ACCOUNT_CLOSED_MESSAGE } from '@shared/support';
+
+const DEFER_LOGIN_TOAST_KEY = 'awy_defer_login_toast';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -40,14 +44,37 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(false);
       return;
     }
+    if (authError === 'account_closed') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      toast({
+        title: "Account closed",
+        description: ACCOUNT_CLOSED_MESSAGE,
+      });
+      setIsLoading(false);
+      return;
+    }
 
     if (loginSuccess === 'true') {
+      const isNewOAuthUser = urlParams.get('newUser') === 'true';
       if (oauthToken) {
         setAuthToken(oauthToken);
       }
       window.history.replaceState({}, document.title, window.location.pathname);
-      void fetchUser().then((ok) => {
+      void fetchUser().then(async (ok) => {
         if (ok) {
+          let deferToast = isNewOAuthUser;
+          if (!deferToast) {
+            try {
+              const consentStatus = await fetchMyConsentStatus();
+              deferToast = Boolean(consentStatus.requirement?.requiresConsent);
+            } catch {
+              deferToast = isNewOAuthUser;
+            }
+          }
+          if (deferToast) {
+            sessionStorage.setItem(DEFER_LOGIN_TOAST_KEY, '1');
+            return;
+          }
           toast({
             title: "Login successful!",
             description: "Welcome to andWeYoga!",
@@ -94,6 +121,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setAuthToken(null);
           setUser(null);
           window.dispatchEvent(new Event("awy:account-deactivated"));
+          return false;
+        }
+        if (response.status === 403 && body.code === "account_closed") {
+          setAuthToken(null);
+          setUser(null);
+          toast({
+            title: "Account closed",
+            description: ACCOUNT_CLOSED_MESSAGE,
+          });
           return false;
         }
         throw new Error(body.message || "Failed to load profile");
@@ -168,7 +204,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const updateProfile = async (profileData: ProfileData) => {
+  const updateProfile = async (
+    profileData: ProfileData,
+    options?: { successTitle?: string },
+  ) => {
     try {
       const response = await apiRequest('PUT', '/api/auth/profile', profileData, getAuthHeaders());
       
@@ -181,7 +220,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(data.user);
       
       toast({
-        title: "Profile updated",
+        title: options?.successTitle ?? "Profile updated",
         description: "Your profile has been updated successfully.",
       });
     } catch (error: any) {

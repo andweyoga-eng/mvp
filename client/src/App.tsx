@@ -18,6 +18,9 @@ import Explore from "@/pages/explore";
 import Emojou from "@/pages/emojou";
 import Reserve from "@/pages/reserve";
 import MyAccount from "@/pages/my-account";
+import PrivacyNotice from "@/pages/privacy-notice";
+import TermsOfService from "@/pages/terms-of-service";
+import Grievance from "@/pages/grievance";
 import { mapLegacyAccountUrl } from "@/lib/account-routes";
 import ResetPassword from "@/pages/reset-password";
 import AdminLogin from "@/pages/admin-login";
@@ -25,6 +28,7 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import SessionFeedback from "@/pages/session-feedback";
 import NotFound from "@/pages/not-found";
 import { MemberPostAuthLanding } from "@/components/member-post-auth-landing";
+import { PostAuthConsentGate } from "@/components/post-auth-consent-gate";
 
 /** Legacy `/account/*` URLs now resolve to the single `/my-account` page anchor. */
 function LegacyAccountRedirect() {
@@ -50,6 +54,9 @@ function Router() {
       <Route path="/emojou" component={Emojou} />
       <Route path="/reserve" component={Reserve} />
       <Route path="/my-account" component={MyAccount} />
+      <Route path="/privacy" component={PrivacyNotice} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/grievance" component={Grievance} />
       <Route path="/account/profile" component={LegacyAccountRedirect} />
       <Route path="/account/health" component={LegacyAccountRedirect} />
       <Route path="/account/subscriptions" component={LegacyAccountRedirect} />
@@ -95,8 +102,10 @@ function App() {
             <AdminAuthProvider>
               <TooltipProvider>
                 <Toaster />
-                <MemberPostAuthLanding />
-                <Router />
+                <PostAuthConsentGate>
+                  <MemberPostAuthLanding />
+                  <Router />
+                </PostAuthConsentGate>
               </TooltipProvider>
             </AdminAuthProvider>
           </DeactivatedGate>

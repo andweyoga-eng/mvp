@@ -29,15 +29,14 @@ export interface BookableSession {
   sessionFrequency?: string | null;
 }
 
-export interface ScheduleDayLike<T extends { date: Date | string }> {
+export interface ScheduleDayLike<T extends { date: Date | string; classType?: { duration?: number | null } }> {
   classes: T[];
 }
 
 /** Week schedule days with only sessions that start after now; drops empty days. */
-export function filterUpcomingScheduleDays<T extends { date: Date | string }>(
-  days: ScheduleDayLike<T>[],
-  now: Date = new Date(),
-): ScheduleDayLike<T>[] {
+export function filterUpcomingScheduleDays<
+  T extends { date: Date | string; classType?: { duration?: number | null } },
+>(days: ScheduleDayLike<T>[], now: Date = new Date()): ScheduleDayLike<T>[] {
   return days
     .map((day) => ({
       ...day,

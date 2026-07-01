@@ -4,6 +4,7 @@ import {
   type BookingIntent,
 } from "@/lib/pending-booking";
 import { MY_SESSIONS_UPCOMING_URL } from "@/lib/account-routes";
+import type { User } from "@/lib/auth";
 
 export { MY_SESSIONS_UPCOMING_URL };
 export const CLASS_SCHEDULE_URL = "/?openBooking=true";
@@ -48,7 +49,14 @@ export function parseMyAccountTabFromSearch(search: string): {
 /** After sign-in, members land on the Dashboard (Sessions) home. */
 export const MEMBER_DASHBOARD_URL = "/dashboard";
 
-export async function resolveMemberLandingPath(): Promise<string> {
+export const MY_ACCOUNT_PROFILE_URL = "/my-account#profile";
+
+export function resolveMemberLandingPath(
+  user?: Pick<User, "profileCompletionStatus"> | null,
+): string {
+  if (user?.profileCompletionStatus === "incomplete") {
+    return MY_ACCOUNT_PROFILE_URL;
+  }
   return MEMBER_DASHBOARD_URL;
 }
 
@@ -66,12 +74,14 @@ function reserveHrefFromIntent(intent: BookingIntent): string | null {
 
 /**
  * Redirect once per browser session after login. A pending session/class booking
- * resumes on the Reserve page; otherwise the member lands on the Dashboard.
+ * resumes on the Reserve page; otherwise the member lands on the Dashboard or
+ * Contact info when onboarding is incomplete.
  * Guest-modal-only intents (no ids) on Home are left for the Home page to resume.
  */
 export async function applyPostLoginLandingIfNeeded(
   pathname: string,
   setLocation: (path: string) => void,
+  user?: Pick<User, "profileCompletionStatus"> | null,
 ): Promise<void> {
   if (!POST_LOGIN_LANDING_PATHS.has(pathname)) return;
   if (hasMemberLandingBeenChecked()) return;
@@ -95,7 +105,7 @@ export async function applyPostLoginLandingIfNeeded(
     return;
   }
 
-  const target = await resolveMemberLandingPath();
+  const target = resolveMemberLandingPath(user);
   if (target !== pathname) {
     setLocation(target);
   }

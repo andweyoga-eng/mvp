@@ -22,20 +22,24 @@ describe("account routes — single-page anchors", () => {
     assert.equal(mapLegacyAccountUrl("/account/health", ""), "/my-account#health");
     assert.equal(mapLegacyAccountUrl("/account/payments", ""), "/my-account#payments");
     assert.equal(mapLegacyAccountUrl("/account/subscriptions", ""), "/my-account#payments");
+    assert.equal(mapLegacyAccountUrl("/account/privacy", ""), "/my-account#privacy");
     assert.equal(mapLegacyAccountUrl("/account", "?sessionsTab=upcoming"), "/my-account#sessions");
   });
 
   it("maps legacy ?tab= query to the matching anchor", () => {
     assert.equal(mapLegacyAccountUrl("/account", "?tab=profile"), "/my-account#profile");
     assert.equal(mapLegacyAccountUrl("/account", "?tab=health"), "/my-account#health");
+    assert.equal(mapLegacyAccountUrl("/account", "?tab=privacy"), "/my-account#privacy");
     assert.equal(anchorFromLegacyTab("subscriptions"), "payments");
     assert.equal(anchorFromLegacyTab("sessions"), "sessions");
+    assert.equal(anchorFromLegacyTab("privacy"), "privacy");
     assert.equal(anchorFromLegacyTab("bogus"), null);
   });
 
   it("exposes the canonical sessions deep-link", () => {
     assert.equal(MY_SESSIONS_UPCOMING_URL, "/my-account#sessions");
     assert.equal(myAccountHref("payments"), "/my-account#payments");
+    assert.equal(myAccountHref("privacy"), "/my-account#privacy");
     assert.equal(myAccountHref(), "/my-account");
   });
 });
@@ -63,18 +67,31 @@ describe("account migration — single page + one drawer", () => {
   it("/my-account is a real page route and /account/* redirects to it", () => {
     const app = readFileSync(join(root, "client/src/App.tsx"), "utf8");
     assert.match(app, /path="\/my-account" component=\{MyAccount\}/);
+    assert.match(app, /path="\/privacy" component=\{PrivacyNotice\}/);
+    assert.match(app, /path="\/terms" component=\{TermsOfService\}/);
+    assert.match(app, /path="\/grievance" component=\{Grievance\}/);
     assert.match(app, /LegacyAccountRedirect/);
-    // The legacy multi-route account app must be gone.
     assert.doesNotMatch(app, /AccountApp/);
     assert.doesNotMatch(app, /MyAccountRedirect/);
   });
 
-  it("My Account page renders all six section anchors", () => {
+  it("My Account page renders all seven section anchors including privacy", () => {
     const page = readFileSync(join(root, "client/src/pages/my-account.tsx"), "utf8");
-    for (const id of ["profile", "health", "sessions", "payments", "preferences", "security"]) {
+    for (const id of [
+      "profile",
+      "health",
+      "sessions",
+      "payments",
+      "preferences",
+      "security",
+      "privacy",
+    ]) {
       assert.match(page, new RegExp(`id="${id}"`), `missing #${id} section`);
     }
-    // Payments is one section with Methods + History sub-tabs.
+    assert.match(page, /PrivacyConsentSection/);
+    assert.match(page, /AccountHealthNoteSection/);
+    assert.match(page, /DateOfBirthField/);
+    assert.match(page, /testIdPrefix="profile-dob"/);
     assert.match(page, /payments-tab-methods/);
     assert.match(page, /payments-tab-history/);
   });
@@ -85,9 +102,18 @@ describe("account migration — single page + one drawer", () => {
     assert.match(drawer, /myAccountHref\("health"\)/);
     assert.match(drawer, /myAccountHref\("sessions"\)/);
     assert.match(drawer, /myAccountHref\("payments"\)/);
+    assert.match(drawer, /myAccountHref\("privacy"\)/);
     assert.match(drawer, /Book Sessions/);
     assert.doesNotMatch(drawer, /My Subscriptions/);
     assert.doesNotMatch(drawer, /\/account\//);
+  });
+
+  it("footer exposes legal page links", () => {
+    const footer = readFileSync(join(root, "client/src/components/footer.tsx"), "utf8");
+    assert.match(footer, /href="\/privacy"/);
+    assert.match(footer, /href="\/terms"/);
+    assert.match(footer, /href="\/grievance"/);
+    assert.match(footer, /Privacy Notice/);
   });
 
   it("navigation no longer has the 'My Dashboard' dropdown — it opens the drawer", () => {

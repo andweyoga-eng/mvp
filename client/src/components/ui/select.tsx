@@ -6,7 +6,12 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const Select = SelectPrimitive.Root
+type SelectRootProps = React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>
+
+/** Radix Select root — supports optional `modal` for use inside Dialog overlays. */
+function Select({ modal, ...props }: SelectRootProps & { modal?: boolean }) {
+  return <SelectPrimitive.Root {...props} {...(modal === undefined ? {} : { modal })} />
+}
 
 const SelectGroup = SelectPrimitive.Group
 

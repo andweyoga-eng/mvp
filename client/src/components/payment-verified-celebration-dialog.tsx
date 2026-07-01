@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import type { PaymentVerifiedCelebration } from "@/components/payment-verified-provider";
+import type { JoinPromptCelebration } from "@/components/payment-verified-provider";
 
 export function PaymentVerifiedCelebrationDialog({
   open,
@@ -19,7 +19,7 @@ export function PaymentVerifiedCelebrationDialog({
   onOpenChange,
 }: {
   open: boolean;
-  celebration: PaymentVerifiedCelebration;
+  celebration: JoinPromptCelebration;
   onJoinNow: () => void;
   onJoinLater: () => void;
   onOpenChange: (open: boolean) => void;

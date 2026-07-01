@@ -1,43 +1,44 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { 
-  Calendar, 
-  Clock, 
-  User, 
-  CheckCircle2, 
-  XCircle, 
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Calendar,
+  Clock,
+  User,
   CalendarDays,
-  Star,
+  MapPin,
+  X,
   RefreshCw,
-  MessageCircle
-} from 'lucide-react';
-import { format } from 'date-fns';
+  Star,
+  Video,
+  Download,
+  ExternalLink,
+} from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 import {
   fetchMemberSessions,
   memberSessionsQueryKey,
   sessionAwaitingPaymentUpdate,
   type MemberSession,
-} from '@/lib/member-sessions';
-import { Download, Video, ExternalLink } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getMeetJoinMessage } from '@shared/session-meet-access';
+} from "@/lib/member-sessions";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { getMeetJoinMessage } from "@shared/session-meet-access";
 import {
   canRetrySessionPayment,
   defaultPaymentRetryDeps,
   retrySessionPayment,
-} from '@/lib/session-payment-retry';
+} from "@/lib/session-payment-retry";
+import {
+  SessionShareMenu,
+  buildBookedSessionSharePayloadForUi,
+} from "@/components/session-share-menu";
 
 type SessionData = MemberSession & {
   canCancel?: boolean;
   canRebook?: boolean;
   canReview?: boolean;
-  isLive?: boolean;
-  cancellationReason?: string | null;
 };
 
 function withSessionActions(sessions: MemberSession[]): SessionData[] {
@@ -49,9 +50,16 @@ function withSessionActions(sessions: MemberSession[]): SessionData[] {
   }));
 }
 
+function formatSessionTime(dateIso: string): string {
+  return format(new Date(dateIso), "h:mm a");
+}
+
+function sessionLocation(session: SessionData): string {
+  return session.googleMeetLink ? "Online" : "Studio";
+}
+
 interface SessionHistoryProps {
   userId: string;
-  /** Initial sub-tab: upcoming | completed | cancelled */
   initialSubTab?: string;
 }
 
@@ -90,17 +98,30 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     }
   }, [initialSubTab]);
 
-  const upcomingSessions = sessions.filter(s => s.status === 'upcoming');
-  const completedSessions = sessions.filter(s => s.status === 'completed');
-  const cancelledSessions = sessions.filter(s => s.status === 'cancelled');
+  const upcomingSessions = sessions.filter((s) => s.status === "upcoming");
+  const completedSessions = sessions.filter((s) => s.status === "completed");
+  const cancelledSessions = sessions.filter((s) => s.status === "cancelled");
+
+  const tabBtn = (tab: string, label: string, count: number) => (
+    <button
+      type="button"
+      onClick={() => setActiveTab(tab)}
+      className={cn(
+        "flex-1 rounded-[10px] px-2 py-2 text-[13px] font-semibold transition-colors",
+        activeTab === tab
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:text-primary",
+      )}
+      data-testid={`${tab}-sessions-tab`}
+    >
+      {label} {count}
+    </button>
+  );
 
   const handleCancelSession = async (sessionId: string) => {
     try {
-      // TODO: Implement actual API call
       console.log(`Cancelling session ${sessionId}`);
-      
       void refetch();
-      
       toast({
         title: "Session cancelled",
         description: "Your session has been cancelled successfully.",
@@ -152,138 +173,148 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     );
   };
 
-  const renderSessionCard = (session: SessionData) => (
-    <Card key={session.id} className="border-purple-100 hover:border-purple-200 transition-colors">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <h3 className="font-bold text-purple-800 mb-1" data-testid={`session-title-${session.id}`}>
-              {session.className}
-            </h3>
-            <div className="flex items-center gap-2 text-sm text-purple-600 mb-2">
-              <User className="h-4 w-4" />
-              <span>{session.instructorName}</span>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            {session.isLive && session.status === "upcoming" && (
-              <Badge className="bg-emerald-600 text-white animate-pulse" data-testid={`session-live-${session.id}`}>
-                Session is Live
-              </Badge>
-            )}
-            <Badge 
-              variant={
-                session.status === 'upcoming' ? 'default' :
-                session.status === 'completed' ? 'secondary' : 
-                'destructive'
-              }
-              className={
-                session.status === 'upcoming' ? 'bg-purple-100 text-purple-800' :
-                session.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                'bg-red-100 text-red-800'
-              }
-              data-testid={`session-status-${session.id}`}
-            >
-              {session.status === 'upcoming' && !session.isLive && <CalendarDays className="h-3 w-3 mr-1" />}
-              {session.status === 'completed' && <CheckCircle2 className="h-3 w-3 mr-1" />}
-              {session.status === 'cancelled' && <XCircle className="h-3 w-3 mr-1" />}
-              {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-            </Badge>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2 text-purple-600">
-            <Calendar className="h-4 w-4" />
-            <span>{format(new Date(session.date), 'MMM dd, yyyy')}</span>
-          </div>
-          <div className="flex items-center gap-2 text-purple-600">
-            <Clock className="h-4 w-4" />
-            <span>{session.time}</span>
-          </div>
+  const statusBadge = (session: SessionData) => {
+    const label =
+      session.isLive && session.status === "upcoming"
+        ? "Live"
+        : session.status.charAt(0).toUpperCase() + session.status.slice(1);
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+          session.status === "upcoming" && "bg-primary/10 text-primary",
+          session.status === "completed" && "bg-emerald-100 text-emerald-800",
+          session.status === "cancelled" && "bg-red-100 text-red-700",
+        )}
+        data-testid={`session-status-${session.id}`}
+      >
+        {session.status === "upcoming" && !session.isLive ? (
+          <CalendarDays className="h-3 w-3" />
+        ) : null}
+        {label}
+      </span>
+    );
+  };
+
+  const renderSessionCard = (session: SessionData) => {
+    const duration = session.sessionDurationMinutes ?? 60;
+    const start = new Date(session.date);
+
+    return (
+      <article
+        key={session.id}
+        className="rounded-2xl border border-primary/10 bg-white p-4 shadow-sm"
+        data-testid={`session-card-${session.id}`}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h3
+            className="font-display text-base font-semibold text-foreground"
+            data-testid={`session-title-${session.id}`}
+          >
+            {session.className}
+          </h3>
+          {statusBadge(session)}
         </div>
 
-        {session.status === "cancelled" && session.cancellationReason && (
-          <p className="mt-2 text-sm text-red-700 bg-red-50 border border-red-100 rounded-md p-2">
+        <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+          <User className="h-4 w-4 shrink-0 text-primary/70" />
+          <span>{session.instructorName}</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <Calendar className="h-4 w-4 shrink-0 text-primary/70" />
+            {format(start, "MMM d, yyyy")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="h-4 w-4 shrink-0 text-primary/70" />
+            {formatSessionTime(session.date)} · {duration} min
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 shrink-0 text-primary/70" />
+            {sessionLocation(session)}
+          </span>
+        </div>
+
+        {session.status === "cancelled" && session.cancellationReason ? (
+          <p className="mt-3 rounded-lg border border-red-100 bg-red-50 p-2 text-sm text-red-700">
             <span className="font-semibold">Cancellation reason: </span>
             {session.cancellationReason}
           </p>
+        ) : null}
+
+        {(session.paymentStatus === "pending" ||
+          session.verificationStatus === "pending" ||
+          session.paymentStatus === "paid") && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            {session.paymentStatus === "pending" && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                Payment pending
+              </span>
+            )}
+            {session.verificationStatus === "pending" && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-800">
+                Awaiting verification
+              </span>
+            )}
+            {session.paymentStatus === "paid" &&
+              session.googleMeetLink &&
+              session.meetJoinState !== "hidden" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {session.meetJoinState === "active" ? (
+                      <Button asChild size="sm" variant="outline" className="h-7 text-xs">
+                        <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
+                          <Video className="mr-1 h-3 w-3" />
+                          Join session
+                        </a>
+                      </Button>
+                    ) : (
+                      <span tabIndex={0} className="inline-flex">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 cursor-not-allowed text-xs opacity-50"
+                          disabled
+                        >
+                          <Video className="mr-1 h-3 w-3" />
+                          Join session
+                        </Button>
+                      </span>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-[260px] text-center">
+                    {getMeetJoinMessage({
+                      sessionStart: start,
+                      sessionDurationMinutes: duration,
+                      isPaid:
+                        session.paymentStatus === "paid" || session.paymentStatus === "waived",
+                      hasMeetLink: !!session.googleMeetLink,
+                    })}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            {session.invoiceUrl && (
+              <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+                <a href={session.invoiceUrl} target="_blank" rel="noopener noreferrer">
+                  <Download className="mr-1 h-3 w-3" />
+                  Invoice
+                </a>
+              </Button>
+            )}
+            {session.receiptUrl && (
+              <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+                <a href={session.receiptUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1 h-3 w-3" />
+                  Receipt
+                </a>
+              </Button>
+            )}
+          </div>
         )}
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <Badge
-            variant="outline"
-            className={
-              session.paymentStatus === "paid"
-                ? "capitalize border-green-300 text-green-800"
-                : "capitalize"
-            }
-          >
-            Payment: {session.paymentStatus}
-          </Badge>
-          {session.paymentStatus === "pending" && session.verificationStatus === "pending" && (
-            <Badge className="bg-amber-100 text-amber-800">Awaiting verification</Badge>
-          )}
-          {session.paymentStatus === "paid" && session.verificationStatus === "confirmed" && (
-            <Badge className="bg-green-100 text-green-800">Payment confirmed</Badge>
-          )}
-          {session.paymentStatus === "paid" &&
-            session.googleMeetLink &&
-            session.meetJoinState !== "hidden" && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  {session.meetJoinState === "active" ? (
-                    <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                      <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
-                        <Video className="h-3 w-3 mr-1" />
-                        Join session
-                      </a>
-                    </Button>
-                  ) : (
-                    <span tabIndex={0} className="inline-flex">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs opacity-50 cursor-not-allowed"
-                        disabled
-                      >
-                        <Video className="h-3 w-3 mr-1" />
-                        Join session
-                      </Button>
-                    </span>
-                  )}
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[260px] text-center">
-                  {getMeetJoinMessage({
-                    sessionStart: new Date(session.date),
-                    sessionDurationMinutes: session.sessionDurationMinutes ?? 60,
-                    isPaid:
-                      session.paymentStatus === "paid" || session.paymentStatus === "waived",
-                    hasMeetLink: !!session.googleMeetLink,
-                  })}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          {session.invoiceUrl && (
-            <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
-              <a href={session.invoiceUrl} target="_blank" rel="noopener noreferrer">
-                <Download className="h-3 w-3 mr-1" />
-                Invoice
-              </a>
-            </Button>
-          )}
-          {session.receiptUrl && (
-            <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
-              <a href={session.receiptUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3 w-3 mr-1" />
-                Receipt
-              </a>
-            </Button>
-          )}
-        </div>
-        
-        <div className="flex gap-2 mt-4">
-          {session.status === 'upcoming' && session.canCancel && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {session.status === "upcoming" && session.canCancel && (
             <Button
               variant="outline"
               size="sm"
@@ -291,7 +322,7 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
               className="border-red-200 text-red-600 hover:bg-red-50"
               data-testid={`cancel-session-${session.id}`}
             >
-              <XCircle className="h-4 w-4 mr-1" />
+              <X className="mr-1 h-4 w-4" />
               Cancel
             </Button>
           )}
@@ -304,123 +335,103 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
               className="border-amber-200 text-amber-700 hover:bg-amber-50"
               data-testid={`retry-payment-${session.id}`}
             >
-              <RefreshCw className="h-4 w-4 mr-1" />
+              <RefreshCw className="mr-1 h-4 w-4" />
               Retry payment
             </Button>
           )}
-          
-          {session.status === 'cancelled' && session.canRebook && (
+
+          {session.status === "upcoming" &&
+            (session.paymentStatus === "paid" || session.paymentStatus === "waived") && (
+              <SessionShareMenu
+                payload={buildBookedSessionSharePayloadForUi({
+                  className: session.className,
+                  instructorName: session.instructorName,
+                  date: session.date,
+                  classId: session.classId,
+                })}
+                className="border-primary/20 text-primary hover:bg-primary/5"
+              />
+            )}
+
+          {session.status === "cancelled" && session.canRebook && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleRebookSession(session.id)}
-              className="border-purple-200 text-purple-600 hover:bg-purple-50"
+              className="border-primary/20 text-primary hover:bg-primary/5"
               data-testid={`rebook-session-${session.id}`}
             >
-              <RefreshCw className="h-4 w-4 mr-1" />
+              <RefreshCw className="mr-1 h-4 w-4" />
               Rebook
             </Button>
           )}
-          
-          {session.status === 'completed' && session.canReview && (
+
+          {session.status === "completed" && session.canReview && (
             <Button
               variant="outline"
               size="sm"
-              className="border-yellow-200 text-yellow-600 hover:bg-yellow-50"
+              className="border-amber-200 text-amber-700 hover:bg-amber-50"
               data-testid={`review-session-${session.id}`}
             >
-              <Star className="h-4 w-4 mr-1" />
+              <Star className="mr-1 h-4 w-4" />
               Review
             </Button>
           )}
         </div>
-      </CardContent>
-    </Card>
-  );
+      </article>
+    );
+  };
+
+  const emptyState = (tab: string) => {
+    const copy =
+      tab === "upcoming"
+        ? {
+            title: "No upcoming sessions",
+            body: "Book your next yoga session to get started!",
+          }
+        : tab === "completed"
+          ? {
+              title: "No completed sessions yet",
+              body: "Your completed sessions will appear here after you attend them.",
+            }
+          : {
+              title: "No cancelled sessions",
+              body: "Great! You haven't cancelled any sessions.",
+            };
+    return (
+      <div className="py-10 text-center text-muted-foreground">
+        <CalendarDays className="mx-auto mb-3 h-10 w-10 text-primary/30" />
+        <p className="font-medium text-foreground">{copy.title}</p>
+        <p className="mt-1 text-sm">{copy.body}</p>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="p-6 text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-          <p className="mt-4 text-purple-600">Loading your session history...</p>
-        </CardContent>
-      </Card>
+      <div className="flex justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
     );
   }
 
+  const lists: Record<string, SessionData[]> = {
+    upcoming: upcomingSessions,
+    completed: completedSessions,
+    cancelled: cancelledSessions,
+  };
+
   return (
-    <Card className="border-2 border-purple-100">
-      <CardHeader className="bg-gradient-to-r from-purple-50 to-orange-50">
-        <CardTitle className="flex items-center gap-3 text-purple-800">
-          <CalendarDays className="h-6 w-6 text-purple-600" />
-          Session History
-        </CardTitle>
-      </CardHeader>
-      
-      <CardContent className="p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger 
-              value="upcoming" 
-              className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800"
-              data-testid="upcoming-sessions-tab"
-            >
-              Upcoming ({upcomingSessions.length})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="completed"
-              className="data-[state=active]:bg-green-100 data-[state=active]:text-green-800"
-              data-testid="completed-sessions-tab"
-            >
-              Completed ({completedSessions.length})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="cancelled"
-              className="data-[state=active]:bg-red-100 data-[state=active]:text-red-800"
-              data-testid="cancelled-sessions-tab"
-            >
-              Cancelled ({cancelledSessions.length})
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="upcoming" className="space-y-4" data-testid="upcoming-sessions-content">
-            {upcomingSessions.length > 0 ? (
-              upcomingSessions.map(renderSessionCard)
-            ) : (
-              <div className="text-center py-8 text-purple-600">
-                <CalendarDays className="h-12 w-12 mx-auto mb-4 text-purple-300" />
-                <p className="text-lg font-medium">No upcoming sessions</p>
-                <p className="text-sm">Book your next yoga session to get started!</p>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="completed" className="space-y-4" data-testid="completed-sessions-content">
-            {completedSessions.length > 0 ? (
-              completedSessions.map(renderSessionCard)
-            ) : (
-              <div className="text-center py-8 text-green-600">
-                <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-300" />
-                <p className="text-lg font-medium">No completed sessions yet</p>
-                <p className="text-sm">Your completed sessions will appear here after you attend them.</p>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="cancelled" className="space-y-4" data-testid="cancelled-sessions-content">
-            {cancelledSessions.length > 0 ? (
-              cancelledSessions.map(renderSessionCard)
-            ) : (
-              <div className="text-center py-8 text-red-600">
-                <XCircle className="h-12 w-12 mx-auto mb-4 text-red-300" />
-                <p className="text-lg font-medium">No cancelled sessions</p>
-                <p className="text-sm">Great! You haven&apos;t cancelled any sessions.</p>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="space-y-4" data-testid="session-history">
+      <div className="flex gap-1.5 rounded-[14px] bg-muted p-1.5">
+        {tabBtn("upcoming", "Upcoming", upcomingSessions.length)}
+        {tabBtn("completed", "Completed", completedSessions.length)}
+        {tabBtn("cancelled", "Cancelled", cancelledSessions.length)}
+      </div>
+
+      <div className="space-y-3" data-testid={`${activeTab}-sessions-content`}>
+        {lists[activeTab]?.length ? lists[activeTab].map(renderSessionCard) : emptyState(activeTab)}
+      </div>
+    </div>
   );
 }

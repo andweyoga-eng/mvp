@@ -46,15 +46,24 @@ import {
   sessionJoinEvents,
   userSessionMappings,
   auditLogs,
+  consentAuditLogs,
+  erasureRequests,
+  userDocuments,
+  DEFAULT_CLASS_INTENSITY,
 } from "@shared/schema";
+import { consentVersion, type ConsentLogInput } from "./consent";
+import type { ConsentType } from "@shared/consent";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, inArray, gt, count } from "drizzle-orm";
+import { BOOKING_PAYMENT_STATUS, canResumePaymentCheckout, bookingCountsTowardCapacity } from "@shared/booking-payment-hold";
+import { paginationOffset } from "@shared/admin-pagination";
 import {
   computeProfileCompletionStatus,
   isAccountProfileComplete,
   getAccountProfileIncompleteReasons,
   isHealthDisclosureComplete,
 } from "@shared/profileCompleteness";
+import type { HealthHistoryEntry } from "@shared/health-disclosure";
 import { classifyMemberSessionStatus } from "@shared/member-session-status";
 import {
   bookingIsResumableCheckout,
@@ -197,6 +206,7 @@ export interface IStorage {
   updateUserHealthData(id: string, healthData: { 
     healthUpdateText: string; 
     healthDocumentUrls: string[]; 
+    healthUpdateHistory?: HealthHistoryEntry[];
     profileCompletionStatus: string;
     healthUpdateLastModified: string;
   }): Promise<User | undefined>;
@@ -293,6 +303,10 @@ export interface IStorage {
   ): Promise<Class | undefined>;
   countBookingsForClass(classId: string): Promise<number>;
   setUserActive(id: string, isActive: boolean): Promise<User | undefined>;
+  deleteUserPermanently(id: string): Promise<{ ok: boolean; message?: string }>;
+  deleteUsersPermanently(
+    ids: string[],
+  ): Promise<{ deleted: string[]; failed: Array<{ id: string; message: string }> }>;
   recordSessionJoin(userId: string, classId: string): Promise<void>;
   recordMoodCheckin(userId: string, classId: string, phase: "pre" | "post", moodId: string): Promise<void>;
   updateClassBookingCount(id: string, count: number): Promise<Class | undefined>;
@@ -325,6 +339,11 @@ export interface IStorage {
     bookingId: string,
     paymentStatus: string,
   ): Promise<Booking | undefined>;
+  updateBookingPaymentHold(
+    bookingId: string,
+    data: { paymentStatus?: string; heldUntil?: string | null },
+  ): Promise<Booking | undefined>;
+  findBookingsWithExpiredPaymentHold(): Promise<Booking[]>;
   ensureUserSessionMapping(userId: string, classId: string): Promise<void>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   getPaymentById(id: string): Promise<Payment | undefined>;
@@ -376,6 +395,26 @@ export interface IStorage {
   verifyAdminCredentials(email: string, password: string): Promise<AdminUser | undefined>;
   getAllUsers(): Promise<User[]>;
   getUsersWithCompleteness(): Promise<(User & { completeness: ProfileCompleteness })[]>;
+  getUsersWithCompletenessPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: (User & { completeness: ProfileCompleteness })[]; total: number }>;
+  getAllClassesPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Class[]; total: number }>;
+  getAllInstructorsPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Instructor[]; total: number }>;
+  getAllClassTypesPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: ClassType[]; total: number }>;
+  getAllBookingsPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Booking[]; total: number }>;
   getAdminProfile(adminUserId: string): Promise<AdminProfile | undefined>;
   upsertAdminProfile(
     adminUserId: string,
@@ -391,6 +430,39 @@ export interface IStorage {
   getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]>;
   incrementSubscriptionUtilization(userId: string, classId: string): Promise<void>;
   insertAuditLog(entry: InsertAuditLog): Promise<void>;
+
+  // Consent & erasure (DPDPA Ch. 7)
+  insertConsentLog(input: ConsentLogInput): Promise<void>;
+  getConsentLogsForUser(userId: string): Promise<(typeof consentAuditLogs.$inferSelect)[]>;
+  userHasActiveConsent(userId: string, consentType: ConsentType): Promise<boolean>;
+  recordRegistrationConsents(params: {
+    userId: string;
+    dateOfBirth: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void>;
+  recordGuestBookingConsents(params: {
+    bookingId: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void>;
+  withdrawHealthDataConsent(params: {
+    userId: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<User | undefined>;
+  requestAccountErasure(params: {
+    userId: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<{ erasureRequestId: string; scheduledErasureAt: Date }>;
+  getPendingErasureForUser(userId: string): Promise<(typeof erasureRequests.$inferSelect) | undefined>;
+  userHasErasureHistory(userId: string): Promise<boolean>;
+  reopenAccountAfterSelfErasure(userId: string): Promise<User | undefined>;
+  getAdminConsentLogs(limit?: number): Promise<(typeof consentAuditLogs.$inferSelect)[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -417,6 +489,7 @@ export class DatabaseStorage implements IStorage {
           description: "Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques. This gentle practice emphasizes alignment, flexibility, and mindfulness. Each pose is held for several breaths, allowing you to build strength and stability while learning proper form. Our certified instructors provide personalized guidance to ensure you feel comfortable and supported throughout your practice.",
           price: "500.00",
           duration: 60,
+          intensity: DEFAULT_CLASS_INTENSITY,
           imageUrl: "/attached_assets/hatha%20yoga_1756809174781.jpg"
         },
         {
@@ -424,6 +497,7 @@ export class DatabaseStorage implements IStorage {
           description: "A dynamic hybrid fitness experience combining yoga with cross-training elements including weights, aerobics, Zumba, and Bhangra. Yoga remains the foundation, but each class varies based on participant demographics and energy levels. This high-energy session builds strength, improves cardiovascular health, and enhances flexibility while keeping you engaged with diverse movement patterns.",
           price: "600.00",
           duration: 60,
+          intensity: DEFAULT_CLASS_INTENSITY,
           imageUrl: "/attached_assets/Hyyocross_1756809174781.jpg"
         },
         {
@@ -431,6 +505,7 @@ export class DatabaseStorage implements IStorage {
           description: "Find inner peace and mental clarity through guided meditation practices. These sessions focus on various techniques including mindfulness, breathwork, and visualization to reduce stress and enhance emotional well-being. Whether you're a beginner or experienced meditator, our tranquil environment and expert guidance will help you develop a deeper connection with yourself.",
           price: "400.00",
           duration: 45,
+          intensity: DEFAULT_CLASS_INTENSITY,
           imageUrl: "/attached_assets/meditation_1756809174781.jpg"
         },
         {
@@ -438,6 +513,7 @@ export class DatabaseStorage implements IStorage {
           description: "Experience the healing power of sound through therapeutic vibrations using singing bowls, gongs, and crystal instruments. These sessions promote deep relaxation, stress recovery, and emotional healing. The resonant frequencies help balance your energy centers and create a meditative state that supports overall wellness and mental clarity.",
           price: "800.00",
           duration: 60,
+          intensity: DEFAULT_CLASS_INTENSITY,
           imageUrl: "/attached_assets/soundtherapy_1756809174781.jpg"
         }
       ];
@@ -571,12 +647,14 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      // Normalize email before storing
-      const normalizedUser = {
-        ...insertUser,
-        email: insertUser.email.trim().toLowerCase()
+      const { healthUpdateHistory: _history, ...rest } = insertUser as InsertUser & {
+        healthUpdateHistory?: unknown;
       };
-      
+      const normalizedUser = {
+        ...rest,
+        email: rest.email.trim().toLowerCase(),
+      };
+
       const [user] = await db.insert(users).values(normalizedUser).returning();
       console.log(`[DB] Created user: ${user.id} (${user.email})`);
       return user;
@@ -602,6 +680,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserHealthData(id: string, healthData: { 
     healthUpdateText: string; 
     healthDocumentUrls: string[]; 
+    healthUpdateHistory?: HealthHistoryEntry[];
     profileCompletionStatus: string;
     healthUpdateLastModified: string;
   }): Promise<User | undefined> {
@@ -610,6 +689,9 @@ export class DatabaseStorage implements IStorage {
         .set({ 
           healthUpdateText: healthData.healthUpdateText,
           healthDocumentUrls: healthData.healthDocumentUrls,
+          ...(healthData.healthUpdateHistory !== undefined
+            ? { healthUpdateHistory: healthData.healthUpdateHistory }
+            : {}),
           profileCompletionStatus: healthData.profileCompletionStatus,
           healthUpdateLastModified: new Date(healthData.healthUpdateLastModified),
           updatedAt: new Date()
@@ -1469,6 +1551,85 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async deleteUserPermanently(id: string): Promise<{ ok: boolean; message?: string }> {
+    try {
+      const user = await this.getUser(id);
+      if (!user) return { ok: false, message: "User not found" };
+
+      await db.transaction(async (tx) => {
+        const userBookings = await tx
+          .select({
+            id: bookings.id,
+            classId: bookings.classId,
+            paymentStatus: bookings.paymentStatus,
+            heldUntil: bookings.heldUntil,
+          })
+          .from(bookings)
+          .where(eq(bookings.userId, id));
+        const bookingIds = userBookings.map((row) => row.id);
+
+        if (bookingIds.length > 0) {
+          await tx.delete(payments).where(inArray(payments.bookingId, bookingIds));
+          await tx
+            .delete(consentAuditLogs)
+            .where(
+              or(
+                eq(consentAuditLogs.userId, id),
+                inArray(consentAuditLogs.bookingId, bookingIds),
+              ),
+            );
+        } else {
+          await tx.delete(consentAuditLogs).where(eq(consentAuditLogs.userId, id));
+        }
+
+        for (const booking of userBookings) {
+          if (
+            bookingCountsTowardCapacity(
+              booking.paymentStatus,
+              booking.heldUntil ?? null,
+            )
+          ) {
+            await tx
+              .update(classes)
+              .set({
+                currentBookings: sql`GREATEST(0, ${classes.currentBookings} - 1)`,
+              })
+              .where(eq(classes.id, booking.classId));
+          }
+        }
+
+        await tx.delete(subscriptions).where(eq(subscriptions.userId, id));
+        await tx.delete(sessionMoodCheckins).where(eq(sessionMoodCheckins.userId, id));
+        await tx.delete(sessionJoinEvents).where(eq(sessionJoinEvents.userId, id));
+        await tx.delete(userSessionMappings).where(eq(userSessionMappings.userId, id));
+        await tx.delete(classTypeNotifyRequests).where(eq(classTypeNotifyRequests.userId, id));
+        await tx.delete(erasureRequests).where(eq(erasureRequests.userId, id));
+        await tx.delete(userDocuments).where(eq(userDocuments.userId, id));
+        await tx.delete(bookings).where(eq(bookings.userId, id));
+        await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
+        await tx.delete(users).where(eq(users.id, id));
+      });
+
+      return { ok: true };
+    } catch (error) {
+      console.error("[DB] Error deleting user permanently:", error);
+      return { ok: false, message: "Failed to delete user" };
+    }
+  }
+
+  async deleteUsersPermanently(
+    ids: string[],
+  ): Promise<{ deleted: string[]; failed: Array<{ id: string; message: string }> }> {
+    const deleted: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (const id of ids) {
+      const result = await this.deleteUserPermanently(id);
+      if (result.ok) deleted.push(id);
+      else failed.push({ id, message: result.message ?? "Delete failed" });
+    }
+    return { deleted, failed };
+  }
+
   async recordSessionJoin(userId: string, classId: string): Promise<void> {
     try {
       await db.insert(sessionJoinEvents).values({ userId, classId });
@@ -1570,6 +1731,21 @@ export class DatabaseStorage implements IStorage {
 
   async countActiveBookingsForClass(classId: string): Promise<number> {
     try {
+      const capacityFilter = or(
+        inArray(bookings.paymentStatus, [
+          BOOKING_PAYMENT_STATUS.PAID,
+          BOOKING_PAYMENT_STATUS.WAIVED,
+        ]),
+        and(
+          eq(bookings.paymentStatus, BOOKING_PAYMENT_STATUS.PENDING),
+          or(isNull(bookings.heldUntil), gt(bookings.heldUntil, sql`NOW()`)),
+        ),
+        and(
+          eq(bookings.paymentStatus, BOOKING_PAYMENT_STATUS.FAILED),
+          gt(bookings.heldUntil, sql`NOW()`),
+        ),
+      );
+
       const rows = await db
         .select({ id: bookings.id })
         .from(bookings)
@@ -1583,7 +1759,7 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(bookings.classId, classId),
-            inArray(bookings.paymentStatus, ["pending", "paid", "waived"]),
+            capacityFilter,
             or(isNull(userSessionMappings.status), sql`${userSessionMappings.status} <> 'cancelled'`),
           ),
         );
@@ -1768,7 +1944,12 @@ export class DatabaseStorage implements IStorage {
             eq(bookings.isGuestCheckout, true),
             sql`lower(${bookings.guestEmail}) = ${normalized}`,
             eq(bookings.classId, classId),
-            inArray(bookings.paymentStatus, ["pending", "paid", "waived", "failed"]),
+            inArray(bookings.paymentStatus, [
+              BOOKING_PAYMENT_STATUS.PENDING,
+              BOOKING_PAYMENT_STATUS.PAID,
+              BOOKING_PAYMENT_STATUS.WAIVED,
+              BOOKING_PAYMENT_STATUS.FAILED,
+            ]),
           ),
         )
         .orderBy(desc(bookings.createdAt))
@@ -1780,25 +1961,33 @@ export class DatabaseStorage implements IStorage {
         return { state: "confirmed", booking: row };
       }
 
-      if (row.paymentStatus === "failed") {
-        const sessionStillUpcoming = new Date(cls.date).getTime() >= Date.now();
-        return {
-          state: "failed",
-          booking: row,
-          canResumePayment: sessionStillUpcoming,
-        };
+      if (
+        row.paymentStatus === BOOKING_PAYMENT_STATUS.CANCELLED_BY_USER ||
+        row.paymentStatus === BOOKING_PAYMENT_STATUS.HOLD_EXPIRED
+      ) {
+        return { state: "none" };
       }
 
-      if (row.paymentStatus === "pending") {
-        const sessionMethod = normalizeSessionPaymentMethod(row.paymentMethod ?? cls.paymentMethod);
-        const canResumePayment =
-          usesHostedCheckout(sessionMethod) &&
-          bookingIsResumableCheckout({
-            paymentStatus: row.paymentStatus,
-            mappingStatus: null,
-            classSessionStartMs: new Date(cls.date).getTime(),
-          });
-        return { state: "processing", booking: row, canResumePayment };
+      const sessionStartMs = new Date(cls.date).getTime();
+      const sessionMethod = normalizeSessionPaymentMethod(row.paymentMethod ?? cls.paymentMethod);
+      const canResume =
+        usesHostedCheckout(sessionMethod) &&
+        canResumePaymentCheckout({
+          paymentStatus: row.paymentStatus,
+          heldUntil: row.heldUntil,
+          mappingStatus: null,
+          classSessionStartMs: sessionStartMs,
+        });
+
+      if (
+        row.paymentStatus === BOOKING_PAYMENT_STATUS.FAILED ||
+        row.paymentStatus === BOOKING_PAYMENT_STATUS.PENDING
+      ) {
+        return {
+          state: canResume ? "processing" : row.paymentStatus === "failed" ? "failed" : "none",
+          booking: row,
+          canResumePayment: canResume,
+        };
       }
 
       return { state: "none" };
@@ -1861,6 +2050,49 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("[DB] Error updating booking payment status:", error);
       return undefined;
+    }
+  }
+
+  async updateBookingPaymentHold(
+    bookingId: string,
+    data: { paymentStatus?: string; heldUntil?: string | null },
+  ): Promise<Booking | undefined> {
+    try {
+      const patch: Record<string, unknown> = {};
+      if (data.paymentStatus !== undefined) patch.paymentStatus = data.paymentStatus;
+      if (data.heldUntil !== undefined) {
+        patch.heldUntil = data.heldUntil ? new Date(data.heldUntil) : null;
+      }
+      const [row] = await db
+        .update(bookings)
+        .set(patch)
+        .where(eq(bookings.id, bookingId))
+        .returning();
+      return row;
+    } catch (error) {
+      console.error("[DB] Error updating booking payment hold:", error);
+      return undefined;
+    }
+  }
+
+  async findBookingsWithExpiredPaymentHold(): Promise<Booking[]> {
+    try {
+      return await db
+        .select()
+        .from(bookings)
+        .where(
+          and(
+            sql`${bookings.heldUntil} IS NOT NULL`,
+            lte(bookings.heldUntil, sql`NOW()`),
+            inArray(bookings.paymentStatus, [
+              BOOKING_PAYMENT_STATUS.PENDING,
+              BOOKING_PAYMENT_STATUS.FAILED,
+            ]),
+          ),
+        );
+    } catch (error) {
+      console.error("[DB] Error finding expired payment holds:", error);
+      return [];
     }
   }
 
@@ -2726,6 +2958,252 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async insertConsentLog(input: ConsentLogInput): Promise<void> {
+    const hasUser = !!input.userId;
+    const hasBooking = !!input.bookingId;
+    if (hasUser === hasBooking) {
+      throw new Error("Exactly one of userId or bookingId must be set for consent logs");
+    }
+    await db.insert(consentAuditLogs).values({
+      userId: input.userId ?? null,
+      bookingId: input.bookingId ?? null,
+      consentType: input.consentType,
+      action: input.action,
+      consentVersion: input.consentVersion ?? "unknown",
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+    });
+  }
+
+  async getConsentLogsForUser(userId: string) {
+    return db
+      .select()
+      .from(consentAuditLogs)
+      .where(eq(consentAuditLogs.userId, userId))
+      .orderBy(desc(consentAuditLogs.timestampUtc));
+  }
+
+  async userHasActiveConsent(userId: string, consentType: ConsentType): Promise<boolean> {
+    const rows = await this.getConsentLogsForUser(userId);
+    const latest = rows.find((r) => r.consentType === consentType);
+    return latest?.action === "opt_in";
+  }
+
+  async recordRegistrationConsents(params: {
+    userId: string;
+    dateOfBirth: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void> {
+    await db
+      .update(users)
+      .set({ dateOfBirth: params.dateOfBirth, updatedAt: new Date() })
+      .where(eq(users.id, params.userId));
+
+    const base = {
+      userId: params.userId,
+      consentVersion: params.consentVersion,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      action: "opt_in" as const,
+    };
+    for (const consentType of ["profile_booking", "terms", "age_declaration"] as const) {
+      await this.insertConsentLog({ ...base, consentType });
+    }
+  }
+
+  async recordGuestBookingConsents(params: {
+    bookingId: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void> {
+    const now = new Date();
+    await db
+      .update(bookings)
+      .set({
+        guestConsentProfile: true,
+        guestConsentTerms: true,
+        guestConsentAge: true,
+        guestConsentAt: now,
+      })
+      .where(eq(bookings.id, params.bookingId));
+
+    const base = {
+      bookingId: params.bookingId,
+      consentVersion: params.consentVersion,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      action: "opt_in" as const,
+    };
+    for (const consentType of ["profile_booking", "terms", "age_declaration"] as const) {
+      await this.insertConsentLog({ ...base, consentType });
+    }
+  }
+
+  async withdrawHealthDataConsent(params: {
+    userId: string;
+    consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<User | undefined> {
+    const [updated] = await db
+      .update(users)
+      .set({
+        healthUpdateText: null,
+        healthDocumentUrls: null,
+        healthUpdateLastModified: null,
+        profileCompletionStatus: "incomplete",
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, params.userId))
+      .returning();
+    await this.insertConsentLog({
+      userId: params.userId,
+      consentType: "health_data",
+      action: "opt_out",
+      consentVersion: params.consentVersion,
+      ipAddress: params.ipAddress,
+      userAgent: params.userAgent,
+    });
+    if (updated) {
+      await this.recomputeProfileCompletionStatus(params.userId);
+    }
+    return updated;
+  }
+
+  async requestAccountErasure(params: {
+    userId: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<{ erasureRequestId: string; scheduledErasureAt: Date }> {
+    const scheduledErasureAt = new Date();
+    scheduledErasureAt.setDate(scheduledErasureAt.getDate() + 30);
+
+    const existing = await this.getPendingErasureForUser(params.userId);
+    if (existing) {
+      return { erasureRequestId: existing.id, scheduledErasureAt: existing.scheduledErasureAt };
+    }
+
+    const [request] = await db
+      .insert(erasureRequests)
+      .values({
+        userId: params.userId,
+        status: "pending",
+        scheduledErasureAt,
+        ipAddress: params.ipAddress ?? null,
+        userAgent: params.userAgent ?? null,
+      })
+      .returning();
+
+    const upcoming = await db
+      .select({ classId: userSessionMappings.classId })
+      .from(userSessionMappings)
+      .innerJoin(classes, eq(classes.id, userSessionMappings.classId))
+      .where(
+        and(
+          eq(userSessionMappings.userId, params.userId),
+          or(isNull(userSessionMappings.status), sql`${userSessionMappings.status} <> 'cancelled'`),
+          gte(classes.date, sql`CURRENT_DATE`),
+        ),
+      );
+
+    const now = new Date();
+    for (const row of upcoming) {
+      await db
+        .update(userSessionMappings)
+        .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(userSessionMappings.userId, params.userId),
+            eq(userSessionMappings.classId, row.classId),
+          ),
+        );
+    }
+
+    await db
+      .update(users)
+      .set({ isActive: false, updatedAt: now })
+      .where(eq(users.id, params.userId));
+
+    const version = consentVersion();
+    for (const consentType of ["profile_booking", "terms", "age_declaration", "health_data"] as const) {
+      const active = await this.userHasActiveConsent(params.userId, consentType);
+      if (active) {
+        await this.insertConsentLog({
+          userId: params.userId,
+          consentType,
+          action: "opt_out",
+          consentVersion: version,
+          ipAddress: params.ipAddress,
+          userAgent: params.userAgent,
+        });
+      }
+    }
+
+    return { erasureRequestId: request.id, scheduledErasureAt };
+  }
+
+  async userHasErasureHistory(userId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: erasureRequests.id })
+      .from(erasureRequests)
+      .where(eq(erasureRequests.userId, userId))
+      .limit(1);
+    return Boolean(row);
+  }
+
+  async reopenAccountAfterSelfErasure(userId: string): Promise<User | undefined> {
+    const hasErasure = await this.userHasErasureHistory(userId);
+    if (!hasErasure) return undefined;
+
+    const now = new Date();
+    await db
+      .update(erasureRequests)
+      .set({ status: "cancelled", completedAt: now })
+      .where(and(eq(erasureRequests.userId, userId), eq(erasureRequests.status, "pending")));
+
+    await db
+      .update(users)
+      .set({
+        isActive: true,
+        primaryMobile: null,
+        primaryMobileCountryCode: "+91",
+        secondaryMobile: null,
+        secondaryMobileCountryCode: "+91",
+        emergencyMobile: null,
+        emergencyMobileCountryCode: "+91",
+        healthUpdateText: null,
+        healthDocumentUrls: null,
+        healthUpdateHistory: [],
+        healthUpdateLastModified: null,
+        dateOfBirth: null,
+        profileCompletionStatus: "incomplete",
+        updatedAt: now,
+      })
+      .where(eq(users.id, userId));
+
+    return this.getUser(userId);
+  }
+
+  async getPendingErasureForUser(userId: string) {
+    const [row] = await db
+      .select()
+      .from(erasureRequests)
+      .where(and(eq(erasureRequests.userId, userId), eq(erasureRequests.status, "pending")))
+      .limit(1);
+    return row;
+  }
+
+  async getAdminConsentLogs(limit = 200) {
+    return db
+      .select()
+      .from(consentAuditLogs)
+      .orderBy(desc(consentAuditLogs.timestampUtc))
+      .limit(limit);
+  }
+
   async incrementSubscriptionUtilization(userId: string, classId: string): Promise<void> {
     const cls = await this.getClass(classId);
     if (!cls) return;
@@ -2749,6 +3227,75 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(subscriptions.id, active.id));
+  }
+
+  async getUsersWithCompletenessPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: (User & { completeness: ProfileCompleteness })[]; total: number }> {
+    const offset = paginationOffset(page, pageSize);
+    const [{ total }] = await db.select({ total: count() }).from(users);
+    const slice = await db.select().from(users).orderBy(desc(users.createdAt)).limit(pageSize).offset(offset);
+    const rows = slice.map((user) => ({
+      ...user,
+      completeness: this.calculateProfileCompleteness(user),
+    }));
+    return { rows, total: Number(total) };
+  }
+
+  async getAllClassesPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Class[]; total: number }> {
+    const offset = paginationOffset(page, pageSize);
+    const [{ total }] = await db.select({ total: count() }).from(classes);
+    const rows = await db.select().from(classes).orderBy(classes.date).limit(pageSize).offset(offset);
+    return { rows, total: Number(total) };
+  }
+
+  async getAllInstructorsPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Instructor[]; total: number }> {
+    const offset = paginationOffset(page, pageSize);
+    const [{ total }] = await db.select({ total: count() }).from(instructors);
+    const rows = await db
+      .select()
+      .from(instructors)
+      .orderBy(instructors.name)
+      .limit(pageSize)
+      .offset(offset);
+    return { rows, total: Number(total) };
+  }
+
+  async getAllClassTypesPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: ClassType[]; total: number }> {
+    const offset = paginationOffset(page, pageSize);
+    const [{ total }] = await db.select({ total: count() }).from(classTypes);
+    const rows = await db
+      .select()
+      .from(classTypes)
+      .orderBy(classTypes.name)
+      .limit(pageSize)
+      .offset(offset);
+    return { rows, total: Number(total) };
+  }
+
+  async getAllBookingsPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: Booking[]; total: number }> {
+    const offset = paginationOffset(page, pageSize);
+    const [{ total }] = await db.select({ total: count() }).from(bookings);
+    const rows = await db
+      .select()
+      .from(bookings)
+      .orderBy(desc(bookings.createdAt))
+      .limit(pageSize)
+      .offset(offset);
+    return { rows, total: Number(total) };
   }
 
   // Profile completeness calculation helper

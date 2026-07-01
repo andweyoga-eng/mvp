@@ -30,6 +30,7 @@ import {
   memberSessionsQueryKey,
   type MemberSession,
 } from "@/lib/member-sessions";
+import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
 import type { Class, ClassType, Instructor } from "@shared/schema";
 import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
@@ -199,6 +200,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!authLoading && !user) setLocation("/");
+  }, [authLoading, user, setLocation]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    if (user.profileCompletionStatus === "incomplete") {
+      setLocation(MY_ACCOUNT_PROFILE_URL);
+    }
   }, [authLoading, user, setLocation]);
 
   useEffect(() => {

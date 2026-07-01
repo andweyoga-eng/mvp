@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { storage } from "./storage";
 import { verifyWebhookSignature } from "./razorpay";
 import { markPaymentPaid } from "./payment-service";
+import { applyPaymentFailureHold } from "./booking-hold-service";
 
 export async function handleRazorpayWebhook(req: Request, res: Response): Promise<void> {
   const signature = req.headers["x-razorpay-signature"] as string | undefined;
@@ -39,6 +40,19 @@ export async function handleRazorpayWebhook(req: Request, res: Response): Promis
             razorpayPaymentId: paymentId,
             razorpayOrderId: orderId,
           });
+        }
+      }
+    }
+
+    if (eventType === "payment.failed") {
+      const paymentEntity =
+        event.payload?.payment?.entity ?? event.payload?.payment;
+      const orderId = paymentEntity?.order_id as string | undefined;
+
+      if (orderId) {
+        const record = await storage.getPaymentByRazorpayOrderId(orderId);
+        if (record?.bookingId) {
+          await applyPaymentFailureHold(record.bookingId);
         }
       }
     }

@@ -101,7 +101,7 @@ export async function fetchRazorpayPayment(paymentId: string): Promise<{
     invoice_id: payment.invoice_id ?? null,
     error_description: payment.error_description ?? undefined,
     email: payment.email ?? undefined,
-    contact: payment.contact ?? undefined,
+    contact: payment.contact != null ? String(payment.contact) : undefined,
   };
 }
 

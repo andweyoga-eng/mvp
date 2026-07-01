@@ -8,3 +8,6 @@ export const CUSTOMER_SUPPORT = {
 
 export const ACCOUNT_DEACTIVATED_MESSAGE =
   "Your andWeYoga account has been deactivated. To reactivate it, please contact our customer care team.";
+
+export const ACCOUNT_CLOSED_MESSAGE =
+  "You previously closed your andWeYoga account. Sign in again or register with the same email to start fresh.";

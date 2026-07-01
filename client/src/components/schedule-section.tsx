@@ -18,6 +18,7 @@ import hyyocrossImg from "@assets/Hyyocross_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import { cn } from "@/lib/utils";
+import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
 
 interface ClassType {
   id: string;
@@ -340,59 +341,17 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                   const imageUrl = classImageFor(cls.classType.name);
                   const soldOut = cls.currentBookings >= cls.maxCapacity;
                   return (
-                    <div
+                    <AvailableTodaySessionCard
                       key={cls.id}
-                      className="w-[286px] shrink-0 snap-start overflow-hidden rounded-2xl border border-transparent bg-muted transition hover:border-primary/15 hover:bg-white hover:shadow-dz-ambient"
-                    >
-                      <div
-                        className="relative flex h-32 items-center justify-center bg-gradient-to-br from-primary/20 to-dz-secondary/30"
-                        style={
-                          imageUrl
-                            ? {
-                                backgroundImage: `url(${imageUrl})`,
-                                backgroundSize: "cover",
-                                backgroundPosition: "center",
-                              }
-                            : undefined
-                        }
-                      >
-                        {soldOut ? (
-                          <span className="absolute left-3 top-3 rounded-lg bg-destructive px-2.5 py-1 text-xs font-semibold text-white">
-                            Sold Out
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="p-4">
-                        <div className="mb-2.5 flex items-start justify-between gap-2">
-                          <div>
-                            <div className="mb-1 flex items-center gap-1 text-dz-secondary">
-                              <Clock className="h-4 w-4" />
-                              <span className="text-xs font-semibold">
-                                {formatTimeIST(cls.date)}
-                              </span>
-                            </div>
-                            <h4 className="font-display text-lg font-semibold">{cls.classType.name}</h4>
-                          </div>
-                          <span className="whitespace-nowrap font-bold text-primary">
-                            ₹{cls.classType.price}
-                          </span>
-                        </div>
-                        <div className="mb-3.5 flex items-center gap-2.5">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
-                            {instructorInitials(cls.instructor.name)}
-                          </div>
-                          <span className="text-sm text-dz-muted">{cls.instructor.name}</span>
-                        </div>
-                        <Button
-                          className="w-full rounded-xl bg-primary font-semibold shadow-dz-primary hover:bg-primary/90"
-                          disabled={soldOut}
-                          onClick={() => onBookingClick(cls.id)}
-                          data-testid={`book-class-${cls.id}`}
-                        >
-                          {soldOut ? "Sold Out" : "Book Now"}
-                        </Button>
-                      </div>
-                    </div>
+                      sessionId={cls.id}
+                      className={cls.classType.name}
+                      instructorName={cls.instructor.name}
+                      timeLabel={formatTimeIST(cls.date)}
+                      price={cls.classType.price}
+                      imageUrl={imageUrl}
+                      soldOut={soldOut}
+                      onBook={(id) => onBookingClick(id)}
+                    />
                   );
                 })}
               </div>

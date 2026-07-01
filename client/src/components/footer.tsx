@@ -1,8 +1,23 @@
 import { Facebook, Instagram, Youtube, Twitter } from "lucide-react";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { navigateToHomeSection } from "@/lib/home-navigation";
+import { detectConsentLanguage } from "@/lib/consent-language";
+
+const LEGAL_LINKS = {
+  en: {
+    privacy: "Privacy Notice",
+    terms: "Terms of Service",
+    grievance: "Grievance Redressal",
+  },
+  kn: {
+    privacy: "ಗೌಪ್ಯತಾ ಸೂಚನೆ",
+    terms: "ಸೇವಾ ನಿಯಮಗಳು",
+    grievance: "ದೂರು ಪರಿಹಾರ",
+  },
+} as const;
 
 export default function Footer() {
+  const legal = LEGAL_LINKS[detectConsentLanguage()];
   return (
     <footer className="bg-primary py-10 text-primary-foreground md:py-16">
       <PageContainer>
@@ -67,8 +82,18 @@ export default function Footer() {
           </div>
         </div>
         <p className="mt-7 text-center text-sm text-white/60">
-          andWeYO^ga, A brand of Ashtanga Welltech OPC Pvt Ltd. All rights reserved. | Privacy
-          Policy | Terms of Service
+          andWeYO^ga, A brand of Ashtanga Welltech OPC Pvt Ltd. All rights reserved.{" "}
+          <a href="/privacy" className="hover:text-white underline-offset-2 hover:underline">
+            {legal.privacy}
+          </a>
+          {" · "}
+          <a href="/terms" className="hover:text-white underline-offset-2 hover:underline">
+            {legal.terms}
+          </a>
+          {" · "}
+          <a href="/grievance" className="hover:text-white underline-offset-2 hover:underline">
+            {legal.grievance}
+          </a>
         </p>
       </PageContainer>
     </footer>

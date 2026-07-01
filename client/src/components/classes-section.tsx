@@ -12,6 +12,10 @@ import { useAuth } from "@/lib/auth";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
 import type { ClassType } from "@shared/schema";
 import type { BookingIntent } from "@/lib/pending-booking";
+import {
+  SessionShareMenu,
+  buildClassTypeSharePayloadForUi,
+} from "@/components/session-share-menu";
 
 interface ClassesSectionProps {
   onBookingClick: (intent?: BookingIntent) => void;
@@ -165,10 +169,16 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                   <p className="mb-4 flex-1 text-sm text-dz-muted" data-testid={`class-description-${classType.id}`}>
                     {classType.description}
                   </p>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
                     <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>
                       ₹{classType.price}/session
                     </span>
+                    <div className="flex items-center gap-2">
+                      <SessionShareMenu
+                        payload={buildClassTypeSharePayloadForUi(classType)}
+                        className="rounded-xl h-9 text-xs"
+                        variant="outline"
+                      />
                     {hasUpcomingSession(classType.id) ? (
                       <Button
                         onClick={() => handleClassBooking(classType.id)}
@@ -186,6 +196,7 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                         Notify me
                       </Button>
                     )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

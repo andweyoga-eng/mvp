@@ -6,6 +6,7 @@ import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   memberBookingBodySchema,
+  createBookingRequestSchema,
   insertBookingSchema,
 } from "../shared/schema.ts";
 import {
@@ -86,6 +87,22 @@ describe("memberBookingBodySchema (POST /api/bookings)", () => {
   it("rejects missing classId", () => {
     const result = memberBookingBodySchema.safeParse({ userId: "user-1" });
     assert.equal(result.success, false);
+  });
+
+  it("createBookingRequestSchema accepts member body without guestPhone", () => {
+    const result = createBookingRequestSchema.safeParse({ classId: "sess-uuid-1" });
+    assert.equal(result.success, true);
+  });
+
+  it("createBookingRequestSchema accepts guest body with phone", () => {
+    const result = createBookingRequestSchema.safeParse({
+      classId: "sess-1",
+      guestName: "Guest",
+      guestEmail: "guest@example.com",
+      guestPhone: "9876543210",
+    });
+    assert.equal(result.success, true);
+    if (result.success) assert.equal(result.data.guestPhone, "9876543210");
   });
 
   it("insertBookingSchema accepts guest checkout without userId", () => {

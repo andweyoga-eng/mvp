@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -22,7 +21,6 @@ import {
   Phone,
   AlertTriangle,
   Heart,
-  CheckCircle2,
   CalendarClock,
   CreditCard,
   SlidersHorizontal,
@@ -30,12 +28,19 @@ import {
   BadgeCheck,
   LogOut,
   Lightbulb,
-  AtSign,
   ArrowUp,
+  Shield,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import { SessionHistory } from "@/components/session-history";
 import { PaymentHistory } from "@/components/payment-history";
+import { PrivacyConsentSection } from "@/components/privacy-consent-section";
+import { AccountHealthNoteSection } from "@/components/account-health-note-section";
+import { DateOfBirthField } from "@/components/date-of-birth-field";
+import { type ConsentLanguage, isAdult, isValidDateOfBirth } from "@shared/consent";
+import { detectConsentLanguage } from "@/lib/consent-language";
+import { fetchMyConsentStatus } from "@/lib/consent-api";
+import { LEGAL_CONFIG } from "@shared/legal-config";
 import { useAuth, getAuthHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -45,11 +50,12 @@ import {
   formatMobileNumber,
 } from "@shared/mobile-validation";
 import {
-  MIN_HEALTH_UPDATE_CHARS,
+  isHealthDisclosureComplete,
   isAccountProfileComplete,
   type AccountProfileCheckInput,
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
+import { parseHealthHistory } from "@shared/health-disclosure";
 
 /**
  * MY ACCOUNT — the single source of truth for the member account experience.
@@ -91,11 +97,12 @@ const NAV: { id: AccountAnchor; label: string; icon: typeof User; soon?: boolean
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal, soon: true },
   { id: "security", label: "Account & security", icon: ShieldCheck },
+  { id: "privacy", label: "Privacy & consent", icon: Shield },
 ];
 
-/** Desktop breakpoint (Tailwind `md`). Below this the page scrolls; at/above it the
+/** Desktop breakpoint (handoff: 900px). Below this the page scrolls; at/above it the
  * content panel scrolls internally while the left rail stays static. */
-const DESKTOP_MQ = "(min-width: 768px)";
+const DESKTOP_MQ = "(min-width: 900px)";
 /** Id of the internally-scrolling content panel (desktop/tablet). */
 const SCROLL_PANEL_ID = "account-scroll";
 
@@ -110,6 +117,7 @@ export default function MyAccount() {
 
   const [profileData, setProfileData] = useState({
     name: "",
+    dateOfBirth: "",
     primaryMobile: "",
     primaryMobileCountryCode: "+91",
     secondaryMobile: "",
@@ -126,6 +134,21 @@ export default function MyAccount() {
   });
   // Preferences are UI-only placeholders until the notifications backend ships.
   const [prefs, setPrefs] = useState({ reminders: true, updates: true, promos: false });
+  const [healthConsentGiven, setHealthConsentGiven] = useState(true);
+  const [healthConsentChecked, setHealthConsentChecked] = useState(false);
+  const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
+  const [dobError, setDobError] = useState("");
+  const dobLocked = Boolean(user?.dateOfBirth);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchMyConsentStatus()
+      .then((data) => {
+        const health = data.categories.find((c) => c.consentType === "health_data");
+        setHealthConsentGiven(health?.status === "active");
+      })
+      .catch(() => setHealthConsentGiven(false));
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) setLocation("/");
@@ -135,6 +158,7 @@ export default function MyAccount() {
     if (!user) return;
     const next = {
       name: user.name || "",
+      dateOfBirth: user.dateOfBirth || "",
       primaryMobile: user.primaryMobile || "",
       primaryMobileCountryCode: user.primaryMobileCountryCode || "+91",
       secondaryMobile: user.secondaryMobile || "",
@@ -145,6 +169,7 @@ export default function MyAccount() {
       healthDocumentUrls: user.healthDocumentUrls || [],
     };
     setProfileData(next);
+    setDobError("");
     setMobileValidation({
       primaryMobile: validateRequiredMobile(
         "primaryMobile",
@@ -247,6 +272,14 @@ export default function MyAccount() {
     if (field.includes("Mobile") && !field.endsWith("CountryCode")) {
       nextValue = formatMobileNumber(value);
     }
+    if (field === "dateOfBirth") {
+      setDobError("");
+      if (value && !isValidDateOfBirth(value)) {
+        setDobError("Please enter a valid date of birth.");
+      } else if (value && !isAdult(value)) {
+        setDobError("You must be 18 or older to use andWeYoga.");
+      }
+    }
     setProfileData((prev) => {
       const next = { ...prev, [field]: nextValue };
       if (
@@ -277,13 +310,28 @@ export default function MyAccount() {
     });
   };
 
-  const handleHealthFill = () =>
-    setProfileData((p) => ({ ...p, healthUpdateText: "No current concerns" }));
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileData.name.trim())
       return toast({ title: "Name is required", variant: "destructive" });
+    if (!dobLocked) {
+      if (!profileData.dateOfBirth.trim()) {
+        setDobError("Date of birth is required.");
+        return toast({ title: "Date of birth is required", variant: "destructive" });
+      }
+      if (!isValidDateOfBirth(profileData.dateOfBirth)) {
+        setDobError("Please enter a valid date of birth.");
+        return toast({ title: "Invalid date of birth", variant: "destructive" });
+      }
+      if (!isAdult(profileData.dateOfBirth)) {
+        setDobError("You must be 18 or older to use andWeYoga.");
+        return toast({
+          title: "Age requirement",
+          description: "You must be 18 or older to use andWeYoga.",
+          variant: "destructive",
+        });
+      }
+    }
     if (!profileData.primaryMobile.trim())
       return toast({ title: "Mobile number is required", variant: "destructive" });
     if (!profileData.emergencyMobile.trim())
@@ -303,51 +351,63 @@ export default function MyAccount() {
         title: `Alternate: ${mobileValidation.secondaryMobile.error}`,
         variant: "destructive",
       });
-    if (profileData.healthUpdateText.trim().length < MIN_HEALTH_UPDATE_CHARS) {
-      toast({
-        title: "Add a health note",
-        description: `At least ${MIN_HEALTH_UPDATE_CHARS} characters — or tap "No current concerns".`,
-        variant: "destructive",
-      });
-      document.getElementById("health")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
     setIsLoading(true);
     try {
-      await updateProfile(profileData);
-      toast({ title: "Profile saved" });
+      const contactPayload = {
+        name: profileData.name,
+        primaryMobile: profileData.primaryMobile,
+        primaryMobileCountryCode: profileData.primaryMobileCountryCode,
+        secondaryMobile: profileData.secondaryMobile,
+        secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
+        emergencyMobile: profileData.emergencyMobile,
+        emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
+        ...(dobLocked ? {} : { dateOfBirth: profileData.dateOfBirth }),
+      };
+      await updateProfile(contactPayload, { successTitle: "Contact info saved" });
+      setActiveSection("health");
+      window.location.hash = "health";
+      requestAnimationFrame(() => {
+        document.getElementById("health")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch {
-      toast({ title: "Update failed", description: "Please try again.", variant: "destructive" });
+      // updateProfile already shows error toast
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleHealthSave = async () => {
+  const handleHealthSave = async (payload: { text: string; documentUrls: string[] }) => {
     if (!user?.id) return;
-    if (profileData.healthUpdateText.trim().length < MIN_HEALTH_UPDATE_CHARS) {
-      return toast({
-        title: "Health note too short",
-        description: `At least ${MIN_HEALTH_UPDATE_CHARS} characters.`,
+    if (!isHealthDisclosureComplete(payload.text)) {
+      toast({
+        title: "Health update required",
+        description: 'Add your health note or tap "No current concerns".',
         variant: "destructive",
       });
+      return;
     }
     setIsLoading(true);
     try {
+      const body: Record<string, unknown> = {
+        healthUpdateText: payload.text,
+        healthDocumentUrls: payload.documentUrls,
+      };
+      if (!healthConsentGiven) {
+        body.healthDataConsent = true;
+        body.consentVersion = LEGAL_CONFIG.documentVersion;
+      }
       const res = await fetch(`/api/users/${user.id}/health-update`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({
-          healthUpdateText: profileData.healthUpdateText,
-          healthDocumentUrls: profileData.healthDocumentUrls,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || err.message || "Failed to save");
       }
       await refreshUser();
+      setHealthConsentGiven(true);
       toast({ title: "Health note saved" });
     } catch (err) {
       toast({
@@ -372,11 +432,20 @@ export default function MyAccount() {
     healthUpdateText: profileData.healthUpdateText,
   };
   const isBookingReady = isAccountProfileComplete(statusInput);
+  const healthHistory = parseHealthHistory(user?.healthUpdateHistory);
 
   // Completeness meter (5 signals) — a friendlier replacement for a binary badge.
   const checks = [
     { ok: Boolean(user?.emailVerified), hint: "verify your email" },
     { ok: profileData.name.trim().length > 0, hint: "add your name" },
+    {
+      ok:
+        dobLocked ||
+        (profileData.dateOfBirth.trim().length > 0 &&
+          isValidDateOfBirth(profileData.dateOfBirth) &&
+          isAdult(profileData.dateOfBirth)),
+      hint: "add your date of birth",
+    },
     {
       ok: profileData.primaryMobile.trim().length > 0 && mobileValidation.primaryMobile.isValid,
       hint: "add your mobile",
@@ -387,7 +456,7 @@ export default function MyAccount() {
       hint: "add an emergency contact",
     },
     {
-      ok: profileData.healthUpdateText.trim().length >= MIN_HEALTH_UPDATE_CHARS,
+      ok: isHealthDisclosureComplete(profileData.healthUpdateText),
       hint: "add a health note",
     },
   ];
@@ -418,20 +487,28 @@ export default function MyAccount() {
 
   const sectionCard =
     "scroll-mt-36 md:scroll-mt-4 rounded-[20px] border border-primary/10 bg-white/70 backdrop-blur-xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(27,28,27,0.04)]";
-  const sectionHead = (Icon: typeof User, title: string, sub: string, soon?: boolean) => (
+  const sectionHead = (
+    Icon: typeof User,
+    title: string,
+    sub: string,
+    opts?: { soon?: boolean; required?: boolean },
+  ) => (
     <div className="flex items-center gap-3">
       <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1">
-        <h2 className="font-display text-xl font-semibold text-foreground">{title}</h2>
+        <h2 className="font-display text-xl font-semibold text-foreground">
+          {title}
+          {opts?.required ? <span className="ml-1 font-bold text-dz-secondary">*</span> : null}
+        </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">{sub}</p>
       </div>
-      {soon && (
+      {opts?.soon ? (
         <span className="rounded-full bg-dz-secondary/10 px-2.5 py-1 text-[10px] font-bold tracking-wider text-dz-secondary">
           SOON
         </span>
-      )}
+      ) : null}
     </div>
   );
 
@@ -442,21 +519,21 @@ export default function MyAccount() {
     );
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background md:h-screen md:min-h-0 md:overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-x-hidden bg-background min-[900px]:h-screen min-[900px]:min-h-0 min-[900px]:overflow-hidden">
       <Navigation onBookingClick={scrollToSchedule} />
 
-      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 md:flex md:min-h-0 md:flex-1 md:flex-col md:pb-0 md:pt-6">
+      <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:flex-col min-[900px]:pb-0 min-[900px]:pt-6">
         <button
           onClick={() => setLocation("/dashboard")}
           data-testid="back-to-hub"
           className="mb-4 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to dashboard
+          <ArrowLeft className="h-4 w-4" /> Back to hub
         </button>
 
         {/* Profile band + completeness meter */}
-        <section className="mb-6 flex shrink-0 flex-wrap items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-dz-secondary p-5 text-white shadow-[0_12px_34px_rgba(52,25,106,0.22)] sm:gap-7 sm:p-7 md:mb-4">
-          <div className="grid h-[72px] w-[72px] shrink-0 place-items-center rounded-full border-2 border-white/35 bg-white/15 font-display text-2xl font-bold backdrop-blur">
+        <section className="mb-6 flex shrink-0 flex-wrap items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-dz-secondary p-5 text-white shadow-[0_12px_34px_rgba(52,25,106,0.22)] sm:gap-7 sm:p-7 min-[900px]:mb-4">
+          <div className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-full border-2 border-white/35 bg-white/15 font-display text-2xl font-bold backdrop-blur">
             {initials}
           </div>
           <div className="min-w-0 flex-1 basis-56">
@@ -497,7 +574,7 @@ export default function MyAccount() {
         </section>
 
         {/* Mobile chip nav — sticky so the section list stays reachable while scrolling */}
-        <nav className="sticky top-[64px] z-30 -mx-4 mb-2 flex gap-2 overflow-x-auto border-b border-primary/10 bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="sticky top-[64px] z-30 -mx-4 mb-2 flex gap-2 overflow-x-auto border-b border-primary/10 bg-background/95 px-4 pb-3 pt-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 min-[900px]:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {NAV.map((n) => (
             <a
               key={n.id}
@@ -515,9 +592,9 @@ export default function MyAccount() {
           ))}
         </nav>
 
-        <div className="grid items-start gap-7 md:grid md:min-h-0 md:flex-1 md:grid-cols-[220px_1fr] md:items-stretch md:gap-6 md:overflow-hidden">
+        <div className="grid items-start gap-7 min-[900px]:grid min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:grid-cols-[236px_1fr] min-[900px]:items-stretch min-[900px]:gap-6 min-[900px]:overflow-hidden">
           {/* Static rail (desktop/tablet) — stays put while the content panel scrolls */}
-          <nav className="hidden flex-col gap-1 md:flex md:min-h-0 md:self-stretch md:overflow-y-auto md:pr-1">
+          <nav className="hidden flex-col gap-1 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:self-stretch min-[900px]:overflow-y-auto min-[900px]:pr-1">
             {NAV.map((n) => {
               const isActive = activeSection === n.id;
               return (
@@ -553,11 +630,11 @@ export default function MyAccount() {
           {/* Content panel — scrolls internally on desktop/tablet, page-scrolls on mobile */}
           <div
             id={SCROLL_PANEL_ID}
-            className="flex min-w-0 flex-col gap-5 md:min-h-0 md:overflow-y-auto md:pb-10 md:pr-2"
+            className="flex min-w-0 flex-col gap-5 min-[900px]:min-h-0 min-[900px]:overflow-y-auto min-[900px]:pb-10 min-[900px]:pr-2"
           >
             {/* CONTACT INFO (anchor id stays `profile`) */}
             <section id="profile" className={sectionCard} data-testid="profile-content">
-              {sectionHead(User, "Contact Info", "Your details, kept private")}
+              {sectionHead(User, "Contact Info", "Your details, kept private", { required: true })}
               <div className="my-5 h-px bg-primary/10" />
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -587,6 +664,22 @@ export default function MyAccount() {
                       readOnly
                       className="cursor-not-allowed bg-muted text-muted-foreground"
                       data-testid="profile-email-display"
+                    />
+                  </div>
+                  <div>
+                    <DateOfBirthField
+                      id="dateOfBirth"
+                      label={
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                          Date of birth {dobLocked ? <Lock className="h-3.5 w-3.5" /> : null}
+                          {!dobLocked ? <span className="font-bold text-dz-secondary">*</span> : null}
+                        </span>
+                      }
+                      value={profileData.dateOfBirth}
+                      onChange={(iso) => handleInputChange("dateOfBirth", iso)}
+                      disabled={dobLocked}
+                      error={dobError}
+                      testIdPrefix="profile-dob"
                     />
                   </div>
                 </div>
@@ -658,54 +751,35 @@ export default function MyAccount() {
                   data-testid="update-profile-button"
                   className="w-full rounded-full bg-primary py-6 font-bold text-white hover:bg-primary/90"
                 >
-                  {isLoading ? "Saving…" : isBookingReady ? "Save changes" : "Complete profile"}
+                  {isLoading ? "Saving…" : "Save changes"}
                 </Button>
               </form>
             </section>
 
             {/* HEALTH */}
             <section id="health" className={sectionCard} data-testid="health-content">
-              {sectionHead(Heart, "Health note", "So we keep your practice safe")}
+              {sectionHead(Heart, "Health note", "So we keep your practice safe", { required: true })}
               <div className="my-5 h-px bg-primary/10" />
-              <Label htmlFor="health-update" className="mb-2.5 block text-sm text-foreground">
-                Anything we should know before you practice? Recent injuries, surgeries, or doctor's
-                notes.
-              </Label>
-              <Textarea
-                id="health-update"
-                value={profileData.healthUpdateText}
-                onChange={(e) => handleInputChange("healthUpdateText", e.target.value)}
-                placeholder="Share anything relevant — or tap below if all clear."
-                className="min-h-[104px]"
-                data-testid="health-update-text"
+              <AccountHealthNoteSection
+                currentText={profileData.healthUpdateText}
+                documentUrls={profileData.healthDocumentUrls}
+                lastModified={user.healthUpdateLastModified ?? null}
+                history={healthHistory}
+                healthConsentGiven={healthConsentGiven}
+                healthConsentChecked={healthConsentChecked}
+                onHealthConsentCheckedChange={setHealthConsentChecked}
+                consentLang={consentLang}
+                onConsentLangChange={setConsentLang}
+                onSave={async (payload) => {
+                  await handleHealthSave(payload);
+                  setProfileData((p) => ({
+                    ...p,
+                    healthUpdateText: payload.text,
+                    healthDocumentUrls: payload.documentUrls,
+                  }));
+                }}
+                isLoading={isLoading}
               />
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleHealthFill}
-                  className="rounded-full border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  data-testid="health-no-concerns"
-                >
-                  <CheckCircle2 className="mr-1.5 h-4 w-4" />
-                  No current concerns
-                </Button>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <AtSign className="h-3.5 w-3.5" />
-                  Detailed reports → mudit@andweyoga.com
-                </span>
-              </div>
-              <Button
-                onClick={handleHealthSave}
-                disabled={
-                  isLoading || profileData.healthUpdateText.trim().length < MIN_HEALTH_UPDATE_CHARS
-                }
-                className="mt-5 w-full rounded-full bg-primary py-6 font-bold text-white hover:bg-primary/90 disabled:opacity-50"
-                data-testid="save-health-update"
-              >
-                {isLoading ? "Saving…" : "Save health note"}
-              </Button>
             </section>
 
             {/* SESSIONS */}
@@ -765,7 +839,7 @@ export default function MyAccount() {
 
             {/* PREFERENCES (placeholder) */}
             <section id="preferences" className={sectionCard} data-testid="preferences-content">
-              {sectionHead(SlidersHorizontal, "Preferences", "How we reach you", true)}
+              {sectionHead(SlidersHorizontal, "Preferences", "How we reach you", { soon: true })}
               <div className="my-4 h-px bg-primary/10" />
               {(
                 [
@@ -824,6 +898,16 @@ export default function MyAccount() {
                 Sign out
               </Button>
             </section>
+
+            {/* PRIVACY & CONSENT */}
+            <section id="privacy" className={sectionCard} data-testid="privacy-content">
+              <PrivacyConsentSection
+                onHealthWithdrawn={() => {
+                  setHealthConsentGiven(false);
+                  setHealthConsentChecked(false);
+                }}
+              />
+            </section>
           </div>
         </div>
       </main>
@@ -835,7 +919,7 @@ export default function MyAccount() {
         aria-label="Back to top"
         data-testid="back-to-top"
         className={cn(
-          "fixed bottom-5 right-5 z-40 grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_rgba(52,25,106,0.35)] transition-all duration-300 md:hidden",
+          "fixed bottom-5 right-5 z-40 grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_10px_28px_rgba(52,25,106,0.35)] transition-all duration-300 min-[900px]:hidden",
           showBackToTop ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
         )}
       >

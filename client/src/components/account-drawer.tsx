@@ -9,6 +9,7 @@ import {
   Smartphone,
   LogOut,
   type LucideIcon,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ const DRAWER_ITEMS: DrawerItem[] = [
   { label: "Health Updates", icon: HeartPulse, href: myAccountHref("health") },
   { label: "Session History", icon: History, href: myAccountHref("sessions") },
   { label: "Payments", icon: CreditCard, href: myAccountHref("payments") },
+  { label: "Privacy & consent", icon: Shield, href: myAccountHref("privacy") },
   { label: "Link Devices", icon: Smartphone, href: myAccountHref("preferences"), soon: true },
 ];
 

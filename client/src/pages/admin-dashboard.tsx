@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -30,6 +31,7 @@ import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
 import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
+import { ConsentLogPanel } from "@/components/admin/consent-log-panel";
 import {
   PaymentQrCodesPanel,
   QrCodesCreateToolbar,
@@ -48,12 +50,14 @@ import {
   InstructorStatusActions,
 } from "@/components/admin/create-instructor-modal";
 import type { Instructor } from "@shared/schema";
+import type { PaginatedResponse } from "@shared/admin-pagination";
+import { AdminPagination } from "@/components/admin/admin-pagination";
 import {
-  canInstructorTakeSessions,
   getInstructorStatusLabel,
   getInstructorEmailVerificationLabel,
   isInstructorFullyOnboarded,
   showManuallyVerifiedBadge,
+  canInstructorTakeSessions,
 } from "@shared/instructor-compliance";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
@@ -67,8 +71,8 @@ interface User {
     emailVerified: boolean; completionPercentage: number; flags: string[];
   };
 }
-interface AdminUsersResponse {
-  users: User[]; totalUsers: number; completeProfiles: number; incompleteProfiles: number;
+interface AdminUsersResponse extends PaginatedResponse<User> {
+  stats?: { completeProfiles: number; incompleteProfiles: number };
 }
 interface ClassType {
   id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null; intensity: string;
@@ -140,11 +144,26 @@ export default function AdminDashboard() {
 
   if (!admin) { setLocation("/admin/login"); return null; }
 
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersPageSize, setUsersPageSize] = useState(20);
+  const [sessionsPage, setSessionsPage] = useState(1);
+  const [sessionsPageSize, setSessionsPageSize] = useState(20);
+  const [instructorsPage, setInstructorsPage] = useState(1);
+  const [instructorsPageSize, setInstructorsPageSize] = useState(20);
+  const [classTypesPage, setClassTypesPage] = useState(1);
+  const [classTypesPageSize, setClassTypesPageSize] = useState(20);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+
+  const isSuperAdmin = admin.role === "super_admin";
+
   const { data: usersData, isLoading: usersLoading, error: usersError, refetch: refetchUsers } =
     useQuery<AdminUsersResponse>({
-      queryKey: ["/api/admin/users"],
+      queryKey: ["/api/admin/users", usersPage, usersPageSize],
       queryFn: async () => {
-        const res = await fetch("/api/admin/users", { headers: adminHeaders() });
+        const res = await fetch(
+          `/api/admin/users?page=${usersPage}&pageSize=${usersPageSize}`,
+          { headers: adminHeaders() },
+        );
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
@@ -152,25 +171,42 @@ export default function AdminDashboard() {
       refetchOnWindowFocus: true,
     });
 
-  const { data: classTypes = [], isLoading: ctLoading, refetch: refetchCT } =
-    useQuery<ClassType[]>({
-      queryKey: ["/api/class-types"],
+  const { data: classTypesData, isLoading: ctLoading, refetch: refetchCT } =
+    useQuery<PaginatedResponse<ClassType>>({
+      queryKey: ["/api/admin/class-types", classTypesPage, classTypesPageSize],
       queryFn: async () => {
-        const res = await fetch("/api/class-types");
+        const res = await fetch(
+          `/api/admin/class-types?page=${classTypesPage}&pageSize=${classTypesPageSize}`,
+          { headers: adminHeaders() },
+        );
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
     });
+  const classTypes = classTypesData?.data ?? [];
 
-  const { data: instructors = [], isLoading: insLoading, refetch: refetchIns } =
-    useQuery<Instructor[]>({
-      queryKey: ["/api/admin/instructors"],
+  const { data: allClassTypes = [] } = useQuery<ClassType[]>({
+    queryKey: ["/api/class-types", "all"],
+    queryFn: async () => {
+      const res = await fetch("/api/class-types");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const { data: instructorsData, isLoading: insLoading, refetch: refetchIns } =
+    useQuery<PaginatedResponse<Instructor>>({
+      queryKey: ["/api/admin/instructors", instructorsPage, instructorsPageSize],
       queryFn: async () => {
-        const res = await fetch("/api/admin/instructors", { headers: adminHeaders() });
+        const res = await fetch(
+          `/api/admin/instructors?page=${instructorsPage}&pageSize=${instructorsPageSize}`,
+          { headers: adminHeaders() },
+        );
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
     });
+  const instructors = instructorsData?.data ?? [];
 
   const sessionInstructorOptions = instructors.map((i) => ({
     id: i.id,
@@ -179,15 +215,21 @@ export default function AdminDashboard() {
   }));
   const eligibleInstructorCount = sessionInstructorOptions.filter((i) => !i.disabled).length;
 
-  const { data: sessions = [], isLoading: sessLoading, refetch: refetchSess } =
-    useQuery<ClassSession[]>({
-      queryKey: ["/api/admin/classes"],
+  const { data: sessionsData, isLoading: sessLoading, refetch: refetchSess } =
+    useQuery<PaginatedResponse<ClassSession>>({
+      queryKey: ["/api/admin/classes", sessionsPage, sessionsPageSize],
       queryFn: async () => {
-        const res = await fetch("/api/admin/classes", { headers: adminHeaders() });
+        const res = await fetch(
+          `/api/admin/classes?page=${sessionsPage}&pageSize=${sessionsPageSize}`,
+          { headers: adminHeaders() },
+        );
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
     });
+  const sessions = sessionsData?.data ?? [];
 
   const { data: paymentQrCodes = [], isLoading: qrLoading, refetch: refetchQr } =
     useQuery<PaymentQrCode[]>({
@@ -239,6 +281,81 @@ export default function AdminDashboard() {
     if (!res.ok) { toast({ title: "Update failed", variant: "destructive" }); return; }
     toast({ title: isActive ? "User activated" : "User deactivated" });
     refetchUsers();
+  }
+
+  async function deleteUserPermanently(user: { id: string; email: string }) {
+    if (
+      !confirm(
+        `Permanently delete ${user.email}? This removes bookings, consent logs, and all related records. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/admin/users/${user.id}`, {
+      method: "DELETE",
+      headers: adminHeaders(),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast({
+        title: "Delete failed",
+        description: (data as { message?: string }).message ?? "Could not delete user",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "User deleted", description: `${user.email} was permanently removed.` });
+    setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
+    refetchUsers();
+  }
+
+  async function deleteSelectedUsers() {
+    if (!selectedUserIds.length) return;
+    if (
+      !confirm(
+        `Permanently delete ${selectedUserIds.length} user(s)? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch("/api/admin/users/bulk-delete", {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: selectedUserIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Bulk delete failed",
+        description: (data as { message?: string }).message ?? "Could not delete users",
+        variant: "destructive",
+      });
+      return;
+    }
+    const payload = data as { deleted?: string[]; failed?: Array<{ id: string; message: string }> };
+    toast({
+      title: "Bulk delete complete",
+      description: `Deleted ${payload.deleted?.length ?? 0} user(s)${
+        payload.failed?.length ? `; ${payload.failed.length} failed` : ""
+      }.`,
+    });
+    setSelectedUserIds([]);
+    refetchUsers();
+  }
+
+  function toggleUserSelected(userId: string, checked: boolean) {
+    setSelectedUserIds((prev) =>
+      checked ? [...new Set([...prev, userId])] : prev.filter((id) => id !== userId),
+    );
+  }
+
+  function toggleSelectAllUsersOnPage(checked: boolean) {
+    const pageIds = usersData?.data.map((user) => user.id) ?? [];
+    if (!checked) {
+      setSelectedUserIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      return;
+    }
+    setSelectedUserIds((prev) => [...new Set([...prev, ...pageIds])]);
   }
 
   const handleLogout = () => {
@@ -347,7 +464,7 @@ export default function AdminDashboard() {
   } | null>(null);
   const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
 
-  const sessionEndMs = (s: { date: string; classType?: { duration?: number } }) =>
+  const sessionEndMs = (s: { date: string; classType?: { duration?: number; name?: string } }) =>
     getSessionEndMs(s.date, s.classType?.duration);
 
   const upcomingSessions = sessions.filter((s) => sessionEndMs(s) >= now);
@@ -408,6 +525,9 @@ export default function AdminDashboard() {
             <TabsTrigger value="subscriptions" className={adminNavTabTrigger}>
               <CreditCard className="w-4 h-4 mr-2 shrink-0" /> Subscription Management
             </TabsTrigger>
+            <TabsTrigger value="consent-logs" className={adminNavTabTrigger}>
+              <Shield className="w-4 h-4 mr-2 shrink-0" /> Consent Log
+            </TabsTrigger>
             <TabsTrigger value="admin-profile" className={adminNavTabTrigger}>
               <Shield className="w-4 h-4 mr-2 shrink-0" /> Admin Profile
             </TabsTrigger>
@@ -416,9 +536,9 @@ export default function AdminDashboard() {
           <TabsContent value="insights">
             <AdminDataInsightsPanel
               stats={{
-                totalUsers: usersData?.totalUsers ?? 0,
-                completeProfiles: usersData?.completeProfiles ?? 0,
-                incompleteProfiles: usersData?.incompleteProfiles ?? 0,
+                totalUsers: usersData?.total ?? 0,
+                completeProfiles: usersData?.stats?.completeProfiles ?? 0,
+                incompleteProfiles: usersData?.stats?.incompleteProfiles ?? 0,
                 upcomingSessions: upcomingSessions.length,
               }}
             />
@@ -427,13 +547,25 @@ export default function AdminDashboard() {
           {/* USERS */}
           <TabsContent value="users">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-[#3d1b80]" /> User Management
                   </CardTitle>
                   <CardDescription>Profile completeness and health data compliance</CardDescription>
                 </div>
+                {isSuperAdmin ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={!selectedUserIds.length}
+                      onClick={() => void deleteSelectedUsers()}
+                    >
+                      Delete selected ({selectedUserIds.length})
+                    </Button>
+                  </div>
+                ) : null}
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
@@ -448,8 +580,31 @@ export default function AdminDashboard() {
                   </Alert>
                 ) : (
                   <div className="space-y-3">
-                    {usersData?.users.map(user => (
+                    {isSuperAdmin && usersData?.data.length ? (
+                      <div className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm">
+                        <Checkbox
+                          checked={
+                            usersData.data.length > 0 &&
+                            usersData.data.every((user) => selectedUserIds.includes(user.id))
+                          }
+                          onCheckedChange={(checked) =>
+                            toggleSelectAllUsersOnPage(checked === true)
+                          }
+                        />
+                        <span className="text-muted-foreground">Select all on this page</span>
+                      </div>
+                    ) : null}
+                    {usersData?.data.map(user => (
                       <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-white hover:bg-gray-50 transition-colors">
+                        {isSuperAdmin ? (
+                          <Checkbox
+                            className="mr-3 shrink-0"
+                            checked={selectedUserIds.includes(user.id)}
+                            onCheckedChange={(checked) =>
+                              toggleUserSelected(user.id, checked === true)
+                            }
+                          />
+                        ) : null}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 flex-wrap">
                             <div>
@@ -491,9 +646,21 @@ export default function AdminDashboard() {
                               <span className="text-sm font-semibold w-8 text-right">{user.completeness.completionPercentage}%</span>
                             </div>
                             <div className="flex items-center gap-1 mt-1 justify-end">
-                              {user.completeness.emailVerified && <CheckCircle className="w-3 h-3 text-green-500" title="Email verified" />}
-                              {user.completeness.healthUpdateComplete && <FileText className="w-3 h-3 text-blue-500" title="Health complete" />}
-                              {user.completeness.documentsComplete && <Settings className="w-3 h-3 text-purple-500" title="Docs complete" />}
+                              {user.completeness.emailVerified && (
+                                <span title="Email verified">
+                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                </span>
+                              )}
+                              {user.completeness.healthUpdateComplete && (
+                                <span title="Health complete">
+                                  <FileText className="w-3 h-3 text-blue-500" />
+                                </span>
+                              )}
+                              {user.completeness.documentsComplete && (
+                                <span title="Docs complete">
+                                  <Settings className="w-3 h-3 text-purple-500" />
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="flex gap-1 flex-wrap justify-end">
@@ -501,20 +668,36 @@ export default function AdminDashboard() {
                               onClick={() => toggleUserActive(user.id, !(user.isActive ?? true))}>
                               {(user.isActive ?? true) ? "Deactivate" : "Activate"}
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7" disabled
-                              title="Soft remove uses Deactivate. Hard delete & bulk Excel — coming soon.">
-                              Remove
-                            </Button>
+                            {isSuperAdmin ? (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="text-xs h-7"
+                                onClick={() => void deleteUserPermanently(user)}
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       </div>
                     ))}
-                    {!usersData?.users.length && (
+                    {!usersData?.data.length && (
                       <div className="text-center py-12 text-gray-400">
                         <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
                         <p>No users registered yet</p>
                       </div>
                     )}
+                    {usersData ? (
+                      <AdminPagination
+                        page={usersData.page}
+                        pageSize={usersData.pageSize}
+                        totalPages={usersData.totalPages}
+                        total={usersData.total}
+                        onPageChange={setUsersPage}
+                        onPageSizeChange={setUsersPageSize}
+                      />
+                    ) : null}
                   </div>
                 )}
               </CardContent>
@@ -529,7 +712,7 @@ export default function AdminDashboard() {
                   <CardTitle className="flex items-center gap-2">
                     <GraduationCap className="w-5 h-5 text-[#3d1b80]" /> Instructors
                   </CardTitle>
-                  <CardDescription>Certified practitioners ({instructors.length} total)</CardDescription>
+                  <CardDescription>Certified practitioners ({instructorsData?.total ?? instructors.length} total)</CardDescription>
                 </div>
                   <CreateInstructorModal onCreated={() => refetchIns()} />
               </CardHeader>
@@ -634,6 +817,16 @@ export default function AdminDashboard() {
                         </div>
                       ))}
                     </div>
+                    {instructorsData ? (
+                      <AdminPagination
+                        page={instructorsData.page}
+                        pageSize={instructorsData.pageSize}
+                        totalPages={instructorsData.totalPages}
+                        total={instructorsData.total}
+                        onPageChange={setInstructorsPage}
+                        onPageSizeChange={setInstructorsPageSize}
+                      />
+                    ) : null}
                   </>
                 )}
               </CardContent>
@@ -717,11 +910,21 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         )}
+                        {sessionsData ? (
+                          <AdminPagination
+                            page={sessionsData.page}
+                            pageSize={sessionsData.pageSize}
+                            totalPages={sessionsData.totalPages}
+                            total={sessionsData.total}
+                            onPageChange={setSessionsPage}
+                            onPageSizeChange={setSessionsPageSize}
+                          />
+                        ) : null}
                       </>
                     )}
 
                     <CreateSessionModal
-                      classTypes={classTypes}
+                      classTypes={allClassTypes}
                       instructors={sessionInstructorOptions}
                       paymentQrCodes={paymentQrCodes}
                       adminDefaultPhone={adminProfileData?.profile?.phone ?? ""}
@@ -754,7 +957,7 @@ export default function AdminDashboard() {
                     ) : (
                       <SessionHistoryList
                         sessions={pastSessions}
-                        classTypes={classTypes}
+                        classTypes={allClassTypes}
                         instructors={sessionInstructorOptions}
                       />
                     )}
@@ -766,6 +969,16 @@ export default function AdminDashboard() {
                       isLoading={ctLoading}
                       onDataChange={() => refetchCT()}
                     />
+                    {classTypesData ? (
+                      <AdminPagination
+                        page={classTypesData.page}
+                        pageSize={classTypesData.pageSize}
+                        totalPages={classTypesData.totalPages}
+                        total={classTypesData.total}
+                        onPageChange={setClassTypesPage}
+                        onPageSizeChange={setClassTypesPageSize}
+                      />
+                    ) : null}
                   </TabsContent>
 
                   <TabsContent value="carousel">
@@ -904,6 +1117,20 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="consent-logs">
+            <Card>
+              <CardHeader>
+                <CardTitle>Consent audit log</CardTitle>
+                <CardDescription>
+                  DPDPA append-only consent records — profile, terms, age, and health data events.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ConsentLogPanel />
               </CardContent>
             </Card>
           </TabsContent>

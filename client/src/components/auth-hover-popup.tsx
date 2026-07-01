@@ -24,6 +24,10 @@ export function AuthChoiceDialog({
   const [googleLoading, setGoogleLoading] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
 
+  const resetAndClose = (nextOpen: boolean) => {
+    onOpenChange(nextOpen);
+  };
+
   const handleGoogleSignIn = () => {
     setGoogleLoading(true);
     try {
@@ -35,17 +39,16 @@ export function AuthChoiceDialog({
     } catch {
       /* ignore */
     }
-    // Pass the preference to the server so it can set a persistent vs session cookie.
     window.location.href = `/api/auth/google?keep=${keepSignedIn ? "1" : "0"}`;
   };
 
   const handleContinueAsGuest = () => {
-    onOpenChange(false);
+    resetAndClose(false);
     onContinueAsGuest?.();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={resetAndClose}>
       <DialogContent
         className="max-w-md rounded-3xl border-dz-glass-border bg-dz-surface p-8"
         data-testid="booking-auth-dialog"
@@ -76,9 +79,7 @@ export function AuthChoiceDialog({
               }}
               aria-hidden
             />
-            <span className="truncate">
-              {googleLoading ? "Signing in..." : "Continue with Google"}
-            </span>
+            <span className="truncate">Continue with Google</span>
           </Button>
 
           <label className="flex cursor-pointer select-none items-center justify-center gap-2.5">
@@ -113,10 +114,6 @@ export function AuthChoiceDialog({
           >
             Continue as Guest
           </Button>
-
-          <p className="px-2 text-center text-xs leading-tight text-dz-muted">
-            By continuing, you agree to our Terms of Service and Privacy Policy
-          </p>
         </div>
       </DialogContent>
     </Dialog>
@@ -124,34 +121,25 @@ export function AuthChoiceDialog({
 }
 
 interface AuthHoverPopupProps {
-  children: React.ReactNode;
+  children: ReactElement;
   onContinueAsGuest?: () => void;
 }
 
 export function AuthHoverPopup({ children, onContinueAsGuest }: AuthHoverPopupProps) {
   const [open, setOpen] = useState(false);
 
-  const openDialog = (e: MouseEvent) => {
-    e.stopPropagation();
-    setOpen(true);
-  };
-
-  const trigger = isValidElement(children)
+  const child = isValidElement(children)
     ? cloneElement(children as ReactElement<{ onClick?: (e: MouseEvent) => void }>, {
         onClick: (e: MouseEvent) => {
-          (children as ReactElement<{ onClick?: (e: MouseEvent) => void }>).props.onClick?.(e);
-          openDialog(e);
+          (children.props as { onClick?: (e: MouseEvent) => void }).onClick?.(e);
+          setOpen(true);
         },
       })
-    : (
-      <button type="button" className="inline-flex" onClick={openDialog}>
-        {children}
-      </button>
-    );
+    : children;
 
   return (
     <>
-      {trigger}
+      {child}
       <AuthChoiceDialog
         open={open}
         onOpenChange={setOpen}
@@ -160,3 +148,5 @@ export function AuthHoverPopup({ children, onContinueAsGuest }: AuthHoverPopupPr
     </>
   );
 }
+
+export { AuthChoiceDialog as BookingAuthDialog };

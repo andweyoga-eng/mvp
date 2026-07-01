@@ -7,8 +7,9 @@ import {
 } from "../shared/guest-booking-conflict.ts";
 
 describe("guest booking conflict messages", () => {
-  it("uses longer TAT for QR manual verification", () => {
-    assert.match(guestBookingProcessingMessage("qr"), /2 hours/);
+  it("uses 15-minute TAT for QR manual verification", () => {
+    assert.match(guestBookingProcessingMessage("qr"), /15 minutes/);
+    assert.match(guestBookingProcessingMessage("qr"), /email and SMS/i);
   });
 
   it("uses short TAT for hosted Razorpay checkout", () => {
@@ -17,6 +18,7 @@ describe("guest booking conflict messages", () => {
 
   it("exports confirmed and QR submitted copy", () => {
     assert.match(GUEST_BOOKING_CONFIRMED_MESSAGE, /already booked/i);
-    assert.match(GUEST_QR_SUBMITTED_MESSAGE, /Thank you/i);
+    assert.match(GUEST_QR_SUBMITTED_MESSAGE, /15 minutes/i);
+    assert.match(GUEST_QR_SUBMITTED_MESSAGE, /email and SMS/i);
   });
 });

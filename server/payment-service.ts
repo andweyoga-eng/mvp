@@ -117,7 +117,10 @@ export async function markPaymentPaid(params: {
     invoiceUrl: invoiceUrl ?? payment.invoiceUrl,
     receiptUrl: `https://razorpay.com/payment/${params.razorpayPaymentId}`,
   });
-  await storage.updateBookingPaymentStatus(payment.bookingId, "paid");
+  await storage.updateBookingPaymentHold(payment.bookingId, {
+    paymentStatus: "paid",
+    heldUntil: null,
+  });
 
   const updated = await storage.getPaymentById(payment.id);
   if (!updated) return null;

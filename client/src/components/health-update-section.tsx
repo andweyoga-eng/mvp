@@ -48,6 +48,7 @@ interface HealthUpdateSectionProps {
   isLoading: boolean;
   /** When true, page-level Save/Cancel are rendered by the parent (account layout). */
   hidePageActions?: boolean;
+  saveDisabled?: boolean;
 }
 
 export function HealthUpdateSection({
@@ -63,6 +64,7 @@ export function HealthUpdateSection({
   onCancel,
   isLoading,
   hidePageActions = false,
+  saveDisabled = false,
 }: HealthUpdateSectionProps) {
   const { toast } = useToast();
   const [isUploadInProgress, setIsUploadInProgress] = useState(false);
@@ -385,7 +387,7 @@ export function HealthUpdateSection({
         <div className="pt-4 border-t border-purple-200 space-y-3">
           <Button
             onClick={onSaveAndSubmit}
-            disabled={isLoading}
+            disabled={isLoading || saveDisabled}
             className="w-full bg-primary !text-white px-8 py-4 rounded-full font-bold hover:bg-primary/90 disabled:opacity-50"
             data-testid="health-save-and-submit"
           >

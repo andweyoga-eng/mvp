@@ -120,31 +120,9 @@ function isSpammyNumber(number: string): boolean {
     return true;
   }
 
-  if (isSequential(number)) {
-    return true;
-  }
-
   const spamPatterns = [/^0+\d*$/, /^1{5,}/, /^9{5,}/];
 
   return spamPatterns.some((pattern) => pattern.test(number));
-}
-
-function isSequential(number: string): boolean {
-  for (let i = 0; i < number.length - 2; i++) {
-    const current = parseInt(number[i], 10);
-    const next = parseInt(number[i + 1], 10);
-    const afterNext = parseInt(number[i + 2], 10);
-
-    if (next === current + 1 && afterNext === next + 1) {
-      return true;
-    }
-
-    if (next === current - 1 && afterNext === next - 1) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 export function formatMobileNumber(number: string): string {
