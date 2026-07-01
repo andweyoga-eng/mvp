@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -60,7 +60,18 @@ export function DateOfBirthField({
   className,
   testIdPrefix = "dob",
 }: DateOfBirthFieldProps) {
-  const { day, month, year } = parseIsoDateParts(value);
+  const parsed = parseIsoDateParts(value);
+  const [day, setDay] = useState(parsed.day);
+  const [month, setMonth] = useState(parsed.month);
+  const [year, setYear] = useState(parsed.year);
+
+  useEffect(() => {
+    const next = parseIsoDateParts(value);
+    setDay(next.day);
+    setMonth(next.month);
+    setYear(next.year);
+  }, [value]);
+
   const currentYear = new Date().getFullYear();
   const years = useMemo(
     () => Array.from({ length: 100 }, (_, i) => String(currentYear - i)),
@@ -73,12 +84,21 @@ export function DateOfBirthField({
   );
 
   const setPart = (part: "day" | "month" | "year", next: string) => {
-    const parts = parseIsoDateParts(value);
-    parts[part] = next;
-    if (part !== "day" && parts.day && Number(parts.day) > daysInMonth(parts.month, parts.year)) {
-      parts.day = String(daysInMonth(parts.month, parts.year)).padStart(2, "0");
+    let nextDay = day;
+    let nextMonth = month;
+    let nextYear = year;
+    if (part === "day") nextDay = next;
+    if (part === "month") nextMonth = next;
+    if (part === "year") nextYear = next;
+
+    if (part !== "day" && nextDay && Number(nextDay) > daysInMonth(nextMonth, nextYear)) {
+      nextDay = String(daysInMonth(nextMonth, nextYear)).padStart(2, "0");
     }
-    onChange(composeIsoDate(parts.day, parts.month, parts.year));
+
+    setDay(nextDay);
+    setMonth(nextMonth);
+    setYear(nextYear);
+    onChange(composeIsoDate(nextDay, nextMonth, nextYear));
   };
 
   return (
