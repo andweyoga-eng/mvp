@@ -1,4 +1,10 @@
 import { normalizeSessionPaymentMethod, usesHostedCheckout } from "./payment-gateway";
+import {
+  MANUAL_PAYMENT_SUBMITTED_COPY,
+  MANUAL_PAYMENT_SUPPORT_WHATSAPP,
+  MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF,
+  MANUAL_PAYMENT_VERIFICATION_TAT,
+} from "./manual-payment-ack";
 
 export type GuestBookingConflictState =
   | "none"
@@ -6,12 +12,11 @@ export type GuestBookingConflictState =
   | "confirmed"
   | "failed";
 
-export const GUEST_QR_VERIFICATION_TAT = "15 minutes";
+export const GUEST_QR_VERIFICATION_TAT = MANUAL_PAYMENT_VERIFICATION_TAT;
 export const GUEST_RAZORPAY_VERIFICATION_TAT = "a few minutes";
 
-/** Guest support WhatsApp (manual QR verification). */
-export const GUEST_QR_SUPPORT_WHATSAPP = "9513022331";
-export const GUEST_QR_SUPPORT_WHATSAPP_HREF = "https://wa.me/919513022331";
+export const GUEST_QR_SUPPORT_WHATSAPP = MANUAL_PAYMENT_SUPPORT_WHATSAPP;
+export const GUEST_QR_SUPPORT_WHATSAPP_HREF = MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF;
 
 export function guestBookingProcessingMessage(paymentMethod: string | null | undefined): string {
   const method = normalizeSessionPaymentMethod(paymentMethod);
@@ -27,11 +32,9 @@ export const GUEST_BOOKING_CONFIRMED_MESSAGE =
 export const GUEST_BOOKING_FAILED_MESSAGE =
   "Your previous payment attempt for this session was unsuccessful. Please try again.";
 
-export const GUEST_QR_SUBMITTED_MESSAGE =
-  "Thank you for your payment. Our team will verify it within 15 minutes and send your session details by email and SMS.";
+export const GUEST_QR_SUBMITTED_MESSAGE = MANUAL_PAYMENT_SUBMITTED_COPY.confirmation;
 
-export const GUEST_QR_SUBMITTED_ASSISTANCE_MESSAGE =
-  "If you need any further assistance, reach out to us on WhatsApp.";
+export const GUEST_QR_SUBMITTED_ASSISTANCE_MESSAGE = MANUAL_PAYMENT_SUBMITTED_COPY.assistance;
 
 export const GUEST_QR_SIGNIN_PROMPT =
   "You can check the status and updates instantly by signing in or creating an account.";

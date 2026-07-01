@@ -78,7 +78,7 @@ import {
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { GuestBookingConfirmedContent } from "@/components/guest-booking-confirmed-dialog";
 import { LEGAL_CONFIG } from "@shared/legal-config";
-import { GUEST_QR_VERIFICATION_TAT } from "@shared/guest-booking-conflict";
+import { MANUAL_PAYMENT_SUBMITTED_TOAST } from "@shared/manual-payment-ack";
 import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
 import { Link } from "wouter";
@@ -1452,9 +1452,7 @@ export default function BookingModal({
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
                   toast({
                     title: "Reference submitted",
-                    description: paymentResult.isGuestCheckout
-                      ? `We'll verify your payment within ${GUEST_QR_VERIFICATION_TAT} and send session details by email and SMS.`
-                      : "Our team will confirm within about 5 minutes during verification hours.",
+                    description: MANUAL_PAYMENT_SUBMITTED_TOAST,
                   });
                 }}
               />
@@ -1473,9 +1471,7 @@ export default function BookingModal({
                   queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
                   toast({
                     title: "Reference submitted",
-                    description: paymentResult.isGuestCheckout
-                      ? `We'll verify your payment within ${GUEST_QR_VERIFICATION_TAT} and send session details by email and SMS.`
-                      : "Our team will confirm within about 5 minutes during verification hours.",
+                    description: MANUAL_PAYMENT_SUBMITTED_TOAST,
                   });
                 }}
               />

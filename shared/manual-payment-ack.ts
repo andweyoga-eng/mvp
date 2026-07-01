@@ -1,6 +1,11 @@
-/** Member-submitted payment reference (QR + payment link flows). */
+/** Member- and guest-submitted payment reference (QR + payment link flows). */
 
 export const MANUAL_PAYMENT_REF_LENGTH = 4;
+
+export const MANUAL_PAYMENT_VERIFICATION_TAT = "15 minutes";
+
+export const MANUAL_PAYMENT_SUPPORT_WHATSAPP = "9513022331";
+export const MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF = "https://wa.me/919513022331";
 
 export const MANUAL_PAYMENT_WORKING_HOURS = {
   daysLabel: "Every day of the week",
@@ -11,10 +16,17 @@ export const MANUAL_PAYMENT_WORKING_HOURS = {
 export const MANUAL_PAYMENT_SUBMITTED_COPY = {
   headline: "Payment reference received",
   confirmation:
-    "Our team will confirm your session within about 5 minutes after verifying your payment.",
+    "Thank you for your payment. Our team will verify it within 15 minutes and send your session details by email and SMS.",
+  assistance: "If you need any further assistance, reach out to us on WhatsApp.",
+  verificationTat: MANUAL_PAYMENT_VERIFICATION_TAT,
+  /** @deprecated Use verificationTat */
   workingHoursTitle: "Verification hours",
+  /** @deprecated Kept for API compatibility */
   workingHoursDetail: `${MANUAL_PAYMENT_WORKING_HOURS.daysLabel}, ${MANUAL_PAYMENT_WORKING_HOURS.timeRangeLabel}.`,
 } as const;
+
+export const MANUAL_PAYMENT_SUBMITTED_TOAST =
+  `We'll verify your payment within ${MANUAL_PAYMENT_VERIFICATION_TAT} and send session details by email and SMS.`;
 
 export const MANUAL_PAYMENT_REF_LABEL =
   "Last 4 characters of payment reference / payment ID";

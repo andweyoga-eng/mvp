@@ -5,6 +5,7 @@ import {
   isValidManualPaymentRef,
   normalizeManualPaymentRefInput,
   MANUAL_PAYMENT_REF_LENGTH,
+  MANUAL_PAYMENT_SUBMITTED_COPY,
 } from "../shared/manual-payment-ack.ts";
 
 describe("manual payment reference", () => {
@@ -33,5 +34,11 @@ describe("manual payment reference", () => {
 
   it("uses 4 character length constant", () => {
     assert.equal(MANUAL_PAYMENT_REF_LENGTH, 4);
+  });
+
+  it("uses unified manual verification copy for members and guests", () => {
+    assert.match(MANUAL_PAYMENT_SUBMITTED_COPY.confirmation, /15 minutes/i);
+    assert.match(MANUAL_PAYMENT_SUBMITTED_COPY.confirmation, /email and SMS/i);
+    assert.match(MANUAL_PAYMENT_SUBMITTED_COPY.assistance, /further assistance/i);
   });
 });
