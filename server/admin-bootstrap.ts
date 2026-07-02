@@ -1,7 +1,5 @@
 /** Admin bootstrap + credential helpers (testable without Express). */
 
-export const LEGACY_ADMIN_PASSWORD = "admin123";
-
 export interface AdminBootstrapConfig {
   password: string;
   email: string;

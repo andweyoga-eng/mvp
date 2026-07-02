@@ -5,7 +5,6 @@ import {
   getAdminBootstrapConfig,
   normalizeAdminEmail,
   normalizeAdminPassword,
-  LEGACY_ADMIN_PASSWORD,
 } from "../server/admin-bootstrap.ts";
 import { hashPassword, verifyPassword } from "../server/auth.ts";
 
@@ -52,8 +51,9 @@ describe("bcrypt round-trip (admin passwords)", () => {
   });
 });
 
-describe("legacy admin password constant", () => {
-  it("is defined for one-time migration", () => {
-    assert.equal(LEGACY_ADMIN_PASSWORD, "admin123");
+describe("legacy admin backdoor removed", () => {
+  it("does not export LEGACY_ADMIN_PASSWORD", async () => {
+    const mod = await import("../server/admin-bootstrap.ts");
+    assert.equal("LEGACY_ADMIN_PASSWORD" in mod, false);
   });
 });

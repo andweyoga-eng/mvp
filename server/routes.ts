@@ -2760,7 +2760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bootstrap && bootstrap.email !== email
             ? `No admin account for this email. Use ${bootstrap.email} (ADMIN_INITIAL_EMAIL).`
             : bootstrap
-              ? "Invalid password. Use ADMIN_INITIAL_PASSWORD from .env / Railway webapp (not legacy admin123 unless bootstrap is unset)."
+              ? "Invalid password. Use ADMIN_INITIAL_PASSWORD from .env / Railway webapp."
               : "Invalid admin credentials.";
         return res.status(401).json({ message: hint });
       }

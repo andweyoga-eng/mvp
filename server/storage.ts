@@ -73,7 +73,6 @@ import { getMeetJoinState } from "@shared/session-meet-access";
 import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod, usesHostedCheckout } from "@shared/payment-gateway";
 import { hashPassword, verifyPassword } from "./auth";
 import {
-  LEGACY_ADMIN_PASSWORD,
   getAdminBootstrapConfig,
   normalizeAdminEmail,
   normalizeAdminPassword,
@@ -2693,6 +2692,21 @@ export class DatabaseStorage implements IStorage {
         admin = updated;
         console.log(`[DB] Admin bootstrap synced for ${updated.email}`);
       }
+
+      const unhashedAdmins = await db
+        .select()
+        .from(adminUsers)
+        .where(or(isNull(adminUsers.passwordHash), eq(adminUsers.passwordHash, "")));
+
+      for (const row of unhashedAdmins) {
+        await db
+          .update(adminUsers)
+          .set({ passwordHash })
+          .where(eq(adminUsers.id, row.id));
+        console.warn(
+          `[DB] Backfilled missing password_hash for admin ${row.email} from ADMIN_INITIAL_PASSWORD.`,
+        );
+      }
     } catch (error) {
       console.error("[DB] Error syncing admin from env:", error);
       if (options?.throwOnError !== false) throw error;
@@ -2773,29 +2787,17 @@ export class DatabaseStorage implements IStorage {
         return undefined;
       }
 
-      if (admin.passwordHash) {
-        if (await verifyPassword(normalizedPassword, admin.passwordHash)) {
-          return admin;
-        }
-
-        if (bootstrap && normalizedPassword === bootstrap.password) {
-          const passwordHash = await hashPassword(normalizedPassword);
-          await this.updateAdminPasswordHash(admin.id, passwordHash);
-          return { ...admin, passwordHash };
-        }
-        return undefined;
+      if (admin.passwordHash && (await verifyPassword(normalizedPassword, admin.passwordHash))) {
+        return admin;
       }
 
-      const legacyOk =
-        normalizedPassword === LEGACY_ADMIN_PASSWORD ||
-        (bootstrap && normalizedPassword === bootstrap.password);
+      if (bootstrap && normalizedPassword === bootstrap.password) {
+        const passwordHash = await hashPassword(normalizedPassword);
+        await this.updateAdminPasswordHash(admin.id, passwordHash);
+        return { ...admin, passwordHash };
+      }
 
-      if (!legacyOk) return undefined;
-
-      console.warn(`[DB] Admin ${admin.email}: migrated from legacy login to password_hash.`);
-      const passwordHash = await hashPassword(normalizedPassword);
-      await this.updateAdminPasswordHash(admin.id, passwordHash);
-      return { ...admin, passwordHash };
+      return undefined;
     } catch (error) {
       console.error("[DB] Error verifying admin credentials:", error);
       return undefined;
