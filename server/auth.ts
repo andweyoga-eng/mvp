@@ -56,7 +56,7 @@ export function generateGuestCheckoutToken(bookingId: string): string {
 
 export function verifyGuestCheckoutToken(token: string): { bookingId: string } | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as {
       bookingId?: string;
       scope?: string;
     };
@@ -69,7 +69,7 @@ export function verifyGuestCheckoutToken(token: string): { bookingId: string } |
 
 export function verifyToken(token: string): { userId: string } | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as {
       userId?: string;
       scope?: string;
     };

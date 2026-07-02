@@ -26,7 +26,7 @@ export function generateAdminToken(adminId: string): string {
 export function verifyAdminToken(token: string): { adminId: string; type: string } | null {
   try {
     const secret = getJwtSecret();
-    const decoded = jwt.verify(token, secret) as any;
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as any;
     // CRITICAL: Always check the type claim to prevent user tokens 
     // being used to access admin endpoints
     if (decoded.type !== 'admin') {
