@@ -2,55 +2,25 @@ import "dotenv/config";
 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { getAllowedCorsOrigin, validateEnvironment } from "./startup-security";
 import { setupVite, serveStatic, log } from "./vite";
 
-// ============================================================
-// SECURITY: Validate all required environment variables exist
-// before starting the server. Fail loudly and early rather
-// than silently using insecure defaults.
-// ============================================================
-function validateEnvironment() {
-  const required = ['JWT_SECRET'];
-  const missing = required.filter(key => !process.env[key]);
-  if (!process.env.DATABASE_URL?.trim() && !process.env.DATABASE_PUBLIC_URL?.trim()) {
-    missing.push('DATABASE_URL or DATABASE_PUBLIC_URL');
-  }
-
-  if (missing.length > 0) {
-    console.error('\n⛔ FATAL: Missing required environment variables:');
-    missing.forEach(key => console.error(`   - ${key}`));
-    console.error('\nCreate a .env file or set these in your hosting platform.\n');
-    process.exit(1);
-  }
-
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
-    console.error('\n⛔ FATAL: JWT_SECRET is too short. Must be at least 32 characters.\n');
-    process.exit(1);
-  }
-
-  console.log('✅ Environment validation passed');
-}
-
 validateEnvironment();
+console.log("✅ Environment validation passed");
 
 const app = express();
-
-// ============================================================
-// SECURITY: CORS — only allow requests from your own domain
-// ============================================================
-function getAllowedCorsOrigin(): string {
-  const host = process.env.ALLOWED_ORIGIN?.trim();
-  if (!host) return '*';
-  const isLocalHost = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
-  const protocol =
-    process.env.NODE_ENV !== 'production' && isLocalHost ? 'http' : 'https';
-  return `${protocol}://${host}`;
-}
+app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
   const allowedOrigin = getAllowedCorsOrigin();
+  const requestOrigin = req.headers.origin;
 
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  if (requestOrigin && requestOrigin !== allowedOrigin) {
+    return res.status(403).json({ message: "CORS origin denied." });
+  }
+
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Origin', requestOrigin || allowedOrigin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
