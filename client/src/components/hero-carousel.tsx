@@ -3,8 +3,8 @@ import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
 import expressImage from "@assets/express_1756460037530.jpg";
 import evolveImage from "@assets/evolve-carousel.png";
-import elevateImage from "@assets/elevate_1756460037530.jpg";
-import becomeImage from "@assets/become_1756460037530.jpg";
+import elevateImage from "@assets/elevate-carousel.png"; // To Elevate — image behind gradient
+import becomeImage from "@assets/become-carousel.png"; // To Become — full color, image behind gradient
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { cn } from "@/lib/utils";
 
@@ -38,12 +38,12 @@ const slides = [
     trail: [BRAND_PHRASE, { lead: "To", accent: "Evolve" }, { lead: "To Learn and", accent: "Grow" }],
   },
   {
-    image: elevateImage,
+    image: elevateImage, // Slide: To Elevate — photo behind gradient overlay
     word: "Elevate",
     trail: [BRAND_PHRASE, { lead: "To", accent: "Elevate" }, { lead: "To push beyond", accent: "our limits" }],
   },
   {
-    image: becomeImage,
+    image: becomeImage, // Slide: To Become — full-color photo behind gradient overlay
     word: "Become",
     trail: [BRAND_PHRASE, { lead: "To", accent: "Become" }, { lead: "Who we are", accent: "meant to be" }],
   },

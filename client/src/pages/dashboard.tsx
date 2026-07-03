@@ -36,8 +36,8 @@ import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
 import expressImage from "@assets/express_1756460037530.jpg";
 import evolveImage from "@assets/evolve-carousel.png";
-import elevateImage from "@assets/elevate_1756460037530.jpg";
-import becomeImage from "@assets/become_1756460037530.jpg";
+import elevateImage from "@assets/elevate-carousel.png";
+import becomeImage from "@assets/become-carousel.png";
 
 const HERO_IMAGES = [
   embraceImage,
