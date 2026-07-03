@@ -30,7 +30,9 @@ import {
 } from "@shared/instructor-compliance";
 import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
 import {
+  ADMIN_AUTH_COOKIE_NAME,
   OAUTH_KEEP_COOKIE_NAME,
+  buildAdminAuthCookieOptions,
   buildAuthCookieOptions,
   buildOAuthKeepCookieOptions,
   keepSignedInFromValue,
@@ -81,6 +83,7 @@ import {
 import {
   hashPassword, verifyPassword, generateToken,
   generateExpiringVerificationToken, isVerificationTokenExpired,
+  hashActionToken,
   generateGuestCheckoutToken,
   requireAuth, optionalAuth, requireBookingAuth, type AuthRequest
 } from "./auth";
@@ -209,6 +212,10 @@ function setAuthCookie(res: Response, token: string, persistent: boolean = true)
   // Token goes in an httpOnly cookie (not the URL) to prevent XSS token theft.
   // "Keep me signed in" ON → persistent 7-day cookie; OFF → session cookie.
   res.cookie('authToken', token, buildAuthCookieOptions(persistent));
+}
+
+function setAdminAuthCookie(res: Response, token: string) {
+  res.cookie(ADMIN_AUTH_COOKIE_NAME, token, buildAdminAuthCookieOptions());
 }
 
 /**
@@ -347,12 +354,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.reopenAccountAfterSelfErasure(existingUser.id);
         const hashedPassword = await hashPassword(validatedData.password);
         const verificationToken = generateExpiringVerificationToken();
+        const verificationTokenHash = hashActionToken(verificationToken);
         const { confirmPassword, ...userData } = validatedData;
         const updated = await storage.updateUser(existingUser.id, {
           ...userData,
           password: hashedPassword,
           emailVerified: false,
-          emailVerificationToken: verificationToken,
+          emailVerificationToken: verificationTokenHash,
         } as any);
         if (!updated) {
           return res.status(500).json({ message: "Failed to register user" });
@@ -388,11 +396,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SECURITY FIX 5: Use expiring verification token
       const verificationToken = generateExpiringVerificationToken();
+      const verificationTokenHash = hashActionToken(verificationToken);
 
       const { confirmPassword, ...userData } = validatedData;
       const user = await storage.createUser({ ...userData, password: hashedPassword });
 
-      await storage.updateUser(user.id, { emailVerificationToken: verificationToken } as any);
+      await storage.updateUser(user.id, { emailVerificationToken: verificationTokenHash } as any);
       await storage.linkGuestBookingsToUser(user.id, user.email);
 
       const logoUrl = `https://${process.env.ALLOWED_ORIGIN || req.get('host')}/attached_assets/Logo%20Transperent%20TM_1756454893432.png`;
@@ -460,7 +469,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: "Login successful",
-        token,
         user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified },
       });
     } catch (error) {
@@ -490,7 +498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Verification link has expired. Please register again." });
       }
 
-      const user = await storage.getUserByVerificationToken(token);
+      const user = await storage.getUserByVerificationToken(hashActionToken(token));
       if (!user) {
         return res.status(400).json({ message: "Invalid or expired verification token" });
       }
@@ -2672,8 +2680,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const resetToken = generateExpiringVerificationToken();
+      const resetTokenHash = hashActionToken(resetToken);
       const resetExpiry = new Date(Date.now() + 3600000); // 1 hour
-      await storage.updateUserResetToken(existingUser.id, resetToken, resetExpiry);
+      await storage.updateUserResetToken(existingUser.id, resetTokenHash, resetExpiry);
 
       const allowedOrigin = process.env.ALLOWED_ORIGIN || req.get('host');
       const resetUrl = `https://${allowedOrigin}/reset-password?token=${resetToken}`;
@@ -2708,7 +2717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Reset link has expired. Please request a new one.' });
       }
 
-      const user = await storage.findUserByResetToken(token);
+      const user = await storage.findUserByResetToken(hashActionToken(token));
       if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
         return res.status(400).json({ message: 'Invalid or expired reset token' });
       }
@@ -2755,26 +2764,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const admin = await verifyAdminCredentials(email, password);
       if (!admin) {
-        const bootstrap = getAdminBootstrapConfig();
-        const hint =
-          bootstrap && bootstrap.email !== email
-            ? `No admin account for this email. Use ${bootstrap.email} (ADMIN_INITIAL_EMAIL).`
-            : bootstrap
-              ? "Invalid password. Use ADMIN_INITIAL_PASSWORD from .env / Railway webapp."
-              : "Invalid admin credentials.";
-        return res.status(401).json({ message: hint });
+        return res.status(401).json({ message: "Invalid admin credentials." });
       }
 
       const token = generateAdminToken(admin.id);
+      setAdminAuthCookie(res, token);
       res.json({
         message: "Admin login successful",
-        token,
         admin: { id: admin.id, email: admin.email, name: admin.name, role: admin.role }
       });
     } catch (error) {
       console.error('Admin login error:', error);
       res.status(500).json({ message: "Admin login failed" });
     }
+  });
+
+  app.post("/api/admin/auth/logout", (_req, res) => {
+    res.clearCookie(ADMIN_AUTH_COOKIE_NAME);
+    res.json({ message: "Admin logged out successfully" });
   });
 
   app.get("/api/admin/auth/verify", requireAdminAuth, async (req: AdminAuthRequest, res) => {

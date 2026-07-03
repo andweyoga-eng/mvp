@@ -68,18 +68,14 @@ export function useAuth() {
 }
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem('authToken');
+  return null;
 }
 
 export function setAuthToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem('authToken', token);
-  } else {
-    localStorage.removeItem('authToken');
-  }
+  // Member auth is cookie-backed; clear any legacy localStorage token.
+  localStorage.removeItem('authToken');
 }
 
 export function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {};
 }

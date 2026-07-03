@@ -10,11 +10,14 @@
  */
 
 export const AUTH_COOKIE_NAME = "authToken";
+export const ADMIN_AUTH_COOKIE_NAME = "adminAuthToken";
 export const OAUTH_KEEP_COOKIE_NAME = "awy_oauth_keep";
 export const PENDING_CONSENT_COOKIE_NAME = "awy_pending_consent";
 
 /** Persistent auth cookie lifetime: 7 days. */
 export const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Admin auth cookie lifetime: 8 hours. */
+export const ADMIN_AUTH_COOKIE_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 /** The keep-preference cookie only needs to survive the OAuth round-trip. */
 export const OAUTH_KEEP_COOKIE_MAX_AGE_MS = 10 * 60 * 1000;
 /** Pending onboarding consent survives the OAuth round-trip. */
@@ -47,6 +50,17 @@ export function buildAuthCookieOptions(
   };
   if (persistent) options.maxAge = AUTH_COOKIE_MAX_AGE_MS;
   return options;
+}
+
+export function buildAdminAuthCookieOptions(
+  isProduction: boolean = process.env.NODE_ENV === "production",
+): AuthCookieOptions {
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: "lax",
+    maxAge: ADMIN_AUTH_COOKIE_MAX_AGE_MS,
+  };
 }
 
 /** Options for the short-lived cookie that carries the keep preference. */

@@ -84,6 +84,10 @@ export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+export function hashActionToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 // SECURITY FIX 5: Email verification tokens now include a 24-hour expiry timestamp.
 // Format: <random-hex>.<expiry-unix-timestamp>
 // This prevents leaked verification links from working indefinitely.

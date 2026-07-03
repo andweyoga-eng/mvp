@@ -1,5 +1,5 @@
 import { useState, useEffect, ReactNode } from 'react';
-import { AuthContext, type User, type RegisterData, type ProfileData, getAuthToken, setAuthToken, getAuthHeaders } from '@/lib/auth';
+import { AuthContext, type User, type RegisterData, type ProfileData, setAuthToken, getAuthHeaders } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
 import { clearMemberLandingCheck } from '@/lib/member-landing';
 import { useToast } from '@/hooks/use-toast';
@@ -21,10 +21,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     
-    // Google OAuth: server sets httpOnly auth cookie and may redirect with only
-    // ?loginSuccess=true (no token in URL — intentional). Passport flow may still
-    // append ?token=... — support both.
-    const oauthToken = urlParams.get('token');
+    // Google OAuth sets an httpOnly auth cookie and redirects with only
+    // status flags in the query string.
     const loginSuccess = urlParams.get('loginSuccess');
 
     const authError = urlParams.get('error');
@@ -56,9 +54,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     if (loginSuccess === 'true') {
       const isNewOAuthUser = urlParams.get('newUser') === 'true';
-      if (oauthToken) {
-        setAuthToken(oauthToken);
-      }
       window.history.replaceState({}, document.title, window.location.pathname);
       void fetchUser().then(async (ok) => {
         if (ok) {
@@ -99,11 +94,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     
-    // Restore session from httpOnly cookie and/or Bearer token in localStorage
+    // Restore session from the httpOnly auth cookie.
     void fetchUser();
   }, [toast]);
 
-  /** Loads user from /api/auth/me using Bearer token (if any) and/or auth cookie. */
+  /** Loads user from /api/auth/me using the httpOnly auth cookie. */
   const fetchUser = async (): Promise<boolean> => {
     try {
       const response = await fetch("/api/auth/me", {
@@ -155,10 +150,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error(error.message || 'Login failed');
       }
       
-      const data = await response.json();
-      if (data.token) {
-        setAuthToken(data.token);
-      }
       clearMemberLandingCheck();
       const loaded = await fetchUser();
       if (!loaded) {

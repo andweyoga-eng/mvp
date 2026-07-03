@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import type { AdminUser } from "@shared/schema";
+import { ADMIN_AUTH_COOKIE_NAME } from "./auth-cookie";
 
 export interface AdminAuthRequest extends Request {
   admin?: AdminUser;
@@ -40,13 +41,15 @@ export function verifyAdminToken(token: string): { adminId: string; type: string
 
 export async function requireAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
+    const cookieToken = (req as any).cookies?.[ADMIN_AUTH_COOKIE_NAME];
     const authHeader = req.headers.authorization;
+    const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const token = cookieToken || headerToken;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return res.status(401).json({ message: "Admin access required. Please login." });
     }
 
-    const token = authHeader.substring(7);
     const decoded = verifyAdminToken(token);
 
     if (!decoded) {
@@ -90,9 +93,11 @@ export async function requireSuperAdminAuth(
 }
 export async function optionalAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
+    const cookieToken = (req as any).cookies?.[ADMIN_AUTH_COOKIE_NAME];
     const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const token = cookieToken || headerToken;
+    if (token) {
       const decoded = verifyAdminToken(token);
       if (decoded) {
         const admin = await storage.getAdminById(decoded.adminId);

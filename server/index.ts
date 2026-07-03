@@ -41,6 +41,20 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com",
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://checkout.razorpay.com",
+        "frame-src https://accounts.google.com https://checkout.razorpay.com",
+      ].join("; "),
+    );
   }
   next();
 });

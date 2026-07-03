@@ -8,8 +8,7 @@ import {
 import type { ZodIssue } from "zod";
 
 export function adminHeaders(): Record<string, string> {
-  const token = localStorage.getItem("adminToken");
-  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  return { "Content-Type": "application/json" };
 }
 
 export async function parseAdminApiError(res: Response): Promise<{
