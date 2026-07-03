@@ -10,6 +10,11 @@ import {
 import { shouldBlockRecurringMidBatchBooking } from "@shared/recurring-batch";
 import { expandSessionOccurrences, serializeRecurrenceWeekdays } from "@shared/session-schedule";
 import { storage, storageReady } from "./storage";
+import {
+  getGuestCheckoutEnabled,
+  setGuestCheckoutEnabled,
+  listPlatformSettings,
+} from "./platform-settings";
 import { getAdminBootstrapConfig, normalizeAdminEmail, normalizeAdminPassword } from "./admin-bootstrap";
 import { checkDatabaseHealth } from "./db-health";
 import {
@@ -998,6 +1003,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   }
 
+  app.get("/api/admin/platform-settings", requireSuperAdminAuth, async (_req, res) => {
+    try {
+      const rows = await listPlatformSettings();
+      res.json(rows);
+    } catch {
+      res.status(500).json({ message: "Failed to load platform settings" });
+    }
+  });
+
+  app.patch("/api/admin/platform-settings/guest-checkout", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const bodySchema = z.object({ enabled: z.boolean() });
+      const { enabled } = bodySchema.parse(req.body);
+      if (!req.admin?.id) {
+        return res.status(401).json({ message: "Admin authentication required" });
+      }
+      const guestCheckoutEnabled = await setGuestCheckoutEnabled(enabled, req.admin.id, {
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+      res.json({ guestCheckoutEnabled });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "enabled must be a boolean",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update guest checkout setting" });
+    }
+  });
+
   app.get("/api/admin/carousel-promotions", requireSuperAdminAuth, async (_req, res) => {
     try {
       const promotions = await storage.getCarouselPromotions();
@@ -1944,8 +1981,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Class not found" });
       }
 
+      const guestCheckoutEnabled = await getGuestCheckoutEnabled();
+      // Guest bookings are born here — in-flight routes and webhooks stay open when OFF (SPEC-GG-01).
       const isGuestAllowedSession =
-        cls.sessionFrequency === "drop_in" || cls.sessionFrequency === "trial";
+        guestCheckoutEnabled &&
+        (cls.sessionFrequency === "drop_in" || cls.sessionFrequency === "trial");
       const mustBeSignedIn = !isGuestAllowedSession;
       const isGuestBooking = !req.user?.id;
 
@@ -2621,6 +2661,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       keyId: gateway?.getPublicKeyId() ?? null,
       provider: gateway?.id ?? null,
     });
+  });
+
+  app.get("/api/platform/config", async (_req, res) => {
+    try {
+      res.json({ guestCheckoutEnabled: await getGuestCheckoutEnabled() });
+    } catch {
+      res.status(500).json({ message: "Failed to load platform config" });
+    }
   });
 
   app.get("/api/payments/my", requireAuth, async (req: any, res) => {

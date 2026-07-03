@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { getSessionBadgeLabel } from "@/lib/session-badges";
+import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import type { ClassType } from "@shared/schema";
 import type { BookingIntent } from "@/lib/pending-booking";
 import {
@@ -154,7 +154,10 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                     </Badge>
                   )}
                   {hasUpcomingSession(classType.id) && frequencyBadge(classType.id) && (
-                    <Badge className="absolute right-3 top-3 bg-primary text-white">
+                    <Badge
+                      variant="outline"
+                      className={`absolute right-3 top-3 ${SESSION_INFO_BADGE_CLASSNAME} bg-white/95 backdrop-blur-sm`}
+                    >
                       {frequencyBadge(classType.id)}
                     </Badge>
                   )}

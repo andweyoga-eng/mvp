@@ -28,6 +28,7 @@ import {
   type CarouselPromotion,
   type InsertCarouselPromotion,
   type UpdateCarouselPromotion,
+  type PlatformSetting,
   type InsertAuditLog,
   users,
   classTypes,
@@ -42,6 +43,7 @@ import {
   classTypeNotifyRequests,
   subscriptions,
   carouselPromotions,
+  platformSettings,
   sessionMoodCheckins,
   sessionJoinEvents,
   userSessionMappings,
@@ -238,6 +240,16 @@ export interface IStorage {
     updates: UpdateCarouselPromotion,
   ): Promise<CarouselPromotion | undefined>;
   deleteCarouselPromotion(id: string): Promise<{ ok: boolean; message?: string }>;
+
+  // Platform settings (SPEC-GG-01)
+  getPlatformSetting(key: string): Promise<PlatformSetting | undefined>;
+  getAllPlatformSettings(): Promise<PlatformSetting[]>;
+  upsertPlatformSetting(
+    key: string,
+    value: unknown,
+    updatedBy: string,
+  ): Promise<PlatformSetting>;
+
   createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest>;
   getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]>;
   updateNotifyRequestEmailStatus(
@@ -978,6 +990,46 @@ export class DatabaseStorage implements IStorage {
       console.error("[DB] Error deleting carousel promotion:", error);
       return { ok: false, message: "Failed to delete promotion" };
     }
+  }
+
+  async getPlatformSetting(key: string): Promise<PlatformSetting | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(platformSettings)
+        .where(eq(platformSettings.key, key))
+        .limit(1);
+      return row;
+    } catch (error) {
+      console.error("[DB] Error reading platform setting:", error);
+      return undefined;
+    }
+  }
+
+  async getAllPlatformSettings(): Promise<PlatformSetting[]> {
+    try {
+      return await db.select().from(platformSettings).orderBy(platformSettings.key);
+    } catch (error) {
+      console.error("[DB] Error listing platform settings:", error);
+      return [];
+    }
+  }
+
+  async upsertPlatformSetting(
+    key: string,
+    value: unknown,
+    updatedBy: string,
+  ): Promise<PlatformSetting> {
+    const now = new Date();
+    const [row] = await db
+      .insert(platformSettings)
+      .values({ key, value, updatedBy, updatedAt: now })
+      .onConflictDoUpdate({
+        target: platformSettings.key,
+        set: { value, updatedBy, updatedAt: now },
+      })
+      .returning();
+    return row;
   }
 
   async createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest> {

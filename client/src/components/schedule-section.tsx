@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
-import { getSessionBadgeLabel } from "@/lib/session-badges";
+import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import {
   formatScheduleDayHeader,
   getRollingWeekDateRange,
@@ -548,7 +548,12 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                         <div className="text-xs text-dz-muted">{row.meta}</div>
                       </div>
                       {row.badge ? (
-                        <Badge className="shrink-0 bg-primary text-white">{row.badge}</Badge>
+                        <Badge
+                          variant="outline"
+                          className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                        >
+                          {row.badge}
+                        </Badge>
                       ) : null}
                       <Button
                         size="sm"

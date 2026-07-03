@@ -38,7 +38,8 @@ import {
   firstGuestFormError,
 } from "@shared/guest-booking-form";
 import { MAX_TEXT_LENGTH, limitTextInput } from "@shared/input-limits";
-import { AuthHoverPopup } from "@/components/auth-hover-popup";
+import { AuthHoverPopup, AuthChoiceDialog } from "@/components/auth-hover-popup";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
@@ -157,11 +158,13 @@ export default function BookingModal({
   const guestCopy = CONSENT_COPY[consentLang];
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
   const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
   const resumeCheckoutStartedRef = useRef(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isLoading, refreshUser } = useAuth();
+  const { guestCheckoutEnabled } = usePlatformConfig();
   const [, setLocation] = useLocation();
 
   const clearGuestFormError = () => setGuestFormBanner("");
@@ -297,6 +300,7 @@ export default function BookingModal({
       "drop_in" ||
     (guestEligibleSession as { sessionFrequency?: string } | undefined)?.sessionFrequency ===
       "trial";
+  const effectiveCanGuestBook = canGuestBook && guestCheckoutEnabled;
 
   const bookingSessionIsTrialDropIn = useMemo(() => {
     const freq =
@@ -327,6 +331,7 @@ export default function BookingModal({
       setGuestFormBanner("");
       setNextBatchPrompt(null);
       setWaitlistEmail("");
+      setBookingAuthOpen(false);
       resumeCheckoutStartedRef.current = false;
       clearGuestCheckoutSession();
       return;
@@ -474,6 +479,16 @@ export default function BookingModal({
             status: 409,
             code: "guest_booking_confirmed",
             message: (result.message as string) || "You are already booked for this session.",
+          };
+        }
+
+        if (response.status === 401 && result.code === "signup_required") {
+          throw {
+            status: 401,
+            code: "signup_required",
+            message:
+              (result.message as string) ||
+              "Sign in is required to book this session.",
           };
         }
 
@@ -665,6 +680,19 @@ export default function BookingModal({
         return;
       }
 
+      if (error.status === 401 && error.code === "signup_required") {
+        setGuestFormBanner("");
+        setGuestFieldErrors({ name: "", email: "", phone: "" });
+        setBookingAuthOpen(true);
+        toast({
+          title: "Sign in required",
+          description:
+            error.message ||
+            "Guest checkout is unavailable. Sign in or create an account to book this session.",
+        });
+        return;
+      }
+
       if (!user) {
         const message = error.message || "Please try again or contact support.";
         const fieldErrors: Partial<Record<GuestFieldKey, string>> = {};
@@ -688,7 +716,16 @@ export default function BookingModal({
 
     if (bookingMutation.isPending || isPaying) return;
 
-    if (!user && !canGuestBook) return;
+    if (!user && !canAccessCheckoutUi) {
+      if (!guestCheckoutEnabled) {
+        setBookingAuthOpen(true);
+        return;
+      }
+
+      if (!effectiveCanGuestBook) {
+        return;
+      }
+    }
 
     if (user && !isProfileComplete && !bookingSessionIsTrialDropIn) {
       onClose();
@@ -756,7 +793,7 @@ export default function BookingModal({
     }
 
     const payload: Record<string, string | boolean> = { classId };
-    if (!user && canGuestBook) {
+    if (!user && effectiveCanGuestBook) {
       if (!validateGuestCheckoutForm()) return;
       const phoneCheck = validateRequiredGuestPhone(guestBooking.phone);
       if (!phoneCheck.ok) return;
@@ -1134,7 +1171,14 @@ export default function BookingModal({
     setPaymentStep("payment-confirmed");
   }, [memberSessions, paymentStep, paymentResult]);
 
+  const suppressModalForGuestGate =
+    isOpen && !user && !isLoading && !guestCheckoutEnabled && !canAccessCheckoutUi;
+
   return (
+    <>
+    {suppressModalForGuestGate ? (
+      <AuthChoiceDialog open={true} onOpenChange={(open) => !open && onClose()} />
+    ) : (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showClose={!hideDialogClose}>
         {!paymentResult && user && !isProfileComplete && !bookingSessionIsTrialDropIn && (
@@ -1517,7 +1561,7 @@ export default function BookingModal({
                 <Skeleton className="h-24 w-full rounded-md" />
                 <Skeleton className="h-11 w-full rounded-xl" />
               </div>
-            ) : canGuestBook && hasPreselectedSession && displayClass && preselectedIsBookable ? (
+            ) : effectiveCanGuestBook && hasPreselectedSession && displayClass && preselectedIsBookable ? (
               <div className="space-y-3 text-left">
                 <div className="text-left p-3 bg-muted rounded-md">
                   <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
@@ -1714,7 +1758,9 @@ export default function BookingModal({
                   </p>
                 </div>
                 <p className="text-purple-600 font-medium">
-                  Sign in to book this session, or choose a trial or drop-in from the schedule below.
+                  {guestCheckoutEnabled
+                    ? "Sign in to book this session, or choose a trial or drop-in from the schedule below."
+                    : "Sign in to book this session."}
                 </p>
                 <AuthHoverPopup onContinueAsGuest={() => onClose()}>
                   <Button
@@ -1738,9 +1784,13 @@ export default function BookingModal({
                   </p>
                 )}
                 <p className="text-purple-600 font-medium">
-                  {hasClassTypeFilter
-                    ? "Sign in to book this class type, or pick a trial or drop-in session from the schedule."
-                    : "Choose a trial or drop-in session from the schedule below, or sign in to book recurring classes."}
+                  {guestCheckoutEnabled
+                    ? hasClassTypeFilter
+                      ? "Sign in to book this class type, or pick a trial or drop-in session from the schedule."
+                      : "Choose a trial or drop-in session from the schedule below, or sign in to book recurring classes."
+                    : hasClassTypeFilter
+                      ? "Sign in to book this class type."
+                      : "Sign in to book your session."}
                 </p>
                 <AuthHoverPopup onContinueAsGuest={() => onClose()}>
                   <Button
@@ -1917,6 +1967,11 @@ export default function BookingModal({
         )}
       </DialogContent>
     </Dialog>
+    )}
+    {!suppressModalForGuestGate && (
+      <AuthChoiceDialog open={bookingAuthOpen} onOpenChange={setBookingAuthOpen} />
+    )}
+    </>
   );
 }
 

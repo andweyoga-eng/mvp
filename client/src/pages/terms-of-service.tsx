@@ -44,7 +44,7 @@ export default function TermsOfServicePage() {
                   <Link href="/privacy#adults" className="text-primary underline">
                     ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿ
                   </Link>{" "}
-                  ವಿವರಿಸಿದಂತೆ. ಖಾತೆ ರಚಿಸುವಾಗ ಅಥವಾ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ಪೂರ್ಣಗೊಳಿಸುವಾಗ ಈ ಅವಶ್ಯಕತೆಯನ್ನು ನೀವು ದೃಢೀಕರಿಸುತ್ತೀರಿ.
+                  ವಿವರಿಸಿದಂತೆ. ಖಾತೆ ರಚಿಸುವಾಗ, ಅಥವಾ ವೇದಿಕೆಯಲ್ಲಿ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ಸಕ್ರಿಯವಾಗಿರುವಾಗ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ಪೂರ್ಣಗೊಳಿಸುವಾಗ ಈ ಅವಶ್ಯಕತೆಯನ್ನು ನೀವು ದೃಢೀಕರಿಸುತ್ತೀರಿ. ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ನಿಷ್ಕ್ರಿಯಗೊಂಡಾಗ, ಡ್ರಾಪ್-ಇನ್ ಮತ್ತು ಟ್ರಯಲ್ ಸೆಷನ್‌ಗಳನ್ನು ಬುಕ್ ಮಾಡಲು ಸೈನ್-ಇನ್ ಖಾತೆ ಅಗತ್ಯ.
                 </>
               ) : (
                 <>
@@ -53,8 +53,8 @@ export default function TermsOfServicePage() {
                   <Link href="/privacy#adults" className="text-primary underline">
                     Privacy Notice
                   </Link>
-                  . By creating an account or completing a guest booking, you confirm that you meet this
-                  requirement.
+                  . By creating an account, or completing a guest booking when guest checkout is enabled on the platform, you confirm that you meet this
+                  requirement. When guest checkout is disabled, drop-in and trial sessions require a signed-in account to book.
                 </>
               )}
             </p>

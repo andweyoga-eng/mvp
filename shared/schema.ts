@@ -295,6 +295,14 @@ export const sessionJoinEvents = pgTable("session_join_events", {
   joinedAt: timestamp("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Runtime platform flags controlled by super admin (SPEC-GG-01). */
+export const platformSettings = pgTable("platform_settings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedBy: varchar("updated_by").references(() => adminUsers.id),
+});
+
 // Admin users for admin console access
 export const adminUsers = pgTable("admin_users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -562,6 +570,7 @@ export type UserSessionMapping = typeof userSessionMappings.$inferSelect;
 export type InsertUserSessionMapping = z.infer<typeof insertUserSessionMappingSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type PlatformSetting = typeof platformSettings.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
 export type AdminProfile = typeof adminProfiles.$inferSelect;

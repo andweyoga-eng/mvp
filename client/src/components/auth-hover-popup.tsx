@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 interface AuthChoiceDialogProps {
   open: boolean;
@@ -21,6 +22,7 @@ export function AuthChoiceDialog({
   onOpenChange,
   onContinueAsGuest,
 }: AuthChoiceDialogProps) {
+  const { guestCheckoutEnabled } = usePlatformConfig();
   const [googleLoading, setGoogleLoading] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
 
@@ -59,7 +61,9 @@ export function AuthChoiceDialog({
             <span className="font-accent italic font-normal text-dz-secondary">session</span>
           </DialogTitle>
           <DialogDescription className="text-sm text-dz-muted">
-            Sign in with Google or continue as a guest for trial and drop-in sessions.
+            {guestCheckoutEnabled
+              ? "Sign in with Google or continue as a guest for trial and drop-in sessions."
+              : "Sign in with Google to book your session."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-2">
@@ -106,14 +110,16 @@ export function AuthChoiceDialog({
             </span>
           </label>
 
-          <Button
-            type="button"
-            onClick={handleContinueAsGuest}
-            className="h-14 w-full rounded-xl bg-primary text-base font-bold text-primary-foreground shadow-dz-primary hover:bg-primary/90"
-            data-testid="guest-popup-button"
-          >
-            Continue as Guest
-          </Button>
+          {guestCheckoutEnabled ? (
+            <Button
+              type="button"
+              onClick={handleContinueAsGuest}
+              className="h-14 w-full rounded-xl bg-primary text-base font-bold text-primary-foreground shadow-dz-primary hover:bg-primary/90"
+              data-testid="guest-popup-button"
+            >
+              Continue as Guest
+            </Button>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

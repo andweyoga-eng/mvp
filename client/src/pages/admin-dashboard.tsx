@@ -31,6 +31,7 @@ import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
 import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
+import { PlatformControlsPanel } from "@/components/admin/platform-controls-panel";
 import { ConsentLogPanel } from "@/components/admin/consent-log-panel";
 import {
   PaymentQrCodesPanel,
@@ -502,6 +503,11 @@ export default function AdminDashboard() {
             <TabsTrigger value="users" className={adminNavTabTrigger}>
               <Users className="w-4 h-4 mr-2 shrink-0" /> Users
             </TabsTrigger>
+            {isSuperAdmin ? (
+              <TabsTrigger value="platform-controls" className={adminNavTabTrigger}>
+                <Settings className="w-4 h-4 mr-2 shrink-0" /> Platform Controls
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger value="instructors" className={adminNavTabTrigger}>
               <GraduationCap className="w-4 h-4 mr-2 shrink-0" /> Instructors
             </TabsTrigger>
@@ -703,6 +709,12 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {isSuperAdmin ? (
+            <TabsContent value="platform-controls">
+              <PlatformControlsPanel />
+            </TabsContent>
+          ) : null}
 
           {/* INSTRUCTORS */}
           <TabsContent value="instructors">

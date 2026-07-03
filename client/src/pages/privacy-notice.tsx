@@ -69,8 +69,8 @@ export default function PrivacyNoticePage() {
           <li>
             <strong>{lang === "kn" ? "ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ಮಾಹಿತಿ" : "Guest Booking Data"}</strong>
             {lang === "kn"
-              ? " — ಖಾತೆ ತೆರೆಯದೆ ಬುಕ್ ಮಾಡುವಾಗ ನೀಡುವ ಹೆಸರು, ಇಮೇಲ್, ದೂರವಾಣಿ — ಆ ಬುಕ್ಕಿಂಗ್ ದೃಢೀಕರಣ ಮತ್ತು ನಿರ್ವಹಣೆಗೆ."
-              : " — name, email, and phone when booking without an account — to confirm and manage that booking."}
+              ? " — ಖಾತೆ ತೆರೆಯದೆ ಬುಕ್ ಮಾಡುವಾಗ ನೀಡುವ ಹೆಸರು, ಇಮೇಲ್, ದೂರವಾಣಿ — ಆ ಬುಕ್ಕಿಂಗ್ ದೃಢೀಕರಣ ಮತ್ತು ನಿರ್ವಹಣೆಗೆ. ಖಾತೆಯಿಲ್ಲದೆ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ವೇದಿಕೆಯಲ್ಲಿ ಸಕ್ರಿಯವಾಗಿರುವಾಗ ಮಾತ್ರ ಲಭ್ಯ; ನಿಷ್ಕ್ರಿಯಗೊಂಡಾಗ ಬುಕಿಂಗ್‌ಗೆ ಸೈನ್-ಇನ್ ಅಗತ್ಯ."
+              : " — name, email, and phone when booking without an account — to confirm and manage that booking. Guest checkout without an account is only available when enabled on the platform; when disabled, booking requires sign-in and member data practices apply."}
           </li>
           <li>
             <strong>{lang === "kn" ? "ಪಾವತಿ ಮಾಹಿತಿ" : "Payment Data"}</strong>
