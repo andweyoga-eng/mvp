@@ -63,7 +63,7 @@ export function getMeetJoinMessage(params: {
 }): string {
   if (!params.isPaid) return "Complete payment to unlock your session link.";
   if (!params.hasMeetLink)
-    return "Your instructor hasn't added the session link yet — it'll appear here once they do.";
+    return "Your instructor hasn't added the session link yet. It'll appear here once they do.";
 
   const now = params.now ?? new Date();
   const nowMs = now.getTime();
@@ -72,7 +72,7 @@ export function getMeetJoinMessage(params: {
   const openFrom = startMs - MEET_OPEN_BEFORE_MS;
 
   if (nowMs > endMs) return "This session has ended.";
-  if (nowMs >= startMs) return "Your session is live now — click to join.";
-  if (nowMs >= openFrom) return "The room is open — you can join now.";
-  return `The Join link activates 1 hour before your session — it'll go live ${humanizeLeadTime(openFrom - nowMs)}.`;
+  if (nowMs >= startMs) return "Your session is live now. Click to join.";
+  if (nowMs >= openFrom) return "The room is open. You can join now.";
+  return `The Join link activates 1 hour before your session. It'll go live ${humanizeLeadTime(openFrom - nowMs)}.`;
 }

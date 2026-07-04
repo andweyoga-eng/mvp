@@ -92,12 +92,12 @@ function sessionLabel(s: PromotableSession): string {
     minute: "2-digit",
     hour12: true,
   });
-  return `${name}${instructor} — ${when}`;
+  return `${name}${instructor}, ${when}`;
 }
 
 function formatWindow(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "N/A";
   return d.toLocaleString("en-IN", {
     day: "numeric",
     month: "short",

@@ -317,7 +317,7 @@ export default function Dashboard() {
               <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
                 {todaySession
                   ? `Your ${todaySession.className} session is scheduled today at ${formatTime(todaySession.date)}.`
-                  : "No sessions scheduled for today — explore upcoming sessions below and reserve your spot."}
+                  : "No sessions scheduled for today. Explore upcoming sessions below and reserve your spot."}
               </p>
 
               {todaySession ? (

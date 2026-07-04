@@ -406,7 +406,7 @@ export function EditInstructorModal({
         title: "Instructor updated",
         description:
           updated.status === "active"
-            ? "Status is now Active — ready for session scheduling."
+            ? "Status is now Active and ready for session scheduling."
             : getInstructorStatusLabel(updated.status) +
               (updated.statusNotes ? `: ${updated.statusNotes}` : ""),
       });
@@ -467,13 +467,13 @@ export function EditInstructorModal({
         </DialogTrigger>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit instructor — {instructor.name}</DialogTitle>
+            <DialogTitle>Edit instructor: {instructor.name}</DialogTitle>
           </DialogHeader>
           <form onSubmit={submitForm} className="space-y-6">
             <FormErrorSummary errors={errors} />
             {isSuperAdmin && liveInstructor.status === "pending" ? (
               <div className="rounded-md border border-amber-200 bg-amber-50/60 p-4 space-y-2">
-                <p className="text-sm font-medium">Super admin — manual verify and onboard</p>
+                <p className="text-sm font-medium">Super admin: manual verify and onboard</p>
                 <p className="text-xs text-muted-foreground">
                   Onboarding status:{" "}
                   <span className="font-medium text-gray-900">
@@ -817,7 +817,7 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
                 {!instructor.emailVerified ? (
                   <div className="space-y-4">
                     <div className="rounded-md border bg-background p-3 space-y-3">
-                      <p className="text-sm font-medium">Option A — Send OTP and wait</p>
+                      <p className="text-sm font-medium">Option A: Send OTP and wait</p>
                       <p className="text-xs text-muted-foreground">
                         Onboarding stays here until the instructor uses the code or link from their
                         email.
@@ -853,7 +853,7 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
 
                     {isSuperAdmin ? (
                       <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-                        <p className="text-sm font-medium">Option B — Verify manually and onboard</p>
+                        <p className="text-sm font-medium">Option B: Verify manually and onboard</p>
                         <p className="text-xs text-muted-foreground">
                           Super admin only. Completes email verification and onboarding without
                           waiting for the instructor OTP.
@@ -890,7 +890,7 @@ export function CreateInstructorModal({ onCreated }: { onCreated: () => void }) 
                 {!instructor.phoneVerified ? (
                   <>
                     <Button type="button" variant="outline" size="sm" disabled title="SMS gateway coming soon">
-                      Verify phone (SMS) — coming soon
+                      Verify phone (SMS), coming soon
                     </Button>
                     <p className="text-xs text-gray-500">
                       Placeholder until SMS gateway is integrated. Use manual verify for UAT.
@@ -1061,7 +1061,7 @@ export function InstructorStatusActions({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{actionLabel} instructor — {instructor.name}</DialogTitle>
+            <DialogTitle>{actionLabel} instructor: {instructor.name}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">{dialogDescription}</p>
           <div className="space-y-2">
@@ -1075,10 +1075,10 @@ export function InstructorStatusActions({
               onChange={(e) => setReason(e.target.value)}
               placeholder={
                 pendingStatus === "active"
-                  ? "e.g. Investigation complete — cleared to return"
+                  ? "e.g. Investigation complete. Cleared to return"
                   : pendingStatus === "suspended"
                     ? "e.g. Pending investigation into complaint"
-                    : "e.g. Repeated violations — permanently removed"
+                    : "e.g. Repeated violations. Permanently removed"
               }
               rows={3}
               maxLength={500}

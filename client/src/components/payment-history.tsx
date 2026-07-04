@@ -31,7 +31,7 @@ const dispositionColors: Record<PaymentDisposition, string> = {
 };
 
 function formatAmount(paise: number | null, currency: string): string {
-  if (paise == null) return "—";
+  if (paise == null) return "N/A";
   return `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 

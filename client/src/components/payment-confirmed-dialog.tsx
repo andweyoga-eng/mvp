@@ -37,7 +37,7 @@ export function PaymentConfirmedContent({
         <p className="text-xl font-semibold text-green-900">Payment confirmed</p>
         <p className="text-base text-green-900/90 leading-relaxed">
           Your payment for <span className="font-semibold">{details.className}</span> is verified.
-          Your session is locked in — we&apos;ll nudge you to join about 30 minutes before class.
+          Your session is locked in. We&apos;ll nudge you to join about 30 minutes before class.
         </p>
       </div>
 

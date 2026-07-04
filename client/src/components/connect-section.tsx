@@ -11,7 +11,7 @@ export default function ConnectSection() {
               title="and We"
               accent="Connect"
               align="left"
-              subtitle="True wellness happens in connection — with yourself, with others, and with the world around you."
+              subtitle="True wellness happens in connection: with yourself, with others, and with the world around you."
             />
             <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-dz-glass-border bg-white p-4 text-center">

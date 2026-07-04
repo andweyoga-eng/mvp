@@ -149,8 +149,8 @@ export default function GrievancePage() {
             </ul>
             <p>
               {lang === "kn"
-                ? "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯನ್ನು ಖಾತೆ ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು — ನಿಮ್ಮ ಖಾತೆಯಲ್ಲಿನ ಗೌಪ್ಯತೆ ಮತ್ತು ಸಮ್ಮತಿ ನಿರ್ವಹಣೆಯನ್ನು ನೋಡಿ."
-                : "Health data consent may be withdrawn independently without closing your account — see Privacy and Consent Management in your account."}
+                ? "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯನ್ನು ಖಾತೆ ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ನಿಮ್ಮ ಖಾತೆಯಲ್ಲಿನ ಗೌಪ್ಯತೆ ಮತ್ತು ಸಮ್ಮತಿ ನಿರ್ವಹಣೆಯನ್ನು ನೋಡಿ."
+                : "Health data consent may be withdrawn independently without closing your account. See Privacy and Consent Management in your account."}
             </p>
           </section>
 

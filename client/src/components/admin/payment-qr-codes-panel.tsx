@@ -166,7 +166,7 @@ function QrCodeForm({
         <Input
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder="e.g. UPI — Primary account"
+          placeholder="e.g. UPI, Primary account"
         />
       </div>
       <div>
@@ -540,7 +540,7 @@ export function PaymentQrCodesPanel({
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-4">
-        One-time QR uploads — reuse by name when scheduling sessions ({qrCodes.length} saved)
+        One-time QR uploads. Reuse by name when scheduling sessions ({qrCodes.length} saved)
       </p>
 
       {isLoading ? (

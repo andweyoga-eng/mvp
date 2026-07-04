@@ -37,7 +37,7 @@ export function PaymentVerifiedCelebrationDialog({
           <DialogTitle className="text-xl text-[#3d1b80]">Class is starting soon</DialogTitle>
           <DialogDescription className="text-base text-purple-900/90 leading-relaxed">
             <span className="font-semibold">{celebration.className}</span> kicks off in about 30
-            minutes. Roll out your mat — ready when you are.
+            minutes. Roll out your mat. Ready when you are.
           </DialogDescription>
         </DialogHeader>
 
@@ -53,7 +53,7 @@ export function PaymentVerifiedCelebrationDialog({
 
         {!hasMeetLink ? (
           <p className="text-xs text-center text-muted-foreground px-2">
-            Your Meet link will appear here once the session is ready — check My Sessions too.
+            Your Meet link will appear here once the session is ready. Check My Sessions too.
           </p>
         ) : null}
 

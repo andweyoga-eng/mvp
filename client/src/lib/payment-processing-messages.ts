@@ -28,7 +28,7 @@ export const PAYMENT_PROCESSING_MESSAGES: Record<
   verifying: {
     title: "Confirming your payment",
     description:
-      "We are verifying your payment with the bank. Please wait — do not close this page until confirmation appears.",
+      "We are verifying your payment with the bank. Please wait. Do not close this page until confirmation appears.",
   },
 };
 

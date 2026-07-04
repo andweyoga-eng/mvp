@@ -253,7 +253,7 @@ export default function Calendar() {
             </h1>
             <p className="text-[clamp(15px,1.4vw,18px)] leading-relaxed text-dz-muted">
               Find your <span className="font-accent text-[1.16em] italic text-primary">flow</span>{" "}
-              and book your next session — a curated calendar of mindful movement and healing
+              and book your next session: a curated calendar of mindful movement and healing
               sounds.
             </p>
           </div>

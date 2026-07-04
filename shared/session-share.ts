@@ -32,7 +32,7 @@ export function buildClassTypeSharePayload(
     typeof classType.price === "string"
       ? classType.price
       : classType.price.toLocaleString("en-IN");
-  const text = `Try ${classType.name} at andWeYoga — ₹${price}/session\n${url}`;
+  const text = `Try ${classType.name} at andWeYoga, ₹${price}/session\n${url}`;
   return { title: `${classType.name} at andWeYoga`, text, url };
 }
 
@@ -44,7 +44,7 @@ export function buildBookedSessionSharePayload(
   const url = buildBookedSessionShareUrl(session.classId, baseUrl);
   const text = `I'm joining ${session.className} with ${session.instructorName} on ${when} (IST) at andWeYoga.\nBook your spot: ${url}`;
   return {
-    title: `My andWeYoga session — ${session.className}`,
+    title: `My andWeYoga session: ${session.className}`,
     text,
     url,
   };

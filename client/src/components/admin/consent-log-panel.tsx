@@ -52,8 +52,8 @@ export function ConsentLogPanel() {
                 </td>
                 <td className="px-3 py-2">{row.consentType}</td>
                 <td className="px-3 py-2">{row.action}</td>
-                <td className="px-3 py-2 font-mono text-xs">{row.userId ?? "—"}</td>
-                <td className="px-3 py-2 font-mono text-xs">{row.bookingId ?? "—"}</td>
+                <td className="px-3 py-2 font-mono text-xs">{row.userId ?? "N/A"}</td>
+                <td className="px-3 py-2 font-mono text-xs">{row.bookingId ?? "N/A"}</td>
                 <td className="px-3 py-2">{row.consentVersion}</td>
               </tr>
             ))}

@@ -17,4 +17,4 @@ export const POST_SESSION_MOOD_PROMPT =
   "How do you feel after practice? Your reflection helps us personalize future sessions.";
 
 export const POST_SESSION_SKIP_NOTE =
-  "Tracking how you feel after class helps us tailor pace, tone, and focus for you. You can skip anytime — it only takes a few seconds when you're ready.";
+  "Tracking how you feel after class helps us tailor pace, tone, and focus for you. You can skip anytime. It only takes a few seconds when you're ready.";

@@ -14,13 +14,13 @@ export default function StorySection() {
           <p>
             In April 2023, andWeYoga was born in Bengaluru with a simple yet powerful philosophy:{" "}
             <span className="font-accent italic text-[#4b3282]">
-              &ldquo;We meet, we greet, we do whatever we like — we play, we paint, we run, we
-              picnic — and we yoga too.&rdquo;
+              &ldquo;We meet, we greet, we do whatever we like. We play, we paint, we run, we
+              picnic, and we yoga too.&rdquo;
             </span>
           </p>
           <p>
             Today, andWeYoga continues to grow stronger every day. We&apos;ve built more than a yoga
-            studio — we&apos;ve created a family where transformation is celebrated and every
+            studio. We&apos;ve created a family where transformation is celebrated and every
             individual&apos;s journey is honored.
           </p>
         </div>

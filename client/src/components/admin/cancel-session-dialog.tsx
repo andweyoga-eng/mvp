@@ -83,7 +83,7 @@ export function CancelSessionDialog({
               value={reason}
               maxLength={MAX_TEXT_LENGTH.cancelReason}
               onChange={(e) => setReason(limitTextInput(e.target.value, MAX_TEXT_LENGTH.cancelReason))}
-              placeholder="e.g. Instructor unavailable — we will reach out to reschedule"
+              placeholder="e.g. Instructor unavailable. We will reach out to reschedule"
               rows={3}
             />
           </div>

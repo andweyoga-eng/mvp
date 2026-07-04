@@ -29,7 +29,7 @@ export default function Trips() {
   }, [authLoading, user, setLocation]);
 
   const soon = (title: string) =>
-    toast({ title, description: "Trip bookings open soon — we'll let you know." });
+    toast({ title, description: "Trip bookings open soon. We'll let you know." });
 
   return (
     <DashboardShell active="trips">

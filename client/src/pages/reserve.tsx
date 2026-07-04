@@ -387,7 +387,7 @@ export default function Reserve() {
                   <div className="flex items-baseline justify-between py-[18px]">
                     <span className="text-[15px] font-semibold">Total</span>
                     <span className="font-display text-[26px] font-bold text-primary">
-                      {price ?? "—"}
+                      {price ?? "N/A"}
                     </span>
                   </div>
 
@@ -438,7 +438,7 @@ export default function Reserve() {
                     <div className="space-y-3">
                       <Alert variant="destructive">
                         <AlertDescription>
-                          Payment did not complete. Your spot is reserved — retry to confirm.
+                          Payment did not complete. Your spot is reserved. Retry to confirm.
                         </AlertDescription>
                       </Alert>
                       <Button

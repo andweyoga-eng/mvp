@@ -49,40 +49,40 @@ export default function PrivacyNoticePage() {
           <li>
             <strong>{lang === "kn" ? "ಗುರುತು ವಿವರಗಳು" : "Identity Data"}</strong>
             {lang === "kn"
-              ? " — ಹೆಸರು, ದೂರವಾಣಿ ಸಂಖ್ಯೆ, ಇಮೇಲ್ ವಿಳಾಸ — ನಿಮ್ಮ ಖಾತೆ ರಚನೆ, ಭದ್ರತೆ, ಬುಕ್ಕಿಂಗ್ ನಿರ್ವಹಣೆ ಮತ್ತು ಸೆಷನ್ ದೃಢೀಕರಣಗಳಿಗಾಗಿ."
-              : " — name, phone number, email address — to create and secure your account, manage bookings, and send session confirmations."}
+              ? ": ಹೆಸರು, ದೂರವಾಣಿ ಸಂಖ್ಯೆ, ಇಮೇಲ್ ವಿಳಾಸ, ನಿಮ್ಮ ಖಾತೆ ರಚನೆ, ಭದ್ರತೆ, ಬುಕ್ಕಿಂಗ್ ನಿರ್ವಹಣೆ ಮತ್ತು ಸೆಷನ್ ದೃಢೀಕರಣಗಳಿಗಾಗಿ."
+              : ": name, phone number, and email address, used to create and secure your account, manage bookings, and send session confirmations."}
           </li>
           <li>
             <strong>{lang === "kn" ? "ಬುಕ್ಕಿಂಗ್ ಮತ್ತು ವೇಳಾಪಟ್ಟಿ ಮಾಹಿತಿ" : "Booking and Schedule Data"}</strong>
             {lang === "kn"
-              ? " — ಆಯ್ಕೆ ಮಾಡಿದ ತರಗತಿಗಳು, ಸಮಯ ಸ್ಲಾಟ್‌ಗಳು, ಶಿಕ್ಷಕರ ಆಯ್ಕೆ, ಸೆಷನ್ ಇತಿಹಾಸ — ನಿಮ್ಮ ಕಾಯ್ದಿರింపನ್ನು ನಿರ್ವಹಿಸಲು."
-              : " — selected classes, time slots, instructor choices, session history — to facilitate and manage your reservations."}
+              ? ": ಆಯ್ಕೆ ಮಾಡಿದ ತರಗತಿಗಳು, ಸಮಯ ಸ್ಲಾಟ್‌ಗಳು, ಶಿಕ್ಷಕರ ಆಯ್ಕೆ, ಸೆಷನ್ ಇತಿಹಾಸ, ನಿಮ್ಮ ಕಾಯ್ದಿರింపನ್ನು ನಿರ್ವಹಿಸಲು."
+              : ": selected classes, time slots, instructor choices, and session history, used to facilitate and manage your reservations."}
           </li>
           <li>
             <SensitiveDataCallout badgeLabel={lang === "kn" ? "ಸೂಕ್ಷ್ಮ" : "Sensitive"}>
               <strong>{lang === "kn" ? "ಆರೋಗ್ಯ ಮಾಹಿತಿ" : "Health Data"}</strong>
               {lang === "kn"
-                ? " — ನೀವು ನೀಡುವ ಆರೋಗ್ಯ ವಿವರಗಳು ಮತ್ತು ಅಪ್‌ಲೋಡ್ ಮಾಡುವ ದಾಖಲೆಗಳು — ಅಗತ್ಯವಿರುವ ಸೆಷನ್ ಬುಕ್ ಮಾಡಿದಾಗ ಮಾತ್ರ ಮತ್ತು ಪ್ರತ್ಯೇಕ, ಸ್ಪಷ್ಟ ಸಮ್ಮತಿಯೊಂದಿಗೆ ಮಾತ್ರ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ."
-                : " — health update text and documents you upload — collected only when you book a session that requires it, and only with your separate, specific consent at the point of collection."}
+                ? ": ನೀವು ನೀಡುವ ಆರೋಗ್ಯ ವಿವರಗಳು ಮತ್ತು ಅಪ್‌ಲೋಡ್ ಮಾಡುವ ದಾಖಲೆಗಳು. ಅಗತ್ಯವಿರುವ ಸೆಷನ್ ಬುಕ್ ಮಾಡಿದಾಗ ಮಾತ್ರ ಮತ್ತು ಪ್ರತ್ಯೇಕ, ಸ್ಪಷ್ಟ ಸಮ್ಮತಿಯೊಂದಿಗೆ ಮಾತ್ರ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ."
+                : ": health update text and documents you upload. Collected only when you book a session that requires it, and only with your separate, specific consent at the point of collection."}
             </SensitiveDataCallout>
           </li>
           <li>
             <strong>{lang === "kn" ? "ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ಮಾಹಿತಿ" : "Guest Booking Data"}</strong>
             {lang === "kn"
-              ? " — ಖಾತೆ ತೆರೆಯದೆ ಬುಕ್ ಮಾಡುವಾಗ ನೀಡುವ ಹೆಸರು, ಇಮೇಲ್, ದೂರವಾಣಿ — ಆ ಬುಕ್ಕಿಂಗ್ ದೃಢೀಕರಣ ಮತ್ತು ನಿರ್ವಹಣೆಗೆ. ಖಾತೆಯಿಲ್ಲದೆ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ವೇದಿಕೆಯಲ್ಲಿ ಸಕ್ರಿಯವಾಗಿರುವಾಗ ಮಾತ್ರ ಲಭ್ಯ; ನಿಷ್ಕ್ರಿಯಗೊಂಡಾಗ ಬುಕಿಂಗ್‌ಗೆ ಸೈನ್-ಇನ್ ಅಗತ್ಯ."
-              : " — name, email, and phone when booking without an account — to confirm and manage that booking. Guest checkout without an account is only available when enabled on the platform; when disabled, booking requires sign-in and member data practices apply."}
+              ? ": ಖಾತೆ ತೆರೆಯದೆ ಬುಕ್ ಮಾಡುವಾಗ ನೀಡುವ ಹೆಸರು, ಇಮೇಲ್, ದೂರವಾಣಿ, ಆ ಬುಕ್ಕಿಂಗ್ ದೃಢೀಕರಣ ಮತ್ತು ನಿರ್ವಹಣೆಗೆ. ಖಾತೆಯಿಲ್ಲದೆ ಅತಿಥಿ ಬುಕ್ಕಿಂಗ್ ವೇದಿಕೆಯಲ್ಲಿ ಸಕ್ರಿಯವಾಗಿರುವಾಗ ಮಾತ್ರ ಲಭ್ಯ; ನಿಷ್ಕ್ರಿಯಗೊಂಡಾಗ ಬುಕಿಂಗ್‌ಗೆ ಸೈನ್-ಇನ್ ಅಗತ್ಯ."
+              : ": name, email, and phone when booking without an account, used to confirm and manage that booking. Guest checkout without an account is only available when enabled on the platform; when disabled, booking requires sign-in and member data practices apply."}
           </li>
           <li>
             <strong>{lang === "kn" ? "ಪಾವತಿ ಮಾಹಿತಿ" : "Payment Data"}</strong>
             {lang === "kn"
-              ? " — ವಹಿವಾಟು ಉಲ್ಲೇಖಗಳು, ಪಾವತಿ ಸ್ಥಿತಿ, ಮೊತ್ತಗಳು. ಕಾರ್ಡ್, ಯುಪಿಐ ಅಥವಾ ನೆಟ್‌ಬ್ಯಾಂಕಿಂಗ್ ವಿವರಗಳನ್ನು ರೇಜರ್‌ಪೇ ನೇರವಾಗಿ ಸಂಗ್ರಹಿಸುತ್ತದೆ; ನಾವು ಅವನ್ನು ಸಂಗ್ರಹಿಸುವುದಿಲ್ಲ."
-              : " — transaction references, payment status, amounts. Card, UPI, or net banking details are collected directly by Razorpay and are not stored by us."}
+              ? ": ವಹಿವಾಟು ಉಲ್ಲೇಖಗಳು, ಪಾವತಿ ಸ್ಥಿತಿ, ಮೊತ್ತಗಳು. ಕಾರ್ಡ್, ಯುಪಿಐ ಅಥವಾ ನೆಟ್‌ಬ್ಯಾಂಕಿಂಗ್ ವಿವರಗಳನ್ನು ರೇಜರ್‌ಪೇ ನೇರವಾಗಿ ಸಂಗ್ರಹಿಸುತ್ತದೆ; ನಾವು ಅವನ್ನು ಸಂಗ್ರಹಿಸುವುದಿಲ್ಲ."
+              : ": transaction references, payment status, and amounts. Card, UPI, or net banking details are collected directly by Razorpay and are not stored by us."}
           </li>
           <li>
             <strong>{lang === "kn" ? "ಸಾಧನ ಮತ್ತು ಲಾಗ್ ಮಾಹಿತಿ" : "Device and Log Data"}</strong>
             {lang === "kn"
-              ? " — ಐಪಿ ವಿಳಾಸ, ಪ್ರವೇಶ ಸಮಯದ ದಾಖಲೆಗಳು, ಸಾಧನ ಮತ್ತು ಬ್ರೌಸರ್ ಮಾಹಿತಿ — ವಂಚನೆ ತಡೆ, ವೇದಿಕೆಯ ಭದ್ರತೆ ಮತ್ತು ಕಾನೂನುಬದ್ಧ ಲಾಗ್ ಅಗತ್ಯಗಳಿಗಾಗಿ."
-              : " — IP address, access timestamps, device and browser information — for fraud prevention, platform security, and logs required under applicable law."}
+              ? ": ಐಪಿ ವಿಳಾಸ, ಪ್ರವೇಶ ಸಮಯದ ದಾಖಲೆಗಳು, ಸಾಧನ ಮತ್ತು ಬ್ರೌಸರ್ ಮಾಹಿತಿ, ವಂಚನೆ ತಡೆ, ವೇದಿಕೆಯ ಭದ್ರತೆ ಮತ್ತು ಕಾನೂನುಬದ್ಧ ಲಾಗ್ ಅಗತ್ಯಗಳಿಗಾಗಿ."
+              : ": IP address, access timestamps, and device and browser information, used for fraud prevention, platform security, and logs required under applicable law."}
           </li>
         </ul>
         <p>

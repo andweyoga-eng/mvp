@@ -103,7 +103,7 @@ export function PendingUserSessionsPanel({
                   </p>
                   <p className="text-sm mt-2">
                     <span className="font-medium">Payment ref:</span>{" "}
-                    {row.transactionAckNumber ?? "—"}
+                    {row.transactionAckNumber ?? "N/A"}
                   </p>
                   {row.ackSubmittedAt && (
                     <p className="text-xs text-gray-400 mt-1">

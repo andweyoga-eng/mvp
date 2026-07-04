@@ -59,7 +59,7 @@ const WORKSHOPS: WorkshopCard[] = [
     tagTone: "primary",
     category: "Asana",
     rows: [
-      { icon: Calendar, text: "Sat, Oct 24 • 10:00 AM — 4:00 PM" },
+      { icon: Calendar, text: "Sat, Oct 24 • 10:00 AM to 4:00 PM" },
       { icon: MapPin, text: "Lotus Sky Studio (Hybrid)" },
       { icon: Users, text: "Limited to 15 practitioners" },
     ],
@@ -76,7 +76,7 @@ const WORKSHOPS: WorkshopCard[] = [
     tagTone: "sage",
     category: "Meditation",
     rows: [
-      { icon: Calendar, text: "Sun, Oct 25 • 2:00 PM — 6:00 PM" },
+      { icon: Calendar, text: "Sun, Oct 25 • 2:00 PM to 6:00 PM" },
       { icon: Video, text: "Live stream + on-demand access" },
       { icon: Award, text: "Certificate of completion included" },
     ],
@@ -93,7 +93,7 @@ const WORKSHOPS: WorkshopCard[] = [
     tagTone: "secondary",
     category: "Pranayama",
     rows: [
-      { icon: Calendar, text: "Wed, Oct 28 • 6:30 PM — 9:00 PM" },
+      { icon: Calendar, text: "Wed, Oct 28 • 6:30 PM to 9:00 PM" },
       { icon: UserIcon, text: "Led by Dr. Elena Vasquez" },
       { icon: Sparkles, text: "Bonus: digital pranayama guide" },
     ],
@@ -148,7 +148,7 @@ export default function Workshops() {
               Elevate your <span className="font-accent italic font-normal">practice</span>.
             </h1>
             <p className="mb-6 max-w-md text-[15px] leading-relaxed text-white/90">
-              Deepen your knowledge with curated masterclasses led by world-class instructors —
+              Deepen your knowledge with curated masterclasses led by world-class instructors:
               transformative experiences designed for every level.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -253,7 +253,7 @@ export default function Workshops() {
 
         {visible.length === 0 && (
           <GlassCard className="mt-6 p-10 text-center text-dz-muted">
-            No workshops in this category yet — check back soon.
+            No workshops in this category yet. Check back soon.
           </GlassCard>
         )}
 

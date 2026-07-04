@@ -78,18 +78,18 @@ const statusBadgeClass = (label: string) => {
 };
 
 function formatGatewayMethod(method: string | null): string {
-  if (!method) return "—";
+  if (!method) return "N/A";
   return method.replace(/_/g, " ").toUpperCase();
 }
 
 function formatAmount(paise: number | null, currency: string): string {
-  if (paise == null) return "—";
+  if (paise == null) return "N/A";
   const rupees = paise / 100;
   return `${currency === "INR" ? "₹" : ""}${rupees.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
 function formatSessionPaymentMethod(method: string | null | undefined): string {
-  if (!method) return "—";
+  if (!method) return "N/A";
   const m = method.replace(/_/g, " ");
   if (m === "razorpay link") return "Payment link";
   if (m === "razorpay gateway") return "Razorpay checkout";
@@ -335,15 +335,15 @@ export function PaymentHistoryPanel() {
                       <p className="font-medium">{formatGatewayMethod(row.gatewayPaymentMethod)}</p>
                     </td>
                     <td className="py-3 pr-3">
-                      <p className="text-xs">{row.payerEmail ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">{row.payerPhone ?? "—"}</p>
+                      <p className="text-xs">{row.payerEmail ?? "N/A"}</p>
+                      <p className="text-xs text-muted-foreground">{row.payerPhone ?? "N/A"}</p>
                       {row.payerName && (
                         <p className="text-xs text-muted-foreground">{row.payerName}</p>
                       )}
                     </td>
                     <td className="py-3 pr-3 max-w-[140px]">
                       <p className="font-mono text-xs break-all">
-                        {row.gatewayReference ?? row.transactionAckNumber ?? "—"}
+                        {row.gatewayReference ?? row.transactionAckNumber ?? "N/A"}
                       </p>
                       {row.gatewayProvider && (
                         <p className="text-xs text-muted-foreground">{row.gatewayProvider}</p>

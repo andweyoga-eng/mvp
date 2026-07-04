@@ -46,4 +46,4 @@ export function isTrialDropInMidSession(
 }
 
 export const TRIAL_DROPIN_MIDSESSION_MESSAGE =
-  "This session has already begun — we keep trial and drop-in spaces calm for yogis who joined on time. Please book the next scheduled session instead; we would love to welcome you then.";
+  "This session has already begun. We keep trial and drop-in spaces calm for yogis who joined on time. Please book the next scheduled session instead; we would love to welcome you then.";

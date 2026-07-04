@@ -872,7 +872,7 @@ export default function BookingModal({
       if (!orderRes.ok) {
         const authHint =
           orderRes.status === 401
-            ? " Your checkout session may have expired — close and book again, or sign in."
+            ? " Your checkout session may have expired. Close and book again, or sign in."
             : "";
         throw new Error((orderData.message || "Could not start payment") + authHint);
       }
@@ -923,7 +923,7 @@ export default function BookingModal({
             } else {
               toast({
                 title: "You're in!",
-                description: "Payment received — see you on the mat.",
+                description: "Payment received. See you on the mat.",
               });
               goToMySessionsUpcoming();
             }
@@ -1085,7 +1085,7 @@ export default function BookingModal({
       minute: "2-digit",
       hour12: true,
     });
-    return `${cls.classType.name} with ${cls.instructor.name} — ${dateStr} at ${timeStr} (${cls.currentBookings}/${cls.maxCapacity})`;
+    return `${cls.classType.name} with ${cls.instructor.name}, ${dateStr} at ${timeStr} (${cls.currentBookings}/${cls.maxCapacity})`;
   };
 
   const showSessionPicker = !hasPreselectedSession;
@@ -1348,7 +1348,7 @@ export default function BookingModal({
               <AlertDescription className="text-purple-900">
                 <p className="font-bold text-lg">See you on the mat</p>
                 <p className="text-sm mt-1">
-                  Payment received for {paymentOutcome.className}. Roll out your mat — your session is locked in.
+                  Payment received for {paymentOutcome.className}. Roll out your mat. Your session is locked in.
                 </p>
               </AlertDescription>
             </Alert>
@@ -1413,7 +1413,7 @@ export default function BookingModal({
           <div className="space-y-4">
             <Alert variant="destructive">
               <AlertDescription>
-                Payment did not complete. Your spot is reserved — please retry to confirm your session.
+                Payment did not complete. Your spot is reserved. Please retry to confirm your session.
               </AlertDescription>
             </Alert>
             <Button

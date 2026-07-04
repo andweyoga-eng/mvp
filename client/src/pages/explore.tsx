@@ -75,7 +75,7 @@ export default function Explore() {
             Find your <span className="font-accent italic font-normal text-dz-secondary">flow</span>.
           </h1>
           <p className="mx-auto mb-7 max-w-2xl text-[clamp(15px,1.5vw,18px)] leading-relaxed text-dz-muted">
-            Discover curated wellness journeys designed for your unique path — from deep meditation
+            Discover curated wellness journeys designed for your unique path, from deep meditation
             to high-energy flow.
           </p>
           <div className="flex flex-wrap justify-center gap-2">

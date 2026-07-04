@@ -39,7 +39,7 @@ export function AdminDataInsightsPanel({ stats }: { stats: AdminInsightsStats })
           Data and Insights
         </CardTitle>
         <CardDescription>
-          Snapshot of members and scheduling — refreshed when you open this tab or reload the
+          Snapshot of members and scheduling, refreshed when you open this tab or reload the
           dashboard.
         </CardDescription>
       </CardHeader>

@@ -293,7 +293,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
         <SectionHeading
           title={`Week ${rollingWeek.weekNumber}`}
           accent="Schedule"
-          subtitle={`Find the perfect time for your practice — ${rollingWeek.label}`}
+          subtitle={`Find the perfect time for your practice, ${rollingWeek.label}`}
         />
 
         {/* Available Today — only shown when enough cards exist to fill the first fold */}

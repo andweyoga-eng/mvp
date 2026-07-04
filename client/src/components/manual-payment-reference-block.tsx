@@ -119,7 +119,7 @@ export function ManualPaymentReferenceBlock({
         />
         <p className="text-xs text-muted-foreground mt-1">
           {refValue.length}/{MANUAL_PAYMENT_REF_LENGTH} characters
-          {refInput.length > 0 && !refValid ? " — use letters or numbers only" : ""}
+          {refInput.length > 0 && !refValid ? ". Use letters or numbers only" : ""}
         </p>
       </div>
 

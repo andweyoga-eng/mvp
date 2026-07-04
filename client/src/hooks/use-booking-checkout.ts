@@ -109,7 +109,7 @@ export function useBookingCheckout({
         if (!orderRes.ok) {
           const authHint =
             orderRes.status === 401
-              ? " Your session may have expired — please sign in and try again."
+              ? " Your session may have expired. Please sign in and try again."
               : "";
           throw new Error((orderData.message || "Could not start payment") + authHint);
         }

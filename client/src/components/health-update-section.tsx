@@ -245,7 +245,7 @@ export function HealthUpdateSection({
           <DialogContent className="sm:max-w-[640px]">
             <DialogHeader>
               <DialogTitle className="text-purple-900">
-                Health concerns — please share details
+                Health concerns: please share details
               </DialogTitle>
             </DialogHeader>
 

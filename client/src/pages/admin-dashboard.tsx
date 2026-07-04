@@ -929,7 +929,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <p className="text-sm text-muted-foreground mb-4">
-                      Sessions in this week ({weekSessions.length}) — edit or delete from the week view
+                      Sessions in this week ({weekSessions.length}). Edit or delete from the week view.
                     </p>
                     {weekSessionsLoading ? (
                       <div className="flex items-center justify-center py-12">
@@ -1172,7 +1172,7 @@ export default function AdminDashboard() {
               <CardHeader>
                 <CardTitle>Consent audit log</CardTitle>
                 <CardDescription>
-                  DPDPA append-only consent records — profile, terms, age, and health data events.
+                  DPDPA append-only consent records for profile, terms, age, and health data events.
                 </CardDescription>
               </CardHeader>
               <CardContent>

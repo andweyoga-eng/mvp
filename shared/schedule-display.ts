@@ -27,7 +27,7 @@ export function getRollingWeekDateRange(now: Date = new Date()): {
     weekNumber: getIsoWeekNumber(start),
     start,
     end,
-    label: `${fmt(start)} – ${fmt(end)}`,
+    label: `${fmt(start)} to ${fmt(end)}`,
   };
 }
 
