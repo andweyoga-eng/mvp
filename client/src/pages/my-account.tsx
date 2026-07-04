@@ -38,6 +38,12 @@ import { PrivacyConsentSection } from "@/components/privacy-consent-section";
 import { AccountHealthNoteSection } from "@/components/account-health-note-section";
 import { DateOfBirthField } from "@/components/date-of-birth-field";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
+import {
+  ADDRESS_COUNTRY_OPTIONS,
+  DEFAULT_ADDRESS_COUNTRY,
+  getAddressStatesForCountry,
+  hasPredefinedAddressStates,
+} from "@shared/address-regions";
 import { type ConsentLanguage, isAdult, isValidDateOfBirth, CONSENT_COPY } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
@@ -131,6 +137,7 @@ export default function MyAccount() {
     addressStreet: "",
     addressLine2: "",
     addressCity: "",
+    addressCountry: DEFAULT_ADDRESS_COUNTRY,
     addressState: "",
     addressPincode: "",
   });
@@ -178,6 +185,7 @@ export default function MyAccount() {
       addressStreet: user.addressStreet || "",
       addressLine2: user.addressLine2 || "",
       addressCity: user.addressCity || "",
+      addressCountry: user.addressCountry || DEFAULT_ADDRESS_COUNTRY,
       addressState: user.addressState || "",
       addressPincode: user.addressPincode || "",
     };
@@ -406,6 +414,7 @@ export default function MyAccount() {
         addressStreet: profileData.addressStreet.trim() || undefined,
         addressLine2: profileData.addressLine2.trim() || undefined,
         addressCity: profileData.addressCity.trim() || undefined,
+        addressCountry: profileData.addressCountry || DEFAULT_ADDRESS_COUNTRY,
         addressState: profileData.addressState.trim() || undefined,
         addressPincode: profileData.addressPincode.trim() || undefined,
         ...(dobLocked ? {} : { dateOfBirth: profileData.dateOfBirth }),
@@ -845,14 +854,62 @@ export default function MyAccount() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="addressState" className="text-xs text-muted-foreground">
-                        State
+                      <Label htmlFor="addressCountry" className="text-xs text-muted-foreground">
+                        Country
                       </Label>
-                      <Input
-                        id="addressState"
-                        value={profileData.addressState}
-                        onChange={(e) => handleInputChange("addressState", e.target.value)}
-                      />
+                      <Select
+                        value={profileData.addressCountry}
+                        onValueChange={(val) => {
+                          const states = getAddressStatesForCountry(val);
+                          const stateStillValid = states.some((s) => s.value === profileData.addressState);
+                          setProfileData((p) => ({
+                            ...p,
+                            addressCountry: val,
+                            addressState: stateStillValid ? p.addressState : "",
+                          }));
+                        }}
+                      >
+                        <SelectTrigger id="addressCountry" className="mt-1">
+                          <SelectValue placeholder="Select country" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          {ADDRESS_COUNTRY_OPTIONS.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="addressState" className="text-xs text-muted-foreground">
+                        State / province
+                      </Label>
+                      {hasPredefinedAddressStates(profileData.addressCountry) ? (
+                        <Select
+                          value={profileData.addressState || undefined}
+                          onValueChange={(val) => handleInputChange("addressState", val)}
+                        >
+                          <SelectTrigger id="addressState" className="mt-1">
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60">
+                            {getAddressStatesForCountry(profileData.addressCountry).map((s) => (
+                              <SelectItem key={s.value} value={s.value}>
+                                {s.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          id="addressState"
+                          value={profileData.addressState}
+                          onChange={(e) => handleInputChange("addressState", e.target.value)}
+                          placeholder="State or region"
+                          className="mt-1"
+                        />
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="addressPincode" className="text-xs text-muted-foreground">

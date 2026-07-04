@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
 import { FieldError, FormErrorSummary } from "@/components/admin/field-error";
+import { SessionDateTimePicker } from "@/components/admin/session-datetime-picker";
 import type { PaymentQrCode } from "@/components/admin/payment-qr-codes-panel";
 
 export interface SessionFormClassType {
@@ -688,17 +689,16 @@ export function CreateSessionModal({
                       : "Date & time (IST)"}{" "}
                     <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    type="datetime-local"
+                  <SessionDateTimePicker
+                    id="session-date"
                     value={form.date}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, date: e.target.value }));
+                    onChange={(v) => {
+                      setForm((f) => ({ ...f, date: v }));
                       clearFieldError("date");
                     }}
                     onBlur={() => runValidation()}
-                    className={errors.date ? "border-red-500" : ""}
+                    error={errors.date}
                   />
-                  <FieldError message={errors.date} />
                 </div>
                 <div>
                   <Label>
@@ -1023,17 +1023,16 @@ export function CreateSessionModal({
                       <Label className="text-xs">
                         Go live at (IST) <span className="text-red-500">*</span>
                       </Label>
-                      <Input
-                        type="datetime-local"
+                      <SessionDateTimePicker
+                        id="session-publish-at"
                         value={form.publishAt}
-                        onChange={(e) => {
-                          setForm((f) => ({ ...f, publishAt: e.target.value }));
+                        onChange={(v) => {
+                          setForm((f) => ({ ...f, publishAt: v }));
                           clearFieldError("publishAt");
                         }}
                         onBlur={() => runValidation()}
-                        className={errors.publishAt ? "border-red-500" : ""}
+                        error={errors.publishAt}
                       />
-                      <FieldError message={errors.publishAt} />
                     </div>
                   )}
                 </div>

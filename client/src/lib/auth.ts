@@ -23,6 +23,7 @@ export interface User {
   addressStreet?: string | null;
   addressLine2?: string | null;
   addressCity?: string | null;
+  addressCountry?: string | null;
   addressState?: string | null;
   addressPincode?: string | null;
 }
@@ -67,6 +68,7 @@ export interface ProfileData {
   addressStreet?: string;
   addressLine2?: string;
   addressCity?: string;
+  addressCountry?: string;
   addressState?: string;
   addressPincode?: string;
 }

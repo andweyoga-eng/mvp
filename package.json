@@ -11,7 +11,8 @@
     "check": "tsc",
     "test": "npm run check && tsx --test tests/**/*.test.ts",
     "test:sanity": "npm run check && tsx --test tests/sanity-regression.test.ts tests/payment-qr.test.ts tests/admin-session-validation.test.ts tests/admin-auth.test.ts tests/booking-flow.test.ts tests/booking-payment.test.ts tests/admin-login.integration.test.ts",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push && tsx scripts/db/purge-seed-data.ts",
+    "db:purge-seed": "tsx scripts/db/purge-seed-data.ts",
     "db:patch": "tsx scripts/db/apply-patches.ts",
     "db:check": "tsx scripts/db/check-connection.ts"
   },

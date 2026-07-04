@@ -20,6 +20,8 @@ interface ClassSession {
   currentBookings: number;
   googleMeetLink?: string | null;
   razorpayLink?: string | null;
+  classType?: { id?: string; name: string; price?: string };
+  instructor?: { id?: string; name: string };
 }
 
 function formatDate(dateStr: string) {
@@ -56,9 +58,14 @@ export function SessionHistoryList({
   return (
     <div className="space-y-3">
       {sessions.map((sess) => {
-        const ct = classTypes.find((c) => c.id === sess.classTypeId);
-        const ins = instructors.find((i) => i.id === sess.instructorId);
+        const ct =
+          sess.classType ??
+          classTypes.find((c) => c.id === sess.classTypeId);
+        const ins =
+          sess.instructor ??
+          instructors.find((i) => i.id === sess.instructorId);
         const isFull = sess.currentBookings >= sess.maxCapacity;
+        const className = ct?.name ?? "Unknown class";
 
         return (
           <div
@@ -68,7 +75,7 @@ export function SessionHistoryList({
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-semibold text-gray-900">{ct?.name ?? "Unknown class"}</h3>
+                  <h3 className="font-semibold text-gray-900">{className}</h3>
                   <Badge variant="secondary" className="text-xs">
                     Past
                   </Badge>

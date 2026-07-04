@@ -111,6 +111,10 @@ import {
   createVerificationEmailHTML,
   createPasswordResetEmailHTML,
 } from "./email";
+import {
+  notifySessionCancellation,
+  validateOwnerCancelOtp,
+} from "./session-cancellation-notify";
 import { setupGoogleAuth, verifyGoogleToken } from "./googleAuth";
 import {
   ensureUserCanAuthenticate,
@@ -556,6 +560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         addressStreet: user.addressStreet,
         addressLine2: user.addressLine2,
         addressCity: user.addressCity,
+        addressCountry: user.addressCountry,
         addressState: user.addressState,
         addressPincode: user.addressPincode,
       });
@@ -644,6 +649,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           addressStreet: updatedUser.addressStreet,
           addressLine2: updatedUser.addressLine2,
           addressCity: updatedUser.addressCity,
+          addressCountry: updatedUser.addressCountry,
           addressState: updatedUser.addressState,
           addressPincode: updatedUser.addressPincode,
         }
@@ -1012,15 +1018,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     },
   );
-  app.delete("/api/class-types/:id", requireAdminAuth, async (req, res) => {
+  app.delete("/api/class-types/:id", requireSuperAdminAuth, async (_req, res) => {
+    res.status(400).json({
+      message:
+        "Use POST /api/admin/class-types/:id/retire with a reason and owner OTP to remove a session type.",
+    });
+  });
+
+  app.post("/api/admin/class-types/:id/retire", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
-      const result = await storage.deleteClassType(req.params.id);
-      if (!result.ok) {
-        return res.status(400).json({ message: result.message || "Cannot delete class type" });
+      const body = z
+        .object({
+          reason: z.string().min(3, "Retirement reason is required"),
+          ownerOtp: z.string().min(1, "Owner OTP is required"),
+        })
+        .parse(req.body);
+
+      const otp = validateOwnerCancelOtp(body.ownerOtp);
+      if (!otp.ok) {
+        return res.status(400).json({ message: otp.message });
       }
-      res.json({ message: "Class type deleted" });
+
+      const result = await storage.retireClassTypeWithSessionCancellation(req.params.id, body.reason);
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message || "Could not retire session type" });
+      }
+
+      const allRecipients = (result.noticePayloads ?? []).flatMap((p) => p.recipients);
+      const notifySummary = await notifySessionCancellation(allRecipients, {
+        kind: "session_type",
+        reason: body.reason,
+        classTypeName: result.classTypeName ?? "Session type",
+      });
+
+      await storage.insertAuditLog({
+        userId: req.admin?.id ?? null,
+        action: "session_type_retired",
+        resourceType: "class_type",
+        resourceId: req.params.id,
+        metadata: JSON.stringify({
+          reason: body.reason,
+          sessionsCancelled: result.sessionsCancelled,
+          hardDeleted: result.hardDeleted,
+          performedByEmail: req.admin?.email,
+        }),
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+
+      res.json({
+        message: result.message,
+        sessionsCancelled: result.sessionsCancelled,
+        hardDeleted: result.hardDeleted,
+        notifications: notifySummary,
+      });
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete class type" });
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+        });
+      }
+      res.status(500).json({ message: "Failed to retire session type" });
     }
   });
 
@@ -3180,7 +3238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/classes/:id/cancel", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+  app.post("/api/admin/classes/:id/cancel", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
       const body = z
         .object({
@@ -3188,14 +3246,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ownerOtp: z.string().min(1, "Owner OTP is required"),
         })
         .parse(req.body);
-      const result = await storage.cancelClassSessionWithBookings(
-        req.params.id,
-        body.reason,
-        body.ownerOtp,
-      );
+
+      const otp = validateOwnerCancelOtp(body.ownerOtp);
+      if (!otp.ok) {
+        return res.status(400).json({ message: otp.message });
+      }
+
+      const result = await storage.cancelClassSession(req.params.id, body.reason);
       if (!result.ok) {
         return res.status(400).json({ message: result.message || "Could not cancel session" });
       }
+
+      const notifySummary = await notifySessionCancellation(result.recipients ?? [], {
+        kind: "session",
+        reason: body.reason,
+        classTypeName: result.classTypeName ?? "Session",
+        sessionDateIso: result.sessionDateIso,
+        instructorName: result.instructorName,
+      });
+
       await storage.insertAuditLog({
         userId: req.admin?.id ?? null,
         action: "session_cancelled",
@@ -3204,12 +3273,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: JSON.stringify({
           reason: body.reason,
           performedByEmail: req.admin?.email,
+          recipientCount: notifySummary.recipientCount,
         }),
         ipAddress: req.ip ?? null,
         userAgent: req.get("user-agent") ?? null,
       });
       res.json({
-        message: "Session cancelled. Booked members will see the reason in their profile.",
+        message:
+          notifySummary.recipientCount > 0
+            ? `Session cancelled. ${notifySummary.recipientCount} member(s) notified by email (SMS/WhatsApp queued when channels go live).`
+            : "Session cancelled. No bookings were affected.",
+        notifications: notifySummary,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

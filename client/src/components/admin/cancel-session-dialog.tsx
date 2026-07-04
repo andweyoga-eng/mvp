@@ -13,7 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldAlert } from "lucide-react";
-import { MAX_TEXT_LENGTH, limitTextInput } from "@shared/input-limits";
+import {
+  MAX_TEXT_LENGTH,
+  limitTextInput,
+  PLACEHOLDER_OWNER_CANCEL_OTP,
+  normalizeOwnerCancelOtpInput,
+  isOwnerCancelFormSubmittable,
+  ownerCancelFormBlocker,
+} from "@shared/input-limits";
 
 interface CancelSessionDialogProps {
   open: boolean;
@@ -45,10 +52,16 @@ export function CancelSessionDialog({
     onOpenChange(next);
   };
 
+  const canSubmit = isOwnerCancelFormSubmittable(reason, ownerOtp);
+  const submitBlocker = ownerCancelFormBlocker(reason, ownerOtp);
+
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      await onConfirm({ reason: reason.trim(), ownerOtp: ownerOtp.trim() });
+      await onConfirm({
+        reason: reason.trim(),
+        ownerOtp: normalizeOwnerCancelOtpInput(ownerOtp) || ownerOtp.trim(),
+      });
       reset();
       onOpenChange(false);
     } finally {
@@ -60,12 +73,32 @@ export function CancelSessionDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Cancel session with bookings</DialogTitle>
+          <DialogTitle>
+            {bookingCount > 0 ? "Cancel session with bookings" : "Cancel scheduled session"}
+          </DialogTitle>
           <DialogDescription>
-            {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. Members will
-            see this session as cancelled with your reason.
+            {bookingCount > 0 ? (
+              <>
+                {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. Members will
+                see this session as cancelled with your reason.
+              </>
+            ) : (
+              <>
+                {sessionLabel} will be cancelled. Members will see the reason in their profile if
+                they had a booking.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
+
+        <Alert className="border-blue-200 bg-blue-50">
+          <ShieldAlert className="h-4 w-4 text-blue-800" />
+          <AlertDescription className="text-blue-950 text-sm">
+            Booked members will be notified by <strong>email</strong> (live when configured), plus{" "}
+            <strong>SMS</strong> and <strong>WhatsApp</strong> placeholders until those channels are
+            integrated.
+          </AlertDescription>
+        </Alert>
 
         <Alert className="border-amber-200 bg-amber-50">
           <ShieldAlert className="h-4 w-4 text-amber-800" />
@@ -89,16 +122,38 @@ export function CancelSessionDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="owner-otp">Owner OTP (placeholder)</Label>
-            <Input
-              id="owner-otp"
-              value={ownerOtp}
-              maxLength={MAX_TEXT_LENGTH.ownerOtp}
-              onChange={(e) => setOwnerOtp(limitTextInput(e.target.value, MAX_TEXT_LENGTH.ownerOtp))}
-              placeholder="000000"
-              autoComplete="one-time-code"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="owner-otp"
+                value={ownerOtp}
+                maxLength={MAX_TEXT_LENGTH.ownerOtp}
+                onChange={(e) =>
+                  setOwnerOtp(
+                    limitTextInput(normalizeOwnerCancelOtpInput(e.target.value), MAX_TEXT_LENGTH.ownerOtp),
+                  )
+                }
+                placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
+                autoComplete="off"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="font-mono tracking-widest"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setOwnerOtp(PLACEHOLDER_OWNER_CANCEL_OTP)}
+              >
+                Use {PLACEHOLDER_OWNER_CANCEL_OTP}
+              </Button>
+            </div>
           </div>
         </div>
+
+        {submitBlocker && !submitting ? (
+          <p className="text-xs text-amber-800">{submitBlocker}</p>
+        ) : null}
 
         <DialogFooter className="gap-2 sm:gap-0">
           <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
@@ -107,7 +162,7 @@ export function CancelSessionDialog({
           <Button
             type="button"
             variant="destructive"
-            disabled={submitting || reason.trim().length < 3 || !ownerOtp.trim()}
+            disabled={submitting || !canSubmit}
             onClick={() => void handleSubmit()}
           >
             {submitting ? "Cancelling…" : "Cancel session"}

@@ -114,7 +114,32 @@ describe("sanity: payment QR validation", async () => {
 });
 
 describe("sanity: admin validation", async () => {
-  const { adminCreateClassSessionSchema } = await import("../shared/admin-validation.ts");
+  const { adminCreateClassSessionSchema, adminCreateClassTypeSchema } = await import(
+    "../shared/admin-validation.ts"
+  );
+
+  it("requires session type image on create", () => {
+    const missing = adminCreateClassTypeSchema.safeParse({
+      name: "Vinyasa Flow",
+      description: "A dynamic flowing practice for all levels.",
+      price: "500",
+      duration: 60,
+      imageUrl: "",
+      intensity: "Moderate",
+    });
+    assert.equal(missing.success, false);
+
+    const ok = adminCreateClassTypeSchema.safeParse({
+      name: "Vinyasa Flow",
+      description: "A dynamic flowing practice for all levels.",
+      price: "500",
+      duration: 60,
+      imageUrl: "https://cdn.example.com/vinyasa.jpg",
+      intensity: "Moderate",
+    });
+    assert.equal(ok.success, true);
+  });
+
   it("accepts session create with required meet link and razorpay payment", () => {
     const result = adminCreateClassSessionSchema.safeParse({
       classTypeId: "00000000-0000-0000-0000-000000000001",

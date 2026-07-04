@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,28 +8,20 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, BookOpen, Upload } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, Pencil, Trash2, BookOpen, Upload, Loader2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/admin-api";
+import { MAX_TEXT_LENGTH, limitTextInput, PLACEHOLDER_OWNER_CANCEL_OTP, normalizeOwnerCancelOtpInput, isOwnerCancelFormSubmittable, ownerCancelFormBlocker } from "@shared/input-limits";
 import { FormErrorSummary } from "@/components/admin/field-error";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "@shared/schema";
-import { compressImageForUpload, validateAdminImageFile } from "@/lib/image-upload";
+import { compressImageForUpload, validateAdminImageFile, ADMIN_IMAGE_MAX_FILE_BYTES } from "@/lib/image-upload";
 
 export interface ClassType {
   id: string;
@@ -157,9 +149,11 @@ function ClassTypeFormFields({
           {errors.intensity && <p className="text-xs text-red-500 mt-1">{errors.intensity}</p>}
         </div>
         <div>
-          <Label>Session image (optional)</Label>
+          <Label>
+            Session image <span className="text-red-500">*</span>
+          </Label>
           <p className="text-xs text-muted-foreground mt-0.5 mb-2">
-            JPEG or PNG, up to 2 MB. Resized to 1200px max for fast loading.
+            Required. JPEG, PNG, or WebP up to 2 MB, or paste an https:// image URL.
           </p>
           <ClassTypeImageField
             imageUrl={form.imageUrl}
@@ -183,6 +177,18 @@ function ClassTypeImageField({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+  const [filePickError, setFilePickError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageUrl) setAttachedFileName(null);
+  }, [imageUrl]);
+
+  const handleImageChange = (url: string) => {
+    if (!url) setAttachedFileName(null);
+    onChange(url);
+  };
 
   return (
     <div className="space-y-2">
@@ -191,28 +197,52 @@ function ClassTypeImageField({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         className="hidden"
+        disabled={isUploading}
         onChange={async (e) => {
           const file = e.target.files?.[0];
           if (!file) return;
           const fileErr = validateAdminImageFile(file);
           if (fileErr) {
-            toast({ title: "Invalid image", description: fileErr, variant: "destructive" });
+            setFilePickError(fileErr);
+            toast({
+              title: file.size > ADMIN_IMAGE_MAX_FILE_BYTES ? "Image too large" : "Invalid image",
+              description: fileErr,
+              variant: "destructive",
+            });
             return;
           }
+          setFilePickError(null);
+          setAttachedFileName(file.name);
+          setIsUploading(true);
           try {
             const dataUrl = await compressImageForUpload(file);
-            onChange(dataUrl);
+            handleImageChange(dataUrl);
+            const sizeKb = Math.round(file.size / 1024);
+            toast({
+              title: "Image attached",
+              description: `${file.name} (${sizeKb} KB) ready to save.`,
+            });
           } catch (err) {
+            setAttachedFileName(null);
             toast({
               title: "Could not process image",
               description: err instanceof Error ? err.message : "Try a different file.",
               variant: "destructive",
             });
           } finally {
+            setIsUploading(false);
             e.target.value = "";
           }
         }}
       />
+      {isUploading && (
+        <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+          <span>
+            Processing{attachedFileName ? ` ${attachedFileName}` : " image"}…
+          </span>
+        </div>
+      )}
       {imageUrl ? (
         <div className="flex items-center gap-3">
           <img
@@ -220,26 +250,66 @@ function ClassTypeImageField({
             alt="Session type preview"
             className="h-20 w-28 rounded-lg object-cover border"
           />
-          <div className="flex flex-col gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+          <div className="flex flex-col gap-2 min-w-0">
+            {attachedFileName && (
+              <p className="text-xs text-muted-foreground truncate" title={attachedFileName}>
+                {attachedFileName}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isUploading}
+              onClick={() => fileRef.current?.click()}
+            >
               <Upload className="w-4 h-4 mr-1" /> Replace
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isUploading}
+              onClick={() => handleImageChange("")}
+            >
               Remove
             </Button>
           </div>
         </div>
       ) : (
-        <Button type="button" variant="outline" className="w-full" onClick={() => fileRef.current?.click()}>
-          <Upload className="w-4 h-4 mr-2" /> Upload image
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          disabled={isUploading}
+          onClick={() => fileRef.current?.click()}
+        >
+          {isUploading ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…
+            </>
+          ) : (
+            <>
+              <Upload className="w-4 h-4 mr-2" /> Upload image
+            </>
+          )}
         </Button>
       )}
       <Input
         value={imageUrl.startsWith("data:") ? "" : imageUrl}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          setAttachedFileName(null);
+          onChange(e.target.value);
+        }}
         placeholder="Or paste https:// image URL"
         className={error ? "border-red-500" : ""}
+        disabled={isUploading}
       />
+      {filePickError && (
+        <p className="text-xs text-red-600 font-medium" role="alert">
+          {filePickError}
+        </p>
+      )}
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
@@ -405,20 +475,36 @@ function EditClassTypeDialog({
   );
 }
 
-function DeleteClassTypeButton({
+function RetireClassTypeButton({
   classType,
-  onDeleted,
+  onRetired,
 }: {
   classType: ClassType;
-  onDeleted: () => void;
+  onRetired: () => void;
 }) {
   const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [ownerOtp, setOwnerOtp] = useState("");
+
+  const reset = () => {
+    setReason("");
+    setOwnerOtp("");
+  };
+
+  const canSubmit = isOwnerCancelFormSubmittable(reason, ownerOtp);
+  const submitBlocker = ownerCancelFormBlocker(reason, ownerOtp);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/class-types/${classType.id}`, {
-        method: "DELETE",
-        headers: adminHeaders(),
+      const res = await fetch(`/api/admin/class-types/${classType.id}/retire`, {
+        method: "POST",
+        headers: { ...adminHeaders(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          reason: reason.trim(),
+          ownerOtp: normalizeOwnerCancelOtpInput(ownerOtp) || ownerOtp.trim(),
+        }),
       });
       if (!res.ok) {
         const err = await parseAdminApiError(res);
@@ -426,59 +512,133 @@ function DeleteClassTypeButton({
       }
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Session type deleted" });
-      onDeleted();
+    onSuccess: (data: { message?: string }) => {
+      toast({ title: "Session type removed", description: data.message });
+      reset();
+      setOpen(false);
+      onRetired();
     },
     onError: (e: Error) => {
-      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+      toast({ title: "Could not remove session type", description: e.message, variant: "destructive" });
     },
   });
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) reset();
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
-          <Trash2 className="w-4 h-4 mr-1" /> Delete
+          <Trash2 className="w-4 h-4 mr-1" /> Remove
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete {classType.name}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This removes the session type from the and We Flow catalogue. You cannot delete a type
-            that still has scheduled sessions.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Remove {classType.name}?</DialogTitle>
+          <DialogDescription>
+            All upcoming sessions for this type will be cancelled. Members with bookings will be
+            notified by email, SMS, and WhatsApp (SMS/WhatsApp are placeholders until those channels
+            go live).
+          </DialogDescription>
+        </DialogHeader>
+
+        <Alert className="border-amber-200 bg-amber-50">
+          <ShieldAlert className="h-4 w-4 text-amber-800" />
+          <AlertDescription className="text-amber-950 text-sm">
+            <strong>Owner OTP (placeholder):</strong> use <strong>000000</strong> after confirming
+            with the studio owner. Live SMS OTP will replace this later.
+          </AlertDescription>
+        </Alert>
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor={`retire-reason-${classType.id}`}>Reason for removal</Label>
+            <Textarea
+              id={`retire-reason-${classType.id}`}
+              value={reason}
+              maxLength={MAX_TEXT_LENGTH.cancelReason}
+              onChange={(e) => setReason(limitTextInput(e.target.value, MAX_TEXT_LENGTH.cancelReason))}
+              placeholder="e.g. This discipline is no longer offered at the studio"
+              rows={3}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`retire-otp-${classType.id}`}>Owner OTP</Label>
+            <div className="flex gap-2">
+              <Input
+                id={`retire-otp-${classType.id}`}
+                value={ownerOtp}
+                maxLength={MAX_TEXT_LENGTH.ownerOtp}
+                onChange={(e) =>
+                  setOwnerOtp(
+                    limitTextInput(normalizeOwnerCancelOtpInput(e.target.value), MAX_TEXT_LENGTH.ownerOtp),
+                  )
+                }
+                placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
+                autoComplete="off"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="font-mono tracking-widest"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setOwnerOtp(PLACEHOLDER_OWNER_CANCEL_OTP)}
+              >
+                Use {PLACEHOLDER_OWNER_CANCEL_OTP}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {submitBlocker && !mutation.isPending ? (
+          <p className="text-xs text-amber-800">{submitBlocker}</p>
+        ) : null}
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={mutation.isPending}>
+            Keep type
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={mutation.isPending || !canSubmit}
             onClick={() => mutation.mutate()}
-            disabled={mutation.isPending}
           >
-            {mutation.isPending ? "Deleting..." : "Delete"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            {mutation.isPending ? "Removing…" : "Remove session type"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function SessionTypesPanel({
   classTypes,
+  totalCount,
   isLoading,
+  isSuperAdmin,
   onDataChange,
 }: {
   classTypes: ClassType[];
+  /** Full count across all pages (when paginated). */
+  totalCount?: number;
   isLoading: boolean;
+  isSuperAdmin?: boolean;
   onDataChange: () => void;
 }) {
+  const displayTotal = totalCount ?? classTypes.length;
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <p className="text-sm text-muted-foreground">
-          Yoga disciplines shown on the public site ({classTypes.length} total)
+          Yoga disciplines shown on the public site ({displayTotal} total)
         </p>
         <CreateClassTypeButton onCreated={onDataChange} />
       </div>
@@ -526,7 +686,9 @@ export function SessionTypesPanel({
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <EditClassTypeDialog classType={ct} onUpdated={onDataChange} />
-                    <DeleteClassTypeButton classType={ct} onDeleted={onDataChange} />
+                    {isSuperAdmin ? (
+                      <RetireClassTypeButton classType={ct} onRetired={onDataChange} />
+                    ) : null}
                   </div>
                 </div>
               </div>

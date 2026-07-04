@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { useLocation } from "wouter";
@@ -135,16 +135,37 @@ interface AdminWaitlistUser {
   createdAt: string;
 }
 
+const ADMIN_MAIN_TAB_KEY = "awy-admin-main-tab";
+const ADMIN_SESSIONS_SUBTAB_KEY = "awy-admin-sessions-subtab";
+
+function readStoredTab(key: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  return sessionStorage.getItem(key) ?? fallback;
+}
+
+function AdminAuthLoadingScreen() {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#3d1b80]" />
+    </div>
+  );
+}
+
 // ─── MAIN DASHBOARD ────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
-  const { admin, logout } = useAdminAuth();
+  const { admin, logout, isLoading: authLoading } = useAdminAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  if (!admin) { setLocation("/admin/login"); return null; }
+  useEffect(() => {
+    if (!authLoading && !admin) {
+      setLocation("/admin/login");
+    }
+  }, [authLoading, admin, setLocation]);
 
+  const [mainTab, setMainTab] = useState(() => readStoredTab(ADMIN_MAIN_TAB_KEY, "insights"));
   const [usersPage, setUsersPage] = useState(1);
   const [usersPageSize, setUsersPageSize] = useState(20);
   const [sessionsPage, setSessionsPage] = useState(1);
@@ -164,7 +185,7 @@ export default function AdminDashboard() {
     return end;
   }, [visibleScheduleWeekStart]);
 
-  const isSuperAdmin = admin.role === "super_admin";
+  const isSuperAdmin = admin?.role === "super_admin";
 
   const { data: usersData, isLoading: usersLoading, error: usersError, refetch: refetchUsers } =
     useQuery<AdminUsersResponse>({
@@ -194,6 +215,11 @@ export default function AdminDashboard() {
       },
     });
   const classTypes = classTypesData?.data ?? [];
+
+  const refreshClassTypes = () => {
+    void refetchCT();
+    qc.invalidateQueries({ queryKey: ["/api/class-types", "all"] });
+  };
 
   const { data: allClassTypes = [] } = useQuery<ClassType[]>({
     queryKey: ["/api/class-types", "all"],
@@ -416,7 +442,7 @@ export default function AdminDashboard() {
   }) {
     const bookingCount = session.currentBookings ?? 0;
     const label = `${session.classType?.name ?? "Session"} · ${new Date(session.date).toLocaleString("en-IN")}`;
-    if (bookingCount > 0) {
+    if (isSuperAdmin || bookingCount > 0) {
       setSessionToCancel({ id: session.id, label, bookingCount });
       setCancelDialogOpen(true);
       return;
@@ -468,6 +494,7 @@ export default function AdminDashboard() {
     const res = await fetch(`/api/admin/classes/${sessionToCancel.id}/cancel`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(payload),
     });
     const body = await res.json().catch(() => ({}));
@@ -489,7 +516,9 @@ export default function AdminDashboard() {
     pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-500";
 
   const now = Date.now();
-  const [sessionsSubTab, setSessionsSubTab] = useState("manage");
+  const [sessionsSubTab, setSessionsSubTab] = useState(() =>
+    readStoredTab(ADMIN_SESSIONS_SUBTAB_KEY, "manage"),
+  );
   const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -505,6 +534,22 @@ export default function AdminDashboard() {
   const pastSessions = sessions
     .filter((s) => sessionEndMs(s) < now)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  useEffect(() => {
+    sessionStorage.setItem(ADMIN_MAIN_TAB_KEY, mainTab);
+  }, [mainTab]);
+
+  useEffect(() => {
+    sessionStorage.setItem(ADMIN_SESSIONS_SUBTAB_KEY, sessionsSubTab);
+  }, [sessionsSubTab]);
+
+  if (authLoading) {
+    return <AdminAuthLoadingScreen />;
+  }
+
+  if (!admin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -525,7 +570,7 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Tabs defaultValue="insights">
+        <Tabs value={mainTab} onValueChange={setMainTab}>
           <TabsList className="mb-6 flex h-auto w-full flex-wrap gap-1 bg-white border p-1">
             <TabsTrigger
               value="insights"
@@ -979,7 +1024,7 @@ export default function AdminDashboard() {
                       showTrigger={false}
                       onCreated={(result) => {
                         void refetchSess();
-                        refetchCT();
+                        refreshClassTypes();
                         setSessionToEdit(null);
                         const first = result?.sessions?.[0]?.date;
                         if (first) {
@@ -1012,8 +1057,12 @@ export default function AdminDashboard() {
                   <TabsContent value="session-types">
                     <SessionTypesPanel
                       classTypes={classTypes}
+                      totalCount={classTypesData?.total}
                       isLoading={ctLoading}
-                      onDataChange={() => refetchCT()}
+                      isSuperAdmin={isSuperAdmin}
+                      onDataChange={() => {
+                        refreshClassTypes();
+                      }}
                     />
                     {classTypesData ? (
                       <AdminPagination

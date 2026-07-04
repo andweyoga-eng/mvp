@@ -26,6 +26,7 @@ interface CalClassType {
   price: number;
   duration?: number;
   intensity?: string | null;
+  imageUrl?: string | null;
 }
 
 interface CalSession {
@@ -58,8 +59,9 @@ const CLASS_IMAGES: Record<string, string> = {
   "Sound Therapy": soundtherapyImg,
 };
 
-function classImageFor(name: string): string | undefined {
-  return CLASS_IMAGES[name];
+function classImageFor(classType: { name: string; imageUrl?: string | null }): string | undefined {
+  if (classType.imageUrl) return classType.imageUrl;
+  return CLASS_IMAGES[classType.name];
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {
@@ -208,7 +210,7 @@ export default function Calendar() {
         hasSessions,
         soldOut: hasSessions && sessions.every((s) => s.currentBookings >= s.maxCapacity),
         isToday: sameCalendarDay(date, new Date()),
-        thumbnailUrl: hasSessions ? classImageFor(sessions[0].classType.name) : undefined,
+        thumbnailUrl: hasSessions ? classImageFor(sessions[0].classType) : undefined,
       });
     }
     return cells;
@@ -341,7 +343,7 @@ export default function Calendar() {
                   className="scrollbar-hide flex snap-x snap-proximity gap-4 overflow-x-auto pb-1"
                 >
                   {filteredCarousel.map((cls) => {
-                    const imageUrl = classImageFor(cls.classType.name);
+                    const imageUrl = classImageFor(cls.classType);
                     const soldOut = cls.currentBookings >= cls.maxCapacity;
                     return (
                       <AvailableTodaySessionCard
@@ -610,7 +612,7 @@ export default function Calendar() {
                     {day.classes.map((cls) => {
                       const soldOut = cls.currentBookings >= cls.maxCapacity;
                       const badge = getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode);
-                      const imageUrl = classImageFor(cls.classType.name);
+                      const imageUrl = classImageFor(cls.classType);
                       return (
                         <GlassCard
                           key={cls.id}

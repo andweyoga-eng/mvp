@@ -63,8 +63,9 @@ const CLASS_IMAGES: Record<string, string> = {
   "Sound Therapy": soundtherapyImg,
 };
 
-function classImageFor(name: string): string | undefined {
-  return CLASS_IMAGES[name];
+function classImageFor(classType: { name: string; imageUrl?: string | null }): string | undefined {
+  if (classType.imageUrl) return classType.imageUrl;
+  return CLASS_IMAGES[classType.name];
 }
 
 function sameCalendarDay(a: Date, b: Date): boolean {
@@ -200,7 +201,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
       const soldOut =
         hasSessions && sessions.every((s) => s.currentBookings >= s.maxCapacity);
       const thumbnailUrl = hasSessions
-        ? classImageFor(sessions[0].classType.name)
+        ? classImageFor(sessions[0].classType)
         : undefined;
       cells.push({
         day: d,
@@ -338,7 +339,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                 className="scrollbar-hide flex snap-x snap-proximity gap-4 overflow-x-auto pb-1"
               >
                 {carouselSessions.map((cls) => {
-                  const imageUrl = classImageFor(cls.classType.name);
+                  const imageUrl = classImageFor(cls.classType);
                   const soldOut = cls.currentBookings >= cls.maxCapacity;
                   return (
                     <AvailableTodaySessionCard

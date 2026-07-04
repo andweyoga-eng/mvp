@@ -34,6 +34,21 @@ const optionalImageUrl = z
     },
   );
 
+/** Required session-type image — upload or https URL. */
+const requiredSessionTypeImageUrl = z
+  .string()
+  .trim()
+  .min(1, "Session image is required — upload a file or paste an https:// image URL")
+  .refine(
+    (v) =>
+      /^https:\/\/.+/i.test(v) ||
+      v.startsWith("data:image/") ||
+      v.startsWith("/attached_assets/"),
+    {
+      message: "Upload an image or provide a valid https:// URL",
+    },
+  );
+
 /** Optional URL: empty string → null; must be https when set */
 const optionalHttpsUrl = z
   .string()
@@ -131,7 +146,7 @@ export const adminCreateClassTypeSchema = z.object({
     .int("Duration must be a whole number of minutes")
     .min(1, "Duration must be at least 1 minute")
     .max(480, "Duration cannot exceed 8 hours"),
-  imageUrl: optionalImageUrl,
+  imageUrl: requiredSessionTypeImageUrl,
   intensity: z.enum(CLASS_INTENSITIES).default(DEFAULT_CLASS_INTENSITY),
 });
 

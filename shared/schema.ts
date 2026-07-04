@@ -37,6 +37,8 @@ export const users = pgTable("users", {
   addressStreet: text("address_street"),
   addressLine2: text("address_line2"),
   addressCity: text("address_city"),
+  /** ISO 3166-1 alpha-2 (e.g. IN, US) */
+  addressCountry: text("address_country").default("IN"),
   addressState: text("address_state"),
   addressPincode: text("address_pincode"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -57,6 +59,9 @@ export const classTypes = pgTable("class_types", {
   imageUrl: text("image_url"),
   /** Gentle | Moderate | Dynamic | Restorative */
   intensity: varchar("intensity", { length: 24 }).notNull().default(DEFAULT_CLASS_INTENSITY),
+  /** Set when a super admin retires the type; hidden from catalogue pickers. */
+  retiredAt: timestamp("retired_at"),
+  retirementReason: text("retirement_reason"),
 });
 
 export const instructors = pgTable("instructors", {
@@ -409,6 +414,7 @@ export const updateProfileSchema = createInsertSchema(users)
     addressStreet: true,
     addressLine2: true,
     addressCity: true,
+    addressCountry: true,
     addressState: true,
     addressPincode: true,
   })

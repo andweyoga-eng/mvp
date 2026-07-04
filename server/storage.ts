@@ -229,6 +229,28 @@ export interface IStorage {
   createClassType(classType: InsertClassType): Promise<ClassType>;
   updateClassType(id: string, updates: Partial<InsertClassType>): Promise<ClassType | undefined>;
   deleteClassType(id: string): Promise<{ ok: boolean; message?: string }>;
+  retireClassTypeWithSessionCancellation(
+    classTypeId: string,
+    reason: string,
+  ): Promise<{
+    ok: boolean;
+    message?: string;
+    sessionsCancelled?: number;
+    hardDeleted?: boolean;
+    classTypeName?: string;
+    noticePayloads?: Array<{
+      recipients: Array<{
+        key: string;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        phoneCountryCode: string | null;
+        whatsappConsent: boolean;
+      }>;
+      sessionDateIso?: string;
+      instructorName?: string;
+    }>;
+  }>;
   countClassesByClassTypeId(classTypeId: string): Promise<number>;
   getClassTypeIdsWithUpcomingSessions(): Promise<string[]>;
 
@@ -305,6 +327,25 @@ export interface IStorage {
   createClass(classData: InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }): Promise<Class>;
   updateClassSession(id: string, updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>): Promise<Class | undefined>;
   deleteClassSession(id: string): Promise<{ ok: boolean; message?: string }>;
+  cancelClassSession(
+    id: string,
+    reason: string,
+  ): Promise<{
+    ok: boolean;
+    message?: string;
+    classTypeName?: string;
+    instructorName?: string;
+    sessionDateIso?: string;
+    recipients?: Array<{
+      key: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      phoneCountryCode: string | null;
+      whatsappConsent: boolean;
+    }>;
+  }>;
+  /** @deprecated Prefer cancelClassSession after OTP check in routes. */
   cancelClassSessionWithBookings(
     id: string,
     reason: string,
@@ -487,139 +528,17 @@ export class DatabaseStorage implements IStorage {
 
   private async initializeData() {
     try {
-      // Check if data already exists
       const existingClassTypes = await db.select().from(classTypes).limit(1);
       if (existingClassTypes.length > 0) {
         console.log('[DB] Database already initialized');
-        await this.syncClassTypeImages();
         await this.syncAdminFromEnv();
         return;
       }
 
-      console.log('[DB] Initializing database with seed data...');
-
-      // Initialize class types
-      const classTypesData: InsertClassType[] = [
-        {
-          name: "Hatha Yoga",
-          description: "Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques. This gentle practice emphasizes alignment, flexibility, and mindfulness. Each pose is held for several breaths, allowing you to build strength and stability while learning proper form. Our certified instructors provide personalized guidance to ensure you feel comfortable and supported throughout your practice.",
-          price: "500.00",
-          duration: 60,
-          intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/hatha_yoga_1756809174781.png"
-        },
-        {
-          name: "Hyyocross",
-          description: "A dynamic hybrid fitness experience combining yoga with cross-training elements including weights, aerobics, Zumba, and Bhangra. Yoga remains the foundation, but each class varies based on participant demographics and energy levels. This high-energy session builds strength, improves cardiovascular health, and enhances flexibility while keeping you engaged with diverse movement patterns.",
-          price: "600.00",
-          duration: 60,
-          intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/Hyyocross_1756809174781.jpg"
-        },
-        {
-          name: "Meditation",
-          description: "Find inner peace and mental clarity through guided meditation practices. These sessions focus on various techniques including mindfulness, breathwork, and visualization to reduce stress and enhance emotional well-being. Whether you're a beginner or experienced meditator, our tranquil environment and expert guidance will help you develop a deeper connection with yourself.",
-          price: "400.00",
-          duration: 45,
-          intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/meditation_1756809174781.png"
-        },
-        {
-          name: "Sound Therapy",
-          description: "Experience the healing power of sound through therapeutic vibrations using singing bowls, gongs, and crystal instruments. These sessions promote deep relaxation, stress recovery, and emotional healing. The resonant frequencies help balance your energy centers and create a meditative state that supports overall wellness and mental clarity.",
-          price: "800.00",
-          duration: 60,
-          intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/soundtherapy_1756809174781.png"
-        }
-      ];
-
-      const insertedClassTypes = await db.insert(classTypes).values(classTypesData).returning();
-      console.log(`[DB] Inserted ${insertedClassTypes.length} class types`);
-
-      // Initialize instructors
-      const instructorsData: InsertInstructor[] = [
-        {
-          name: "Sarah Johnson",
-          bio: "Sarah has been practicing yoga for over 15 years and teaching for 8 years. She specializes in Hatha and restorative yoga, with a focus on alignment and mindfulness. Sarah believes yoga is for everyone and creates an inclusive, welcoming environment for all students.",
-          imageUrl: "/attached_assets/instructor_sarah_1756809174781.jpg",
-          specialties: ["Hatha Yoga", "Meditation", "Mindfulness"]
-        },
-        {
-          name: "Michael Chen",
-          bio: "Michael brings high energy and creativity to his Hyyocross classes. With a background in fitness training and yoga instruction, he seamlessly blends strength training with yoga philosophy. His classes are challenging yet accessible, designed to build both physical and mental resilience.",
-          imageUrl: "/attached_assets/instructor_michael_1756809174781.jpg",
-          specialties: ["Hyyocross", "Strength Training", "Vinyasa"]
-        },
-        {
-          name: "David Kumar",
-          bio: "David is a certified meditation instructor with 12 years of experience in various contemplative practices. He guides students through mindfulness meditation, breathwork, and stress reduction techniques. His calm presence and gentle guidance help students find peace and clarity.",
-          imageUrl: "/attached_assets/instructor_david_1756809174781.jpg",
-          specialties: ["Meditation", "Breathwork", "Stress Relief"]
-        },
-        {
-          name: "Lisa Thompson",
-          bio: "Lisa is a sound therapy practitioner and certified yoga instructor. She combines her knowledge of vibrational healing with yoga philosophy to create transformative experiences. Her sessions incorporate singing bowls, crystal instruments, and guided meditation for deep healing and relaxation.",
-          imageUrl: "/attached_assets/instructor_lisa_1756809174781.jpg",
-          specialties: ["Sound Therapy", "Vibrational Healing", "Meditation"]
-        }
-      ];
-
-      const insertedInstructors = await db.insert(instructors).values(instructorsData).returning();
-      console.log(`[DB] Inserted ${insertedInstructors.length} instructors`);
-
-      // Create classes for the current week
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-
-      const weeklySchedule = [
-        // Monday
-        { day: 1, time: "09:00", classTypeIndex: 0, instructorIndex: 0 },
-        { day: 1, time: "18:30", classTypeIndex: 1, instructorIndex: 1 },
-        // Tuesday  
-        { day: 2, time: "07:00", classTypeIndex: 1, instructorIndex: 1 },
-        { day: 2, time: "19:00", classTypeIndex: 2, instructorIndex: 2 },
-        // Wednesday
-        { day: 3, time: "10:00", classTypeIndex: 0, instructorIndex: 0 },
-        { day: 3, time: "17:30", classTypeIndex: 3, instructorIndex: 3 },
-        // Thursday
-        { day: 4, time: "08:00", classTypeIndex: 2, instructorIndex: 2 },
-        { day: 4, time: "19:30", classTypeIndex: 0, instructorIndex: 0 },
-        // Friday
-        { day: 5, time: "09:30", classTypeIndex: 1, instructorIndex: 1 },
-        { day: 5, time: "18:00", classTypeIndex: 3, instructorIndex: 3 },
-        // Saturday
-        { day: 6, time: "10:00", classTypeIndex: 3, instructorIndex: 3 },
-        { day: 6, time: "16:00", classTypeIndex: 2, instructorIndex: 2 },
-        // Sunday
-        { day: 0, time: "11:00", classTypeIndex: 0, instructorIndex: 0 },
-        { day: 0, time: "17:00", classTypeIndex: 1, instructorIndex: 1 },
-      ];
-
-      const classesData: InsertClass[] = [];
-      weeklySchedule.forEach(schedule => {
-        const classDate = new Date(startOfWeek);
-        classDate.setDate(startOfWeek.getDate() + schedule.day);
-        
-        const [hours, minutes] = schedule.time.split(':');
-        classDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        
-        classesData.push({
-          classTypeId: insertedClassTypes[schedule.classTypeIndex].id,
-          instructorId: insertedInstructors[schedule.instructorIndex].id,
-          date: classDate,
-          maxCapacity: 20
-        });
-      });
-
-      const insertedClasses = await db.insert(classes).values(classesData).returning();
-      console.log(`[DB] Inserted ${insertedClasses.length} classes`);
-
+      console.log(
+        '[DB] Empty database — no demo seed data inserted. Create session types and sessions via the admin panel.',
+      );
       await this.syncAdminFromEnv();
-
-      console.log('[DB] Database initialization complete');
     } catch (error) {
       console.error('[DB] Error initializing database:', error);
     }
@@ -842,7 +761,11 @@ export class DatabaseStorage implements IStorage {
   // Class Types
   async getAllClassTypes(): Promise<ClassType[]> {
     try {
-      return await db.select().from(classTypes);
+      return await db
+        .select()
+        .from(classTypes)
+        .where(isNull(classTypes.retiredAt))
+        .orderBy(classTypes.name);
     } catch (error) {
       console.error('[DB] Error getting class types:', error);
       return [];
@@ -1198,11 +1121,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteClassType(id: string): Promise<{ ok: boolean; message?: string }> {
     try {
+      const ct = await this.getClassType(id);
+      if (!ct) return { ok: false, message: "Class type not found" };
+      if (ct.retiredAt) return { ok: false, message: "This session type is already retired." };
       const used = await this.countClassesByClassTypeId(id);
       if (used > 0) {
         return {
           ok: false,
-          message: `Cannot delete: ${used} scheduled session(s) use this class type. Remove or reassign them first.`,
+          message: `${used} session(s) still reference this type. Retire it instead to cancel upcoming sessions.`,
         };
       }
       const result = await db.delete(classTypes).where(eq(classTypes.id, id)).returning({ id: classTypes.id });
@@ -1214,6 +1140,212 @@ export class DatabaseStorage implements IStorage {
       console.error("[DB] Error deleting class type:", error);
       throw error;
     }
+  }
+
+  async getCancellationRecipientsForClass(classId: string) {
+    const rows = await db
+      .select({
+        userId: bookings.userId,
+        guestName: bookings.guestName,
+        guestEmail: bookings.guestEmail,
+        guestPhone: bookings.guestPhone,
+        userName: users.name,
+        userEmail: users.email,
+        primaryMobile: users.primaryMobile,
+        primaryMobileCountryCode: users.primaryMobileCountryCode,
+        whatsappConsent: users.whatsappConsent,
+      })
+      .from(bookings)
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .where(
+        and(
+          eq(bookings.classId, classId),
+          or(
+            inArray(bookings.paymentStatus, [
+              BOOKING_PAYMENT_STATUS.PAID,
+              BOOKING_PAYMENT_STATUS.WAIVED,
+              BOOKING_PAYMENT_STATUS.PENDING,
+            ]),
+            and(
+              eq(bookings.paymentStatus, BOOKING_PAYMENT_STATUS.FAILED),
+              gt(bookings.heldUntil, sql`NOW()`),
+            ),
+          ),
+        ),
+      );
+
+    const recipients: Array<{
+      key: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      phoneCountryCode: string | null;
+      whatsappConsent: boolean;
+    }> = [];
+
+    for (const row of rows) {
+      const email = (row.userEmail ?? row.guestEmail)?.trim().toLowerCase() || null;
+      const phone = row.primaryMobile ?? row.guestPhone ?? null;
+      const key = email ?? phone ?? row.userId ?? `guest-${row.guestEmail ?? row.guestName ?? "unknown"}`;
+      recipients.push({
+        key,
+        name: row.userName ?? row.guestName ?? "Member",
+        email,
+        phone,
+        phoneCountryCode: row.primaryMobileCountryCode ?? "+91",
+        whatsappConsent: Boolean(row.whatsappConsent),
+      });
+    }
+    return recipients;
+  }
+
+  async cancelClassSession(id: string, reason: string) {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) {
+      return { ok: false as const, message: "Please enter a cancellation reason (at least 3 characters)." };
+    }
+
+    try {
+      const cls = await this.getClass(id);
+      if (!cls) return { ok: false as const, message: "Session not found" };
+      if (cls.cancelledAt) return { ok: false as const, message: "This session is already cancelled." };
+
+      const [classType, instructor] = await Promise.all([
+        this.getClassType(cls.classTypeId),
+        this.getInstructor(cls.instructorId),
+      ]);
+
+      const now = new Date();
+      await db
+        .update(classes)
+        .set({
+          cancelledAt: now,
+          cancellationReason: trimmedReason,
+          pausedAt: now,
+          status: "paused",
+        })
+        .where(eq(classes.id, id));
+
+      await db
+        .update(userSessionMappings)
+        .set({
+          status: "cancelled",
+          cancelledAt: now,
+          cancellationReason: trimmedReason,
+          updatedAt: now,
+        })
+        .where(eq(userSessionMappings.classId, id));
+
+      await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, id));
+
+      const recipients = await this.getCancellationRecipientsForClass(id);
+
+      return {
+        ok: true as const,
+        classTypeName: classType?.name ?? "Session",
+        instructorName: instructor?.name,
+        sessionDateIso: cls.date.toISOString(),
+        recipients,
+      };
+    } catch (error) {
+      console.error("[DB] Error cancelling class session:", error);
+      return { ok: false as const, message: "Failed to cancel session" };
+    }
+  }
+
+  async retireClassTypeWithSessionCancellation(classTypeId: string, reason: string) {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) {
+      return { ok: false as const, message: "Please enter a reason (at least 3 characters)." };
+    }
+
+    const classType = await this.getClassType(classTypeId);
+    if (!classType) return { ok: false as const, message: "Session type not found" };
+    if (classType.retiredAt) {
+      return { ok: false as const, message: "This session type is already retired." };
+    }
+
+    const sessions = await db
+      .select()
+      .from(classes)
+      .where(and(eq(classes.classTypeId, classTypeId), isNull(classes.cancelledAt)));
+
+    let sessionsCancelled = 0;
+    const noticePayloads: Array<{
+      recipients: Array<{
+        key: string;
+        name: string;
+        email: string | null;
+        phone: string | null;
+        phoneCountryCode: string | null;
+        whatsappConsent: boolean;
+      }>;
+      sessionDateIso?: string;
+      instructorName?: string;
+    }> = [];
+
+    for (const sess of sessions) {
+      const cancelled = await this.cancelClassSession(sess.id, trimmedReason);
+      if (cancelled.ok) {
+        sessionsCancelled += 1;
+        if (cancelled.recipients?.length) {
+          noticePayloads.push({
+            recipients: cancelled.recipients,
+            sessionDateIso: cancelled.sessionDateIso,
+            instructorName: cancelled.instructorName,
+          });
+        }
+      }
+    }
+
+    const deletable = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.classTypeId, classTypeId));
+
+    for (const row of deletable) {
+      const bookingCount = await this.countBookingsForClass(row.id);
+      if (bookingCount === 0) {
+        await db.delete(classes).where(eq(classes.id, row.id));
+      }
+    }
+
+    const stillUsed = await this.countClassesByClassTypeId(classTypeId);
+    if (stillUsed > 0) {
+      await db
+        .update(classTypes)
+        .set({
+          retiredAt: new Date(),
+          retirementReason: trimmedReason,
+        })
+        .where(eq(classTypes.id, classTypeId));
+      await db
+        .delete(classTypeNotifyRequests)
+        .where(eq(classTypeNotifyRequests.classTypeId, classTypeId));
+
+      return {
+        ok: true as const,
+        sessionsCancelled,
+        hardDeleted: false,
+        classTypeName: classType.name,
+        noticePayloads,
+        message: `${sessionsCancelled} session(s) cancelled. Session type retired (${stillUsed} past session(s) kept for booking history).`,
+      };
+    }
+
+    await db
+      .delete(classTypeNotifyRequests)
+      .where(eq(classTypeNotifyRequests.classTypeId, classTypeId));
+    await db.delete(classTypes).where(eq(classTypes.id, classTypeId));
+
+    return {
+      ok: true as const,
+      sessionsCancelled,
+      hardDeleted: true,
+      classTypeName: classType.name,
+      noticePayloads,
+      message: `${sessionsCancelled} session(s) cancelled. Session type removed.`,
+    };
   }
 
   // Instructors
@@ -1544,50 +1676,11 @@ export class DatabaseStorage implements IStorage {
     reason: string,
     ownerOtp: string,
   ): Promise<{ ok: boolean; message?: string }> {
-    const trimmedReason = reason.trim();
-    if (trimmedReason.length < 3) {
-      return { ok: false, message: "Please enter a cancellation reason (at least 3 characters)." };
-    }
-    const placeholderOtp = (process.env.OWNER_CANCEL_OTP_DUMMY || "000000").trim();
-    if (ownerOtp.trim() !== placeholderOtp) {
-      return {
-        ok: false,
-        message:
-          "Invalid owner OTP. Until SMS verification is live, use placeholder OTP 000000 (ask the studio owner).",
-      };
-    }
-
-    try {
-      const cls = await this.getClass(id);
-      if (!cls) return { ok: false, message: "Session not found" };
-      if (cls.cancelledAt) return { ok: false, message: "This session is already cancelled." };
-
-      const now = new Date();
-      await db
-        .update(classes)
-        .set({
-          cancelledAt: now,
-          cancellationReason: trimmedReason,
-          pausedAt: now,
-          status: "paused",
-        })
-        .where(eq(classes.id, id));
-
-      await db
-        .update(userSessionMappings)
-        .set({
-          status: "cancelled",
-          cancelledAt: now,
-          cancellationReason: trimmedReason,
-          updatedAt: now,
-        })
-        .where(eq(userSessionMappings.classId, id));
-
-      return { ok: true };
-    } catch (error) {
-      console.error("[DB] Error cancelling class session:", error);
-      return { ok: false, message: "Failed to cancel session" };
-    }
+    const { validateOwnerCancelOtp } = await import("./session-cancellation-notify");
+    const otp = validateOwnerCancelOtp(ownerOtp);
+    if (!otp.ok) return { ok: false, message: otp.message };
+    const result = await this.cancelClassSession(id, reason);
+    return { ok: result.ok, message: result.message };
   }
 
   async findNextSessionForClassType(
@@ -3474,10 +3567,14 @@ export class DatabaseStorage implements IStorage {
     pageSize: number,
   ): Promise<{ rows: ClassType[]; total: number }> {
     const offset = paginationOffset(page, pageSize);
-    const [{ total }] = await db.select({ total: count() }).from(classTypes);
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(classTypes)
+      .where(isNull(classTypes.retiredAt));
     const rows = await db
       .select()
       .from(classTypes)
+      .where(isNull(classTypes.retiredAt))
       .orderBy(classTypes.name)
       .limit(pageSize)
       .offset(offset);

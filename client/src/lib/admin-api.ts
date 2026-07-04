@@ -51,7 +51,7 @@ export function validateClassTypeForm(form: {
     description: form.description,
     price: form.price,
     duration: form.duration,
-    imageUrl: form.imageUrl || null,
+    imageUrl: form.imageUrl.trim(),
     intensity: form.intensity,
   });
   if (result.success) return { ok: true as const, data: result.data, errors: {} };

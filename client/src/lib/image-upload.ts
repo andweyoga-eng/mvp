@@ -5,9 +5,13 @@ export const ADMIN_IMAGE_MAX_BASE64 = 900_000;
 export const ADMIN_IMAGE_MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 export function validateAdminImageFile(file: File): string | null {
-  if (!file.type.startsWith("image/")) return "Please choose an image file (JPEG, PNG, or WebP).";
+  if (!file.type.startsWith("image/")) {
+    return "Please choose an image file (JPEG, PNG, or WebP).";
+  }
   if (file.size > ADMIN_IMAGE_MAX_FILE_BYTES) {
-    return `Image must be ${ADMIN_IMAGE_MAX_FILE_BYTES / (1024 * 1024)} MB or smaller.`;
+    const maxMb = ADMIN_IMAGE_MAX_FILE_BYTES / (1024 * 1024);
+    const actualMb = (file.size / (1024 * 1024)).toFixed(1);
+    return `This file is ${actualMb} MB. The maximum allowed size is ${maxMb} MB — choose a smaller image or resize it before uploading.`;
   }
   return null;
 }
