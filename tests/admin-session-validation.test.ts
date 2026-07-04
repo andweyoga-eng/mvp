@@ -79,6 +79,30 @@ describe("adminCreateClassSessionSchema — required fields", () => {
       assert.equal(r.success, false, `capacity "${cap}" should fail`);
     }
   });
+
+  it("accepts offline sessions without a Google Meet link when venue details are provided", () => {
+    const r = parseSession({
+      classTypeId: "ct-1",
+      instructorId: "ins-1",
+      date: futureDate,
+      maxCapacity: "10",
+      googleMeetLink: "",
+      deliveryMode: "offline",
+      sessionFrequency: "drop_in",
+      venueAddress: "12 Residency Road, Bengaluru",
+      venueMapLink: "https://maps.google.com/?q=Residency+Road",
+      venueContactPhone: "9876543210",
+      paymentMethod: "razorpay_link",
+      razorpayLink: "https://rzp.io/i/x",
+      publishMode: "now",
+    });
+    assert.equal(r.success, true);
+    if (r.success) {
+      assert.equal(r.data.googleMeetLink, null);
+      assert.equal(r.data.deliveryMode, "offline");
+      assert.equal(r.data.sessionFrequency, "drop_in");
+    }
+  });
 });
 
 describe("adminCreateClassSessionSchema — field length", () => {
@@ -317,5 +341,31 @@ describe("validateSessionForm (client helper)", async () => {
       assert.ok(r.errors.classTypeId);
       assert.ok(r.errors.qrContactPhone || r.errors.qrContactEmail);
     }
+  });
+
+  it("does not surface a meet-link error for offline sessions", () => {
+    const r = validateSessionForm({
+      classTypeId: "ct-1",
+      instructorId: "ins-1",
+      date: futureDate,
+      maxCapacity: "20",
+      googleMeetLink: "",
+      deliveryMode: "offline",
+      sessionFrequency: "trial",
+      venueAddress: "Mysore Road Studio",
+      venueMapLink: "https://maps.google.com/?q=Mysore+Road+Studio",
+      venueContactPhone: "9876543210",
+      paymentMethod: "razorpay_link",
+      razorpayLink: "https://rzp.io/i/x",
+      paymentQrCodeId: "",
+      qrContactPhone: "",
+      qrContactEmail: "",
+      publishMode: "now",
+      publishAt: "",
+      recurrenceKind: "once",
+      occurrenceCount: "1",
+      recurrenceWeekdays: [],
+    });
+    assert.equal(r.ok, true);
   });
 });

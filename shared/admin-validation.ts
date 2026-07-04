@@ -27,12 +27,16 @@ const optionalHttpsUrl = z
     message: "URL must start with https://",
   });
 
-const requiredHttpsUrl = z
+const optionalMeetUrl = z
   .string()
   .trim()
-  .min(1, "Google Meet link is required")
-  .max(2048, "Meet link is too long (max 2048 characters)")
-  .refine((v) => /^https:\/\/.+/i.test(v), {
+  .optional()
+  .nullable()
+  .transform((v) => (v === "" || v == null ? null : v))
+  .refine((v) => v === null || v.length <= 2048, {
+    message: "Meet link is too long (max 2048 characters)",
+  })
+  .refine((v) => v === null || /^https:\/\/.+/i.test(v), {
     message: "Meet link must start with https://",
   });
 
@@ -222,7 +226,7 @@ export const adminCreateClassSessionSchema = z
               .max(500, "Capacity cannot exceed 500"),
           ),
       ),
-    googleMeetLink: requiredHttpsUrl,
+    googleMeetLink: optionalMeetUrl,
     deliveryMode: z.enum(["online", "offline", "hybrid"]).default("online"),
     sessionFrequency: z.enum(["recurring", "drop_in", "trial"]).default("recurring"),
     venueAddress: z.string().trim().optional().nullable(),

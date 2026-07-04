@@ -301,6 +301,7 @@ export interface IStorage {
   getPublishedClasses(): Promise<Class[]>;
   getClass(id: string): Promise<Class | undefined>;
   getClassesByDate(date: Date): Promise<Class[]>;
+  getClassesInRange(start: Date, end: Date): Promise<Class[]>;
   createClass(classData: InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }): Promise<Class>;
   updateClassSession(id: string, updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>): Promise<Class | undefined>;
   deleteClassSession(id: string): Promise<{ ok: boolean; message?: string }>;
@@ -1461,6 +1462,19 @@ export class DatabaseStorage implements IStorage {
         .where(and(gte(classes.date, startOfDay), lte(classes.date, endOfDay)));
     } catch (error) {
       console.error('[DB] Error getting classes by date:', error);
+      return [];
+    }
+  }
+
+  async getClassesInRange(start: Date, end: Date): Promise<Class[]> {
+    try {
+      return await db
+        .select()
+        .from(classes)
+        .where(and(gte(classes.date, start), lte(classes.date, end)))
+        .orderBy(classes.date);
+    } catch (error) {
+      console.error("[DB] Error getting classes in range:", error);
       return [];
     }
   }

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import type { AdminClassSessionForEdit } from "@/components/admin/create-session-modal";
 import { parseRecurrenceWeekdays } from "@shared/session-schedule";
+import { useIsBelowLg } from "@/hooks/use-mobile";
 
 interface SessionRow {
   id: string;
@@ -83,6 +84,7 @@ export function WeekScheduleGrid({
   onEditSession?: (session: AdminClassSessionForEdit) => void;
   onDeleteSession?: (session: SessionRow) => void;
 }) {
+  const isBelowLg = useIsBelowLg();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
 
   useEffect(() => {
@@ -107,6 +109,11 @@ export function WeekScheduleGrid({
     });
   }, [weekStart]);
 
+  const visibleDays = useMemo(
+    () => (isBelowLg ? [...days].reverse() : days),
+    [days, isBelowLg],
+  );
+
   const byDay = useMemo(() => {
     const map: Record<number, SessionRow[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
     for (const s of sessions) {
@@ -114,11 +121,15 @@ export function WeekScheduleGrid({
       if (dt < weekStart || dt > weekEnd) continue;
       map[dt.getDay()].push(s);
     }
+    const sortDirection = isBelowLg ? -1 : 1;
     Object.values(map).forEach((list) =>
-      list.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      list.sort(
+        (a, b) =>
+          (new Date(a.date).getTime() - new Date(b.date).getTime()) * sortDirection,
+      ),
     );
     return map;
-  }, [sessions, weekStart, weekEnd]);
+  }, [sessions, weekStart, weekEnd, isBelowLg]);
 
   const toEditPayload = (s: SessionRow): AdminClassSessionForEdit => ({
     id: s.id,
@@ -205,8 +216,8 @@ export function WeekScheduleGrid({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2">
-        {days.map((day, idx) => (
-          <div key={idx} className="min-h-[120px] rounded-lg border bg-white p-2">
+        {visibleDays.map((day) => (
+          <div key={day.toDateString()} className="min-h-[120px] rounded-lg border bg-white p-2">
             <p className="text-xs font-medium text-gray-600 mb-2">
               {DAY_LABELS[day.getDay()]}{" "}
               <span className="text-gray-400">

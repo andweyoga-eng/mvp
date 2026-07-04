@@ -96,6 +96,10 @@ const INITIAL_FORM = {
 
 const MAX_QR_LOCAL_PHONE_DIGITS = 10;
 
+function meetLinkRequiredForDeliveryMode(mode: "online" | "offline" | "hybrid"): boolean {
+  return mode === "online" || mode === "hybrid";
+}
+
 function countLocalPhoneDigits(phone: string): number {
   let digits = phone.replace(/\D/g, "");
   if (digits.startsWith("91") && digits.length > MAX_QR_LOCAL_PHONE_DIGITS) {
@@ -546,12 +550,17 @@ export function CreateSessionModal({
                     <Select
                       modal={false}
                       value={form.deliveryMode}
-                      onValueChange={(v) =>
+                      onValueChange={(v) => {
+                        const nextMode = v as "online" | "offline" | "hybrid";
                         setForm((f) => ({
                           ...f,
-                          deliveryMode: v as "online" | "offline" | "hybrid",
-                        }))
-                      }
+                          deliveryMode: nextMode,
+                        }));
+                        clearFieldError("googleMeetLink");
+                        clearFieldError("venueAddress");
+                        clearFieldError("venueMapLink");
+                        clearFieldError("venueContactPhone");
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -691,7 +700,10 @@ export function CreateSessionModal({
               {/* Row 3: meet */}
               <div>
                 <Label>
-                  Google Meet Link <span className="text-red-500">*</span>
+                  Google Meet Link
+                  {meetLinkRequiredForDeliveryMode(form.deliveryMode) && (
+                    <span className="text-red-500"> *</span>
+                  )}
                 </Label>
                 <Input
                   value={form.googleMeetLink}
@@ -706,7 +718,9 @@ export function CreateSessionModal({
                 />
                 <FieldError message={errors.googleMeetLink} />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Sent to members after payment — not shown on the public site.
+                  {form.deliveryMode === "offline"
+                    ? "Offline sessions do not require a Meet link."
+                    : "Sent to members after payment — not shown on the public site."}
                 </p>
               </div>
 

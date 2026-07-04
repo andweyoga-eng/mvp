@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { useLocation } from "wouter";
@@ -154,6 +154,15 @@ export default function AdminDashboard() {
   const [classTypesPage, setClassTypesPage] = useState(1);
   const [classTypesPageSize, setClassTypesPageSize] = useState(20);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
+  const defaultScheduleWeekStart = useMemo(() => startOfWeek(new Date()), []);
+  const visibleScheduleWeekStart = scheduleWeekAnchor ?? defaultScheduleWeekStart;
+  const visibleScheduleWeekEnd = useMemo(() => {
+    const end = new Date(visibleScheduleWeekStart);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  }, [visibleScheduleWeekStart]);
 
   const isSuperAdmin = admin.role === "super_admin";
 
@@ -231,6 +240,30 @@ export default function AdminDashboard() {
       refetchOnWindowFocus: true,
     });
   const sessions = sessionsData?.data ?? [];
+  const {
+    data: weekSessions = [],
+    isLoading: weekSessionsLoading,
+    refetch: refetchWeekSessions,
+  } = useQuery<ClassSession[]>({
+    queryKey: [
+      "/api/admin/classes/week",
+      visibleScheduleWeekStart.toISOString(),
+      visibleScheduleWeekEnd.toISOString(),
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        start: visibleScheduleWeekStart.toISOString(),
+        end: visibleScheduleWeekEnd.toISOString(),
+      });
+      const res = await fetch(`/api/admin/classes/week?${params.toString()}`, {
+        headers: adminHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
 
   const { data: paymentQrCodes = [], isLoading: qrLoading, refetch: refetchQr } =
     useQuery<PaymentQrCode[]>({
@@ -422,6 +455,7 @@ export default function AdminDashboard() {
     }
     toast({ title: "Session deleted" });
     refetchSess();
+    refetchWeekSessions();
   }
 
   // DEAD-01 FIX: performCancelSession removed — was defined but never called.
@@ -448,6 +482,7 @@ export default function AdminDashboard() {
     toast({ title: "Session cancelled", description: body.message });
     setSessionToCancel(null);
     refetchSess();
+    refetchWeekSessions();
   }
 
   const getCompletenessColor = (pct: number) =>
@@ -463,8 +498,6 @@ export default function AdminDashboard() {
     label: string;
     bookingCount: number;
   } | null>(null);
-  const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
-
   const sessionEndMs = (s: { date: string; classType?: { duration?: number; name?: string } }) =>
     getSessionEndMs(s.date, s.classType?.duration);
 
@@ -896,9 +929,9 @@ export default function AdminDashboard() {
                     </div>
 
                     <p className="text-sm text-muted-foreground mb-4">
-                      Upcoming sessions ({upcomingSessions.length}) — edit or delete from the week view
+                      Sessions in this week ({weekSessions.length}) — edit or delete from the week view
                     </p>
-                    {sessLoading ? (
+                    {weekSessionsLoading ? (
                       <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#bb5309]" />
                       </div>
@@ -906,19 +939,19 @@ export default function AdminDashboard() {
                       <>
                         <div className="mb-8">
                           <WeekScheduleGrid
-                            sessions={upcomingSessions}
+                            sessions={weekSessions}
                             weekStart={scheduleWeekAnchor}
                             onWeekStartChange={setScheduleWeekAnchor}
                             onEditSession={openEditSession}
                             onDeleteSession={openCancelOrDeleteSession}
                           />
                         </div>
-                        {upcomingSessions.length === 0 && (
+                        {weekSessions.length === 0 && (
                           <div className="text-center py-12 text-gray-400">
                             <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                            <p className="font-medium">No upcoming sessions</p>
+                            <p className="font-medium">No sessions in this week</p>
                             <p className="text-sm mt-1">
-                              Click New session to schedule your next class.
+                              Click New session to schedule a class in the selected week.
                             </p>
                           </div>
                         )}
@@ -954,6 +987,7 @@ export default function AdminDashboard() {
                         }
                         qc.invalidateQueries({ queryKey: ["/api/schedule/week"] });
                         qc.invalidateQueries({ queryKey: ["/api/admin/classes"] });
+                        qc.invalidateQueries({ queryKey: ["/api/admin/classes/week"] });
                       }}
                     />
                   </TabsContent>

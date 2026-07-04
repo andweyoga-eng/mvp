@@ -2961,6 +2961,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/classes/week", requireAdminAuth, async (req, res) => {
+    try {
+      const { start, end } = z
+        .object({
+          start: z.string().min(1),
+          end: z.string().min(1),
+        })
+        .parse(req.query);
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        return res.status(400).json({ message: "Invalid week range" });
+      }
+      const rows = await storage.getClassesInRange(startDate, endDate);
+      const enriched = await Promise.all(
+        rows.map(async (cls) => {
+          const [classType, instructor, currentBookings] = await Promise.all([
+            storage.getClassType(cls.classTypeId),
+            storage.getInstructor(cls.instructorId),
+            storage.syncClassBookingCount(cls.id),
+          ]);
+          return { ...cls, classType, instructor, currentBookings };
+        }),
+      );
+      res.json(enriched);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "start and end query params are required" });
+      }
+      res.status(500).json({ message: "Failed to fetch admin week classes" });
+    }
+  });
+
   app.get("/api/admin/class-types", requireAdminAuth, async (req, res) => {
     try {
       const { page, pageSize } = paginationQuerySchema.parse(req.query);

@@ -560,7 +560,12 @@ export default function Calendar() {
                                 </div>
                               </div>
                               {badge ? (
-                                <Badge className="shrink-0 bg-primary text-white">{badge}</Badge>
+                                <Badge
+                                  variant="outline"
+                                  className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                                >
+                                  {badge}
+                                </Badge>
                               ) : null}
                               <Button
                                 size="sm"
