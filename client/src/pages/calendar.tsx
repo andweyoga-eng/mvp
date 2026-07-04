@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
-import { getSessionBadgeLabel } from "@/lib/session-badges";
+import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import { formatScheduleDayHeader, getRollingWeekDateRange } from "@shared/schedule-display";
 import { CLASS_INTENSITIES, type ClassIntensity } from "@shared/schema";
 import hathaYogaImg from "@assets/hatha yoga_1756809174781.jpg";
@@ -643,7 +643,12 @@ export default function Calendar() {
                               {sessionIntensity(cls)}
                             </Badge>
                             {badge ? (
-                              <Badge className="bg-primary text-white">{badge}</Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn("whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                              >
+                                {badge}
+                              </Badge>
                             ) : null}
                           </div>
                           <span className="font-bold text-primary">₹{cls.classType.price}</span>
