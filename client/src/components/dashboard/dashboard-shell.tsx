@@ -15,6 +15,15 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { AccountDrawer } from "@/components/account-drawer";
 import { PageContainer } from "@/components/digital-zen/page-container";
+import { useAuth } from "@/lib/auth";
+import { getIncompleteAccountHref } from "@/lib/account-profile-complete";
+import { useProfileCompletionGuard } from "@/hooks/use-profile-completion-guard";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 export type DashboardSection =
@@ -51,6 +60,10 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  useProfileCompletionGuard();
+
+  const incompleteHref = getIncompleteAccountHref(user);
 
   const go = (href?: string) => {
     if (!href) {
@@ -107,15 +120,37 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
               <Bell className="h-5 w-5" />
               <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-dz-secondary ring-2 ring-dz-surface" />
             </button>
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-dz-primary transition-transform hover:shadow-dz-hero active:scale-95"
-              data-testid="dashboard-account-toggle"
-            >
-              <span className="hidden sm:inline">My Account</span>
-              <Menu className="h-[17px] w-[17px]" />
-            </button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (incompleteHref) {
+                        setLocation(incompleteHref);
+                        return;
+                      }
+                      setDrawerOpen(true);
+                    }}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold shadow-dz-primary transition-transform hover:shadow-dz-hero active:scale-95",
+                      incompleteHref
+                        ? "bg-orange-600 text-white hover:bg-orange-700"
+                        : "bg-primary text-primary-foreground",
+                    )}
+                    data-testid="dashboard-account-toggle"
+                  >
+                    <span className="hidden sm:inline">My Account</span>
+                    <Menu className="h-[17px] w-[17px]" />
+                  </button>
+                </TooltipTrigger>
+                {incompleteHref ? (
+                  <TooltipContent side="bottom" className="max-w-xs text-center">
+                    Complete your phone number and health note to book sessions.
+                  </TooltipContent>
+                ) : null}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </PageContainer>
 
@@ -131,7 +166,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
                     key={item.id}
                     type="button"
                     onClick={() => go(item.href)}
-                    title={item.href ? item.label : `${item.label} — coming soon`}
+                    title={item.href ? item.label : `${item.label} (coming soon)`}
                     className={cn(
                       "group flex flex-col items-center gap-2 rounded-xl px-1 py-1.5 text-center transition-transform",
                       item.href ? "hover:-translate-y-0.5" : "cursor-default opacity-70",

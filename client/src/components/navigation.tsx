@@ -3,10 +3,19 @@ import { AlertTriangle, Sparkles, Menu, X } from "lucide-react";
 import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
 import { AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { AccountDrawer } from "@/components/account-drawer";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import {
+  getIncompleteAccountHref,
+  isAuthUserProfileComplete,
+} from "@/lib/account-profile-complete";
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
@@ -56,7 +65,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
               <button
                 type="button"
                 className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 animate-pulse items-center justify-center rounded-full bg-gradient-to-br from-dz-secondary to-primary px-1 text-[10px] font-bold text-white ring-2 ring-white"
-                aria-label="Session starting soon — open join prompt"
+                aria-label="Session starting soon. Open join prompt."
                 data-testid="payment-verified-menu-bubble"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -96,19 +105,37 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 data-testid="nav-auth-loading"
               />
             ) : user ? (
-              <Button
-                className={`rounded-full px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-4 sm:text-sm ${
-                  !isProfileComplete
-                    ? "bg-orange-600 hover:bg-orange-700"
-                    : "bg-primary hover:bg-primary/90"
-                }`}
-                data-testid="nav-my-account"
-                onClick={() => setAccountDrawerOpen(true)}
-              >
-                {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
-                My Account
-                <Menu className="ml-1.5 h-3.5 w-3.5" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className={`rounded-full px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-4 sm:text-sm ${
+                        !isProfileComplete
+                          ? "bg-orange-600 hover:bg-orange-700"
+                          : "bg-primary hover:bg-primary/90"
+                      }`}
+                      data-testid="nav-my-account"
+                      onClick={() => {
+                        const href = getIncompleteAccountHref(user);
+                        if (href) {
+                          window.location.href = href;
+                          return;
+                        }
+                        setAccountDrawerOpen(true);
+                      }}
+                    >
+                      {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
+                      My Account
+                      <Menu className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  {!isProfileComplete ? (
+                    <TooltipContent side="bottom" className="max-w-xs text-center">
+                      Complete your phone number and health note to book sessions.
+                    </TooltipContent>
+                  ) : null}
+                </Tooltip>
+              </TooltipProvider>
             ) : (
               <>
                 <Button

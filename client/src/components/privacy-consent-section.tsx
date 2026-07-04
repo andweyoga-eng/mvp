@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
-import { User, Gavel, Cake, HeartPulse, Loader2 } from "lucide-react";
+import { User, Gavel, Cake, HeartPulse, Loader2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -33,6 +33,7 @@ const CATEGORY_ICONS: Record<ConsentType, typeof User> = {
   terms: Gavel,
   age_declaration: Cake,
   health_data: HeartPulse,
+  whatsapp_contact: MessageCircle,
 };
 
 function StatusBadge({

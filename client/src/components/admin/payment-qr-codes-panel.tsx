@@ -57,24 +57,20 @@ function buildFullContactPhone(localDigits: string, countryCode: string): string
 }
 
 /** Admin QR contact: length by country + shared server schema (no member spam heuristics). */
-function validateQrContactFields(phone: string, email: string, countryCode: string) {
-  const local = phone.replace(/\D/g, "");
-  const { minLength, maxLength } = getCountryPhoneLimits(countryCode);
+function validateQrContactFields(phone: string, email: string, _countryCode: string) {
+  const local = phone.replace(/\D/g, "").slice(0, 10);
 
   let phoneErr: string | undefined;
   if (!local) {
     phoneErr = "Contact phone is required";
-  } else if (local.length < minLength) {
-    phoneErr = `Enter ${minLength} digit${minLength === 1 ? "" : "s"}`;
-  } else if (local.length > maxLength) {
-    phoneErr = `Maximum ${maxLength} digits`;
+  } else if (local.length !== 10) {
+    phoneErr = "Enter a 10-digit phone number";
   }
 
-  const fullPhone = buildFullContactPhone(local, countryCode);
   const parsed = adminPaymentQrCodeSchema.safeParse({
     name: "x",
     imageUrl: "data:image/png;base64,iVBORw0KGgo=",
-    contactPhone: fullPhone,
+    contactPhone: local,
     contactEmail: email.trim(),
   });
 
@@ -254,10 +250,7 @@ function QrCodeForm({
             onChange={(e) =>
               onContactPhoneChange(clampLocalPhoneDigits(e.target.value, phoneCountryCode))
             }
-            placeholder={
-              phoneCountryCode === "+91" ? "10-digit mobile" : "Mobile number"
-            }
-            maxLength={getCountryPhoneLimits(phoneCountryCode).maxLength}
+            maxLength={10}
             className={phoneError ? "border-red-500" : ""}
           />
         </div>
@@ -292,14 +285,14 @@ export function CreateQrButton({ onCreated }: { onCreated: () => void }) {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const fullPhone = buildFullContactPhone(contactPhone, phoneCountryCode);
+      const digits = contactPhone.replace(/\D/g, "").slice(0, 10);
       const res = await fetch("/api/admin/payment-qr-codes", {
         method: "POST",
         headers: adminHeaders(),
         body: JSON.stringify({
           name,
           imageUrl,
-          contactPhone: fullPhone,
+          contactPhone: digits,
           contactEmail,
         }),
       });
@@ -409,14 +402,14 @@ function EditQrDialog({ qr, onUpdated }: { qr: PaymentQrCode; onUpdated: () => v
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const fullPhone = buildFullContactPhone(contactPhone, phoneCountryCode);
+      const digits = contactPhone.replace(/\D/g, "").slice(0, 10);
       const res = await fetch(`/api/admin/payment-qr-codes/${qr.id}`, {
         method: "PATCH",
         headers: adminHeaders(),
         body: JSON.stringify({
           name,
           imageUrl,
-          contactPhone: fullPhone,
+          contactPhone: digits,
           contactEmail,
         }),
       });

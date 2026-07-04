@@ -44,6 +44,19 @@ function optionalSecondaryOk(
   return validateMobileNumber(digits, cc(countryCode)).isValid;
 }
 
+export function getFirstIncompleteAccountAnchor(
+  u: AccountProfileCheckInput,
+): "profile" | "health" | null {
+  const primaryDigits = (u.primaryMobile ?? "").trim();
+  if (!primaryDigits || !requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) {
+    return "profile";
+  }
+  if (!isHealthDisclosureComplete(u.healthUpdateText)) {
+    return "health";
+  }
+  return null;
+}
+
 /** Profile tab fields only (name, phones, email verified) — excludes health disclosure. */
 export function isProfileFieldsSectionComplete(u: AccountProfileCheckInput): boolean {
   if (!u.emailVerified) return false;
@@ -105,7 +118,7 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
 
   if (!isHealthDisclosureComplete(u.healthUpdateText)) {
     reasons.push(
-      'Health disclosure required — select an option on the Health Update tab',
+      'Health disclosure required. Select an option on the Health Update tab.',
     );
   }
 

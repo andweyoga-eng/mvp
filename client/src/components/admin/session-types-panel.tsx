@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,11 +24,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, BookOpen, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/admin-api";
 import { FormErrorSummary } from "@/components/admin/field-error";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "@shared/schema";
+import { compressImageForUpload, validateAdminImageFile } from "@/lib/image-upload";
 
 export interface ClassType {
   id: string;
@@ -135,7 +136,7 @@ function ClassTypeFormFields({
           {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
           <Label>
             Intensity <span className="text-red-500">*</span>
@@ -156,15 +157,91 @@ function ClassTypeFormFields({
           {errors.intensity && <p className="text-xs text-red-500 mt-1">{errors.intensity}</p>}
         </div>
         <div>
-          <Label>Image URL (optional)</Label>
-          <Input
-            value={form.imageUrl}
-            onChange={(e) => setForm((f) => ({ ...f, imageUrl: e.target.value }))}
-            placeholder="https://..."
+          <Label>Session image (optional)</Label>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+            JPEG or PNG, up to 2 MB. Resized to 1200px max for fast loading.
+          </p>
+          <ClassTypeImageField
+            imageUrl={form.imageUrl}
+            onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+            error={errors.imageUrl}
           />
         </div>
       </div>
     </>
+  );
+}
+
+function ClassTypeImageField({
+  imageUrl,
+  onChange,
+  error,
+}: {
+  imageUrl: string;
+  onChange: (url: string) => void;
+  error?: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const fileErr = validateAdminImageFile(file);
+          if (fileErr) {
+            toast({ title: "Invalid image", description: fileErr, variant: "destructive" });
+            return;
+          }
+          try {
+            const dataUrl = await compressImageForUpload(file);
+            onChange(dataUrl);
+          } catch (err) {
+            toast({
+              title: "Could not process image",
+              description: err instanceof Error ? err.message : "Try a different file.",
+              variant: "destructive",
+            });
+          } finally {
+            e.target.value = "";
+          }
+        }}
+      />
+      {imageUrl ? (
+        <div className="flex items-center gap-3">
+          <img
+            src={imageUrl}
+            alt="Session type preview"
+            className="h-20 w-28 rounded-lg object-cover border"
+          />
+          <div className="flex flex-col gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+              <Upload className="w-4 h-4 mr-1" /> Replace
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => onChange("")}>
+              Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" className="w-full" onClick={() => fileRef.current?.click()}>
+          <Upload className="w-4 h-4 mr-2" /> Upload image
+        </Button>
+      )}
+      <Input
+        value={imageUrl.startsWith("data:") ? "" : imageUrl}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Or paste https:// image URL"
+        className={error ? "border-red-500" : ""}
+      />
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
   );
 }
 

@@ -52,6 +52,7 @@ import {
   type InstructorOperationalStatus,
 } from "@shared/instructor-compliance";
 import type { Instructor } from "@shared/schema";
+import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
 
 function compressImageForUpload(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -219,7 +220,10 @@ function InstructorProfileForm({
             <Label>Phone <span className="text-red-500">*</span></Label>
             <Input
               value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, phone: clampIndianPhoneDigits(e.target.value) }))}
+              placeholder="10-digit number"
+              maxLength={10}
+              inputMode="numeric"
               className={errors.phone ? "border-red-500" : ""}
             />
             <FieldError message={errors.phone} />

@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { WEEKDAY_LABELS } from "@shared/session-schedule";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
+import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
 import { FieldError, FormErrorSummary } from "@/components/admin/field-error";
 import type { PaymentQrCode } from "@/components/admin/payment-qr-codes-panel";
 
@@ -71,12 +72,14 @@ const SESSION_TYPE_OPTIONS: Array<{
   },
 ];
 
+const MEET_LINK_PREFIX = "https://";
+
 const INITIAL_FORM = {
   classTypeId: "",
   instructorId: "",
   date: "",
   maxCapacity: "20",
-  googleMeetLink: "",
+  googleMeetLink: MEET_LINK_PREFIX,
   deliveryMode: "online" as "online" | "offline" | "hybrid",
   sessionFrequency: "recurring" as "recurring" | "drop_in" | "trial",
   venueAddress: "",
@@ -165,6 +168,17 @@ function toDatetimeLocalValue(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function meetLinkForForm(value: string | null | undefined): string {
+  const v = (value ?? "").trim();
+  return v || MEET_LINK_PREFIX;
+}
+
+function meetLinkForSubmit(value: string): string {
+  const v = value.trim();
+  if (!v || v === MEET_LINK_PREFIX) return "";
+  return v;
+}
+
 function sessionToForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
   const publishedAt = sess.publishedAt ? new Date(sess.publishedAt) : null;
   const publishLater =
@@ -174,17 +188,17 @@ function sessionToForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
     instructorId: sess.instructorId,
     date: toDatetimeLocalValue(sess.date),
     maxCapacity: String(sess.maxCapacity),
-    googleMeetLink: sess.googleMeetLink ?? "",
+    googleMeetLink: meetLinkForForm(sess.googleMeetLink),
     deliveryMode: (sess.deliveryMode as "online" | "offline" | "hybrid") ?? "online",
     sessionFrequency:
       (sess.sessionFrequency as "recurring" | "drop_in" | "trial") ?? "recurring",
     venueAddress: sess.venueAddress ?? "",
     venueMapLink: sess.venueMapLink ?? "",
-    venueContactPhone: sess.venueContactPhone ?? "",
+    venueContactPhone: clampIndianPhoneDigits(sess.venueContactPhone ?? ""),
     paymentMethod: (sess.paymentMethod ?? "razorpay_link") as typeof INITIAL_FORM.paymentMethod,
     razorpayLink: sess.razorpayLink ?? "",
     paymentQrCodeId: sess.paymentQrCodeId ?? "",
-    qrContactPhone: sess.qrContactPhone ?? "",
+    qrContactPhone: clampIndianPhoneDigits(sess.qrContactPhone ?? ""),
     qrContactEmail: sess.qrContactEmail ?? "",
     publishMode: publishLater ? "later" : "now",
     publishAt: publishLater && sess.publishedAt ? toDatetimeLocalValue(sess.publishedAt) : "",
@@ -234,7 +248,7 @@ export function CreateSessionModal({
       setForm(sessionToForm(sessionToEdit));
       setErrors({});
     } else if (open && !sessionToEdit) {
-      setForm({ ...INITIAL_FORM, venueContactPhone: adminDefaultPhone });
+      setForm({ ...INITIAL_FORM, venueContactPhone: clampIndianPhoneDigits(adminDefaultPhone) });
       setErrors({});
       setQrContactNotice(null);
     }
@@ -289,8 +303,17 @@ export function CreateSessionModal({
     },
   });
 
+  function formForValidation() {
+    return {
+      ...form,
+      googleMeetLink: meetLinkForSubmit(form.googleMeetLink),
+      venueContactPhone: clampIndianPhoneDigits(form.venueContactPhone),
+      qrContactPhone: clampIndianPhoneDigits(form.qrContactPhone),
+    };
+  }
+
   function runValidation() {
-    const v = validateSessionForm(form);
+    const v = validateSessionForm(formForValidation());
     if (!v.ok) {
       setErrors(v.errors);
       return null;
@@ -300,7 +323,7 @@ export function CreateSessionModal({
   }
 
   function submitSessionForm() {
-    const v = validateSessionForm(form);
+    const v = validateSessionForm(formForValidation());
     if (!v.ok) {
       setErrors(v.errors);
       const n = Object.keys(v.errors).length;
@@ -351,7 +374,7 @@ export function CreateSessionModal({
           <DialogDescription className="text-left">
             {isEdit
               ? "Update this session. Date/time cannot change if members have already booked."
-              : "Like a calendar event: one-time or weekly series. Manual entry today — Google Calendar sync later."}
+              : "Like a calendar event: one-time or weekly series. Manual entry today. Google Calendar sync later."}
           </DialogDescription>
         </DialogHeader>
 
@@ -363,7 +386,7 @@ export function CreateSessionModal({
                 {noClassTypes && "Create at least one Session Type first (Sessions → Session Type). "}
                 {noInstructors && "Create at least one Instructor first (Instructors tab). "}
                 {noEligibleInstructors &&
-                  "Instructors exist but none are session-eligible yet — complete onboarding verification or re-activate suspended instructors."}
+                  "Instructors exist but none are session-eligible yet. Complete onboarding verification or re-activate suspended instructors."}
               </AlertDescription>
             </Alert>
           </div>
@@ -401,7 +424,7 @@ export function CreateSessionModal({
                     <SelectContent>
                       {classTypes.map((ct) => (
                         <SelectItem key={ct.id} value={ct.id}>
-                          {ct.name} — Rs.{ct.price} / {ct.duration}min
+                          {ct.name} · Rs.{ct.price} / {ct.duration}min
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -661,7 +684,7 @@ export function CreateSessionModal({
                 <div>
                   <Label>
                     {form.recurrenceKind === "weekly" && !isEdit
-                      ? "First session — date & time (IST)"
+                      ? "First session: date & time (IST)"
                       : "Date & time (IST)"}{" "}
                     <span className="text-red-500">*</span>
                   </Label>
@@ -708,11 +731,18 @@ export function CreateSessionModal({
                 <Input
                   value={form.googleMeetLink}
                   onChange={(e) => {
-                    setForm((f) => ({ ...f, googleMeetLink: e.target.value }));
+                    const raw = e.target.value;
+                    const next =
+                      raw.length < MEET_LINK_PREFIX.length && MEET_LINK_PREFIX.startsWith(raw)
+                        ? MEET_LINK_PREFIX
+                        : raw.startsWith("http") || raw.startsWith(MEET_LINK_PREFIX)
+                          ? raw
+                          : `${MEET_LINK_PREFIX}${raw.replace(/^\/+/, "")}`;
+                    setForm((f) => ({ ...f, googleMeetLink: next }));
                     clearFieldError("googleMeetLink");
                   }}
                   onBlur={() => runValidation()}
-                  placeholder="https://meet.google.com/..."
+                  placeholder="meet.google.com/..."
                   disabled={form.deliveryMode === "offline"}
                   className={errors.googleMeetLink ? "border-red-500" : ""}
                 />
@@ -720,7 +750,7 @@ export function CreateSessionModal({
                 <p className="text-xs text-muted-foreground mt-1">
                   {form.deliveryMode === "offline"
                     ? "Offline sessions do not require a Meet link."
-                    : "Sent to members after payment — not shown on the public site."}
+                    : "Sent to members after payment. Not shown on the public site."}
                 </p>
               </div>
 
@@ -767,8 +797,15 @@ export function CreateSessionModal({
                   <Input
                     value={form.venueContactPhone}
                     disabled={form.deliveryMode === "online"}
-                    onChange={(e) => setForm((f) => ({ ...f, venueContactPhone: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        venueContactPhone: clampIndianPhoneDigits(e.target.value),
+                      }))
+                    }
                     placeholder="10-digit number"
+                    maxLength={10}
+                    inputMode="numeric"
                     className={errors.venueContactPhone ? "border-red-500" : ""}
                   />
                   <FieldError message={errors.venueContactPhone} />
@@ -887,11 +924,16 @@ export function CreateSessionModal({
                       <Input
                         value={form.qrContactPhone}
                         onChange={(e) => {
-                          setForm((f) => ({ ...f, qrContactPhone: e.target.value }));
+                          setForm((f) => ({
+                            ...f,
+                            qrContactPhone: clampIndianPhoneDigits(e.target.value),
+                          }));
                           clearFieldError("qrContactPhone");
                         }}
                         onBlur={() => runValidation()}
-                        placeholder="+91 98765 43210"
+                        placeholder="10-digit number"
+                        maxLength={10}
+                        inputMode="numeric"
                         className={errors.qrContactPhone ? "border-red-500" : ""}
                       />
                       <FieldError message={errors.qrContactPhone} />

@@ -37,7 +37,8 @@ import { PaymentHistory } from "@/components/payment-history";
 import { PrivacyConsentSection } from "@/components/privacy-consent-section";
 import { AccountHealthNoteSection } from "@/components/account-health-note-section";
 import { DateOfBirthField } from "@/components/date-of-birth-field";
-import { type ConsentLanguage, isAdult, isValidDateOfBirth } from "@shared/consent";
+import { ConsentCheckbox } from "@/components/consent-checkbox";
+import { type ConsentLanguage, isAdult, isValidDateOfBirth, CONSENT_COPY } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { LEGAL_CONFIG } from "@shared/legal-config";
@@ -126,6 +127,12 @@ export default function MyAccount() {
     emergencyMobileCountryCode: "+91",
     healthUpdateText: "",
     healthDocumentUrls: [] as string[],
+    whatsappConsent: false,
+    addressStreet: "",
+    addressLine2: "",
+    addressCity: "",
+    addressState: "",
+    addressPincode: "",
   });
   const [mobileValidation, setMobileValidation] = useState({
     primaryMobile: { isValid: true, error: "" },
@@ -167,6 +174,12 @@ export default function MyAccount() {
       emergencyMobileCountryCode: user.emergencyMobileCountryCode || "+91",
       healthUpdateText: user.healthUpdateText || "",
       healthDocumentUrls: user.healthDocumentUrls || [],
+      whatsappConsent: Boolean(user.whatsappConsent),
+      addressStreet: user.addressStreet || "",
+      addressLine2: user.addressLine2 || "",
+      addressCity: user.addressCity || "",
+      addressState: user.addressState || "",
+      addressPincode: user.addressPincode || "",
     };
     setProfileData(next);
     setDobError("");
@@ -188,6 +201,33 @@ export default function MyAccount() {
       ),
     });
   }, [user]);
+
+  // Save primary mobile as soon as it is valid so the team can contact the member.
+  useEffect(() => {
+    if (!user?.id) return;
+    const digits = formatMobileNumber(profileData.primaryMobile);
+    const valid = validateMobileNumber(digits, profileData.primaryMobileCountryCode).isValid;
+    if (!valid || !digits.trim()) return;
+    const saved = formatMobileNumber(user.primaryMobile || "");
+    if (digits === saved) return;
+
+    const timer = window.setTimeout(() => {
+      void updateProfile(
+        {
+          primaryMobile: digits,
+          primaryMobileCountryCode: profileData.primaryMobileCountryCode,
+        },
+        { silent: true },
+      ).catch(() => undefined);
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [
+    profileData.primaryMobile,
+    profileData.primaryMobileCountryCode,
+    user?.id,
+    user?.primaryMobile,
+    updateProfile,
+  ]);
 
   // Deep-link scrolling: the page renders via JS, so a cross-page hash can land
   // before sections mount. Resolve on mount AND on hashchange. Also honour the
@@ -361,6 +401,13 @@ export default function MyAccount() {
         secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
         emergencyMobile: profileData.emergencyMobile,
         emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
+        whatsappConsent: profileData.whatsappConsent,
+        whatsappConsentSource: profileData.whatsappConsent ? "profile_primary_mobile" : undefined,
+        addressStreet: profileData.addressStreet.trim() || undefined,
+        addressLine2: profileData.addressLine2.trim() || undefined,
+        addressCity: profileData.addressCity.trim() || undefined,
+        addressState: profileData.addressState.trim() || undefined,
+        addressPincode: profileData.addressPincode.trim() || undefined,
         ...(dobLocked ? {} : { dateOfBirth: profileData.dateOfBirth }),
       };
       await updateProfile(contactPayload, { successTitle: "Contact info saved" });
@@ -462,7 +509,9 @@ export default function MyAccount() {
   ];
   const pct = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
   const firstGap = checks.find((c) => !c.ok);
-  const pctHint = pct === 100 ? "All set — you're ready to book." : `Next: ${firstGap?.hint}.`;
+  const pctHint = pct === 100 ? "All set. You're ready to book." : `Next: ${firstGap?.hint}.`;
+  const consentCopy = CONSENT_COPY[consentLang];
+  const needsHealthOnboarding = !isHealthDisclosureComplete(profileData.healthUpdateText);
 
   const initials = (profileData.name || user?.name || "A W")
     .split(" ")
@@ -728,6 +777,8 @@ export default function MyAccount() {
                                 onChange={(e) => handleInputChange(row.field, e.target.value)}
                                 placeholder={row.placeholder}
                                 required={row.required}
+                                maxLength={10}
+                                inputMode="numeric"
                                 className={showErr ? "border-destructive" : ""}
                                 data-testid={`${row.field}-input`}
                               />
@@ -742,6 +793,84 @@ export default function MyAccount() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                {profileData.primaryMobile.trim().length > 0 ? (
+                  <ConsentCheckbox
+                    checked={profileData.whatsappConsent}
+                    onChange={(checked) =>
+                      setProfileData((p) => ({ ...p, whatsappConsent: checked }))
+                    }
+                    testId="whatsapp-consent-checkbox"
+                    label={consentCopy.whatsappConsent}
+                  />
+                ) : null}
+
+                <div className="space-y-3 rounded-xl border border-primary/10 bg-primary/[0.02] p-4">
+                  <p className="text-sm font-semibold text-foreground">Mailing address</p>
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Helps us share studio directions and local updates.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="addressStreet" className="text-xs text-muted-foreground">
+                        Street address
+                      </Label>
+                      <Input
+                        id="addressStreet"
+                        value={profileData.addressStreet}
+                        onChange={(e) => handleInputChange("addressStreet", e.target.value)}
+                        placeholder="House / flat, street"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <Label htmlFor="addressLine2" className="text-xs text-muted-foreground">
+                        Apartment, suite, etc. (optional)
+                      </Label>
+                      <Input
+                        id="addressLine2"
+                        value={profileData.addressLine2}
+                        onChange={(e) => handleInputChange("addressLine2", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressCity" className="text-xs text-muted-foreground">
+                        City
+                      </Label>
+                      <Input
+                        id="addressCity"
+                        value={profileData.addressCity}
+                        onChange={(e) => handleInputChange("addressCity", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressState" className="text-xs text-muted-foreground">
+                        State
+                      </Label>
+                      <Input
+                        id="addressState"
+                        value={profileData.addressState}
+                        onChange={(e) => handleInputChange("addressState", e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="addressPincode" className="text-xs text-muted-foreground">
+                        PIN code
+                      </Label>
+                      <Input
+                        id="addressPincode"
+                        value={profileData.addressPincode}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "addressPincode",
+                            e.target.value.replace(/\D/g, "").slice(0, 6),
+                          )
+                        }
+                        inputMode="numeric"
+                        maxLength={6}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -770,6 +899,7 @@ export default function MyAccount() {
                 onHealthConsentCheckedChange={setHealthConsentChecked}
                 consentLang={consentLang}
                 onConsentLangChange={setConsentLang}
+                startInEditMode={needsHealthOnboarding}
                 onSave={async (payload) => {
                   await handleHealthSave(payload);
                   setProfileData((p) => ({
@@ -829,7 +959,7 @@ export default function MyAccount() {
                     <div>
                       <p className="text-sm font-semibold">No cards yet</p>
                       <p className="mt-0.5 text-sm text-muted-foreground">
-                        Secure card payments arrive soon — for now, pay at the studio.
+                        Secure card payments arrive soon. For now, pay at the studio.
                       </p>
                     </div>
                   </div>

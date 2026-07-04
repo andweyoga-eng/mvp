@@ -67,7 +67,7 @@ function formatRange(start: Date) {
   end.setDate(end.getDate() + 6);
   const fmt = (d: Date) =>
     d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" });
-  return `${fmt(start)} – ${fmt(end)}`;
+  return `${fmt(start)} to ${fmt(end)}`;
 }
 
 export function WeekScheduleGrid({

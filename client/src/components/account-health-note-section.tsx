@@ -50,6 +50,8 @@ export interface AccountHealthNoteSectionProps {
   onConsentLangChange: (lang: ConsentLanguage) => void;
   onSave: (payload: { text: string; documentUrls: string[] }) => Promise<void>;
   isLoading: boolean;
+  /** When true and no note on file, show the edit form with Save note (not Edit). */
+  startInEditMode?: boolean;
 }
 
 export function AccountHealthNoteSection({
@@ -64,10 +66,11 @@ export function AccountHealthNoteSection({
   onConsentLangChange,
   onSave,
   isLoading,
+  startInEditMode = false,
 }: AccountHealthNoteSectionProps) {
   const { toast } = useToast();
   const [tab, setTab] = useState<HealthTab>("current");
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditing, setIsEditing] = useState(() => startInEditMode && !isHealthDisclosureComplete(currentText));
   const [draftText, setDraftText] = useState("");
   const [draftDocs, setDraftDocs] = useState<string[]>([]);
   const [attachedName, setAttachedName] = useState<string | null>(null);
@@ -79,6 +82,13 @@ export function AccountHealthNoteSection({
 
   const hasCurrentNote = isHealthDisclosureComplete(currentText);
   const showConsentPrompt = isEditing && !healthConsentGiven;
+
+  useEffect(() => {
+    if (startInEditMode && !hasCurrentNote) {
+      setIsEditing(true);
+      setTab("current");
+    }
+  }, [startInEditMode, hasCurrentNote]);
   const saveDisabled =
     isLoading ||
     isUploading ||

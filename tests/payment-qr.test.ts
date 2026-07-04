@@ -78,7 +78,7 @@ describe("unit: adminPaymentQrCodeSchema", async () => {
   const { adminPaymentQrCodeSchema } = await import("../shared/admin-validation.ts");
 
   const validContact = {
-    contactPhone: "+919876543210",
+    contactPhone: "9876543210",
     contactEmail: "payments@andweyoga.com",
   };
 
@@ -122,7 +122,7 @@ describe("unit: adminPaymentQrCodeSchema", async () => {
     const result = adminPaymentQrCodeSchema.safeParse({
       name: "Test",
       imageUrl: makeJpegDataUrl(50),
-      contactPhone: "+919876543210",
+      contactPhone: "9876543210",
       contactEmail: "not-an-email",
     });
     assert.equal(result.success, false);
@@ -200,7 +200,7 @@ describe("regression: QR payment session schema (cross-pollination)", async () =
       ...base,
       paymentMethod: "qr",
       paymentQrCodeId: "qr-uuid-1",
-      qrContactPhone: "+919876543210",
+      qrContactPhone: "9876543210",
       qrContactEmail: "pay@example.com",
     });
     assert.equal(result.success, true);
@@ -266,7 +266,7 @@ describe("integration: payment QR CRUD in database", { skip: !hasDb }, () => {
     const data = adminPaymentQrCodeSchema.parse({
       name: `Test QR ${Date.now()}`,
       imageUrl,
-      contactPhone: "+919876543210",
+      contactPhone: "9876543210",
       contactEmail: "test-qr@andweyoga.com",
     });
     const row = await storage.createPaymentQrCode(data);

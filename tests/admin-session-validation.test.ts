@@ -182,7 +182,7 @@ describe("adminCreateClassSessionSchema — QR payment", () => {
     const r = parseSession({
       ...base,
       paymentQrCodeId: "qr-uuid",
-      qrContactPhone: "+91 9876543210",
+      qrContactPhone: "9876543210",
       qrContactEmail: "pay@andweyoga.com",
     });
     assert.equal(r.success, true);

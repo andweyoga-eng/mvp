@@ -1200,10 +1200,19 @@ export default function AdminDashboard() {
                       const phone = prompt("Admin phone (10 digits)", adminProfileData?.profile?.phone ?? "");
                       const govId = prompt("Government ID image URL or data URL (<=1MB)", adminProfileData?.profile?.governmentIdImageUrl ?? "");
                       if (!email || !phone) return;
+                      const phoneDigits = phone.replace(/\D/g, "").slice(0, 10);
+                      if (!/^\d{10}$/.test(phoneDigits)) {
+                        toast({
+                          title: "Invalid phone",
+                          description: "Enter a 10-digit phone number.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
                       const res = await fetch("/api/admin/profile", {
                         method: "PUT",
                         headers: adminHeaders(),
-                        body: JSON.stringify({ email, phone, governmentIdImageUrl: govId || null }),
+                        body: JSON.stringify({ email, phone: phoneDigits, governmentIdImageUrl: govId || null }),
                       });
                       if (!res.ok) {
                         const b = await res.json().catch(() => ({}));

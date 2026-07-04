@@ -30,6 +30,15 @@ export const users = pgTable("users", {
   sessionAttendanceCount: integer("session_attendance_count").notNull().default(0),
   /** Required for DPDPA age gate; collected at onboarding consent (Ch. 7). */
   dateOfBirth: text("date_of_birth"),
+  /** WhatsApp contact consent (primary mobile); audit trail also in consent_audit_logs. */
+  whatsappConsent: boolean("whatsapp_consent").notNull().default(false),
+  whatsappConsentAt: timestamp("whatsapp_consent_at"),
+  whatsappConsentSource: text("whatsapp_consent_source"),
+  addressStreet: text("address_street"),
+  addressLine2: text("address_line2"),
+  addressCity: text("address_city"),
+  addressState: text("address_state"),
+  addressPincode: text("address_pincode"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -384,17 +393,30 @@ export const loginUserSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
-export const updateProfileSchema = createInsertSchema(users).pick({
-  name: true,
-  primaryMobile: true,
-  primaryMobileCountryCode: true,
-  secondaryMobile: true,
-  secondaryMobileCountryCode: true,
-  emergencyMobile: true,
-  emergencyMobileCountryCode: true,
-  healthUpdateText: true,
-  healthDocumentUrls: true,
-  dateOfBirth: true,
+export const updateProfileSchema = createInsertSchema(users)
+  .pick({
+    name: true,
+    primaryMobile: true,
+    primaryMobileCountryCode: true,
+    secondaryMobile: true,
+    secondaryMobileCountryCode: true,
+    emergencyMobile: true,
+    emergencyMobileCountryCode: true,
+    healthUpdateText: true,
+    healthDocumentUrls: true,
+    dateOfBirth: true,
+    whatsappConsent: true,
+    addressStreet: true,
+    addressLine2: true,
+    addressCity: true,
+    addressState: true,
+    addressPincode: true,
+  })
+  .partial();
+
+/** Partial profile update (e.g. save phone as soon as entered). */
+export const updateProfilePartialSchema = updateProfileSchema.extend({
+  whatsappConsentSource: z.string().trim().max(80).optional().nullable(),
 });
 
 // Health Update validation schema with mandatory text field

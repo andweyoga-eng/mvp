@@ -16,6 +16,24 @@ const instructorQrImageField = z
     "Upload a QR image or provide a valid https URL",
   );
 
+/** Optional URL: empty → null; https, data:image/, or /attached_assets/ when set */
+const optionalImageUrl = z
+  .string()
+  .trim()
+  .optional()
+  .nullable()
+  .transform((v) => (v === "" || v == null ? null : v))
+  .refine(
+    (v) =>
+      v === null ||
+      /^https:\/\/.+/i.test(v) ||
+      v.startsWith("data:image/") ||
+      v.startsWith("/attached_assets/"),
+    {
+      message: "Upload an image or provide a valid https:// URL",
+    },
+  );
+
 /** Optional URL: empty string → null; must be https when set */
 const optionalHttpsUrl = z
   .string()
@@ -74,25 +92,19 @@ const optionalDateTime = z
     return new Date(s);
   });
 
-const qrPhoneField = z
+const tenDigitPhoneField = z
   .string()
   .trim()
-  .min(8, "Contact phone must be at least 8 characters")
-  .max(20, "Contact phone is too long")
-  .refine((v) => /^[+]?[\d\s\-()]{8,20}$/.test(v), {
-    message: "Enter a valid phone number (digits, +, spaces, dashes)",
-  });
+  .regex(/^\d{10}$/, "Enter a valid 10-digit phone number");
+
+/** @deprecated Use tenDigitPhoneField — admin contact phones are India 10-digit only */
+const qrPhoneField = tenDigitPhoneField;
 
 const qrEmailField = z
   .string()
   .trim()
   .min(1, "Contact email is required")
   .email("Enter a valid email address");
-
-const tenDigitPhoneField = z
-  .string()
-  .trim()
-  .regex(/^\d{10}$/, "Enter a valid 10-digit phone number");
 
 const priceField = z
   .union([z.string(), z.number()])
@@ -119,7 +131,7 @@ export const adminCreateClassTypeSchema = z.object({
     .int("Duration must be a whole number of minutes")
     .min(1, "Duration must be at least 1 minute")
     .max(480, "Duration cannot exceed 8 hours"),
-  imageUrl: optionalHttpsUrl,
+  imageUrl: optionalImageUrl,
   intensity: z.enum(CLASS_INTENSITIES).default(DEFAULT_CLASS_INTENSITY),
 });
 

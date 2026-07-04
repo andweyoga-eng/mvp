@@ -18,6 +18,13 @@ export interface User {
   dateOfBirth?: string | null;
   profileCompletionStatus: 'incomplete' | 'complete';
   healthUpdateLastModified?: string | null;
+  whatsappConsent?: boolean;
+  whatsappConsentAt?: string | null;
+  addressStreet?: string | null;
+  addressLine2?: string | null;
+  addressCity?: string | null;
+  addressState?: string | null;
+  addressPincode?: string | null;
 }
 
 export interface AuthContextType {
@@ -26,7 +33,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (userData: RegisterData) => Promise<void>;
-  updateProfile: (userData: ProfileData, options?: { successTitle?: string }) => Promise<void>;
+  updateProfile: (userData: Partial<ProfileData>, options?: { successTitle?: string; silent?: boolean }) => Promise<void>;
   /** Re-fetch /api/auth/me (cookie or Bearer), e.g. after health save */
   refreshUser: () => Promise<void>;
 }
@@ -55,6 +62,13 @@ export interface ProfileData {
   dateOfBirth?: string;
   healthUpdateText?: string;
   healthDocumentUrls?: string[];
+  whatsappConsent?: boolean;
+  whatsappConsentSource?: string;
+  addressStreet?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressState?: string;
+  addressPincode?: string;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);

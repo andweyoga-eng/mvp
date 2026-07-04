@@ -3,8 +3,9 @@ import {
   clearPendingBooking,
   type BookingIntent,
 } from "@/lib/pending-booking";
-import { MY_SESSIONS_UPCOMING_URL } from "@/lib/account-routes";
+import { MY_SESSIONS_UPCOMING_URL, myAccountHref } from "@/lib/account-routes";
 import type { User } from "@/lib/auth";
+import { getFirstIncompleteAccountAnchor } from "@shared/profileCompleteness";
 
 export { MY_SESSIONS_UPCOMING_URL };
 export const CLASS_SCHEDULE_URL = "/?openBooking=true";
@@ -52,10 +53,29 @@ export const MEMBER_DASHBOARD_URL = "/dashboard";
 export const MY_ACCOUNT_PROFILE_URL = "/my-account#profile";
 
 export function resolveMemberLandingPath(
-  user?: Pick<User, "profileCompletionStatus"> | null,
+  user?: Pick<
+    User,
+    | "profileCompletionStatus"
+    | "emailVerified"
+    | "name"
+    | "primaryMobile"
+    | "primaryMobileCountryCode"
+    | "emergencyMobile"
+    | "emergencyMobileCountryCode"
+    | "healthUpdateText"
+  > | null,
 ): string {
   if (user?.profileCompletionStatus === "incomplete") {
-    return MY_ACCOUNT_PROFILE_URL;
+    const anchor = getFirstIncompleteAccountAnchor({
+      emailVerified: Boolean(user.emailVerified),
+      name: user.name,
+      primaryMobile: user.primaryMobile,
+      primaryMobileCountryCode: user.primaryMobileCountryCode,
+      emergencyMobile: user.emergencyMobile,
+      emergencyMobileCountryCode: user.emergencyMobileCountryCode,
+      healthUpdateText: user.healthUpdateText,
+    });
+    return anchor ? myAccountHref(anchor) : MY_ACCOUNT_PROFILE_URL;
   }
   return MEMBER_DASHBOARD_URL;
 }
@@ -81,7 +101,7 @@ function reserveHrefFromIntent(intent: BookingIntent): string | null {
 export async function applyPostLoginLandingIfNeeded(
   pathname: string,
   setLocation: (path: string) => void,
-  user?: Pick<User, "profileCompletionStatus"> | null,
+  user?: Parameters<typeof resolveMemberLandingPath>[0],
 ): Promise<void> {
   if (!POST_LOGIN_LANDING_PATHS.has(pathname)) return;
   if (hasMemberLandingBeenChecked()) return;

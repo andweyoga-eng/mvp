@@ -196,8 +196,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const updateProfile = async (
-    profileData: ProfileData,
-    options?: { successTitle?: string },
+    profileData: Partial<ProfileData>,
+    options?: { successTitle?: string; silent?: boolean },
   ) => {
     try {
       const response = await apiRequest('PUT', '/api/auth/profile', profileData, getAuthHeaders());
@@ -210,16 +210,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const data = await response.json();
       setUser(data.user);
       
-      toast({
-        title: options?.successTitle ?? "Profile updated",
-        description: "Your profile has been updated successfully.",
-      });
+      if (!options?.silent) {
+        toast({
+          title: options?.successTitle ?? "Profile updated",
+          description: "Your profile has been updated successfully.",
+        });
+      }
     } catch (error: any) {
-      toast({
-        title: "Update failed",
-        description: error.message || "Please try again",
-        variant: "destructive",
-      });
+      if (!options?.silent) {
+        toast({
+          title: "Update failed",
+          description: error.message || "Please try again",
+          variant: "destructive",
+        });
+      }
       throw error;
     }
   };

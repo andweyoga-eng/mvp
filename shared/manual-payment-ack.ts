@@ -9,8 +9,8 @@ export const MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF = "https://wa.me/919513022331"
 
 export const MANUAL_PAYMENT_WORKING_HOURS = {
   daysLabel: "Every day of the week",
-  timeRangeLabel: "6:00 AM – 9:00 PM IST",
-  shortLabel: "Every day, 6:00 AM – 9:00 PM IST",
+  timeRangeLabel: "6:00 AM to 9:00 PM IST",
+  shortLabel: "Every day, 6:00 AM to 9:00 PM IST",
 } as const;
 
 export const MANUAL_PAYMENT_SUBMITTED_COPY = {

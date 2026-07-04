@@ -79,6 +79,7 @@ import {
   registerUserSchema,
   loginUserSchema,
   updateProfileSchema,
+  updateProfilePartialSchema,
   healthUpdateSchema
 } from "@shared/schema";
 import {
@@ -549,7 +550,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         healthUpdateHistory: parseHealthHistory(user.healthUpdateHistory),
         dateOfBirth: user.dateOfBirth,
         profileCompletionStatus: user.profileCompletionStatus,
-        healthUpdateLastModified: user.healthUpdateLastModified
+        healthUpdateLastModified: user.healthUpdateLastModified,
+        whatsappConsent: user.whatsappConsent,
+        whatsappConsentAt: user.whatsappConsentAt,
+        addressStreet: user.addressStreet,
+        addressLine2: user.addressLine2,
+        addressCity: user.addressCity,
+        addressState: user.addressState,
+        addressPincode: user.addressPincode,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to get user profile" });
@@ -566,7 +574,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return respondAccountDeactivated(res);
       }
 
-      const validatedData = updateProfileSchema.parse(req.body);
+      const validatedData = updateProfilePartialSchema.parse(req.body);
 
       if (validatedData.dateOfBirth) {
         const ageCheck = validateOnboardingDateOfBirth(validatedData.dateOfBirth);
@@ -583,10 +591,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      let updatedUser = await storage.updateUser(req.user!.id, validatedData);
+      const patch: Record<string, unknown> = { ...validatedData };
+      const grantingWhatsapp =
+        validatedData.whatsappConsent === true && !existing.whatsappConsent;
+      if (grantingWhatsapp) {
+        patch.whatsappConsentAt = new Date();
+        patch.whatsappConsentSource =
+          validatedData.whatsappConsentSource ?? "profile_primary_mobile";
+      }
+
+      let updatedUser = await storage.updateUser(req.user!.id, patch);
       if (!updatedUser) {
         return res.status(404).json({ message: "User not found" });
       }
+
+      if (grantingWhatsapp) {
+        const meta = requestMeta(req);
+        await storage.insertConsentLog({
+          userId: req.user!.id,
+          consentType: "whatsapp_contact",
+          action: "opt_in",
+          consentVersion: consentVersion(),
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
+      }
+
       const withCompletion =
         (await storage.recomputeProfileCompletionStatus(req.user!.id)) ?? updatedUser;
       updatedUser = withCompletion;
@@ -609,6 +639,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           dateOfBirth: updatedUser.dateOfBirth,
           profileCompletionStatus: updatedUser.profileCompletionStatus,
           healthUpdateLastModified: updatedUser.healthUpdateLastModified,
+          whatsappConsent: updatedUser.whatsappConsent,
+          whatsappConsentAt: updatedUser.whatsappConsentAt,
+          addressStreet: updatedUser.addressStreet,
+          addressLine2: updatedUser.addressLine2,
+          addressCity: updatedUser.addressCity,
+          addressState: updatedUser.addressState,
+          addressPincode: updatedUser.addressPincode,
         }
       });
     } catch (error) {

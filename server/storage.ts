@@ -491,6 +491,7 @@ export class DatabaseStorage implements IStorage {
       const existingClassTypes = await db.select().from(classTypes).limit(1);
       if (existingClassTypes.length > 0) {
         console.log('[DB] Database already initialized');
+        await this.syncClassTypeImages();
         await this.syncAdminFromEnv();
         return;
       }
@@ -505,7 +506,7 @@ export class DatabaseStorage implements IStorage {
           price: "500.00",
           duration: 60,
           intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/hatha%20yoga_1756809174781.jpg"
+          imageUrl: "/attached_assets/hatha_yoga_1756809174781.png"
         },
         {
           name: "Hyyocross",
@@ -521,7 +522,7 @@ export class DatabaseStorage implements IStorage {
           price: "400.00",
           duration: 45,
           intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/meditation_1756809174781.jpg"
+          imageUrl: "/attached_assets/meditation_1756809174781.png"
         },
         {
           name: "Sound Therapy",
@@ -529,7 +530,7 @@ export class DatabaseStorage implements IStorage {
           price: "800.00",
           duration: 60,
           intensity: DEFAULT_CLASS_INTENSITY,
-          imageUrl: "/attached_assets/soundtherapy_1756809174781.jpg"
+          imageUrl: "/attached_assets/soundtherapy_1756809174781.png"
         }
       ];
 
@@ -2757,6 +2758,18 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('[DB] Error creating contact message:', error);
       throw error;
+    }
+  }
+
+  /** Keep And We Flow catalogue images in sync when assets are added to the repo. */
+  private async syncClassTypeImages(): Promise<void> {
+    const imageByName: Record<string, string> = {
+      "Hatha Yoga": "/attached_assets/hatha_yoga_1756809174781.png",
+      Meditation: "/attached_assets/meditation_1756809174781.png",
+      "Sound Therapy": "/attached_assets/soundtherapy_1756809174781.png",
+    };
+    for (const [name, imageUrl] of Object.entries(imageByName)) {
+      await db.update(classTypes).set({ imageUrl }).where(eq(classTypes.name, name));
     }
   }
 
