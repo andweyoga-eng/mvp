@@ -10,6 +10,7 @@ import {
 } from "./objectAcl";
 import {
   assertS3Configured,
+  deleteS3HealthDocument,
   presignHealthDocumentPut,
   s3UploadUrlToObjectPath,
   streamS3HealthDocument,
@@ -283,6 +284,24 @@ export class ObjectStorageService {
       objectFile,
       requestedPermission: requestedPermission ?? ObjectPermission.READ,
     });
+  }
+
+  async deleteObjectEntity(reqPath: string): Promise<boolean> {
+    if (backend() === "s3") {
+      await deleteS3HealthDocument(reqPath);
+      return true;
+    }
+
+    try {
+      const objectFile = await this.getObjectEntityFile(reqPath);
+      await objectFile.delete({ ignoreNotFound: true });
+      return true;
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) {
+        return true;
+      }
+      throw error;
+    }
   }
 
   /** Download handler for GET /objects/... — supports S3 and Replit GCS. */

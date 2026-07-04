@@ -23,6 +23,21 @@ export async function saveLocalHealthDocument(
   return `/objects/health-documents/${userId}/${id}`;
 }
 
+export async function deleteLocalHealthDocument(objectPath: string): Promise<boolean> {
+  const filePath = filePathForObjectPath(objectPath);
+  if (!filePath) return false;
+
+  try {
+    await fs.unlink(filePath);
+    return true;
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return true;
+    }
+    throw error;
+  }
+}
+
 export async function streamLocalHealthDocument(
   objectPath: string,
   userId: string | undefined,

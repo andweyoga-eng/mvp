@@ -53,10 +53,10 @@ import {
   userDocuments,
   DEFAULT_CLASS_INTENSITY,
 } from "@shared/schema";
-import { consentVersion, type ConsentLogInput } from "./consent";
+import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc, inArray, gt, count } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count } from "drizzle-orm";
 import { BOOKING_PAYMENT_STATUS, canResumePaymentCheckout, bookingCountsTowardCapacity } from "@shared/booking-payment-hold";
 import { paginationOffset } from "@shared/admin-pagination";
 import {
@@ -79,6 +79,7 @@ import {
   normalizeAdminEmail,
   normalizeAdminPassword,
 } from "./admin-bootstrap";
+import { deleteHealthDocumentObject } from "./health-document-upload";
 
 /** Resolves after first DB init + admin bootstrap sync (await before handling traffic). */
 let resolveStorageReady: () => void = () => {};
@@ -220,6 +221,7 @@ export interface IStorage {
   findUserByResetToken(token: string): Promise<User | undefined>;
   updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
   clearUserResetToken(id: string): Promise<User | undefined>;
+  getUserDocuments(userId: string): Promise<(typeof userDocuments.$inferSelect)[]>;
   
   // Class Types
   getAllClassTypes(): Promise<ClassType[]>;
@@ -473,6 +475,7 @@ export interface IStorage {
   getPendingErasureForUser(userId: string): Promise<(typeof erasureRequests.$inferSelect) | undefined>;
   userHasErasureHistory(userId: string): Promise<boolean>;
   reopenAccountAfterSelfErasure(userId: string): Promise<User | undefined>;
+  processDueAccountErasures(now?: Date): Promise<number>;
   getAdminConsentLogs(limit?: number): Promise<(typeof consentAuditLogs.$inferSelect)[]>;
 }
 
@@ -620,6 +623,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  private async collectHealthDocumentReferences(userId: string): Promise<string[]> {
+    const [user, documents] = await Promise.all([
+      this.getUser(userId),
+      this.getUserDocuments(userId),
+    ]);
+
+    return [...new Set([
+      ...(user?.healthDocumentUrls ?? []),
+      ...documents.map((document) => document.storageKey),
+    ])].filter((value) => Boolean(value));
+  }
+
+  private async deleteHealthDocumentReferences(references: string[]): Promise<void> {
+    for (const reference of references) {
+      await deleteHealthDocumentObject(reference);
+    }
+  }
+
   // Users
   async getUser(id: string): Promise<User | undefined> {
     try {
@@ -654,6 +675,14 @@ export class DatabaseStorage implements IStorage {
 
   async findUserByEmail(email: string): Promise<User | undefined> {
     return this.getUserByEmail(email);
+  }
+
+  async getUserDocuments(userId: string) {
+    return db
+      .select()
+      .from(userDocuments)
+      .where(eq(userDocuments.userId, userId))
+      .orderBy(desc(userDocuments.createdAt));
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -1602,10 +1631,18 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async deleteUserPermanently(id: string): Promise<{ ok: boolean; message?: string }> {
+  private async deleteUserRecordsPermanently(
+    id: string,
+    options: { preserveCompletedErasureIds?: string[]; completedAt?: Date } = {},
+  ): Promise<{ ok: boolean; message?: string }> {
     try {
       const user = await this.getUser(id);
       if (!user) return { ok: false, message: "User not found" };
+
+      const documentReferences = await this.collectHealthDocumentReferences(id);
+      await this.deleteHealthDocumentReferences(documentReferences);
+
+      const completedAt = options.completedAt ?? new Date();
 
       await db.transaction(async (tx) => {
         const userBookings = await tx
@@ -1622,16 +1659,15 @@ export class DatabaseStorage implements IStorage {
         if (bookingIds.length > 0) {
           await tx.delete(payments).where(inArray(payments.bookingId, bookingIds));
           await tx
-            .delete(consentAuditLogs)
-            .where(
-              or(
-                eq(consentAuditLogs.userId, id),
-                inArray(consentAuditLogs.bookingId, bookingIds),
-              ),
-            );
-        } else {
-          await tx.delete(consentAuditLogs).where(eq(consentAuditLogs.userId, id));
+            .update(consentAuditLogs)
+            .set({ bookingId: null })
+            .where(inArray(consentAuditLogs.bookingId, bookingIds));
         }
+
+        await tx
+          .update(consentAuditLogs)
+          .set({ userId: null })
+          .where(eq(consentAuditLogs.userId, id));
 
         for (const booking of userBookings) {
           if (
@@ -1654,7 +1690,29 @@ export class DatabaseStorage implements IStorage {
         await tx.delete(sessionJoinEvents).where(eq(sessionJoinEvents.userId, id));
         await tx.delete(userSessionMappings).where(eq(userSessionMappings.userId, id));
         await tx.delete(classTypeNotifyRequests).where(eq(classTypeNotifyRequests.userId, id));
-        await tx.delete(erasureRequests).where(eq(erasureRequests.userId, id));
+
+        if (options.preserveCompletedErasureIds?.length) {
+          await tx
+            .update(erasureRequests)
+            .set({ status: "completed", completedAt, userId: null })
+            .where(
+              and(
+                eq(erasureRequests.userId, id),
+                inArray(erasureRequests.id, options.preserveCompletedErasureIds),
+              ),
+            );
+          await tx
+            .delete(erasureRequests)
+            .where(
+              and(
+                eq(erasureRequests.userId, id),
+                notInArray(erasureRequests.id, options.preserveCompletedErasureIds),
+              ),
+            );
+        } else {
+          await tx.delete(erasureRequests).where(eq(erasureRequests.userId, id));
+        }
+
         await tx.delete(userDocuments).where(eq(userDocuments.userId, id));
         await tx.delete(bookings).where(eq(bookings.userId, id));
         await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
@@ -1666,6 +1724,10 @@ export class DatabaseStorage implements IStorage {
       console.error("[DB] Error deleting user permanently:", error);
       return { ok: false, message: "Failed to delete user" };
     }
+  }
+
+  async deleteUserPermanently(id: string): Promise<{ ok: boolean; message?: string }> {
+    return this.deleteUserRecordsPermanently(id);
   }
 
   async deleteUsersPermanently(
@@ -3102,28 +3164,53 @@ export class DatabaseStorage implements IStorage {
     ipAddress?: string | null;
     userAgent?: string | null;
   }): Promise<User | undefined> {
-    const [updated] = await db
-      .update(users)
-      .set({
-        healthUpdateText: null,
-        healthDocumentUrls: null,
-        healthUpdateLastModified: null,
-        profileCompletionStatus: "incomplete",
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, params.userId))
-      .returning();
-    await this.insertConsentLog({
-      userId: params.userId,
-      consentType: "health_data",
-      action: "opt_out",
-      consentVersion: params.consentVersion,
-      ipAddress: params.ipAddress,
-      userAgent: params.userAgent,
-    });
-    if (updated) {
-      await this.recomputeProfileCompletionStatus(params.userId);
+    const [existingUser, documents, hasActiveConsent] = await Promise.all([
+      this.getUser(params.userId),
+      this.getUserDocuments(params.userId),
+      this.userHasActiveConsent(params.userId, "health_data"),
+    ]);
+    if (!existingUser) {
+      return undefined;
     }
+
+    const documentReferences = [...new Set([
+      ...(existingUser.healthDocumentUrls ?? []),
+      ...documents.map((document) => document.storageKey),
+    ])];
+    await this.deleteHealthDocumentReferences(documentReferences);
+
+    const now = new Date();
+    const [updated] = await db.transaction(async (tx) => {
+      await tx.delete(userDocuments).where(eq(userDocuments.userId, params.userId));
+
+      const [row] = await tx
+        .update(users)
+        .set({
+          healthUpdateText: null,
+          healthDocumentUrls: null,
+          healthUpdateHistory: [],
+          healthUpdateLastModified: null,
+          profileCompletionStatus: "incomplete",
+          updatedAt: now,
+        })
+        .where(eq(users.id, params.userId))
+        .returning();
+
+      if (hasActiveConsent) {
+        await tx.insert(consentAuditLogs).values({
+          userId: params.userId,
+          bookingId: null,
+          consentType: "health_data",
+          action: "opt_out",
+          consentVersion: params.consentVersion,
+          ipAddress: params.ipAddress ?? null,
+          userAgent: params.userAgent ?? null,
+        });
+      }
+
+      return [row];
+    });
+
     return updated;
   }
 
@@ -3132,8 +3219,8 @@ export class DatabaseStorage implements IStorage {
     ipAddress?: string | null;
     userAgent?: string | null;
   }): Promise<{ erasureRequestId: string; scheduledErasureAt: Date }> {
-    const scheduledErasureAt = new Date();
-    scheduledErasureAt.setDate(scheduledErasureAt.getDate() + 30);
+    const now = new Date();
+    const scheduledErasureAt = scheduledErasureDate(now);
 
     const existing = await this.getPendingErasureForUser(params.userId);
     if (existing) {
@@ -3163,7 +3250,6 @@ export class DatabaseStorage implements IStorage {
         ),
       );
 
-    const now = new Date();
     for (const row of upcoming) {
       await db
         .update(userSessionMappings)
@@ -3174,6 +3260,10 @@ export class DatabaseStorage implements IStorage {
             eq(userSessionMappings.classId, row.classId),
           ),
         );
+    }
+
+    for (const classId of new Set(upcoming.map((row) => row.classId))) {
+      await this.syncClassBookingCount(classId);
     }
 
     await db
@@ -3239,6 +3329,36 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId));
 
     return this.getUser(userId);
+  }
+
+  async processDueAccountErasures(now: Date = new Date()): Promise<number> {
+    const dueRequests = await db
+      .select()
+      .from(erasureRequests)
+      .where(
+        and(
+          eq(erasureRequests.status, "pending"),
+          lte(erasureRequests.scheduledErasureAt, now),
+        ),
+      )
+      .orderBy(erasureRequests.scheduledErasureAt);
+
+    let processed = 0;
+    for (const request of dueRequests) {
+      if (!request.userId) {
+        continue;
+      }
+
+      const result = await this.deleteUserRecordsPermanently(request.userId, {
+        preserveCompletedErasureIds: [request.id],
+        completedAt: now,
+      });
+      if (result.ok) {
+        processed += 1;
+      }
+    }
+
+    return processed;
   }
 
   async getPendingErasureForUser(userId: string) {

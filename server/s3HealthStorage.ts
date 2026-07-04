@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -153,6 +154,15 @@ export async function verifyS3HealthObjectExists(key: string): Promise<void> {
   await client.send(
     new HeadObjectCommand({ Bucket: getS3Bucket(), Key: key })
   );
+}
+
+export async function deleteS3HealthDocument(objectPathOrKey: string): Promise<boolean> {
+  const key = objectPathOrKey.replace(/^\/objects\//, "");
+  const client = getS3Client();
+  await client.send(
+    new DeleteObjectCommand({ Bucket: getS3Bucket(), Key: key })
+  );
+  return true;
 }
 
 export async function streamS3HealthDocument(

@@ -190,7 +190,7 @@ export const consentAuditLogs = pgTable("consent_audit_logs", {
 /** Account erasure requests — processed within 30 days (Ch. 5). */
 export const erasureRequests = pgTable("erasure_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").references(() => users.id),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   requestedAt: timestamp("requested_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   scheduledErasureAt: timestamp("scheduled_erasure_at").notNull(),

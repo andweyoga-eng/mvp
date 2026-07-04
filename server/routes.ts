@@ -176,12 +176,13 @@ function rateLimit(maxRequests: number, windowMs: number) {
 }
 
 // Clean up stale rate limit entries every 10 minutes
-setInterval(() => {
+const rateLimitCleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [key, record] of rateLimitStore.entries()) {
     if (now > record.resetAt) rateLimitStore.delete(key);
   }
 }, 10 * 60 * 1000);
+rateLimitCleanupInterval.unref?.();
 
 const authRateLimit = rateLimit(10, 15 * 60 * 1000);   // 10 attempts per 15 minutes
 const forgotPwdRateLimit = rateLimit(3, 60 * 60 * 1000); // 3 attempts per hour
@@ -561,6 +562,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existing) {
         return res.status(404).json({ message: "User not found" });
       }
+      if (!isUserActive(existing)) {
+        return respondAccountDeactivated(res);
+      }
 
       const validatedData = updateProfileSchema.parse(req.body);
 
@@ -626,6 +630,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existing = await storage.getUser(userId);
       if (!existing) {
         return res.status(404).json({ error: 'User not found' });
+      }
+      if (!isUserActive(existing)) {
+        return respondAccountDeactivated(res);
       }
 
       if (existing.dateOfBirth) {
@@ -3316,11 +3323,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   // SPEC-01: expire payment holds every 2 minutes
-  setInterval(() => {
+  const paymentHoldInterval = setInterval(() => {
     void expirePaymentHolds().catch((err) =>
       console.error("[cron] expirePaymentHolds failed:", err),
     );
   }, 2 * 60 * 1000);
+  paymentHoldInterval.unref?.();
+
+  const erasureInterval = setInterval(() => {
+    void storage.processDueAccountErasures().catch((err) =>
+      console.error("[cron] processDueAccountErasures failed:", err),
+    );
+  }, 5 * 60 * 1000);
+  erasureInterval.unref?.();
 
   return httpServer;
 }

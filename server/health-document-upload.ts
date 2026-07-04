@@ -9,8 +9,17 @@ import {
   isHealthDocumentWithinSizeLimit,
 } from '@shared/health-document-validation';
 import { getHealthObjectStorageBackend } from './objectStorage';
-import { putHealthDocumentBuffer, streamS3HealthDocument, userOwnsHealthDocumentPath } from './s3HealthStorage';
-import { saveLocalHealthDocument, streamLocalHealthDocument } from './localHealthStorage';
+import {
+  deleteS3HealthDocument,
+  putHealthDocumentBuffer,
+  streamS3HealthDocument,
+  userOwnsHealthDocumentPath,
+} from './s3HealthStorage';
+import {
+  deleteLocalHealthDocument,
+  saveLocalHealthDocument,
+  streamLocalHealthDocument,
+} from './localHealthStorage';
 
 export type HealthDocumentUploadBackend = 's3' | 'replit' | 'local';
 
@@ -132,6 +141,22 @@ export async function streamHealthDocumentForUser(
       res.status(500).json({ error: 'Internal server error' });
     }
   }
+}
+
+export async function deleteHealthDocumentObject(pathOrKey: string): Promise<boolean> {
+  const backend = resolveHealthDocumentUploadBackend();
+
+  if (backend === 'local') {
+    return deleteLocalHealthDocument(pathOrKey);
+  }
+
+  if (backend === 's3') {
+    return deleteS3HealthDocument(pathOrKey);
+  }
+
+  const { ObjectStorageService } = await import('./objectStorage');
+  const objectStorageService = new ObjectStorageService();
+  return objectStorageService.deleteObjectEntity(pathOrKey);
 }
 
 export class HealthDocumentUploadError extends Error {

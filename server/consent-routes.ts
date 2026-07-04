@@ -12,6 +12,7 @@ import {
 import {
   buildConsentCategoryStatuses,
   consentVersion,
+  ERASURE_GRACE_DAYS,
   requestMeta,
   validateOnboardingDateOfBirth,
   LEGAL_CONFIG,
@@ -249,7 +250,7 @@ export function registerConsentRoutes(app: Express): void {
         message: "Erasure requested. Your bookings have been cancelled.",
         erasureRequestId: result.erasureRequestId,
         scheduledErasureAt: result.scheduledErasureAt.toISOString(),
-        timelineDays: 30,
+        timelineDays: ERASURE_GRACE_DAYS,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
