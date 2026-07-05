@@ -140,7 +140,7 @@ import {
 } from "./booking-access";
 import { MANUAL_PAYMENT_SUBMITTED_COPY } from "@shared/manual-payment-ack";
 
-// Health document uploads: enabled when S3/Replit is configured, or local disk in development.
+// Health document uploads: enabled when S3 is configured, or local disk in development.
 // Set ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES=false to disable explicitly.
 import {
   HealthDocumentUploadError,

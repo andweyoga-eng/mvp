@@ -263,7 +263,7 @@ export const userDocuments = pgTable("user_documents", {
   fileName: text("file_name").notNull(),
   fileType: varchar("file_type", { length: 255 }).notNull(), // Fixed: MIME types can be long (e.g., application/vnd.openxmlformats-officedocument.wordprocessingml.document)
   fileSize: integer("file_size").notNull(),
-  storageProvider: varchar("storage_provider", { length: 50 }).notNull().default("replit"), // 'replit', 's3', 'gcs', 'local'
+  storageProvider: varchar("storage_provider", { length: 50 }).notNull().default("s3"), // 's3', 'gcs', 'local'
   storageKey: text("storage_key").notNull(), // provider-specific file identifier
   checksum: varchar("checksum", { length: 64 }).notNull(), // file integrity verification
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),

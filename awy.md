@@ -19,7 +19,7 @@ Internal tracking document for engineering and product. Update this file when yo
 - **Booking is aligned with that rule.** `POST /api/bookings` returns 409 when the full account profile is incomplete, not only when health text is short.
 - **Auth after login loads the full user** from `/api/auth/me` (cookie and optional Bearer) so the client always has mobiles, health fields, and completion status.
 - **Health document uploads are off in product** until object storage and routes are ready; UI and server routes are gated behind a single flag. Users are directed to email for detailed reports where applicable.
-- **SMS “verify phone” on Profile is removed from the UI** for now; numbers are still collected and format-validated. Rationale lives in **dev comments** (`client/src/pages/my-account.tsx`) and **`replit.md`** — not in user-facing copy.
+- **SMS “verify phone” on Profile is removed from the UI** for now; numbers are still collected and format-validated. Rationale lives in **dev comments** (`client/src/pages/my-account.tsx`) and **`awy.md`** — not in user-facing copy.
 - **Secrets stay out of git.** `.env` and common local variants are listed in `.gitignore`.
 - **Railway Postgres:** App prefers **`DATABASE_PUBLIC_URL`** over **`DATABASE_URL`** when both exist, so the web service avoids **`ENOTFOUND postgres.railway.internal`** when private DNS does not resolve from the container.
 - **Admin DB patches:** Use **`npm run db:patch`** for incremental SQL on existing DBs (avoids `drizzle-kit push` `42P16` on primary keys). Patches: `password_hash`, session link columns.
@@ -126,7 +126,7 @@ _Add a row when a feature or fix is deployed and working — not for every inter
 ### Profile tab — SMS verification
 
 - Per-number **Verify** buttons (mock SMS) **removed** from the Profile form.
-- **Internal only:** full rationale in file header comments in `client/src/pages/my-account.tsx` and in **`replit.md`** under internal development notes — **not** shown as an alert to end users.
+- **Internal only:** full rationale in file header comments in `client/src/pages/my-account.tsx` and in **`awy.md`** under internal development notes — **not** shown as an alert to end users.
 
 ### Repository hygiene
 
@@ -213,7 +213,7 @@ Replace `<host>` and `<classId>` with real values.
 | Profile / health UI | `client/src/pages/my-account.tsx`, `client/src/components/health-update-section.tsx` |
 | Booking / nav | `client/src/components/navigation.tsx`, `client/src/components/classes-section.tsx`, `client/src/components/booking-modal.tsx` |
 | Helpers | `client/src/lib/account-profile-complete.ts`, `client/src/lib/profile-constants.ts` |
-| Internal docs | `replit.md`, **`awy.md` (this file)** |
+| Internal docs | **`awy.md` (this file)**, `SOP-TESTING-AND-PRODUCTION.md` |
 | Ignore secrets | `.gitignore` |
 | DB / Drizzle | `server/db.ts`, `server/index.ts`, `drizzle.config.ts`, `.env.example` |
 | Admin auth / bootstrap | `server/storage.ts`, `server/adminAuth.ts`, `client/src/pages/admin-login.tsx` |

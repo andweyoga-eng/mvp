@@ -22,7 +22,7 @@ function getS3Client(): S3Client {
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
-      "S3 mode: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or use OBJECT_STORAGE=replit)."
+      "S3 mode: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
     );
   }
   const region =

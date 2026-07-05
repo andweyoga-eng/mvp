@@ -21,7 +21,7 @@ import {
   streamLocalHealthDocument,
 } from './localHealthStorage';
 
-export type HealthDocumentUploadBackend = 's3' | 'replit' | 'local';
+export type HealthDocumentUploadBackend = 's3' | 'local';
 
 export function resolveHealthDocumentUploadBackend(): HealthDocumentUploadBackend | null {
   if (process.env.ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES === 'false') {
@@ -127,20 +127,7 @@ export async function streamHealthDocumentForUser(
     return;
   }
 
-  const { ObjectStorageService, ObjectNotFoundError } = await import('./objectStorage');
-  const objectStorageService = new ObjectStorageService();
-  try {
-    await objectStorageService.serveObjectEntity(objectPath, userId, res);
-  } catch (error) {
-    console.error('Error accessing document:', error);
-    if (error instanceof ObjectNotFoundError) {
-      res.status(404).json({ error: 'Document not found' });
-      return;
-    }
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
+  res.status(503).json({ error: 'Health document storage is not configured.' });
 }
 
 export async function deleteHealthDocumentObject(pathOrKey: string): Promise<boolean> {
@@ -154,9 +141,7 @@ export async function deleteHealthDocumentObject(pathOrKey: string): Promise<boo
     return deleteS3HealthDocument(pathOrKey);
   }
 
-  const { ObjectStorageService } = await import('./objectStorage');
-  const objectStorageService = new ObjectStorageService();
-  return objectStorageService.deleteObjectEntity(pathOrKey);
+  return false;
 }
 
 export class HealthDocumentUploadError extends Error {

@@ -7,7 +7,7 @@
 | **Document version** | 1.0 |
 | **Last updated** | 2026-05-14 |
 | **Repository** | `github.com/andweyoga-eng/mvp` (branch: `awy-main` typical) |
-| **Related docs** | `awy.md` (change log), `replit.md` (internal notes), `.env.example`, `PRODUCT_BIBLE.md` |
+| **Related docs** | `awy.md` (change log), `.env.example`, `PRODUCT_BIBLE.md` |
 
 > **Privacy:** This document uses placeholders (`<…>`, `***`) for secrets, connection strings, and personal emails. Never paste real passwords, API keys, or full `DATABASE_URL` values into tickets or commits.
 
@@ -105,7 +105,7 @@ Copy `.env.example` → `.env` locally. On Railway, set the same keys in the **w
 Optional (health document uploads — **currently disabled in product**):
 
 - `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES` is a **code flag** in `server/routes.ts` (default `false`), not an env var.
-- S3/Replit object storage vars — see `.env.example` when uploads are re-enabled.
+- S3 object storage vars — see `.env.example` when uploads are re-enabled.
 
 ### 4.3 `ALLOWED_ORIGIN` rules (critical)
 
@@ -210,7 +210,7 @@ Work through in order. Check each box before pushing to GitHub.
 
 - [ ] Name, primary mobile, emergency mobile required; secondary optional
 - [ ] Invalid mobile shows validation errors (10 digits, spam patterns)
-- [ ] **SMS “Verify” buttons are not shown** (intentionally disabled — see `my-account.tsx` dev comments / `replit.md`)
+- [ ] **SMS “Verify” buttons are not shown** (intentionally disabled — see `my-account.tsx` dev comments / `awy.md`)
 - [ ] **Profile status** shows **Incomplete** until all mandatory fields + health + verified email
 - [ ] Button label: **Complete Profile** vs **Update Profile** matches completion state
 
