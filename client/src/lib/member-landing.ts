@@ -10,6 +10,11 @@ import { getFirstIncompleteAccountAnchor } from "@shared/profileCompleteness";
 export { MY_SESSIONS_UPCOMING_URL };
 export const CLASS_SCHEDULE_URL = "/?openBooking=true";
 
+/** After sign-in, members land on the Dashboard (Sessions) home. */
+export const MEMBER_DASHBOARD_URL = "/dashboard";
+
+export const MY_ACCOUNT_PROFILE_URL = "/my-account#profile";
+
 const LANDING_CHECKED_KEY = "awy_member_landing_checked_v1";
 
 export function clearMemberLandingCheck(): void {
@@ -26,6 +31,12 @@ export function markMemberLandingChecked(): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Full navigation so dashboard sees fresh profile completion from the server. */
+export function redirectToMemberDashboardAfterProfileComplete(): void {
+  markMemberLandingChecked();
+  window.location.assign(MEMBER_DASHBOARD_URL);
 }
 
 export function hasMemberLandingBeenChecked(): boolean {
@@ -47,11 +58,7 @@ export function parseMyAccountTabFromSearch(search: string): {
   };
 }
 
-/** After sign-in, members land on the Dashboard (Sessions) home. */
-export const MEMBER_DASHBOARD_URL = "/dashboard";
-
-export const MY_ACCOUNT_PROFILE_URL = "/my-account#profile";
-
+/** Resolve post-login landing: Dashboard when complete, otherwise My Account onboarding. */
 export function resolveMemberLandingPath(
   user?: Pick<
     User,

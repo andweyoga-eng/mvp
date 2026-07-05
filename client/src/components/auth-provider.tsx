@@ -55,8 +55,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (loginSuccess === 'true') {
       const isNewOAuthUser = urlParams.get('newUser') === 'true';
       window.history.replaceState({}, document.title, window.location.pathname);
-      void fetchUser().then(async (ok) => {
-        if (ok) {
+      void fetchUser().then(async (loadedUser) => {
+        if (loadedUser) {
           let deferToast = isNewOAuthUser;
           if (!deferToast) {
             try {
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [toast]);
 
   /** Loads user from /api/auth/me using the httpOnly auth cookie. */
-  const fetchUser = async (): Promise<boolean> => {
+  const fetchUser = async (): Promise<User | null> => {
     try {
       const response = await fetch("/api/auth/me", {
         credentials: "include",
@@ -110,13 +110,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (response.status === 401) {
           setAuthToken(null);
           setUser(null);
-          return false;
+          return null;
         }
         if (response.status === 403 && body.code === "account_deactivated") {
           setAuthToken(null);
           setUser(null);
           window.dispatchEvent(new Event("awy:account-deactivated"));
-          return false;
+          return null;
         }
         if (response.status === 403 && body.code === "account_closed") {
           setAuthToken(null);
@@ -125,17 +125,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
             title: "Account closed",
             description: ACCOUNT_CLOSED_MESSAGE,
           });
-          return false;
+          return null;
         }
         throw new Error(body.message || "Failed to load profile");
       }
       setUser(body);
-      return true;
+      return body as User;
     } catch (error) {
       console.error("Failed to fetch user:", error);
       setAuthToken(null);
       setUser(null);
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -151,8 +151,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       
       clearMemberLandingCheck();
-      const loaded = await fetchUser();
-      if (!loaded) {
+      const loadedUser = await fetchUser();
+      if (!loadedUser) {
         throw new Error("Could not load your profile after login");
       }
 
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const updateProfile = async (
     profileData: Partial<ProfileData>,
     options?: { successTitle?: string; silent?: boolean },
-  ) => {
+  ): Promise<User | null> => {
     try {
       const response = await apiRequest('PUT', '/api/auth/profile', profileData, getAuthHeaders());
       
@@ -216,6 +216,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           description: "Your profile has been updated successfully.",
         });
       }
+      return data.user as User;
     } catch (error: any) {
       if (!options?.silent) {
         toast({
@@ -240,9 +241,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
   };
 
-  const refreshUser = async () => {
-    await fetchUser();
-  };
+  const refreshUser = async () => fetchUser();
 
   const value = {
     user,

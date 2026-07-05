@@ -62,7 +62,15 @@ import {
   type AccountProfileCheckInput,
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
+import { MEMBER_DASHBOARD_URL, redirectToMemberDashboardAfterProfileComplete } from "@/lib/member-landing";
 import { parseHealthHistory } from "@shared/health-disclosure";
+
+function profileJustCompletedOnServer(
+  wasIncomplete: boolean,
+  status: string | null | undefined,
+): boolean {
+  return wasIncomplete && status === "complete";
+}
 
 /**
  * MY ACCOUNT — the single source of truth for the member account experience.
@@ -400,6 +408,7 @@ export default function MyAccount() {
         variant: "destructive",
       });
     setIsLoading(true);
+    const wasIncomplete = user?.profileCompletionStatus !== "complete";
     try {
       const contactPayload = {
         name: profileData.name,
@@ -419,7 +428,31 @@ export default function MyAccount() {
         addressPincode: profileData.addressPincode.trim() || undefined,
         ...(dobLocked ? {} : { dateOfBirth: profileData.dateOfBirth }),
       };
-      await updateProfile(contactPayload, { successTitle: "Contact info saved" });
+      const checkAfterSave: AccountProfileCheckInput = {
+        emailVerified: Boolean(user?.emailVerified),
+        name: contactPayload.name,
+        primaryMobile: contactPayload.primaryMobile,
+        primaryMobileCountryCode: contactPayload.primaryMobileCountryCode,
+        secondaryMobile: contactPayload.secondaryMobile,
+        secondaryMobileCountryCode: contactPayload.secondaryMobileCountryCode,
+        emergencyMobile: contactPayload.emergencyMobile,
+        emergencyMobileCountryCode: contactPayload.emergencyMobileCountryCode,
+        healthUpdateText: profileData.healthUpdateText,
+      };
+      const completesProfile =
+        wasIncomplete && isAccountProfileComplete(checkAfterSave);
+      const updatedUser = await updateProfile(contactPayload, {
+        successTitle: completesProfile ? undefined : "Contact info saved",
+        silent: completesProfile,
+      });
+      if (profileJustCompletedOnServer(wasIncomplete, updatedUser?.profileCompletionStatus)) {
+        toast({
+          title: "You're all set",
+          description: "Your profile is complete. Welcome to your dashboard.",
+        });
+        redirectToMemberDashboardAfterProfileComplete();
+        return;
+      }
       setActiveSection("health");
       window.location.hash = "health";
       requestAnimationFrame(() => {
@@ -443,6 +476,7 @@ export default function MyAccount() {
       return;
     }
     setIsLoading(true);
+    const wasIncomplete = user.profileCompletionStatus !== "complete";
     try {
       const body: Record<string, unknown> = {
         healthUpdateText: payload.text,
@@ -458,11 +492,28 @@ export default function MyAccount() {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
       });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+        profileCompletionStatus?: string;
+      };
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || err.message || "Failed to save");
+        throw new Error(data.error || data.message || "Failed to save");
+      }
+      if (profileJustCompletedOnServer(wasIncomplete, data.profileCompletionStatus)) {
+        toast({
+          title: "You're all set",
+          description: "Your profile is complete. Welcome to your dashboard.",
+        });
+        redirectToMemberDashboardAfterProfileComplete();
+        return;
       }
       await refreshUser();
+      setProfileData((prev) => ({
+        ...prev,
+        healthUpdateText: payload.text,
+        healthDocumentUrls: payload.documentUrls,
+      }));
       setHealthConsentGiven(true);
       toast({ title: "Health note saved" });
     } catch (err) {
