@@ -24,13 +24,18 @@ import { getMeetJoinMessage } from "@shared/session-meet-access";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { formatSessionPrice } from "@/lib/booking-payment";
-import { filterBookableSessions } from "@/lib/booking-flow";
+import {
+  collapseBookableForCarousel,
+  formatHubCarouselSchedule,
+} from "@/lib/hub-carousel-sessions";
+import { getSessionBadgeLabel } from "@/lib/session-badges";
 import {
   fetchMemberSessions,
   memberSessionsQueryKey,
   type MemberSession,
 } from "@/lib/member-sessions";
 import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import type { Class, ClassType, Instructor } from "@shared/schema";
 import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
@@ -144,21 +149,45 @@ function SessionCard({
   onReserve: (cls: EnrichedClass) => void;
 }) {
   const price = formatSessionPrice(cls.classType.price);
+  const badge = getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode);
+  const schedule = formatHubCarouselSchedule(cls);
+  const imageChipClass =
+    "rounded-lg border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-[0_2px_10px_rgba(0,0,0,0.18)]";
+
   return (
-    <div className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient">
+    <article
+      className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
+      aria-label={`${cls.classType.name}, ${schedule.label}`}
+      data-testid={`hub-session-card-${cls.id}`}
+    >
       <div className="relative flex h-[160px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]">
         {cls.classType.imageUrl ? (
           <img
             src={cls.classType.imageUrl}
-            alt={cls.classType.name}
+            alt=""
+            aria-hidden
             className="h-full w-full object-cover"
           />
         ) : (
-          <Flower2 className="h-16 w-16 text-primary/25" />
+          <Flower2 className="h-16 w-16 text-primary/25" aria-hidden />
         )}
-        <span className="absolute right-3 top-3 rounded-md bg-dz-surface/85 px-2 py-1 text-[11px] font-semibold text-primary">
+        {badge ? (
+          <span className={cn("absolute left-3 top-3", imageChipClass)}>{badge}</span>
+        ) : null}
+        <span className={cn("absolute right-3 top-3", imageChipClass)}>
           {cls.currentBookings}/{cls.maxCapacity} spots
         </span>
+        {schedule.label ? (
+          <div
+            className="absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-black/[0.08] bg-white px-3.5 py-2.5 text-[12px] font-semibold leading-snug text-foreground shadow-[0_-6px_16px_rgba(0,0,0,0.12)]"
+            data-testid={`hub-session-schedule-${cls.id}`}
+          >
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
+              <CalendarDays className="h-3.5 w-3.5 text-primary" aria-hidden />
+            </span>
+            <span className="truncate">{schedule.label}</span>
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-2.5 flex items-start justify-between gap-2">
@@ -179,6 +208,7 @@ function SessionCard({
             {cls.instructor.name}
           </span>
         </div>
+        <StrictNoToBlock strictNoTo={cls.classType.strictNoTo} compact className="mb-3 border-none pt-0" />
         <button
           type="button"
           onClick={() => onReserve(cls)}
@@ -188,7 +218,7 @@ function SessionCard({
           Reserve Spot
         </button>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -231,7 +261,7 @@ export default function Dashboard() {
     queryKey: ["/api/instructors"],
   });
 
-  const bookable = useMemo(() => filterBookableSessions(allClasses).slice(0, 12), [allClasses]);
+  const bookable = useMemo(() => collapseBookableForCarousel(allClasses, 12), [allClasses]);
 
   const upcomingBooked = useMemo(
     () =>
