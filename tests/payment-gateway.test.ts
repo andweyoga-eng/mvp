@@ -10,7 +10,7 @@ import {
   requiresAdminVerification,
   formatGatewayPaymentStatus,
 } from "../shared/payment-gateway.ts";
-import { getMeetJoinState, isWithinJoinPromptWindow } from "../shared/session-meet-access.ts";
+import { getMeetJoinState, getJoinPromptCelebrationCopy, isWithinJoinPromptWindow } from "../shared/session-meet-access.ts";
 
 describe("payment gateway helpers", () => {
   it("normalizes legacy razorpay to link", () => {
@@ -196,5 +196,46 @@ describe("join prompt window", () => {
       }),
       false,
     );
+  });
+});
+
+describe("join prompt celebration copy", () => {
+  const start = new Date("2026-07-06T02:15:00+05:30");
+  const base = {
+    className: "weRun weLift and WeYoga",
+    instructorName: "Deepti Kukreja",
+    sessionStart: start,
+    sessionDurationMinutes: 60,
+  };
+
+  it("uses soon copy before class", () => {
+    const copy = getJoinPromptCelebrationCopy({
+      ...base,
+      now: new Date("2026-07-06T01:50:00+05:30"),
+    });
+    assert.equal(copy.title, "Class is starting soon");
+    assert.match(copy.description, /begins in about 25 minutes/);
+    assert.equal(copy.primaryCta, "Hop on Meet");
+  });
+
+  it("uses live copy during class", () => {
+    const copy = getJoinPromptCelebrationCopy({
+      ...base,
+      now: new Date("2026-07-06T02:18:00+05:30"),
+    });
+    assert.equal(copy.title, "We are live");
+    assert.match(copy.description, /in flow right now/);
+    assert.match(copy.description, /Deepti Kukreja/);
+    assert.equal(copy.primaryCta, "Join now");
+  });
+
+  it("uses ending copy in the final stretch", () => {
+    const copy = getJoinPromptCelebrationCopy({
+      ...base,
+      now: new Date("2026-07-06T03:05:00+05:30"),
+    });
+    assert.equal(copy.title, "Still time to join");
+    assert.match(copy.description, /wrapping up soon/);
+    assert.equal(copy.primaryCta, "Hop in now");
   });
 });

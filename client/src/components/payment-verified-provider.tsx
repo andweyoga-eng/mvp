@@ -37,6 +37,7 @@ export type JoinPromptCelebration = {
   className: string;
   instructorName: string;
   sessionDate: string;
+  sessionDurationMinutes?: number;
   googleMeetLink: string | null;
   meetJoinState: MemberSession["meetJoinState"];
   popupDismissed: boolean;
@@ -55,6 +56,7 @@ function toJoinPrompt(session: MemberSession, popupDismissed: boolean): JoinProm
     className: session.className,
     instructorName: session.instructorName,
     sessionDate: session.date,
+    sessionDurationMinutes: session.sessionDurationMinutes,
     googleMeetLink: session.googleMeetLink,
     meetJoinState: session.meetJoinState,
     popupDismissed,

@@ -143,7 +143,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                   data-testid="nav-book-session"
                   onClick={() => setBookingAuthOpen(true)}
                 >
-                  Book Session
+                  Book/Signup
                 </Button>
                 <AuthChoiceDialog
                   open={bookingAuthOpen}

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+import { getJoinPromptCelebrationCopy } from "@shared/session-meet-access";
 import type { JoinPromptCelebration } from "@/components/payment-verified-provider";
 
 export function PaymentVerifiedCelebrationDialog({
@@ -26,6 +27,13 @@ export function PaymentVerifiedCelebrationDialog({
 }) {
   const hasMeetLink = !!celebration.googleMeetLink;
   const sessionWhen = new Date(celebration.sessionDate);
+  const durationMinutes = celebration.sessionDurationMinutes ?? 60;
+  const copy = getJoinPromptCelebrationCopy({
+    className: celebration.className,
+    instructorName: celebration.instructorName,
+    sessionStart: sessionWhen,
+    sessionDurationMinutes: durationMinutes,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,10 +42,9 @@ export function PaymentVerifiedCelebrationDialog({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#3d1b80] to-[#bb5309] shadow-lg">
             <Sparkles className="h-6 w-6 text-white" />
           </div>
-          <DialogTitle className="text-xl text-[#3d1b80]">Class is starting soon</DialogTitle>
+          <DialogTitle className="text-xl text-[#3d1b80]">{copy.title}</DialogTitle>
           <DialogDescription className="text-base text-purple-900/90 leading-relaxed">
-            <span className="font-semibold">{celebration.className}</span> kicks off in about 30
-            minutes. Roll out your mat. Ready when you are.
+            {copy.description}
           </DialogDescription>
         </DialogHeader>
 
@@ -66,7 +73,7 @@ export function PaymentVerifiedCelebrationDialog({
             onClick={onJoinNow}
           >
             <Video className="h-4 w-4 mr-2" />
-            Hop on Meet
+            {copy.primaryCta}
           </Button>
           <Button
             type="button"
