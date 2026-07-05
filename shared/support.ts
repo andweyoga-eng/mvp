@@ -1,9 +1,16 @@
-/** Customer care contact shown when an account is deactivated. */
+/** Customer care contact — single source for member UI, legal pages, and contact sheets. */
 export const CUSTOMER_SUPPORT = {
   email: "mudit@andweyoga.com",
   phone: "+91 9513022331",
   phoneDisplay: "+91 9513022331",
-  hours: "9 AM to 5 PM IST",
+  phoneLocal: "9513022331",
+  whatsappHref: "https://wa.me/919513022331",
+  telHref: "tel:+919513022331",
+  smsHref: "sms:+919513022331",
+  /** Mon–Sat office windows (IST). */
+  hours: "Mon–Sat, 9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
+  hoursShort: "9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
+  daysLabel: "Mon–Sat",
 } as const;
 
 export const ACCOUNT_DEACTIVATED_MESSAGE =

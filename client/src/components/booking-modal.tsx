@@ -51,7 +51,12 @@ import {
   openRazorpayPayment,
   isValidPaymentUrl,
   syncPaymentStatusAfterVerifyFailure,
+  extractBookingHeldUntil,
 } from "@/lib/booking-payment";
+import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
+import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
+import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ClassType, Class } from "@shared/schema";
@@ -133,6 +138,10 @@ export default function BookingModal({
   >("pay");
   const [isPaying, setIsPaying] = useState(false);
   const [paymentPhase, setPaymentPhase] = useState<PaymentProcessingPhase | null>(null);
+  const [heldUntil, setHeldUntil] = useState<string | null>(null);
+  const holdCountdown = usePaymentHoldCountdown(
+    paymentStep === "pay" && paymentResult?.paymentRequired !== false ? heldUntil : null,
+  );
   const [alreadyBookedView, setAlreadyBookedView] = useState<{
     className: string;
     instructorName: string;
@@ -326,6 +335,7 @@ export default function BookingModal({
       setAlreadyBookedView(null);
       setIsPaying(false);
       setPaymentPhase(null);
+      setHeldUntil(null);
       setGuestConsent({ profile: false, terms: false, age: false });
       setGuestFieldErrors({ name: "", email: "", phone: "" });
       setGuestFormBanner("");
@@ -529,17 +539,19 @@ export default function BookingModal({
 
       if (result.useRazorpayCheckout && result.razorpayKeyId) {
         setPaymentResult(result);
+        setHeldUntil(extractBookingHeldUntil(result));
         setPaymentStep("pay");
         if (!isGuestResult && result.token) {
           await refreshUser();
         }
-        await startRazorpayCheckout(result);
         return;
       }
 
       if (!isGuestResult && result.token) {
         await refreshUser();
       }
+
+      setHeldUntil(extractBookingHeldUntil(result));
 
       if (result.useQrPayment && result.qrPayment) {
         setPaymentResult(result);
@@ -638,14 +650,12 @@ export default function BookingModal({
           setAuthToken(null);
           setGuestCheckoutToken(error.resumeCheckout.guestCheckoutToken);
           setPaymentResult(error.resumeCheckout);
+          setHeldUntil(extractBookingHeldUntil(error.resumeCheckout));
           setPaymentStep("pay");
           toast({
             title: "Payment pending",
             description: error.message,
           });
-          if (error.resumeCheckout.useRazorpayCheckout && error.resumeCheckout.razorpayKeyId) {
-            void startRazorpayCheckout(error.resumeCheckout);
-          }
           return;
         }
         toast({
@@ -786,9 +796,7 @@ export default function BookingModal({
       ? findUpcomingPendingSessionForClass(memberSessions, classId)
       : undefined;
     if (pendingSession && paymentResult?.bookingId === pendingSession.bookingId) {
-      if (paymentResult.useRazorpayCheckout && paymentResult.razorpayKeyId) {
-        void startRazorpayCheckout(paymentResult);
-      }
+      setPaymentStep("pay");
       return;
     }
 
@@ -844,6 +852,32 @@ export default function BookingModal({
 
   const handleGuestSignUp = () => {
     window.location.href = "/api/auth/google";
+  };
+
+  const releaseCheckout = async (): Promise<boolean> => {
+    const bookingId = paymentResult?.bookingId;
+    if (!bookingId) return false;
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/cancel-checkout`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: getCheckoutAuthHeaders({ preferGuest: true }),
+      });
+      if (!res.ok) throw new Error("Release failed");
+      clearGuestCheckoutSession();
+      setHeldUntil(null);
+      setPaymentResult(null);
+      setPaymentStep("pay");
+      queryClient.invalidateQueries({ queryKey: ["/api/classes"] });
+      return true;
+    } catch {
+      toast({
+        title: "Could not release spot",
+        description: "Please try again or contact support.",
+        variant: "destructive",
+      });
+      return false;
+    }
   };
 
   const startRazorpayCheckout = async (booking: MemberBookingResult) => {
@@ -940,29 +974,13 @@ export default function BookingModal({
           }
         },
         onDismiss: () => {
-          void (async () => {
-            setIsPaying(false);
-            setPaymentPhase(null);
-            try {
-              await fetch(`/api/bookings/${booking.bookingId}/cancel-checkout`, {
-                method: "PATCH",
-                credentials: "include",
-                headers: getCheckoutAuthHeaders({ preferGuest: true }),
-              });
-              clearGuestCheckoutSession();
-              setPaymentResult(null);
-              setPaymentStep("pay");
-              toast({
-                title: "Checkout cancelled",
-                description: "Your spot has been released.",
-              });
-            } catch {
-              toast({
-                title: "Could not cancel checkout",
-                variant: "destructive",
-              });
-            }
-          })();
+          setIsPaying(false);
+          setPaymentPhase(null);
+          setPaymentStep("pay");
+          toast({
+            title: "Payment not completed",
+            description: "Your spot is still reserved. Retry payment when ready.",
+          });
         },
         onPaymentFailed: () => {
           void (async () => {
@@ -1050,16 +1068,13 @@ export default function BookingModal({
           setFormData({ classId: data.classId });
         }
         setPaymentResult(data);
+        setHeldUntil(extractBookingHeldUntil(data));
         setPaymentStep("pay");
 
-        if (data.useRazorpayCheckout && data.razorpayKeyId) {
-          await startRazorpayCheckout(data);
-        } else {
-          toast({
-            title: "Payment pending",
-            description: "Complete payment using the options shown.",
-          });
-        }
+        toast({
+          title: "Payment pending",
+          description: "Complete payment using the options shown.",
+        });
       } catch {
         if (!cancelled) {
           toast({
@@ -1276,6 +1291,8 @@ export default function BookingModal({
               className: paymentOutcome.className,
               instructorName: paymentOutcome.instructorName,
               sessionDate: paymentOutcome.sessionDate,
+              googleMeetLink: paymentOutcome.googleMeetLink,
+              sessionDurationMinutes: displayClass ? sessionDurationMinutes(displayClass) : 60,
             }}
             onViewSessions={goToMySessionsUpcoming}
             onCancel={onClose}
@@ -1446,25 +1463,24 @@ export default function BookingModal({
           />
         )}
 
-        {paymentResult && canAccessCheckoutUi && paymentStep === "pay" && !paymentOutcome && (
+        {paymentResult && canAccessCheckoutUi && paymentStep === "pay" && !paymentOutcome && holdCountdown.expired && (
+          <CheckoutHoldExpiredState
+            onTryAgain={() => {
+              setHeldUntil(null);
+              setPaymentResult(null);
+              setPaymentStep("pay");
+            }}
+          />
+        )}
+
+        {paymentResult && canAccessCheckoutUi && paymentStep === "pay" && !paymentOutcome && !holdCountdown.expired && (
           <div className="space-y-4">
-            <Alert className="border-green-200 bg-green-50">
-              <CreditCard className="h-4 w-4 text-green-700" />
-              <AlertDescription className="text-green-900">
-                <p className="font-medium">Your spot is reserved</p>
-                <p className="text-sm mt-1">
-                  {paymentResult.useQrPayment
-                    ? "Scan the QR code, pay the session fee, then enter the last 4 characters of your payment reference."
-                    : isValidPaymentUrl(paymentResult.razorpayLink)
-                      ? "Open the payment link, complete payment, then enter the last 4 characters of your payment reference or payment ID."
-                    : paymentResult.useRazorpayCheckout
-                      ? isPaying
-                        ? "Follow the steps below. Do not close this page until payment is confirmed."
-                        : `Pay now to confirm ${paymentResult.className}.`
-                      : `Pay now via Razorpay to confirm ${paymentResult.className}.`}
-                </p>
-              </AlertDescription>
-            </Alert>
+            {holdCountdown.isActive && (
+              <PaymentHoldCountdownChip
+                timeDisplay={holdCountdown.timeDisplay}
+                isWarning={holdCountdown.isWarning}
+              />
+            )}
             <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
               <p className="font-bold text-purple-600">{paymentResult.className}</p>
               <p className="text-muted-foreground">
@@ -1538,15 +1554,14 @@ export default function BookingModal({
                   : `Pay ${formatSessionPrice(paymentResult.price) ?? "now"}`}
               </Button>
             ) : null}
-            <Button
+            <button
               type="button"
-              variant="outline"
-              className="w-full font-bold"
-              onClick={onClose}
+              onClick={() => void releaseCheckout().then((ok) => ok && onClose())}
+              className="w-full py-2.5 text-[13px] text-muted-foreground underline decoration-muted-foreground/30 underline-offset-[3px]"
               disabled={isPaying || !!paymentPhase}
             >
-              Cancel
-            </Button>
+              Release my spot
+            </button>
           </div>
         )}
 
@@ -1844,6 +1859,12 @@ export default function BookingModal({
                       <p className="text-sm text-muted-foreground">
                         {displayClass.currentBookings}/{displayClass.maxCapacity} spots filled
                       </p>
+                      <StrictNoToBlock
+                        strictNoTo={displayClass.classType.strictNoTo}
+                        compact
+                        defaultExpanded
+                        className="mt-3 border-none pt-0"
+                      />
                     </div>
                   ) : displayClass ? (
                     <Alert className="mt-2 border-amber-200 bg-amber-50">
@@ -1868,9 +1889,12 @@ export default function BookingModal({
               ) : (
                 <div>
                   {hasClassTypeFilter && filteredClassType && (
-                    <p className="text-sm text-purple-600 font-medium mb-2">
-                      Upcoming sessions for {filteredClassType.name}
-                    </p>
+                    <div className="mb-3">
+                      <p className="text-sm text-purple-600 font-medium mb-2">
+                        Upcoming sessions for {filteredClassType.name}
+                      </p>
+                      <StrictNoToBlock strictNoTo={filteredClassType.strictNoTo} compact />
+                    </div>
                   )}
                   <Label htmlFor="classId" className="text-sm font-bold text-purple-600">
                     {hasClassTypeFilter ? "Select session *" : "Select Class *"}

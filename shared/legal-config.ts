@@ -35,6 +35,12 @@ export const LEGAL_CONFIG = {
     resolutionDays: 30,
     statutoryMaxDays: 90,
   },
+  /** Member-facing customer care (see shared/support.ts for tel/sms/whatsapp hrefs). */
+  customerCare: {
+    email: "mudit@andweyoga.com",
+    phone: "+91 9513022331",
+    hours: "Mon–Sat, 9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
+  },
 } as const;
 
 export type LegalConfig = typeof LEGAL_CONFIG;

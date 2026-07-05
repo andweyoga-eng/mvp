@@ -20,7 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/admin-api";
 import { MAX_TEXT_LENGTH, limitTextInput, PLACEHOLDER_OWNER_CANCEL_OTP, normalizeOwnerCancelOtpInput, isOwnerCancelFormSubmittable, ownerCancelFormBlocker } from "@shared/input-limits";
 import { FormErrorSummary } from "@/components/admin/field-error";
-import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "@shared/schema";
+import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY, STRICT_NO_TO_MAX_LENGTH } from "@shared/schema";
+import { parseStrictNoToTags, strictNoToCounterState } from "@/lib/strict-no-to";
 import { compressImageForUpload, validateAdminImageFile, ADMIN_IMAGE_MAX_FILE_BYTES } from "@/lib/image-upload";
 
 export interface ClassType {
@@ -31,6 +32,7 @@ export interface ClassType {
   duration: number;
   imageUrl: string | null;
   intensity: string;
+  strictNoTo?: string | null;
 }
 
 type ClassTypeForm = {
@@ -40,6 +42,7 @@ type ClassTypeForm = {
   duration: string;
   imageUrl: string;
   intensity: string;
+  strictNoTo: string;
 };
 
 const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
@@ -49,6 +52,7 @@ const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
   duration: "60",
   imageUrl: "",
   intensity: DEFAULT_CLASS_INTENSITY,
+  strictNoTo: "",
 };
 
 function classTypeToForm(ct: ClassType): ClassTypeForm {
@@ -59,6 +63,7 @@ function classTypeToForm(ct: ClassType): ClassTypeForm {
     duration: String(ct.duration),
     imageUrl: ct.imageUrl ?? "",
     intensity: ct.intensity ?? DEFAULT_CLASS_INTENSITY,
+    strictNoTo: ct.strictNoTo ?? "",
   };
 }
 
@@ -128,6 +133,11 @@ function ClassTypeFormFields({
           {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
         </div>
       </div>
+      <StrictNoToAdminField
+        value={form.strictNoTo}
+        onChange={(strictNoTo) => setForm((f) => ({ ...f, strictNoTo }))}
+        error={errors.strictNoTo}
+      />
       <div className="grid grid-cols-1 gap-4">
         <div>
           <Label>
@@ -163,6 +173,82 @@ function ClassTypeFormFields({
         </div>
       </div>
     </>
+  );
+}
+
+function StrictNoToAdminField({
+  value,
+  onChange,
+  error,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+}) {
+  const tags = parseStrictNoToTags(value);
+  const { isOverLimit, isNearLimit, counterColor } = strictNoToCounterState(value.length);
+
+  return (
+    <div className="rounded-2xl border border-primary/12 bg-white/65 p-4">
+      <div className="mb-1.5 flex items-center gap-2">
+        <Label className="text-xs font-extrabold uppercase tracking-wide text-primary">
+          Not Suitable
+        </Label>
+        <Badge variant="outline" className="border-red-200 bg-red-50 text-[10px] text-red-900">
+          New field
+        </Badge>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+        Enter conditions separated by commas — e.g. <em>Pregnant women, Asthmatic, Low BP</em>. For
+        edge cases not covered here, the contact-team link on the booking page handles the rest.
+      </p>
+      <Textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, STRICT_NO_TO_MAX_LENGTH + 10))}
+        rows={2}
+        placeholder="Pregnant women, Asthmatic, Low BP…"
+        className={error || isOverLimit ? "border-red-500" : ""}
+      />
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="text-xs">
+          {isOverLimit ? (
+            <span className="font-semibold text-red-700">Exceeds limit — trim to save</span>
+          ) : isNearLimit ? (
+            <span className="font-medium text-amber-700">Approaching limit</span>
+          ) : (
+            <span className="text-muted-foreground">
+              Tip: use the contact-team link for anything longer
+            </span>
+          )}
+        </div>
+        <span className="text-xs font-bold tabular-nums" style={{ color: counterColor }}>
+          {value.length} / {STRICT_NO_TO_MAX_LENGTH}
+        </span>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+      {tags.length > 0 && (
+        <div className="mt-3 border-t border-primary/10 pt-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Preview — member view
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-lg border px-2.5 py-1 text-xs font-medium"
+                style={{
+                  background: "rgba(186,26,26,0.07)",
+                  borderColor: "rgba(186,26,26,0.16)",
+                  color: "#93000a",
+                }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

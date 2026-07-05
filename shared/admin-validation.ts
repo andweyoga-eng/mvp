@@ -148,6 +148,13 @@ export const adminCreateClassTypeSchema = z.object({
     .max(480, "Duration cannot exceed 8 hours"),
   imageUrl: requiredSessionTypeImageUrl,
   intensity: z.enum(CLASS_INTENSITIES).default(DEFAULT_CLASS_INTENSITY),
+  strictNoTo: z
+    .string()
+    .trim()
+    .max(120, `Not Suitable must be ${120} characters or fewer`)
+    .optional()
+    .nullable()
+    .transform((v) => (v === "" || v == null ? null : v)),
 });
 
 export const adminCreateInstructorSchema = z.object({

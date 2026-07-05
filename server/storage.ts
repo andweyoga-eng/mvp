@@ -285,6 +285,7 @@ export interface IStorage {
   getRecurringSeriesBounds(
     seriesId: string,
   ): Promise<{ startAt: Date; endAt: Date } | undefined>;
+  countClassesInSeries(seriesId: string): Promise<number>;
   findNextRecurringClassAfter(
     classTypeId: string,
     afterDate: Date,
@@ -1085,6 +1086,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(classes.seriesId, seriesId));
     if (!row?.startAt || !row?.endAt) return undefined;
     return row;
+  }
+
+  async countClassesInSeries(seriesId: string): Promise<number> {
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(classes)
+      .where(eq(classes.seriesId, seriesId));
+    return Math.max(1, Number(total));
   }
 
   async findNextRecurringClassAfter(

@@ -5,6 +5,7 @@ export interface MemberBookingResult {
     classId: string;
     userId: string | null;
     createdAt: string;
+    heldUntil?: string | null;
   };
   bookingId: string;
   classId: string;
@@ -30,6 +31,8 @@ export interface MemberBookingResult {
   /** Guest trial/drop-in checkout — short-lived booking-scoped token */
   guestCheckoutToken?: string | null;
   isGuestCheckout?: boolean;
+  /** ISO timestamp — seat hold expiry (A-01), duplicated at top level for convenience */
+  heldUntil?: string | null;
 }
 
 export interface PaymentVerifyResult {
@@ -66,6 +69,11 @@ export function isValidPaymentUrl(url: string | null | undefined): url is string
   } catch {
     return false;
   }
+}
+
+export function extractBookingHeldUntil(result: MemberBookingResult): string | null {
+  if (result.heldUntil) return result.heldUntil;
+  return result.booking?.heldUntil ?? null;
 }
 
 /** Poll server when Razorpay client verify fails but webhook may have confirmed (common with UPI). */

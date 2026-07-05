@@ -4,10 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Clock,
-  MapPin,
   User as UserIcon,
   Lock,
-  CheckCircle2,
   CreditCard,
   Loader2,
   Flower2,
@@ -17,6 +15,16 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -37,6 +45,17 @@ import {
 } from "@/components/manual-payment-reference-block";
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { AlreadyBookedSessionContent } from "@/components/already-booked-session-content";
+import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
+import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
+import { ReleaseSpotToast } from "@/components/release-spot-toast";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { SessionDeliveryInfo } from "@/components/session-delivery-info";
+import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
+import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
+import {
+  formatRecurringScheduleLine,
+  isFixedRecurringCheckout,
+} from "@/lib/recurring-series-display";
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 import type { Class, ClassType } from "@shared/schema";
 
@@ -47,6 +66,7 @@ interface EnrichedClass extends Class {
 }
 
 const MY_SESSIONS_URL = "/my-account#sessions";
+const CALENDAR_URL = "/calendar";
 
 function dayKey(date: string | Date): string {
   return new Date(date).toDateString();
@@ -87,6 +107,12 @@ export default function Reserve() {
   );
   const sessionId = params.get("sessionId");
   const classTypeId = params.get("classTypeId");
+  const fromLogin = params.get("from") === "login";
+  const exitPath = fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
+  const backLabel = fromLogin ? "Back to My Sessions" : "Back to Calendar";
+
+  const [showReleaseToast, setShowReleaseToast] = useState(false);
+  const [backConfirmOpen, setBackConfirmOpen] = useState(false);
 
   const checkout = useBookingCheckout({
     onProfileRequired: (redirectTo) => setLocation(redirectTo),
@@ -125,15 +151,34 @@ export default function Reserve() {
   const pool = useMemo<EnrichedClass[]>(() => {
     const bookable = filterBookableSessions(allClasses);
     if (classTypeId) {
-      return bookable.filter(
+      const filtered = bookable.filter(
         (c) => c.classType?.id === classTypeId || c.classTypeId === classTypeId,
       );
+      if (filtered.length > 0) {
+        const anchor = filtered[0];
+        const singleSeries =
+          anchor.seriesId &&
+          filtered.every(
+            (s) => isFixedRecurringCheckout(s) && s.seriesId === anchor.seriesId,
+          );
+        if (singleSeries) {
+          const sorted = [...filtered].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+          );
+          const pick =
+            (sessionId && sorted.find((c) => c.id === sessionId)) ?? sorted[0];
+          return pick ? [pick] : sorted;
+        }
+      }
+      return filtered;
     }
     if (sessionId) {
       const found =
         bookable.find((c) => c.id === sessionId) ??
         (singleClass?.id === sessionId ? singleClass : undefined);
-      // Offer sibling sessions of the same type as alternate date/times.
+      if (found && isFixedRecurringCheckout(found)) {
+        return [found];
+      }
       const typeId = found?.classType?.id ?? found?.classTypeId;
       const siblings = typeId
         ? bookable.filter((c) => (c.classType?.id ?? c.classTypeId) === typeId)
@@ -182,6 +227,25 @@ export default function Reserve() {
     [dayGroups, selectedDayKey],
   );
 
+  const isFixedRecurring = isFixedRecurringCheckout(selected);
+  const showDatePicker = !isFixedRecurring && dayGroups.length > 1;
+  const showTimePicker = !isFixedRecurring && timesForSelectedDay.length > 1;
+
+  const seriesMeta = useMemo(() => {
+    if (!selected?.seriesId || !isFixedRecurring) return null;
+    const occurrences = allClasses
+      .filter((c) => c.seriesId === selected.seriesId)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return {
+      startDate: occurrences[0]?.date ?? selected.date,
+      occurrenceCount: occurrences.length,
+    };
+  }, [allClasses, selected, isFixedRecurring]);
+
+  const recurringScheduleLine = selected && isFixedRecurring
+    ? formatRecurringScheduleLine(selected)
+    : null;
+
   const existingBooking = selected
     ? findUpcomingMemberSessionForClass(memberSessions, selected.id)
     : undefined;
@@ -207,6 +271,41 @@ export default function Reserve() {
   const goToSessions = () => setLocation(MY_SESSIONS_URL);
 
   const reserved = checkout.paymentResult;
+  const isMidHold =
+    checkout.step === "pay" &&
+    Boolean(reserved) &&
+    checkout.holdCountdown.isActive &&
+    !checkout.holdCountdown.expired;
+
+  const mapInteractionLocked =
+    checkout.isPaying || checkout.paymentPhase != null;
+
+  const navigateAfterRelease = () => {
+    setShowReleaseToast(true);
+    window.setTimeout(() => setLocation(exitPath), 2500);
+  };
+
+  const handleReleaseSpot = async () => {
+    const ok = await checkout.releaseCheckout();
+    if (ok) navigateAfterRelease();
+  };
+
+  const handleBackClick = () => {
+    if (isMidHold) {
+      setBackConfirmOpen(true);
+      return;
+    }
+    setLocation(exitPath);
+  };
+
+  const confirmBackRelease = async () => {
+    setBackConfirmOpen(false);
+    if (isMidHold) {
+      await handleReleaseSpot();
+      return;
+    }
+    setLocation(exitPath);
+  };
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-dz-surface text-foreground">
@@ -227,11 +326,11 @@ export default function Reserve() {
           </button>
           <button
             type="button"
-            onClick={() => setLocation("/dashboard")}
+            onClick={handleBackClick}
             className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
           >
             <ArrowLeft className="h-5 w-5" />
-            <span>Back to Sessions</span>
+            <span>{backLabel}</span>
           </button>
         </PageContainer>
       </header>
@@ -245,6 +344,9 @@ export default function Reserve() {
             <h1 className="font-display text-[clamp(28px,4vw,40px)] font-bold tracking-tight text-primary">
               Reserve your <span className="font-accent text-[1.1em] italic">spot</span>
             </h1>
+            <p className="mt-2 text-[15px] text-muted-foreground">
+              Seat held for 10 minutes once you confirm — complete payment to lock it in.
+            </p>
           </div>
 
           {classesLoading && !selected ? (
@@ -301,16 +403,29 @@ export default function Reserve() {
                         <UserIcon className="h-[18px] w-[18px] text-primary" />
                         {selected.instructor.name}
                       </span>
-                      <span className="flex items-center gap-2 text-[13px] font-medium">
-                        <MapPin className="h-[18px] w-[18px] text-primary" />
-                        Online (Google Meet)
-                      </span>
                     </div>
+                    <SessionDeliveryInfo
+                      session={selected}
+                      paymentLocked={mapInteractionLocked}
+                    />
+                    <StrictNoToBlock
+                      strictNoTo={selected.classType.strictNoTo}
+                      defaultExpanded
+                    />
                   </div>
                 </GlassCard>
 
+                {isFixedRecurring && seriesMeta ? (
+                  <RecurringSeriesScheduleCard
+                    session={selected}
+                    instructorName={selected.instructor.name}
+                    seriesStartDate={seriesMeta.startDate}
+                    occurrenceCount={seriesMeta.occurrenceCount}
+                  />
+                ) : null}
+
                 {/* date */}
-                {dayGroups.length > 1 && (
+                {showDatePicker && (
                   <GlassCard className="rounded-[22px] p-6">
                     <h3 className="mb-4 font-display text-lg font-semibold">Select a date</h3>
                     <div className="flex gap-2.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -347,7 +462,7 @@ export default function Reserve() {
                 )}
 
                 {/* time */}
-                {timesForSelectedDay.length > 1 && (
+                {showTimePicker && (
                   <GlassCard className="rounded-[22px] p-6">
                     <h3 className="mb-4 font-display text-lg font-semibold">Choose a time</h3>
                     <div className="flex flex-wrap gap-2.5">
@@ -380,9 +495,23 @@ export default function Reserve() {
                   <h3 className="mb-[18px] font-display text-lg font-semibold">Booking summary</h3>
                   <div className="flex flex-col gap-3 border-b border-primary/10 pb-[18px]">
                     <SummaryRow label="Session" value={selected.classType.name} />
-                    <SummaryRow label="Date" value={formatLongDate(selected.date)} />
-                    <SummaryRow label="Time" value={formatTime(selected.date)} />
+                    {isFixedRecurring && recurringScheduleLine ? (
+                      <SummaryRow label="Schedule" value={recurringScheduleLine} />
+                    ) : (
+                      <>
+                        <SummaryRow label="Date" value={formatLongDate(selected.date)} />
+                        <SummaryRow label="Time" value={formatTime(selected.date)} />
+                      </>
+                    )}
                     <SummaryRow label="Instructor" value={selected.instructor.name} />
+                    <SummaryRow
+                      label={
+                        normalizeDeliveryMode(selected.deliveryMode) === "online"
+                          ? "Mode"
+                          : "Location"
+                      }
+                      value={formatSessionDeliverySummary(selected)}
+                    />
                   </div>
                   <div className="flex items-baseline justify-between py-[18px]">
                     <span className="text-[15px] font-semibold">Total</span>
@@ -408,7 +537,7 @@ export default function Reserve() {
                       instructorName={existingBooking.instructorName}
                       sessionDate={existingBooking.date}
                       onViewSessions={goToSessions}
-                      onCancel={() => setLocation("/dashboard")}
+                      onCancel={() => setLocation(exitPath)}
                     />
                   ) : checkout.step === "payment-confirmed" && checkout.paymentOutcome ? (
                     <PaymentConfirmedContent
@@ -417,9 +546,11 @@ export default function Reserve() {
                         className: checkout.paymentOutcome.className,
                         instructorName: checkout.paymentOutcome.instructorName,
                         sessionDate: checkout.paymentOutcome.sessionDate,
+                        googleMeetLink: checkout.paymentOutcome.googleMeetLink,
+                        sessionDurationMinutes: sessionDurationMinutes(selected),
                       }}
                       onViewSessions={goToSessions}
-                      onCancel={() => setLocation("/dashboard")}
+                      onCancel={() => setLocation(exitPath)}
                     />
                   ) : checkout.step === "manual-submitted" ? (
                     <ManualPaymentSubmittedMessage onViewSessions={goToSessions} />
@@ -448,18 +579,20 @@ export default function Reserve() {
                       >
                         {checkout.isPaying ? "Opening…" : "Retry payment"}
                       </Button>
-                      <Button variant="outline" className="w-full" onClick={() => setLocation("/dashboard")}>
-                        Cancel
+                      <Button variant="outline" className="w-full" onClick={() => void handleReleaseSpot()}>
+                        Release my spot
                       </Button>
                     </div>
+                  ) : checkout.step === "pay" && reserved && checkout.holdCountdown.expired ? (
+                    <CheckoutHoldExpiredState onTryAgain={() => checkout.reset()} />
                   ) : checkout.step === "pay" && reserved ? (
                     <div className="space-y-3">
-                      <Alert className="border-green-200 bg-green-50">
-                        <CheckCircle2 className="h-4 w-4 text-green-700" />
-                        <AlertDescription className="text-green-900">
-                          Your spot is reserved. Complete payment to confirm.
-                        </AlertDescription>
-                      </Alert>
+                      {checkout.holdCountdown.isActive && (
+                        <PaymentHoldCountdownChip
+                          timeDisplay={checkout.holdCountdown.timeDisplay}
+                          isWarning={checkout.holdCountdown.isWarning}
+                        />
+                      )}
 
                       {reserved.useQrPayment && reserved.qrPayment && reserved.bookingId ? (
                         <ManualPaymentReferenceBlock
@@ -478,19 +611,23 @@ export default function Reserve() {
                           onSubmitted={checkout.markManualSubmitted}
                         />
                       ) : reserved.useRazorpayCheckout ? (
-                        <Button
-                          className="w-full bg-green-600 !text-white hover:bg-green-700"
-                          disabled={checkout.isPaying || !!checkout.paymentPhase}
-                          onClick={() => void checkout.startRazorpayCheckout(reserved)}
-                        >
-                          {checkout.isPaying
-                            ? "Payment in progress…"
-                            : `Pay ${price ?? "now"}`}
-                        </Button>
+                        !checkout.isPaying && !checkout.paymentPhase ? (
+                          <Button
+                            className="w-full gap-2 bg-green-600 !text-white hover:bg-green-700"
+                            onClick={() => void checkout.startRazorpayCheckout(reserved)}
+                          >
+                            <CreditCard className="h-5 w-5" />
+                            Retry payment
+                          </Button>
+                        ) : null
                       ) : null}
-                      <Button variant="outline" className="w-full" onClick={() => setLocation("/dashboard")}>
-                        Cancel
-                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => void handleReleaseSpot()}
+                        className="w-full py-2.5 text-[13px] text-muted-foreground underline decoration-muted-foreground/30 underline-offset-[3px]"
+                      >
+                        Release my spot
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -504,18 +641,26 @@ export default function Reserve() {
                       <button
                         type="button"
                         onClick={handleConfirm}
-                        disabled={checkout.isReserving || selected.hasPaymentConfigured === false}
+                        disabled={
+                          checkout.isReserving ||
+                          checkout.isPaying ||
+                          selected.hasPaymentConfigured === false
+                        }
                         className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-primary py-[15px] text-[15px] font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         data-testid="reserve-confirm"
                       >
                         <Lock className="h-5 w-5" />
-                        {checkout.isReserving ? "Reserving…" : "Confirm & Reserve"}
+                        {checkout.isReserving
+                          ? "Reserving…"
+                          : checkout.isPaying
+                            ? "Opening payment…"
+                            : "Reserve and Pay"}
                       </button>
                       <p className="mt-3.5 flex items-center gap-2 text-xs text-muted-foreground">
                         <CreditCard className="h-4 w-4 text-[#354c3a]" />
                         {selected.paymentMethod === "qr"
                           ? "Pay by scanning the studio QR after reserving."
-                          : "Secure payment via Razorpay after reserving."}
+                          : "Your spot is held while you complete payment in Razorpay."}
                       </p>
                     </>
                   )}
@@ -525,6 +670,26 @@ export default function Reserve() {
           )}
         </PageContainer>
       </main>
+
+      <ReleaseSpotToast visible={showReleaseToast} />
+
+      <AlertDialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Release your held spot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Leaving checkout will release your seat so others can book it. You can pick another
+              time afterward.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep my spot</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmBackRelease()}>
+              Release and leave
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,11 +1,12 @@
+import { CUSTOMER_SUPPORT } from "@shared/support";
 import { Mail, Phone, Clock, Instagram } from "lucide-react";
 import { SectionHeading } from "@/components/digital-zen/section-heading";
 import { PageContainer } from "@/components/digital-zen/page-container";
 
 const contacts = [
-  { icon: Mail, label: "Email Us", value: "mudit@andweyoga.com" },
-  { icon: Phone, label: "Call Us", value: "+91 9513022331" },
-  { icon: Clock, label: "Business Hours", value: "9 AM - 5 PM IST" },
+  { icon: Mail, label: "Email Us", value: CUSTOMER_SUPPORT.email, href: `mailto:${CUSTOMER_SUPPORT.email}` },
+  { icon: Phone, label: "Call Us", value: CUSTOMER_SUPPORT.phoneDisplay, href: CUSTOMER_SUPPORT.telHref },
+  { icon: Clock, label: "Business Hours", value: CUSTOMER_SUPPORT.hours },
   {
     icon: Instagram,
     label: "Follow Us",
@@ -33,8 +34,8 @@ export default function ContactSection() {
               {item.href ? (
                 <a
                   href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  target={item.href.startsWith("http") ? "_blank" : undefined}
+                  rel={item.href.startsWith("http") ? "noopener noreferrer" : undefined}
                   className="mt-1.5 inline-block text-sm text-dz-muted hover:text-primary"
                 >
                   {item.value}

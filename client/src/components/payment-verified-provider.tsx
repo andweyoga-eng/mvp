@@ -226,6 +226,8 @@ export function PaymentVerifiedProvider({ children }: { children: ReactNode }) {
             className: paymentConfirmed.className,
             instructorName: paymentConfirmed.instructorName,
             sessionDate: paymentConfirmed.date,
+            googleMeetLink: paymentConfirmed.googleMeetLink,
+            sessionDurationMinutes: paymentConfirmed.sessionDurationMinutes ?? 60,
           }}
           onViewSessions={viewMySessions}
           onCancel={() => closePaymentConfirmed(paymentConfirmed.bookingId)}

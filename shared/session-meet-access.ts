@@ -72,7 +72,7 @@ export function getMeetJoinMessage(params: {
   const openFrom = startMs - MEET_OPEN_BEFORE_MS;
 
   if (nowMs > endMs) return "This session has ended.";
-  if (nowMs >= startMs) return "Your session is live now. Click to join.";
-  if (nowMs >= openFrom) return "The room is open. You can join now.";
-  return `The Join link activates 1 hour before your session. It'll go live ${humanizeLeadTime(openFrom - nowMs)}.`;
+  if (nowMs >= startMs) return "Your session is live now. Tap Join to enter.";
+  if (nowMs >= openFrom) return "The room is open. Tap Join to enter.";
+  return `Join opens 1 hour before class (${humanizeLeadTime(openFrom - nowMs)}).`;
 }

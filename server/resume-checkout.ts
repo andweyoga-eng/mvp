@@ -32,6 +32,9 @@ export function buildResumeCheckoutPayload(params: {
       classId: booking.classId,
       userId: booking.userId,
       createdAt: booking.createdAt,
+      heldUntil: booking.heldUntil
+        ? new Date(booking.heldUntil).toISOString()
+        : null,
     },
     bookingId: booking.id,
     classId: cls.id,
@@ -44,6 +47,10 @@ export function buildResumeCheckoutPayload(params: {
     paymentRequired: resumeHasPrice,
     isGuestCheckout: booking.isGuestCheckout,
   };
+
+  payload.heldUntil = booking.heldUntil
+    ? new Date(booking.heldUntil).toISOString()
+    : null;
 
   if (booking.isGuestCheckout) {
     payload.guestCheckoutToken = generateGuestCheckoutToken(booking.id);

@@ -13,8 +13,11 @@
     "test:sanity": "npm run check && tsx --test tests/sanity-regression.test.ts tests/payment-qr.test.ts tests/admin-session-validation.test.ts tests/admin-auth.test.ts tests/booking-flow.test.ts tests/booking-payment.test.ts tests/admin-login.integration.test.ts",
     "db:push": "drizzle-kit push && tsx scripts/db/purge-seed-data.ts",
     "db:purge-seed": "tsx scripts/db/purge-seed-data.ts",
+    "db:purge-all-sessions": "tsx scripts/db/purge-all-sessions.ts",
     "db:patch": "tsx scripts/db/apply-patches.ts",
-    "db:check": "tsx scripts/db/check-connection.ts"
+    "db:check": "tsx scripts/db/check-connection.ts",
+    "qa:smoke-a01-e01": "tsx scripts/qa/smoke-a01-e01.ts",
+    "qa:smoke-cleanup": "tsx scripts/qa/purge-smoke-fixtures.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

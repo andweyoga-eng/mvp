@@ -96,21 +96,21 @@ function DeactivatedGate({ children }: { children: ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <PaymentVerifiedProvider>
-          <DeactivatedGate>
-            <AdminAuthProvider>
-              <TooltipProvider>
+      <TooltipProvider>
+        <AuthProvider>
+          <PaymentVerifiedProvider>
+            <DeactivatedGate>
+              <AdminAuthProvider>
                 <Toaster />
                 <PostAuthConsentGate>
                   <MemberPostAuthLanding />
                   <Router />
                 </PostAuthConsentGate>
-              </TooltipProvider>
-            </AdminAuthProvider>
-          </DeactivatedGate>
-        </PaymentVerifiedProvider>
-      </AuthProvider>
+              </AdminAuthProvider>
+            </DeactivatedGate>
+          </PaymentVerifiedProvider>
+        </AuthProvider>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

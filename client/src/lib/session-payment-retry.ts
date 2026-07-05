@@ -64,6 +64,9 @@ export async function retrySessionPayment(
     if (!orderRes.ok) {
       throw new Error(orderData.message || "Could not start payment retry.");
     }
+    if (!orderData.keyId?.trim() || !orderData.orderId?.trim()) {
+      throw new Error("Payment gateway returned an incomplete checkout session.");
+    }
 
     await deps.openRazorpayCheckout({
       keyId: orderData.keyId,

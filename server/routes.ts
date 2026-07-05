@@ -57,6 +57,7 @@ import {
   cancelGuestCheckout,
   expirePaymentHolds,
 } from "./booking-hold-service";
+import { initialBookingHeldUntil } from "@shared/booking-payment-hold";
 import { buildResumeCheckoutPayload, bookingCanResumeCheckout } from "./resume-checkout";
 import { paginationQuerySchema, buildPaginatedResponse } from "@shared/admin-pagination";
 import { REQUIRED_PHONE_MESSAGE } from "@shared/guest-phone";
@@ -2205,6 +2206,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
+        const guestClassType = classTypeForBooking ?? (await storage.getClassType(cls.classTypeId));
+        const guestPrice = guestClassType?.price ?? null;
+        const guestHasPrice =
+          guestPrice !== null && guestPrice !== "" && parseFloat(String(guestPrice)) > 0;
+        const guestHoldUntil = initialBookingHeldUntil(guestHasPrice);
+
         const booking = resumableGuestBooking
           ? resumableGuestBooking
           : await storage.createBooking({
@@ -2214,6 +2221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               guestName,
               guestEmail,
               guestPhone,
+              ...(guestHoldUntil ? { heldUntil: guestHoldUntil } : {}),
             });
 
         if (!resumableGuestBooking) {
@@ -2312,6 +2320,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isGuestCheckout: true,
           guestCheckoutToken: guestCheckoutToken ?? null,
           resumedPendingBooking: !!resumableGuestBooking,
+          heldUntil: booking.heldUntil
+            ? new Date(booking.heldUntil).toISOString()
+            : null,
         });
       }
 
@@ -2408,11 +2419,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      const memberPrice = classTypeForBooking?.price ?? null;
+      const memberHasPrice =
+        memberPrice !== null && memberPrice !== "" && parseFloat(String(memberPrice)) > 0;
+      const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
+
       const booking = resumableBooking
         ? resumableBooking
         : await storage.createBooking({
             userId: user.id,
             classId,
+            ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
           });
 
       const classType = await storage.getClassType(cls.classTypeId);
@@ -2443,12 +2460,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         try {
+          let totalSessions = 1;
+          if (cls.sessionFrequency === "recurring") {
+            if (cls.seriesId) {
+              totalSessions = await storage.countClassesInSeries(cls.seriesId);
+            } else if (cls.seriesWeekCount != null && cls.seriesWeekCount > 0) {
+              totalSessions = cls.seriesWeekCount;
+            } else {
+              totalSessions = 4;
+            }
+          }
           await storage.createSubscription({
             userId: user.id,
             classTypeId: cls.classTypeId,
             bookingId: booking.id,
             subscriptionType: cls.sessionFrequency ?? "recurring",
-            totalSessions: cls.sessionFrequency === "recurring" ? 4 : 1,
+            totalSessions,
             totalAmountPaise: amountPaise,
             status: "active",
           });
@@ -2519,6 +2546,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isGuestCheckout: false,
         token: checkoutAuthToken ?? null,
         resumedPendingBooking: !!resumableBooking,
+        heldUntil: booking.heldUntil
+          ? new Date(booking.heldUntil).toISOString()
+          : null,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

@@ -1,16 +1,18 @@
 /** Member- and guest-submitted payment reference (QR + payment link flows). */
 
+import { CUSTOMER_SUPPORT } from "./support";
+
 export const MANUAL_PAYMENT_REF_LENGTH = 4;
 
 export const MANUAL_PAYMENT_VERIFICATION_TAT = "15 minutes";
 
-export const MANUAL_PAYMENT_SUPPORT_WHATSAPP = "9513022331";
-export const MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF = "https://wa.me/919513022331";
+export const MANUAL_PAYMENT_SUPPORT_WHATSAPP = CUSTOMER_SUPPORT.phoneLocal;
+export const MANUAL_PAYMENT_SUPPORT_WHATSAPP_HREF = CUSTOMER_SUPPORT.whatsappHref;
 
 export const MANUAL_PAYMENT_WORKING_HOURS = {
-  daysLabel: "Every day of the week",
-  timeRangeLabel: "6:00 AM to 9:00 PM IST",
-  shortLabel: "Every day, 6:00 AM to 9:00 PM IST",
+  daysLabel: CUSTOMER_SUPPORT.daysLabel,
+  timeRangeLabel: CUSTOMER_SUPPORT.hoursShort,
+  shortLabel: `${CUSTOMER_SUPPORT.daysLabel}, ${CUSTOMER_SUPPORT.hoursShort}`,
 } as const;
 
 export const MANUAL_PAYMENT_SUBMITTED_COPY = {

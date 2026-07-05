@@ -1,5 +1,6 @@
 import { LegalPageLayout, SensitiveDataCallout } from "@/components/legal/legal-page-layout";
 import { LEGAL_CONFIG, formatRegisteredOffice } from "@shared/legal-config";
+import { CUSTOMER_SUPPORT } from "@shared/support";
 import { Link } from "wouter";
 
 const SECTIONS = [
@@ -172,8 +173,8 @@ export default function PrivacyNoticePage() {
             {email}
           </a>{" "}
           {lang === "kn"
-            ? `ಗೆ ಅಥವಾ ನಿಮ್ಮ ಖಾತೆ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಮೂಲಕ ಕಳುಹಿಸಬಹುದು. ನೋಂದಾಯಿತ ಕಚೇರಿ: ${formatRegisteredOffice()}. ಸಿಐಎನ್: ${LEGAL_CONFIG.cin}.`
-            : `or through your account settings. Registered office: ${formatRegisteredOffice()}. CIN: ${LEGAL_CONFIG.cin}.`}
+            ? `ಗೆ ಅಥವಾ ನಿಮ್ಮ ಖಾತೆ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಮೂಲಕ ಕಳುಹಿಸಬಹುದು. ಗ್ರಾಹಕ ಸಂರಕ್ಷಣೆ: ${CUSTOMER_SUPPORT.phoneDisplay} (${CUSTOMER_SUPPORT.hours}). ನೋಂದಾಯಿತ ಕಚೇರಿ: ${formatRegisteredOffice()}. ಸಿಐಎನ್: ${LEGAL_CONFIG.cin}.`
+            : `or through your account settings. Customer care: ${CUSTOMER_SUPPORT.phoneDisplay} (${CUSTOMER_SUPPORT.hours}). Registered office: ${formatRegisteredOffice()}. CIN: ${LEGAL_CONFIG.cin}.`}
         </p>
       </section>
         </>

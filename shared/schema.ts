@@ -62,7 +62,12 @@ export const classTypes = pgTable("class_types", {
   /** Set when a super admin retires the type; hidden from catalogue pickers. */
   retiredAt: timestamp("retired_at"),
   retirementReason: text("retirement_reason"),
+  /** Comma-separated contraindications shown as "Not Suitable" tags (E-01). */
+  strictNoTo: text("strict_no_to"),
 });
+
+/** Max characters for class_types.strict_no_to (admin + server validation). */
+export const STRICT_NO_TO_MAX_LENGTH = 120;
 
 export const instructors = pgTable("instructors", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

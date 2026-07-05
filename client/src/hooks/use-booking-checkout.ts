@@ -10,6 +10,7 @@ import {
   formatSessionPrice,
   openRazorpayPayment,
   syncPaymentStatusAfterVerifyFailure,
+  extractBookingHeldUntil,
 } from "@/lib/booking-payment";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { clearPendingBooking } from "@/lib/pending-booking";
@@ -18,6 +19,7 @@ import {
   type PaymentProcessingPhase,
 } from "@/lib/payment-processing-messages";
 import { TRIAL_DROPIN_MIDSESSION_MESSAGE } from "@shared/booking-eligibility";
+import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
 
 /** Signed-in member checkout state machine. Mirrors the booking-modal member flow. */
 export type CheckoutStep =
@@ -58,12 +60,17 @@ export function useBookingCheckout({
   const [step, setStep] = useState<CheckoutStep>("idle");
   const [isPaying, setIsPaying] = useState(false);
   const [paymentPhase, setPaymentPhase] = useState<PaymentProcessingPhase | null>(null);
+  const [heldUntil, setHeldUntil] = useState<string | null>(null);
   const [alreadyBookedView, setAlreadyBookedView] = useState<{
     className: string;
     instructorName: string;
     sessionDate: string;
   } | null>(null);
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
+
+  const holdCountdown = usePaymentHoldCountdown(
+    step === "pay" && paymentResult?.paymentRequired !== false ? heldUntil : null,
+  );
 
   const invalidateSessions = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/classes"] });
@@ -78,16 +85,52 @@ export function useBookingCheckout({
     setStep("idle");
     setIsPaying(false);
     setPaymentPhase(null);
+    setHeldUntil(null);
     setAlreadyBookedView(null);
     setNextBatchPrompt(null);
   }, []);
+
+  const releaseCheckout = useCallback(async (): Promise<boolean> => {
+    const bookingId = paymentResult?.bookingId;
+    if (!bookingId) return false;
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/cancel-checkout`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        throw new Error("Release failed");
+      }
+      invalidateSessions();
+      setHeldUntil(null);
+      setPaymentResult(null);
+      setStep("idle");
+      return true;
+    } catch {
+      toast({
+        title: "Could not release spot",
+        description: "Please try again or contact support.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  }, [paymentResult, invalidateSessions, toast]);
 
   const startRazorpayCheckout = useCallback(
     async (booking: MemberBookingResult) => {
       if (!booking.bookingId || !booking.razorpayKeyId) return;
       const payerName = user?.name?.trim();
       const payerEmail = user?.email?.trim();
-      if (!payerName || !payerEmail) return;
+      if (!payerName || !payerEmail) {
+        setIsPaying(false);
+        toast({
+          title: "Profile incomplete",
+          description: "Add your name and verified email before paying.",
+          variant: "destructive",
+        });
+        return;
+      }
       setIsPaying(true);
       setPaymentPhase("creating-order");
       try {
@@ -154,6 +197,7 @@ export function useBookingCheckout({
                 throw new Error(verified.message || "Payment verification failed");
               }
               setPaymentOutcome(confirmed);
+              setHeldUntil(null);
               setStep("payment-confirmed");
               invalidateSessions();
               onConfirmed?.(confirmed);
@@ -173,11 +217,10 @@ export function useBookingCheckout({
           onDismiss: () => {
             setIsPaying(false);
             setPaymentPhase(null);
-            setStep("failed");
+            setStep("pay");
             toast({
               title: "Payment not completed",
               description: "Your spot is still reserved. Retry payment when ready.",
-              variant: "destructive",
             });
           },
         });
@@ -249,28 +292,27 @@ export function useBookingCheckout({
       clearPendingBooking();
       invalidateSessions();
       if (result.token) setAuthToken(result.token);
-
-      if (result.useRazorpayCheckout && result.razorpayKeyId) {
-        setPaymentResult(result);
-        setStep("pay");
-        if (result.token) await refreshUser();
-        await startRazorpayCheckout(result);
-        return;
-      }
       if (result.token) await refreshUser();
 
-      if (result.useQrPayment && result.qrPayment) {
+      const hold = extractBookingHeldUntil(result);
+      setHeldUntil(hold);
+
+      const needsPayment =
+        result.useRazorpayCheckout ||
+        result.useQrPayment ||
+        isValidPaymentUrl(result.razorpayLink) ||
+        result.paymentRequired;
+
+      if (needsPayment) {
         setPaymentResult(result);
         setStep("pay");
-        return;
-      }
-      if (isValidPaymentUrl(result.razorpayLink)) {
-        setPaymentResult(result);
-        setStep("pay");
+        if (result.useRazorpayCheckout && result.razorpayKeyId) {
+          setIsPaying(true);
+          void startRazorpayCheckout(result);
+        }
         return;
       }
 
-      // No payment required → reserved/confirmed.
       setPaymentResult(result);
       setStep("payment-confirmed");
       setPaymentOutcome({
@@ -359,6 +401,8 @@ export function useBookingCheckout({
     paymentOutcome,
     isPaying,
     paymentPhase,
+    heldUntil,
+    holdCountdown,
     processingCopy: paymentPhase ? PAYMENT_PROCESSING_MESSAGES[paymentPhase] : null,
     alreadyBookedView,
     setAlreadyBookedView,
@@ -369,6 +413,7 @@ export function useBookingCheckout({
     retryPayment,
     markManualSubmitted,
     joinNextBatch,
+    releaseCheckout,
     reset,
     formatSessionPrice,
   };

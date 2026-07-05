@@ -5,6 +5,7 @@ import {
   bookingCountsTowardCapacity,
   canResumePaymentCheckout,
   holdExpiresAt,
+  initialBookingHeldUntil,
   isPaymentHoldActive,
   PAYMENT_HOLD_MINUTES,
 } from "../shared/booking-payment-hold.ts";
@@ -14,6 +15,14 @@ const activeHoldUntil = holdExpiresAt(Date.now()).toISOString();
 const expiredHoldUntil = holdExpiresAt(Date.now() - (PAYMENT_HOLD_MINUTES + 1) * 60 * 1000).toISOString();
 
 describe("booking payment hold", () => {
+  it("initialBookingHeldUntil sets hold for paid sessions only", () => {
+    const now = Date.now();
+    const paid = initialBookingHeldUntil(true, now);
+    assert.ok(paid);
+    assert.equal(paid!.getTime(), now + PAYMENT_HOLD_MINUTES * 60 * 1000);
+    assert.equal(initialBookingHeldUntil(false, now), null);
+  });
+
   it("isPaymentHoldActive respects heldUntil", () => {
     const now = Date.now();
     assert.equal(isPaymentHoldActive(holdExpiresAt(now), now), true);

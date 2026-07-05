@@ -113,6 +113,11 @@ export default function TermsOfServicePage() {
                 ? "ಈ ನಿಯಮಗಳು ಭಾರತದ ಕಾನೂನುಗಳಿಗೆ ಒಳಪಟ್ಟಿವೆ. ಬೆಂಗಳೂರು, ಕರ್ನಾಟಕದ ನ್ಯಾಯಾಲಯಗಳಿಗೆ ವಿಶೇಷ ಅಧಿಕಾರಾವಕಾಶವಿದೆ, ಅನ್ವಯವಾಗುವ ಸ್ಥಳದಲ್ಲಿ ಉಪಭೋಕ್ತಾ ವೇದಿಕೆಗಳು ಅಥವಾ ಡೇಟಾ ಪ್ರೊಟೆಕ್ಷನ್ ಬೋರ್ಡ್ ಆಫ್ ಇಂಡಿಯಾವನ್ನು ಸಂಪರ್ಕಿಸುವ ನಿಮ್ಮ ಹಕ್ಕು ಉಳಿದಿದೆ."
                 : "These Terms are governed by the laws of India. Courts at Bengaluru, Karnataka shall have exclusive jurisdiction, subject to your right to approach consumer forums or the Data Protection Board of India where applicable."}
             </p>
+            <p>
+              {lang === "kn"
+                ? `ಸಾಮಾನ್ಯ ಬುಕ್ಕಿಂಗ್ ಅಥವಾ ವೇದಿಕೆ ಪ್ರಶ್ನೆಗಳಿಗೆ: ${LEGAL_CONFIG.customerCare.email}, ${LEGAL_CONFIG.customerCare.phone} (${LEGAL_CONFIG.customerCare.hours}).`
+                : `For general booking or platform questions: ${LEGAL_CONFIG.customerCare.email}, ${LEGAL_CONFIG.customerCare.phone} (${LEGAL_CONFIG.customerCare.hours}).`}
+            </p>
           </section>
         </>
       )}

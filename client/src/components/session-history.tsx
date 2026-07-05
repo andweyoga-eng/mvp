@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -11,7 +11,6 @@ import {
   X,
   RefreshCw,
   Star,
-  Video,
   Download,
   ExternalLink,
 } from "lucide-react";
@@ -23,8 +22,13 @@ import {
   sessionAwaitingPaymentUpdate,
   type MemberSession,
 } from "@/lib/member-sessions";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getMeetJoinMessage } from "@shared/session-meet-access";
+import {
+  fetchMemberSubscriptions,
+  memberSubscriptionsQueryKey,
+} from "@/lib/member-subscriptions";
+import { summarizeMemberSessionStatuses } from "@shared/member-session-counts";
+import { PackageUsageCollapsible } from "@/components/session-count-summary";
+import { MeetLinkJoinControl } from "@/components/meet-link-join-control";
 import {
   canRetrySessionPayment,
   defaultPaymentRetryDeps,
@@ -101,6 +105,17 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
   const upcomingSessions = sessions.filter((s) => s.status === "upcoming");
   const completedSessions = sessions.filter((s) => s.status === "completed");
   const cancelledSessions = sessions.filter((s) => s.status === "cancelled");
+
+  const sessionSummary = useMemo(
+    () => summarizeMemberSessionStatuses(sessions),
+    [sessions],
+  );
+
+  const { data: subscriptions = [] } = useQuery({
+    queryKey: memberSubscriptionsQueryKey(userId),
+    queryFn: fetchMemberSubscriptions,
+    retry: 1,
+  });
 
   const tabBtn = (tab: string, label: string, count: number) => (
     <button
@@ -260,39 +275,14 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
             {session.paymentStatus === "paid" &&
               session.googleMeetLink &&
               session.meetJoinState !== "hidden" && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {session.meetJoinState === "active" ? (
-                      <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                        <a href={session.googleMeetLink} target="_blank" rel="noopener noreferrer">
-                          <Video className="mr-1 h-3 w-3" />
-                          Join session
-                        </a>
-                      </Button>
-                    ) : (
-                      <span tabIndex={0} className="inline-flex">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 cursor-not-allowed text-xs opacity-50"
-                          disabled
-                        >
-                          <Video className="mr-1 h-3 w-3" />
-                          Join session
-                        </Button>
-                      </span>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-[260px] text-center">
-                    {getMeetJoinMessage({
-                      sessionStart: start,
-                      sessionDurationMinutes: duration,
-                      isPaid:
-                        session.paymentStatus === "paid" || session.paymentStatus === "waived",
-                      hasMeetLink: !!session.googleMeetLink,
-                    })}
-                  </TooltipContent>
-                </Tooltip>
+                <MeetLinkJoinControl
+                  size="sm"
+                  googleMeetLink={session.googleMeetLink}
+                  sessionStart={start}
+                  sessionDurationMinutes={duration}
+                  isPaid
+                  showInlineHint
+                />
               )}
             {session.invoiceUrl && (
               <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
@@ -423,6 +413,12 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
 
   return (
     <div className="space-y-4" data-testid="session-history">
+      <PackageUsageCollapsible
+        summary={sessionSummary}
+        subscriptions={subscriptions}
+        sessions={sessions}
+      />
+
       <div className="flex gap-1.5 rounded-[14px] bg-muted p-1.5">
         {tabBtn("upcoming", "Upcoming", upcomingSessions.length)}
         {tabBtn("completed", "Completed", completedSessions.length)}

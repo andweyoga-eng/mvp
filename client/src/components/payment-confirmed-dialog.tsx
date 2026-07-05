@@ -9,12 +9,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
+import { MeetLinkJoinControl } from "@/components/meet-link-join-control";
 
 export type PaymentConfirmedDetails = {
   bookingId: string;
   className: string;
   instructorName: string;
   sessionDate: string;
+  googleMeetLink?: string | null;
+  sessionDurationMinutes?: number;
 };
 
 export function PaymentConfirmedContent({
@@ -27,6 +30,7 @@ export function PaymentConfirmedContent({
   onCancel: () => void;
 }) {
   const sessionWhen = new Date(details.sessionDate);
+  const durationMinutes = details.sessionDurationMinutes ?? 60;
 
   return (
     <div className="space-y-4">
@@ -41,13 +45,22 @@ export function PaymentConfirmedContent({
         </p>
       </div>
 
-      <div className="rounded-lg border border-green-100 bg-white/80 p-3 text-sm text-green-900 space-y-1">
-        <p className="font-medium">{details.className}</p>
-        <p className="text-green-700">With {details.instructorName}</p>
-        <p className="flex items-center gap-2 text-green-800">
-          <Clock className="h-4 w-4 shrink-0" />
-          {format(sessionWhen, "EEE, MMM d")} · {format(sessionWhen, "h:mm a")}
-        </p>
+      <div className="rounded-lg border border-green-100 bg-white/80 p-3 text-sm text-green-900 space-y-3">
+        <div className="space-y-1">
+          <p className="font-medium">{details.className}</p>
+          <p className="text-green-700">With {details.instructorName}</p>
+          <p className="flex items-center gap-2 text-green-800">
+            <Clock className="h-4 w-4 shrink-0" />
+            {format(sessionWhen, "EEE, MMM d")} · {format(sessionWhen, "h:mm a")}
+          </p>
+        </div>
+        <MeetLinkJoinControl
+          googleMeetLink={details.googleMeetLink ?? null}
+          sessionStart={sessionWhen}
+          sessionDurationMinutes={durationMinutes}
+          isPaid
+          className="w-full border-green-200 text-green-900 hover:bg-green-50"
+        />
       </div>
 
       <div className="flex flex-col gap-2">

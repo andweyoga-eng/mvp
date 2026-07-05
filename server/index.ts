@@ -50,9 +50,9 @@ app.use((req, res, next) => {
         "img-src 'self' data: https:",
         "font-src 'self' data: https:",
         "style-src 'self' 'unsafe-inline'",
-        "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com",
-        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://checkout.razorpay.com",
-        "frame-src https://accounts.google.com https://checkout.razorpay.com",
+        "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com https://*.razorpay.com",
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://checkout.razorpay.com https://*.razorpay.com",
+        "frame-src https://accounts.google.com https://checkout.razorpay.com https://*.razorpay.com",
       ].join("; "),
     );
   }

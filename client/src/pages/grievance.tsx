@@ -68,6 +68,10 @@ export default function GrievancePage() {
                 <strong>{lang === "kn" ? "ಅಂಚೆ ವಿಳಾಸ:" : "Postal address:"}</strong>{" "}
                 {lang === "kn" ? "ನೋಂದಾಯಿತ ಕಚೇರಿಯಂತೆಯೇ" : "same as registered office"}
               </li>
+              <li>
+                <strong>{lang === "kn" ? "ಗ್ರಾಹಕ ಸಂರಕ್ಷಣೆ:" : "Customer care:"}</strong>{" "}
+                {LEGAL_CONFIG.customerCare.phone} ({LEGAL_CONFIG.customerCare.hours})
+              </li>
             </ul>
           </section>
 

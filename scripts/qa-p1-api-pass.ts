@@ -1,4 +1,9 @@
 import "dotenv/config";
+/**
+ * @deprecated Legacy ad-hoc QA script with hardcoded session IDs and no cleanup.
+ * Prefer: npm run qa:smoke-a01-e01 (creates tagged fixtures, asserts, auto-cleans).
+ * If you must run this, cancel or delete any bookings it creates afterward.
+ */
 import { generateGuestCheckoutToken } from "../server/auth";
 import { storage } from "../server/storage";
 

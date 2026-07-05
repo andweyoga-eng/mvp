@@ -20,6 +20,8 @@ import {
   QA_FIXTURE_QR_NAME_PREFIX,
   QA_FIXTURE_USER_EMAIL_DOMAIN,
   QA_FIXTURE_USER_EMAIL_PREFIXES,
+  QA_SMOKE_CLASS_TYPE_PREFIX,
+  QA_SMOKE_INSTRUCTOR_PREFIX,
   SEED_CLASS_TYPE_NAMES,
   SEED_INSTRUCTOR_NAMES,
 } from "../../shared/seed-catalog.ts";
@@ -43,6 +45,7 @@ import {
 function fixtureClassTypeCondition() {
   const parts = [inArray(classTypes.name, [...SEED_CLASS_TYPE_NAMES])];
   parts.push(like(classTypes.name, `${QA_FIXTURE_CLASS_TYPE_PREFIX}%`));
+  parts.push(like(classTypes.name, `${QA_SMOKE_CLASS_TYPE_PREFIX}%`));
   return or(...parts);
 }
 
@@ -53,6 +56,7 @@ function fixtureInstructorCondition() {
   for (const prefix of QA_FIXTURE_INSTRUCTOR_PREFIXES) {
     parts.push(like(instructors.name, `${prefix}%`));
   }
+  parts.push(like(instructors.name, `${QA_SMOKE_INSTRUCTOR_PREFIX}%`));
   return or(...parts);
 }
 
