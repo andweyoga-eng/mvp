@@ -80,7 +80,7 @@ import {
   normalizeAdminPassword,
 } from "./admin-bootstrap";
 import { deleteHealthDocumentObject } from "./health-document-upload";
-import { hasHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
+import { hasHealthSupportingMaterials, type HealthMediaLink } from "@shared/health-media-links";
 
 /** Resolves after first DB init + admin bootstrap sync (await before handling traffic). */
 let resolveStorageReady: () => void = () => {};
@@ -3616,7 +3616,7 @@ export class DatabaseStorage implements IStorage {
   // Profile completeness calculation helper
   private calculateProfileCompleteness(user: User): ProfileCompleteness {
     const healthUpdateComplete = isHealthDisclosureComplete(user.healthUpdateText);
-    const documentsComplete = hasHealthMediaLinks(
+    const documentsComplete = hasHealthSupportingMaterials(
       user.healthMediaLinks,
       user.healthDocumentUrls,
     );

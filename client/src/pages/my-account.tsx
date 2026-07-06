@@ -489,7 +489,7 @@ export default function MyAccount() {
     try {
       const body: Record<string, unknown> = {
         healthUpdateText: payload.text,
-        healthDocumentUrls: [],
+        healthDocumentUrls: payload.documentUrls,
         healthMediaLinks: payload.mediaLinks,
       };
       if (!healthConsentGiven) {
@@ -522,11 +522,11 @@ export default function MyAccount() {
       setProfileData((prev) => ({
         ...prev,
         healthUpdateText: payload.text,
-        healthDocumentUrls: [],
+        healthDocumentUrls: payload.documentUrls,
         healthMediaLinks: payload.mediaLinks,
       }));
       setHealthConsentGiven(true);
-      toast({ title: "Health note saved", description: "Your links stay in your Google Drive — we only store the link." });
+      toast({ title: "Health note saved" });
     } catch (err) {
       toast({
         title: "Error",
@@ -1025,7 +1025,7 @@ export default function MyAccount() {
                   setProfileData((p) => ({
                     ...p,
                     healthUpdateText: payload.text,
-                    healthDocumentUrls: [],
+                    healthDocumentUrls: payload.documentUrls,
                     healthMediaLinks: payload.mediaLinks,
                   }));
                 }}

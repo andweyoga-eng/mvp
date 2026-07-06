@@ -18,12 +18,17 @@ import {
 } from "@shared/health-disclosure";
 import {
   type HealthMediaLink,
+  filterHealthObjectDocumentUrls,
   resolveHealthMediaLinks,
 } from "@shared/health-media-links";
 import {
   HealthMediaLinksEditor,
   HealthMediaLinksSummary,
 } from "@/components/health-media-links-section";
+import {
+  HealthDocumentUploadField,
+  HealthDocumentUploadSummary,
+} from "@/components/health-document-upload-field";
 
 type HealthTab = "current" | "history";
 
@@ -63,9 +68,12 @@ export function AccountHealthNoteSection({
   const [isEditing, setIsEditing] = useState(() => startInEditMode && !isHealthDisclosureComplete(currentText));
   const [draftText, setDraftText] = useState("");
   const [draftMediaLinks, setDraftMediaLinks] = useState<HealthMediaLink[]>([]);
+  const [draftDocumentUrls, setDraftDocumentUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   const consentCopy = CONSENT_COPY[consentLang];
 
   const resolvedCurrentLinks = resolveHealthMediaLinks(mediaLinks, documentUrls);
+  const currentUploads = filterHealthObjectDocumentUrls(documentUrls);
   const hasCurrentNote = isHealthDisclosureComplete(currentText);
   const showConsentPrompt = isEditing && !healthConsentGiven;
 
@@ -78,6 +86,7 @@ export function AccountHealthNoteSection({
 
   const saveDisabled =
     isLoading ||
+    isUploading ||
     !isHealthDisclosureComplete(draftText) ||
     (showConsentPrompt && !healthConsentChecked);
 
@@ -85,6 +94,7 @@ export function AccountHealthNoteSection({
     if (!isEditing) return;
     setDraftText(currentText);
     setDraftMediaLinks(resolveHealthMediaLinks(mediaLinks, documentUrls));
+    setDraftDocumentUrls(filterHealthObjectDocumentUrls(documentUrls));
   }, [isEditing, currentText, mediaLinks, documentUrls]);
 
   const subTabBtn = (active: boolean) =>
@@ -102,6 +112,7 @@ export function AccountHealthNoteSection({
     setIsEditing(false);
     setDraftText(currentText);
     setDraftMediaLinks(resolveHealthMediaLinks(mediaLinks, documentUrls));
+    setDraftDocumentUrls(filterHealthObjectDocumentUrls(documentUrls));
   };
 
   const handleSave = async () => {
@@ -115,7 +126,7 @@ export function AccountHealthNoteSection({
     }
     await onSave({
       text: draftText.trim(),
-      documentUrls: [],
+      documentUrls: draftDocumentUrls,
       mediaLinks: draftMediaLinks,
     });
     setIsEditing(false);
@@ -149,6 +160,7 @@ export function AccountHealthNoteSection({
           ) : (
             history.map((entry, i) => {
               const entryLinks = resolveHealthMediaLinks(entry.mediaLinks, entry.documentUrls);
+              const entryUploads = filterHealthObjectDocumentUrls(entry.documentUrls);
               return (
                 <div
                   key={`${entry.savedAt}-${i}`}
@@ -158,7 +170,8 @@ export function AccountHealthNoteSection({
                     {new Date(entry.savedAt).toLocaleDateString()}
                   </p>
                   <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
-                  <div className="mt-2">
+                  <div className="mt-2 space-y-2">
+                    <HealthDocumentUploadSummary documentUrls={entryUploads} />
                     <HealthMediaLinksSummary links={entryLinks} />
                   </div>
                 </div>
@@ -201,8 +214,8 @@ export function AccountHealthNoteSection({
                   <span className="flex items-start gap-2 text-sm leading-relaxed">
                     <span className="mt-0.5 shrink-0" aria-hidden>💚</span>
                     <span>
-                      {consentCopy.healthConsent} Links you share may be opened by our team in read-only mode; we do
-                      not store file contents.
+                      {consentCopy.healthConsent} Uploaded files are stored securely; Google links are opened
+                      read-only and we never copy file contents from Drive.
                     </span>
                   </span>
                 }
@@ -234,6 +247,7 @@ export function AccountHealthNoteSection({
             onClick={() => {
               setDraftText(HEALTH_NO_CONCERNS_TEXT);
               setDraftMediaLinks([]);
+              setDraftDocumentUrls([]);
             }}
             className="rounded-full border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             data-testid="health-no-concerns"
@@ -242,10 +256,17 @@ export function AccountHealthNoteSection({
             No current concerns
           </Button>
 
+          <HealthDocumentUploadField
+            documentUrls={draftDocumentUrls}
+            onChange={setDraftDocumentUrls}
+            disabled={isLoading || isUploading}
+            onUploadingChange={setIsUploading}
+          />
+
           <HealthMediaLinksEditor
             value={draftMediaLinks}
             onChange={setDraftMediaLinks}
-            disabled={isLoading}
+            disabled={isLoading || isUploading}
           />
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -262,7 +283,7 @@ export function AccountHealthNoteSection({
               type="button"
               variant="outline"
               onClick={cancelEdit}
-              disabled={isLoading}
+              disabled={isLoading || isUploading}
               className="flex-1 rounded-full py-6 font-bold"
             >
               Cancel
@@ -280,7 +301,8 @@ export function AccountHealthNoteSection({
                 </p>
               ) : null}
               <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{currentText}</p>
-              <div className="mt-3">
+              <div className="mt-3 space-y-2">
+                <HealthDocumentUploadSummary documentUrls={currentUploads} />
                 <HealthMediaLinksSummary links={resolvedCurrentLinks} />
               </div>
             </div>

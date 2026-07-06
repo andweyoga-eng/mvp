@@ -1322,8 +1322,10 @@ export default function AdminDashboard() {
 
       {healthViewUser ? (
         <AdminHealthMaterialsPanel
+          userId={healthViewUser.id}
           userName={healthViewUser.name}
           healthText={healthViewUser.healthUpdateText}
+          documentUrls={healthViewUser.healthDocumentUrls ?? []}
           mediaLinks={resolveHealthMediaLinks(
             healthViewUser.healthMediaLinks,
             healthViewUser.healthDocumentUrls,

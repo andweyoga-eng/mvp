@@ -38,6 +38,37 @@ export async function deleteLocalHealthDocument(objectPath: string): Promise<boo
   }
 }
 
+export async function streamLocalHealthDocumentAdmin(
+  objectPath: string,
+  res: Response,
+): Promise<void> {
+  const filePath = filePathForObjectPath(objectPath);
+  if (!filePath) {
+    res.status(404).json({ error: 'Document not found' });
+    return;
+  }
+
+  try {
+    const buffer = await fs.readFile(filePath);
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType =
+      ext === '.pdf'
+        ? 'application/pdf'
+        : ext === '.png'
+          ? 'image/png'
+          : 'image/jpeg';
+
+    res.set({
+      'Content-Type': contentType,
+      'Content-Length': String(buffer.length),
+      'Cache-Control': 'private, max-age=3600',
+    });
+    res.send(buffer);
+  } catch {
+    res.status(404).json({ error: 'Document not found' });
+  }
+}
+
 export async function streamLocalHealthDocument(
   objectPath: string,
   userId: string | undefined,

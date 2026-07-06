@@ -55,7 +55,9 @@ import { parseHealthHistory, type HealthHistoryEntry } from "@shared/health-disc
 import {
   resolveHealthMediaLinks,
   sanitizeHealthMediaLinksForSave,
+  filterHealthObjectDocumentUrls,
 } from "@shared/health-media-links";
+import { userOwnsHealthDocumentPath } from "./s3HealthStorage";
 import {
   applyPaymentFailureHold,
   cancelGuestCheckout,
@@ -150,6 +152,7 @@ import {
   HealthDocumentUploadError,
   healthDocumentUploadBodySchema,
   isHealthDocumentUploadEnabled,
+  streamHealthDocumentForAdmin,
   streamHealthDocumentForUser,
   uploadHealthDocumentForUser,
 } from "./health-document-upload";
@@ -713,15 +716,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingText = (existing.healthUpdateText ?? "").trim();
       let healthUpdateHistory = parseHealthHistory(existing.healthUpdateHistory);
 
-      const existingMediaLinks = resolveHealthMediaLinks(
-        existing.healthMediaLinks,
-        existing.healthDocumentUrls,
-      );
-
       const savedMediaLinks =
         healthUpdateData.healthMediaLinks !== undefined
           ? sanitizeHealthMediaLinksForSave(healthUpdateData.healthMediaLinks)
-          : existingMediaLinks;
+          : resolveHealthMediaLinks(existing.healthMediaLinks, existing.healthDocumentUrls);
+
+      const savedDocumentUrls =
+        healthUpdateData.healthDocumentUrls !== undefined
+          ? [...new Set(
+              healthUpdateData.healthDocumentUrls
+                .map((url) => url.trim())
+                .filter((url) => userOwnsHealthDocumentPath(url, userId)),
+            )]
+          : filterHealthObjectDocumentUrls(existing.healthDocumentUrls);
 
       if (existingText && existingText !== newText) {
         const archived: HealthHistoryEntry = {
@@ -732,8 +739,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : typeof existing.healthUpdateLastModified === "string"
                 ? existing.healthUpdateLastModified
                 : new Date().toISOString(),
-          documentUrls: existing.healthDocumentUrls ?? [],
-          mediaLinks: existingMediaLinks,
+          documentUrls: filterHealthObjectDocumentUrls(existing.healthDocumentUrls),
+          mediaLinks: resolveHealthMediaLinks(existing.healthMediaLinks, existing.healthDocumentUrls),
         };
         healthUpdateHistory = [archived, ...healthUpdateHistory].slice(0, 5);
       }
@@ -741,14 +748,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const mergedForStatus = {
         ...existing,
         healthUpdateText: healthUpdateData.healthUpdateText,
-        healthDocumentUrls: [],
+        healthDocumentUrls: savedDocumentUrls,
         healthMediaLinks: savedMediaLinks,
       };
       const profileCompletionStatus = computeProfileCompletionStatus(mergedForStatus);
 
       const updatedUser = await storage.updateUserHealthData(userId, {
         healthUpdateText: healthUpdateData.healthUpdateText,
-        healthDocumentUrls: [],
+        healthDocumentUrls: savedDocumentUrls,
         healthMediaLinks: savedMediaLinks,
         healthUpdateHistory,
         profileCompletionStatus,
@@ -3163,6 +3170,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update user" });
     }
   });
+
+  if (isHealthDocumentUploadEnabled()) {
+    app.get("/api/admin/users/:userId/health-documents", requireAdminAuth, async (req, res) => {
+      const objectPath = typeof req.query.path === "string" ? req.query.path : "";
+      if (!objectPath || !userOwnsHealthDocumentPath(objectPath, req.params.userId)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      try {
+        await streamHealthDocumentForAdmin(objectPath, res);
+      } catch (error) {
+        console.error("Admin health document stream error:", error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to load document" });
+        }
+      }
+    });
+  }
 
   app.post("/api/admin/users/bulk", requireAdminAuth, async (_req, res) => {
     // PLACEHOLDER: Excel bulk upload — needs multer/xlsx parser + row validation + invite emails

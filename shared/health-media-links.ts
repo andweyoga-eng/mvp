@@ -177,7 +177,15 @@ export function parseHealthMediaLinks(raw: unknown): HealthMediaLink[] {
   );
 }
 
-/** Merge legacy object-storage paths and document URL strings into typed links. */
+export function isHealthObjectDocumentPath(url: string): boolean {
+  return /^\/objects\/health-documents\/[^/]+\/[^/]+$/.test(url.trim());
+}
+
+export function filterHealthObjectDocumentUrls(urls: string[] | null | undefined): string[] {
+  return (urls ?? []).filter(isHealthObjectDocumentPath);
+}
+
+/** Google Drive / Docs links only — excludes uploaded object-storage paths. */
 export function resolveHealthMediaLinks(
   mediaLinks: unknown,
   legacyDocumentUrls: string[] | null | undefined,
@@ -185,28 +193,20 @@ export function resolveHealthMediaLinks(
   const parsed = parseHealthMediaLinks(mediaLinks);
   if (parsed.length > 0) return parsed;
 
-  const legacy = legacyDocumentUrls ?? [];
+  const legacy = (legacyDocumentUrls ?? []).filter((url) => !isHealthObjectDocumentPath(url));
   const now = new Date().toISOString();
-  return legacy
-    .map((url, index) => {
-      const normalized = normalizeHealthMediaUrl(url);
-      if (normalized) {
-        return {
-          id: `legacy-${index}`,
-          type: "document" as const,
-          url: normalized,
-          addedAt: now,
-        };
-      }
-      return {
-        id: `legacy-object-${index}`,
-        type: "document" as const,
-        url,
-        label: "Uploaded file",
-        addedAt: now,
-      };
-    })
-    .filter((link) => Boolean(link.url));
+  const migrated: HealthMediaLink[] = [];
+  legacy.forEach((url, index) => {
+    const normalized = normalizeHealthMediaUrl(url);
+    if (!normalized) return;
+    migrated.push({
+      id: `legacy-${index}`,
+      type: "document",
+      url: normalized,
+      addedAt: now,
+    });
+  });
+  return migrated;
 }
 
 export function hasHealthMediaLinks(
@@ -214,6 +214,17 @@ export function hasHealthMediaLinks(
   legacyDocumentUrls?: string[] | null,
 ): boolean {
   return resolveHealthMediaLinks(mediaLinks, legacyDocumentUrls).length > 0;
+}
+
+/** True when the member shared Google links and/or a direct upload. */
+export function hasHealthSupportingMaterials(
+  mediaLinks: unknown,
+  documentUrls?: string[] | null,
+): boolean {
+  return (
+    hasHealthMediaLinks(mediaLinks, documentUrls) ||
+    filterHealthObjectDocumentUrls(documentUrls).length > 0
+  );
 }
 
 export function sanitizeHealthMediaLinksForSave(

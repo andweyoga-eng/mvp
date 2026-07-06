@@ -4,6 +4,7 @@ import {
   HEALTH_DOCUMENT_MAX_BYTES,
   HEALTH_DOCUMENT_TOO_LARGE_MESSAGE,
 } from '@shared/health-disclosure';
+import { isHealthObjectDocumentPath } from '@shared/health-media-links';
 import {
   isAllowedHealthDocumentMeta,
   isHealthDocumentWithinSizeLimit,
@@ -19,6 +20,7 @@ import {
   deleteLocalHealthDocument,
   saveLocalHealthDocument,
   streamLocalHealthDocument,
+  streamLocalHealthDocumentAdmin,
 } from './localHealthStorage';
 
 export type HealthDocumentUploadBackend = 's3' | 'local';
@@ -116,6 +118,37 @@ export async function streamHealthDocumentForUser(
       res.status(401).json({ error: 'Unauthorized access to document' });
       return;
     }
+    try {
+      await streamS3HealthDocument(objectPath, res);
+    } catch (error) {
+      console.error('S3 document stream error:', error);
+      if (!res.headersSent) {
+        res.status(404).json({ error: 'Document not found' });
+      }
+    }
+    return;
+  }
+
+  res.status(503).json({ error: 'Health document storage is not configured.' });
+}
+
+export async function streamHealthDocumentForAdmin(
+  objectPath: string,
+  res: Response,
+): Promise<void> {
+  if (!isHealthObjectDocumentPath(objectPath)) {
+    res.status(400).json({ error: 'Invalid document path' });
+    return;
+  }
+
+  const backend = resolveHealthDocumentUploadBackend();
+
+  if (backend === 'local') {
+    await streamLocalHealthDocumentAdmin(objectPath, res);
+    return;
+  }
+
+  if (backend === 's3') {
     try {
       await streamS3HealthDocument(objectPath, res);
     } catch (error) {
