@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
 
 export interface AvailableTodaySessionCardProps {
   sessionId: string;
@@ -11,6 +12,7 @@ export interface AvailableTodaySessionCardProps {
   imageUrl?: string;
   soldOut: boolean;
   intensityLabel?: string;
+  strictNoTo?: string | null;
   onBook: (sessionId: string) => void;
 }
 
@@ -31,6 +33,7 @@ export function AvailableTodaySessionCard({
   imageUrl,
   soldOut,
   intensityLabel,
+  strictNoTo,
   onBook,
 }: AvailableTodaySessionCardProps) {
   return (
@@ -79,6 +82,11 @@ export function AvailableTodaySessionCard({
           </div>
           <span className="truncate text-sm text-dz-muted">{instructorName}</span>
         </div>
+        <StrictNoToBlock
+          strictNoTo={strictNoTo}
+          compact
+          className="mb-3 border-none pt-0"
+        />
         <Button
           className={cn(
             "mt-auto w-full rounded-xl font-semibold",

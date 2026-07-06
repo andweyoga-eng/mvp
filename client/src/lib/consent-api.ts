@@ -36,7 +36,7 @@ export async function submitAuthenticatedConsent(body: {
   consentTerms?: boolean;
   consentAge?: boolean;
   consentVersion?: string;
-}): Promise<{ ok: boolean; code?: string }> {
+}): Promise<{ ok: boolean; code?: string; message?: string }> {
   const res = await fetch("/api/users/me/consent/complete", {
     method: "POST",
     headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
@@ -49,7 +49,10 @@ export async function submitAuthenticatedConsent(body: {
   }
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Failed to submit consent");
+    return {
+      ok: false,
+      message: typeof data.message === "string" ? data.message : "Failed to submit consent",
+    };
   }
   return { ok: true };
 }

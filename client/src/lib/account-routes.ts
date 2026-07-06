@@ -10,6 +10,7 @@ export const ACCOUNT_ANCHORS = {
   health: "health",
   sessions: "sessions",
   payments: "payments",
+  credits: "credits",
   preferences: "preferences",
   security: "security",
   privacy: "privacy",

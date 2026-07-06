@@ -30,6 +30,7 @@ import {
   Lightbulb,
   ArrowUp,
   Shield,
+  Coins,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import { SessionHistory } from "@/components/session-history";
@@ -64,6 +65,7 @@ import {
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
 import { MEMBER_DASHBOARD_URL, redirectToMemberDashboardAfterProfileComplete } from "@/lib/member-landing";
 import { parseHealthHistory } from "@shared/health-disclosure";
+import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 
 function profileJustCompletedOnServer(
   wasIncomplete: boolean,
@@ -110,6 +112,7 @@ const NAV: { id: AccountAnchor; label: string; icon: typeof User; soon?: boolean
   { id: "health", label: "Health note", icon: Heart },
   { id: "sessions", label: "Sessions", icon: CalendarClock },
   { id: "payments", label: "Payments", icon: CreditCard },
+  { id: "credits", label: "Credits", icon: Coins, soon: true },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal, soon: true },
   { id: "security", label: "Account & security", icon: ShieldCheck },
   { id: "privacy", label: "Privacy & consent", icon: Shield },
@@ -141,6 +144,7 @@ export default function MyAccount() {
     emergencyMobileCountryCode: "+91",
     healthUpdateText: "",
     healthDocumentUrls: [] as string[],
+    healthMediaLinks: [] as HealthMediaLink[],
     whatsappConsent: false,
     addressStreet: "",
     addressLine2: "",
@@ -189,6 +193,7 @@ export default function MyAccount() {
       emergencyMobileCountryCode: user.emergencyMobileCountryCode || "+91",
       healthUpdateText: user.healthUpdateText || "",
       healthDocumentUrls: user.healthDocumentUrls || [],
+      healthMediaLinks: resolveHealthMediaLinks(user.healthMediaLinks, user.healthDocumentUrls),
       whatsappConsent: Boolean(user.whatsappConsent),
       addressStreet: user.addressStreet || "",
       addressLine2: user.addressLine2 || "",
@@ -465,7 +470,11 @@ export default function MyAccount() {
     }
   };
 
-  const handleHealthSave = async (payload: { text: string; documentUrls: string[] }) => {
+  const handleHealthSave = async (payload: {
+    text: string;
+    documentUrls: string[];
+    mediaLinks: HealthMediaLink[];
+  }) => {
     if (!user?.id) return;
     if (!isHealthDisclosureComplete(payload.text)) {
       toast({
@@ -480,7 +489,8 @@ export default function MyAccount() {
     try {
       const body: Record<string, unknown> = {
         healthUpdateText: payload.text,
-        healthDocumentUrls: payload.documentUrls,
+        healthDocumentUrls: [],
+        healthMediaLinks: payload.mediaLinks,
       };
       if (!healthConsentGiven) {
         body.healthDataConsent = true;
@@ -512,10 +522,11 @@ export default function MyAccount() {
       setProfileData((prev) => ({
         ...prev,
         healthUpdateText: payload.text,
-        healthDocumentUrls: payload.documentUrls,
+        healthDocumentUrls: [],
+        healthMediaLinks: payload.mediaLinks,
       }));
       setHealthConsentGiven(true);
-      toast({ title: "Health note saved" });
+      toast({ title: "Health note saved", description: "Your links stay in your Google Drive — we only store the link." });
     } catch (err) {
       toast({
         title: "Error",
@@ -1000,6 +1011,7 @@ export default function MyAccount() {
               <AccountHealthNoteSection
                 currentText={profileData.healthUpdateText}
                 documentUrls={profileData.healthDocumentUrls}
+                mediaLinks={profileData.healthMediaLinks}
                 lastModified={user.healthUpdateLastModified ?? null}
                 history={healthHistory}
                 healthConsentGiven={healthConsentGiven}
@@ -1013,7 +1025,8 @@ export default function MyAccount() {
                   setProfileData((p) => ({
                     ...p,
                     healthUpdateText: payload.text,
-                    healthDocumentUrls: payload.documentUrls,
+                    healthDocumentUrls: [],
+                    healthMediaLinks: payload.mediaLinks,
                   }));
                 }}
                 isLoading={isLoading}
@@ -1073,6 +1086,20 @@ export default function MyAccount() {
                   </div>
                 </div>
               )}
+            </section>
+
+            {/* CREDITS (placeholder) */}
+            <section id="credits" className={sectionCard} data-testid="credits-content">
+              {sectionHead(Coins, "Credits", "Session credits for future bookings", { soon: true })}
+              <div className="my-5 h-px bg-primary/10" />
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.02] px-6 py-10 text-center">
+                <Coins className="h-10 w-10 text-primary/35" />
+                <p className="font-display text-lg font-semibold text-primary">Credits coming soon</p>
+                <p className="max-w-md text-sm text-muted-foreground">
+                  When sessions are converted into credits — for example after an instructor no-show —
+                  you&apos;ll be able to view your balance and apply them to any booking here.
+                </p>
+              </div>
             </section>
 
             {/* PREFERENCES (placeholder) */}

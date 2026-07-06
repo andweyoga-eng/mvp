@@ -14,6 +14,7 @@ export interface User {
   // Health Update fields - mandatory for booking sessions
   healthUpdateText?: string | null;
   healthDocumentUrls?: string[] | null;
+  healthMediaLinks?: import("@shared/health-media-links").HealthMediaLink[] | null;
   healthUpdateHistory?: import("@shared/health-disclosure").HealthHistoryEntry[] | null;
   dateOfBirth?: string | null;
   profileCompletionStatus: 'incomplete' | 'complete';
@@ -66,6 +67,7 @@ export interface ProfileData {
   dateOfBirth?: string;
   healthUpdateText?: string;
   healthDocumentUrls?: string[];
+  healthMediaLinks?: import("@shared/health-media-links").HealthMediaLink[];
   whatsappConsent?: boolean;
   whatsappConsentSource?: string;
   addressStreet?: string;

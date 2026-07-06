@@ -139,6 +139,8 @@ describe("consent API routes (HTTP)", { skip: !hasDb }, () => {
     assert.equal(res.json?.cin, LEGAL_CONFIG.cin);
     assert.deepEqual(res.json?.grievanceOfficer, LEGAL_CONFIG.grievanceOfficer);
     assert.match(String(res.json?.registeredOfficeFormatted), /560060/);
+    assert.ok(Array.isArray(res.json?.subprocessorSchedule));
+    assert.equal(res.json?.subprocessorSchedule?.[0]?.name, "Railway Corp.");
   });
 
   it("POST /api/auth/onboarding-consent accepts an adult DOB and sets pending cookie", async () => {
@@ -371,6 +373,50 @@ describe("consent API with persisted user records", { skip: !hasDb }, () => {
 
     const after = await request(app, "GET", "/api/users/me/consent", {
       headers: { Authorization: `Bearer ${reconsentToken}` },
+    });
+    const afterReq = after.json?.requirement as { requiresConsent: boolean; flow: string | null };
+    assert.equal(afterReq.requiresConsent, false);
+    assert.equal(afterReq.flow, null);
+  });
+
+  it("POST /api/users/me/consent/complete stores server policy version when client sends stale consentVersion", async (t) => {
+    if (!schemaReady) t.skip("consent schema migration not applied");
+    const { storage } = await import("../server/storage.ts");
+    const { generateToken } = await import("../server/auth.ts");
+
+    const outdatedVersion = "v0.0.0_outdated_test";
+    const reconsentUser = await storage.createUser({
+      email: `consent-stale-client-${Date.now()}@example.com`,
+      password: "",
+      name: "Stale Client Version User",
+      primaryMobile: null,
+      primaryMobileCountryCode: "+91",
+      secondaryMobile: null,
+      secondaryMobileCountryCode: "+91",
+      emergencyMobile: null,
+      emergencyMobileCountryCode: "+91",
+    });
+    await storage.recordRegistrationConsents({
+      userId: reconsentUser.id,
+      dateOfBirth: adultPayload.dateOfBirth,
+      consentVersion: outdatedVersion,
+    });
+    const token = generateToken(reconsentUser.id);
+
+    const complete = await request(app, "POST", "/api/users/me/consent/complete", {
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        consentProfile: true,
+        consentTerms: true,
+        consentAge: true,
+        consentVersion: outdatedVersion,
+      },
+    });
+    assert.equal(complete.status, 200);
+    assert.equal(complete.json?.ok, true);
+
+    const after = await request(app, "GET", "/api/users/me/consent", {
+      headers: { Authorization: `Bearer ${token}` },
     });
     const afterReq = after.json?.requirement as { requiresConsent: boolean; flow: string | null };
     assert.equal(afterReq.requiresConsent, false);

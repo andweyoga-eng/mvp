@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { uploadHealthDocumentFile } from "@/lib/health-document-upload";
 import {
   HEALTH_DOCUMENT_MAX_BYTES,
+  HEALTH_DOCUMENT_MAX_MB,
   HEALTH_DOCUMENT_TOO_LARGE_MESSAGE,
   HEALTH_NO_CONCERNS_TEXT,
   isAllowedHealthDisclosureFile,
@@ -343,7 +344,7 @@ export function HealthUpdateSection({
                   </Button>
 
                   <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Up to 1MB. PDF, JPG, or PNG.</p>
+                    <p>Up to {HEALTH_DOCUMENT_MAX_MB} MB. PDF, JPG, or PNG.</p>
                     {editingDocumentUrls.length > 0 && (
                       <p className="text-green-700">A document is attached.</p>
                     )}

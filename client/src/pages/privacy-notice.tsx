@@ -1,5 +1,5 @@
 import { LegalPageLayout, SensitiveDataCallout } from "@/components/legal/legal-page-layout";
-import { LEGAL_CONFIG, formatRegisteredOffice } from "@shared/legal-config";
+import { LEGAL_CONFIG, formatRegisteredOffice, DATA_PROCESSING_DISCLOSURE, SUBPROCESSOR_SCHEDULE } from "@shared/legal-config";
 import { CUSTOMER_SUPPORT } from "@shared/support";
 import { Link } from "wouter";
 
@@ -11,6 +11,7 @@ const SECTIONS = [
   { id: "adults", title: (lang: "en" | "kn") => (lang === "kn" ? "ವಯಸ್ಕರಿಗಷ್ಟೇ" : "Adults-only") },
   { id: "payments", title: (lang: "en" | "kn") => (lang === "kn" ? "ಪಾವತಿಗಳು" : "Razorpay") },
   { id: "localisation", title: (lang: "en" | "kn") => (lang === "kn" ? "ಸ್ಥಳೀಕರಣ" : "Localisation") },
+  { id: "subprocessors", title: (lang: "en" | "kn") => (lang === "kn" ? "ಉಪಪ್ರಕ್ರಿಯೆದಾರರು" : "Subprocessors") },
   { id: "rights", title: (lang: "en" | "kn") => (lang === "kn" ? "ನಿಮ್ಮ ಹಕ್ಕುಗಳು" : "Your rights") },
   { id: "contact", title: (lang: "en" | "kn") => (lang === "kn" ? "ಸಂಪರ್ಕ" : "Contact") },
 ];
@@ -97,8 +98,11 @@ export default function PrivacyNoticePage() {
         <h2>{lang === "kn" ? "ನಿಮ್ಮ ಮಾಹಿತಿಯನ್ನು ನಾವು ಏನು ಮಾಡುವುದಿಲ್ಲ" : "What we do not do with your data"}</h2>
         <p>
           {lang === "kn"
-            ? "ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ, ಬುಕ್ಕಿಂಗ್ ಇತಿಹಾಸ, ಆರೋಗ್ಯ ಮಾಹಿತಿ ಅಥವಾ ಕ್ಷೇಮಾಭಿರುಚಿಗಳನ್ನು ಜಾಹೀರಾತುದಾರರು, ವಿಶ್ಲೇಷಣಾ ಪೂರೈಕೆದಾರರು ಅಥವಾ ಮೂರನೇ ವ್ಯಕ್ತಿಯ ಮಾರುಕಟ್ಟೆ ಜಾಲಗಳೊಂದಿಗೆ ನಾವು ಹಂಚುವುದಿಲ್ಲ, ಮಾರುವುದಿಲ್ಲ, ಬಾಡಿಗೆಗೆ ನೀಡುವುದಿಲ್ಲ ಅಥವಾ ವ್ಯಾಪಾರ ಮಾಡುವುದಿಲ್ಲ. ನಮ್ಮ ಸೂಚನೆಗಳ ಮೇರೆಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುವ ಸೇವಾ ಪೂರೈಕೆದಾರರಿಗೆ ಮಾಹಿತಿ ಹಂಚಿದರೆ, ಅದು ಅವರ ಕಾರ್ಯ ನಿರ್ವಹಣೆಗೆ ಅಗತ್ಯವಿರುವ ಮಟ್ಟಿಗೆ ಮಾತ್ರ ಸೀಮಿತವಾಗಿರುತ್ತದೆ."
-            : "We do not share, sell, rent, license, or trade your personal data, booking history, health data, or wellness preferences with third-party marketing networks, analytics providers, or advertisers. Where data is shared with a service provider acting on our instructions, such as our payment partner, that sharing is limited to what is necessary for that provider to perform its function."}
+            ? DATA_PROCESSING_DISCLOSURE.kn.noMarketingShare
+            : DATA_PROCESSING_DISCLOSURE.en.noMarketingShare}{" "}
+          {lang === "kn"
+            ? DATA_PROCESSING_DISCLOSURE.kn.subprocessorShare
+            : DATA_PROCESSING_DISCLOSURE.en.subprocessorShare}
         </p>
       </section>
 
@@ -145,9 +149,57 @@ export default function PrivacyNoticePage() {
         <h2>{lang === "kn" ? "ಮಾಹಿತಿ ಸ್ಥಳೀಕರಣ ಮತ್ತು ಕಾಯ್ದಿರింపు" : "Data localisation and retention"}</h2>
         <p>
           {lang === "kn"
-            ? "ಎಲ್ಲ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯೂ ಭಾರತದಲ್ಲಿರುವ ಕ್ಲೌಡ್ ಮೂಲಸೌಕರ್ಯದಲ್ಲಿ ಹೋಸ್ಟ್ ಆಗಿರುತ್ತದೆ. ಸಕ್ರಿಯ ಖಾತೆಗೆ ಸಂಬಂಧಿಸಿದ ಗುರುತು, ಬುಕ್ಕಿಂಗ್ ಮತ್ತು ಆರೋಗ್ಯ ಮಾಹಿತಿಯನ್ನು ಖಾತೆ ಸಕ್ರಿಯವಾಗಿರುವವರೆಗೆ ಕಾಯ್ದಿರಿಸಲಾಗುತ್ತದೆ. ಖಾತೆ ಮುಚ್ಚಿದ ನಂತರ ಗುರುತು ಮತ್ತು ಆರೋಗ್ಯ ಮಾಹಿತಿಯನ್ನು ಮுப்பತ್ತು ದಿನಗಳೊಳಗೆ ಅಳಿಸಲಾಗುತ್ತದೆ ಅಥವಾ ಶಾಶ್ವತವಾಗಿ ಗುರುತಿಸಲಾಗದಂತೆ ಅನಾಮಧೇಯಗೊಳಿಸಲಾಗುತ್ತದೆ. ಆದರೆ ಡಿಪಿಡಿಪಿ ನಿಯಮಗಳ ಪ್ರಕಾರ ಕನಿಷ್ಠ ಒಂದು ವರ್ಷದ ಪ್ರಕ್ರಿಯಾ ಲಾಗ್‌ಗಳು ಮತ್ತು ಭಾರತೀಯ ತೆರಿಗೆ/ಕಂಪನಿ ಕಾನೂನುಗಳಿಗೆ ಅಗತ್ಯವಿರುವ ಹಣಕಾಸು ದಾಖಲೆಗಳು ಕಾಯ್ದಿರಿಸಲಾಗಬಹುದು."
-            : "All personal data is hosted on cloud infrastructure located within the Republic of India. Identity, booking, and health data tied to an active account are kept while your account is active. On account closure, identity and health data are erased or irreversibly anonymised within 30 days, except where a specific legal retention requirement applies (processing logs for at least one year under DPDP Rules; financial records as required under Indian tax and company law)."}
+            ? DATA_PROCESSING_DISCLOSURE.kn.localisationInterim
+            : DATA_PROCESSING_DISCLOSURE.en.localisationInterim}
         </p>
+        <p>
+          {lang === "kn"
+            ? DATA_PROCESSING_DISCLOSURE.kn.migrationCommitment
+            : DATA_PROCESSING_DISCLOSURE.en.migrationCommitment}
+        </p>
+        <p>
+          {lang === "kn"
+            ? DATA_PROCESSING_DISCLOSURE.kn.retention
+            : DATA_PROCESSING_DISCLOSURE.en.retention}
+        </p>
+      </section>
+
+      <section id="subprocessors">
+        <h2>{lang === "kn" ? "ಉಪಪ್ರಕ್ರಿಯೆದಾರ ಪಟ್ಟಿ" : "Subprocessor schedule"}</h2>
+        <p>
+          {lang === "kn"
+            ? "ನಮ್ಮ ಸೂಚನೆಗಳ ಮೇರೆಗೆ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಸಂಸ್ಕರಿಸುವ ಮೂರನೇ ವ್ಯಕ್ತಿ ಸೇವಾ ಪೂರೈಕೆದಾರರು ಈ ಕೆಳಗಿನವರು. ಈ ಪಟ್ಟಿಯನ್ನು ನಾವು ಸ್ಥಳಾಂತರ ಅಥವಾ ಹೊಸ ಸೇವಾ ಪೂರೈಕೆದಾರರನ್ನು ಸೇರಿಸಿದಾಗ ನವೀಕರಿಸುತ್ತೇವೆ."
+            : "The following third-party service providers process personal data on our instructions. We update this schedule when we migrate infrastructure or add new providers."}
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[32rem] border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="py-2 pr-4 font-semibold">{lang === "kn" ? "ಹೆಸರು" : "Name"}</th>
+                <th className="py-2 pr-4 font-semibold">{lang === "kn" ? "ಪಾತ್ರ" : "Role"}</th>
+                <th className="py-2 pr-4 font-semibold">{lang === "kn" ? "ಸ್ಥಳ" : "Location"}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SUBPROCESSOR_SCHEDULE.map((entry) => (
+                <tr key={entry.name} className="border-b border-border/60 align-top">
+                  <td className="py-3 pr-4">
+                    <a
+                      href={entry.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      {entry.name}
+                    </a>
+                  </td>
+                  <td className="py-3 pr-4">{entry.role[lang]}</td>
+                  <td className="py-3 pr-4">{entry.location[lang]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section id="rights">

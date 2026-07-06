@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { INSTRUCTOR_LICENSE_STATUSES } from "./instructor-compliance";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "./schema";
+import { SESSION_TERMS_MAX_LENGTH } from "./session-terms";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -152,6 +153,14 @@ export const adminCreateClassTypeSchema = z.object({
     .string()
     .trim()
     .max(120, `Not Suitable must be ${120} characters or fewer`)
+    .optional()
+    .nullable()
+    .transform((v) => (v === "" || v == null ? null : v)),
+  termsAndConditions: z
+    .string()
+    .trim()
+    .min(10, "Terms & conditions must be at least 10 characters")
+    .max(SESSION_TERMS_MAX_LENGTH, "Terms & conditions are too long")
     .optional()
     .nullable()
     .transform((v) => (v === "" || v == null ? null : v)),

@@ -304,17 +304,18 @@ export function CreateSessionModal({
     },
   });
 
-  function formForValidation() {
+  function formForValidation(overrides?: Partial<typeof form>) {
+    const f = { ...form, ...overrides };
     return {
-      ...form,
-      googleMeetLink: meetLinkForSubmit(form.googleMeetLink),
-      venueContactPhone: clampIndianPhoneDigits(form.venueContactPhone),
-      qrContactPhone: clampIndianPhoneDigits(form.qrContactPhone),
+      ...f,
+      googleMeetLink: meetLinkForSubmit(f.googleMeetLink),
+      venueContactPhone: clampIndianPhoneDigits(f.venueContactPhone),
+      qrContactPhone: clampIndianPhoneDigits(f.qrContactPhone),
     };
   }
 
-  function runValidation() {
-    const v = validateSessionForm(formForValidation());
+  function runValidation(overrides?: Partial<typeof form>) {
+    const v = validateSessionForm(formForValidation(overrides));
     if (!v.ok) {
       setErrors(v.errors);
       return null;
@@ -696,7 +697,7 @@ export function CreateSessionModal({
                       setForm((f) => ({ ...f, date: v }));
                       clearFieldError("date");
                     }}
-                    onBlur={() => runValidation()}
+                    onBlur={(date) => runValidation({ date })}
                     error={errors.date}
                   />
                 </div>
@@ -765,7 +766,11 @@ export function CreateSessionModal({
                   <Input
                     value={form.venueAddress}
                     disabled={form.deliveryMode === "online"}
-                    onChange={(e) => setForm((f) => ({ ...f, venueAddress: e.target.value }))}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, venueAddress: e.target.value }));
+                      clearFieldError("venueAddress");
+                    }}
+                    onBlur={(e) => runValidation({ venueAddress: e.target.value })}
                     placeholder="Studio address"
                     className={errors.venueAddress ? "border-red-500" : ""}
                   />
@@ -781,7 +786,11 @@ export function CreateSessionModal({
                   <Input
                     value={form.venueMapLink}
                     disabled={form.deliveryMode === "online"}
-                    onChange={(e) => setForm((f) => ({ ...f, venueMapLink: e.target.value }))}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, venueMapLink: e.target.value }));
+                      clearFieldError("venueMapLink");
+                    }}
+                    onBlur={(e) => runValidation({ venueMapLink: e.target.value })}
                     placeholder="https://maps..."
                     className={errors.venueMapLink ? "border-red-500" : ""}
                   />
@@ -797,11 +806,15 @@ export function CreateSessionModal({
                   <Input
                     value={form.venueContactPhone}
                     disabled={form.deliveryMode === "online"}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
+                    onChange={(e) => {
+                      const venueContactPhone = clampIndianPhoneDigits(e.target.value);
+                      setForm((f) => ({ ...f, venueContactPhone }));
+                      clearFieldError("venueContactPhone");
+                    }}
+                    onBlur={(e) =>
+                      runValidation({
                         venueContactPhone: clampIndianPhoneDigits(e.target.value),
-                      }))
+                      })
                     }
                     placeholder="10-digit number"
                     maxLength={10}
@@ -1030,7 +1043,7 @@ export function CreateSessionModal({
                           setForm((f) => ({ ...f, publishAt: v }));
                           clearFieldError("publishAt");
                         }}
-                        onBlur={() => runValidation()}
+                        onBlur={(publishAt) => runValidation({ publishAt })}
                         error={errors.publishAt}
                       />
                     </div>

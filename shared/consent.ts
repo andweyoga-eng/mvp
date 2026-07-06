@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LEGAL_CONFIG } from "./legal-config";
+import { LEGAL_CONFIG, DATA_PROCESSING_DISCLOSURE } from "./legal-config";
 
 export const CONSENT_TYPES = [
   "profile_booking",
@@ -152,16 +152,14 @@ export const CONSENT_COPY = {
     reconsentSubtitle:
       "Our policy version has changed. Please review the updated items before continuing.",
     dobLabel: "Date of birth",
-    cb1Profile:
-      "I consent to andWeYoga collecting and processing my name, email address, contact number, date of birth, and booking history to create and manage my account, arrange sessions I book, and provide related support and communications. Data is processed by Ashtanga Welltech OPC Pvt Ltd and stored in India.",
+    cb1Profile: DATA_PROCESSING_DISCLOSURE.en.consentProfileProcessing,
     cb2TermsPrefix: "I have read and agree to the",
     cb2TermsLink: "Terms of Service",
     cb2And: "and",
     cb2PrivacyLink: "Privacy Notice",
     cb3Age:
       "I confirm that I am 18 years of age or older and that the date of birth I have entered is accurate.",
-    trustSignal:
-      "andWeYoga does not sell or share your personal data with third parties for marketing. Your data is stored on servers in India.",
+    trustSignal: DATA_PROCESSING_DISCLOSURE.en.consentTrustSignal,
     agreeContinue: "Agree and Continue",
     agreeUpdates: "Review and Continue",
     cancel: "Cancel",
@@ -198,16 +196,14 @@ export const CONSENT_COPY = {
     reconsentSubtitle:
       "ನಮ್ಮ ನೀತಿ ಆವೃತ್ತಿ ಬದಲಾಗಿದೆ. ಮುಂದುವರಿಯುವ ಮೊದಲು ಬದಲಾಗಿರುವ ಅಂಶಗಳನ್ನು ಓದಿ ಒಪ್ಪಿಕೊಳ್ಳಿ.",
     dobLabel: "ಜನ್ಮ ದಿನಾಂಕ",
-    cb1Profile:
-      "ನನ್ನ ಹೆಸರು, ಇಮೇಲ್ ವಿಳಾಸ, ಸಂಪರ್ಕ ಸಂಖ್ಯೆ, ಜನ್ಮ ದಿನಾಂಕ ಮತ್ತು ಬುಕ್ಕಿಂಗ್ ಇತಿಹಾಸವನ್ನು ಖಾತೆ ರಚನೆ, ಬುಕ್ಕಿಂಗ್ ನಿರ್ವಹಣೆ, ಸಂಬಂಧಿತ ನೆರವು ಮತ್ತು ಸಂವಹನಗಳಿಗಾಗಿ ಸಂಗ್ರಹಿಸಿ ಸಂಸ್ಕರಿಸಲು ನಾನು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ಈ ಮಾಹಿತಿಯನ್ನು ಅಷ್ಟಾಂಗ ವೆಲ್‌ಟೆಕ್ ಓಪಿಸಿ ಪ್ರೈವೇಟ್ ಲಿಮಿಟೆಡ್ ಭಾರತದಲ್ಲಿರುವ ಸರ್ವರ್‌ಗಳಲ್ಲಿ ಸಂಸ್ಕರಿಸುತ್ತದೆ.",
+    cb1Profile: DATA_PROCESSING_DISCLOSURE.kn.consentProfileProcessing,
     cb2TermsPrefix: "ನಾನು ಈ ಕೆಳಗಿನ ದಾಖಲೆಗಳನ್ನು ಓದಿ ಒಪ್ಪುತ್ತೇನೆ:",
     cb2TermsLink: "ಸೇವಾ ನಿಯಮಗಳು",
     cb2And: "ಮತ್ತು",
     cb2PrivacyLink: "ಗೌಪ್ಯತಾ ಸೂಚನೆ",
     cb3Age:
       "ನಾನು ಹದಿನೆಂಟು ವರ್ಷ ಅಥವಾ ಅದಕ್ಕಿಂತ ಹೆಚ್ಚು ವಯಸ್ಸಿನವನಾಗಿದ್ದೇನೆ ಅಥವಾ ವಯಸ್ಸಿನವಳಾಗಿದ್ದೇನೆ ಹಾಗೂ ನಾನು ನಮೂದಿಸಿದ ಜನ್ಮ ದಿನಾಂಕ ಸರಿಯಾಗಿದೆ ಎಂದು ದೃಢೀಕರಿಸುತ್ತೇನೆ.",
-    trustSignal:
-      "ಆಂಡ್‌ವೀಯೋಗ ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಜಾಹೀರಾತು ಅಥವಾ ಮಾರುಕಟ್ಟೆ ಉದ್ದೇಶಗಳಿಗಾಗಿ ಮೂರನೇ ವ್ಯಕ್ತಿಗಳಿಗೆ ಮಾರುವುದಿಲ್ಲ ಅಥವಾ ಹಂಚುವುದಿಲ್ಲ. ನಿಮ್ಮ ಮಾಹಿತಿ ಭಾರತದಲ್ಲಿರುವ ಸರ್ವರ್‌ಗಳಲ್ಲಿ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ.",
+    trustSignal: DATA_PROCESSING_DISCLOSURE.kn.consentTrustSignal,
     agreeContinue: "ಒಪ್ಪಿ ಮತ್ತು ಮುಂದುವರಿಯಿರಿ",
     agreeUpdates: "ನವೀಕರಿಸಿದ ಅಂಶಗಳನ್ನು ಒಪ್ಪಿ ಮುಂದುವರಿಯಿರಿ",
     cancel: "ರದ್ದು",
@@ -256,7 +252,7 @@ export const PRIVACY_UI_COPY = {
     status: { active: "Active", withdrawn: "Withdrawn", not_given: "Not given" },
     givenOn: "Given",
     updatedOn: "Updated",
-    privacyLink: "Privacy Notice & retention policy",
+    privacyLink: "Privacy Notice, subprocessors & retention policy",
     loadError: "Could not load consent status",
     healthWithdrawn: "Health data consent withdrawn",
     healthWithdrawFailed: "Failed to withdraw health consent",
@@ -293,7 +289,7 @@ export const PRIVACY_UI_COPY = {
     status: { active: "ಸಕ್ರಿಯ", withdrawn: "ಹಿಂತೆಗೆದುಕೊಳ್ಳಲಾಗಿದೆ", not_given: "ನೀಡಲಾಗಿಲ್ಲ" },
     givenOn: "ನೀಡಿದ ದಿನಾಂಕ",
     updatedOn: "ನವೀಕರಿಸಿದ ದಿನಾಂಕ",
-    privacyLink: "ಗೌಪ್ಯತಾ ಸೂಚನೆ ಮತ್ತು ಕಾಯ್ದಿರಿಂಪು ನೀತಿ",
+    privacyLink: "ಗೌಪ್ಯತಾ ಸೂಚನೆ, ಉಪಪ್ರಕ್ರಿಯೆದಾರರು ಮತ್ತು ಕಾಯ್ದಿರಿಂಪು ನೀತಿ",
     loadError: "ಸಮ್ಮತಿ ಸ್ಥಿತಿಯನ್ನು ಲೋಡ್ ಮಾಡಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ",
     healthWithdrawn: "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಲಾಗಿದೆ",
     healthWithdrawFailed: "ಆರೋಗ್ಯ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಲು ವಿಫಲವಾಗಿದೆ",

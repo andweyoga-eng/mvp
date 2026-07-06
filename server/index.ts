@@ -76,8 +76,8 @@ app.post(
   handleRazorpayWebhook,
 );
 
-// QR admin uploads send base64 data URLs (~33% larger than raw files); allow headroom for ~2MB images.
-app.use(express.json({ limit: '3mb' }));
+// Health uploads send base64 in JSON (~33% overhead); allow headroom for 5MB files + other payloads.
+app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from attached_assets

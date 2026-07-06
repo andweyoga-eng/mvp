@@ -92,7 +92,7 @@ interface SessionDateTimePickerProps {
   id?: string;
   value: string;
   onChange: (value: string) => void;
-  onBlur?: () => void;
+  onBlur?: (value: string) => void;
   error?: string;
   disabled?: boolean;
   className?: string;
@@ -148,7 +148,7 @@ export function SessionDateTimePicker({
     const next = formatSessionDatetimeLocal(draftDate, hour24, Number(draftMinute));
     onChange(next);
     setOpen(false);
-    onBlur?.();
+    onBlur?.(next);
   }
 
   return (

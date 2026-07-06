@@ -53,6 +53,10 @@ import { consentVersion, requestMeta, validateOnboardingDateOfBirth } from "./co
 import { isAdult } from "@shared/consent";
 import { parseHealthHistory, type HealthHistoryEntry } from "@shared/health-disclosure";
 import {
+  resolveHealthMediaLinks,
+  sanitizeHealthMediaLinksForSave,
+} from "@shared/health-media-links";
+import {
   applyPaymentFailureHold,
   cancelGuestCheckout,
   expirePaymentHolds,
@@ -552,6 +556,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emergencyMobileCountryCode: user.emergencyMobileCountryCode,
         healthUpdateText: user.healthUpdateText,
         healthDocumentUrls: user.healthDocumentUrls,
+        healthMediaLinks: resolveHealthMediaLinks(user.healthMediaLinks, user.healthDocumentUrls),
         healthUpdateHistory: parseHealthHistory(user.healthUpdateHistory),
         dateOfBirth: user.dateOfBirth,
         profileCompletionStatus: user.profileCompletionStatus,
@@ -641,6 +646,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emergencyMobileCountryCode: updatedUser.emergencyMobileCountryCode,
           healthUpdateText: updatedUser.healthUpdateText,
           healthDocumentUrls: updatedUser.healthDocumentUrls,
+          healthMediaLinks: resolveHealthMediaLinks(
+            updatedUser.healthMediaLinks,
+            updatedUser.healthDocumentUrls,
+          ),
           healthUpdateHistory: parseHealthHistory(updatedUser.healthUpdateHistory),
           dateOfBirth: updatedUser.dateOfBirth,
           profileCompletionStatus: updatedUser.profileCompletionStatus,
@@ -704,6 +713,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingText = (existing.healthUpdateText ?? "").trim();
       let healthUpdateHistory = parseHealthHistory(existing.healthUpdateHistory);
 
+      const existingMediaLinks = resolveHealthMediaLinks(
+        existing.healthMediaLinks,
+        existing.healthDocumentUrls,
+      );
+
+      const savedMediaLinks =
+        healthUpdateData.healthMediaLinks !== undefined
+          ? sanitizeHealthMediaLinksForSave(healthUpdateData.healthMediaLinks)
+          : existingMediaLinks;
+
       if (existingText && existingText !== newText) {
         const archived: HealthHistoryEntry = {
           text: existing.healthUpdateText!,
@@ -714,6 +733,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 ? existing.healthUpdateLastModified
                 : new Date().toISOString(),
           documentUrls: existing.healthDocumentUrls ?? [],
+          mediaLinks: existingMediaLinks,
         };
         healthUpdateHistory = [archived, ...healthUpdateHistory].slice(0, 5);
       }
@@ -721,14 +741,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const mergedForStatus = {
         ...existing,
         healthUpdateText: healthUpdateData.healthUpdateText,
-        healthDocumentUrls:
-          healthUpdateData.healthDocumentUrls ?? existing.healthDocumentUrls ?? [],
+        healthDocumentUrls: [],
+        healthMediaLinks: savedMediaLinks,
       };
       const profileCompletionStatus = computeProfileCompletionStatus(mergedForStatus);
 
       const updatedUser = await storage.updateUserHealthData(userId, {
         healthUpdateText: healthUpdateData.healthUpdateText,
-        healthDocumentUrls: healthUpdateData.healthDocumentUrls || [],
+        healthDocumentUrls: [],
+        healthMediaLinks: savedMediaLinks,
         healthUpdateHistory,
         profileCompletionStatus,
         healthUpdateLastModified: new Date().toISOString()

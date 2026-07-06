@@ -1,46 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  AlertTriangle,
   CheckCircle2,
-  FileText,
-  HeartPulse,
   Pencil,
-  Upload,
-  X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { uploadHealthDocumentFile } from "@/lib/health-document-upload";
 import { cn } from "@/lib/utils";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 import {
-  HEALTH_DOCUMENT_MAX_BYTES,
-  HEALTH_DOCUMENT_TOO_LARGE_MESSAGE,
   HEALTH_NO_CONCERNS_TEXT,
-  isAllowedHealthDisclosureFile,
   isHealthDisclosureComplete,
   MAX_HEALTH_CONCERNS_CHARS,
   type HealthHistoryEntry,
 } from "@shared/health-disclosure";
+import {
+  type HealthMediaLink,
+  resolveHealthMediaLinks,
+} from "@shared/health-media-links";
+import {
+  HealthMediaLinksEditor,
+  HealthMediaLinksSummary,
+} from "@/components/health-media-links-section";
 
 type HealthTab = "current" | "history";
-
-function docLabel(url: string): string {
-  const segment = url.split("/").pop() ?? url;
-  return decodeURIComponent(segment);
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-}
 
 export interface AccountHealthNoteSectionProps {
   currentText: string;
   documentUrls: string[];
+  mediaLinks: HealthMediaLink[];
   lastModified: string | null;
   history: HealthHistoryEntry[];
   healthConsentGiven: boolean;
@@ -48,15 +38,15 @@ export interface AccountHealthNoteSectionProps {
   onHealthConsentCheckedChange: (checked: boolean) => void;
   consentLang: ConsentLanguage;
   onConsentLangChange: (lang: ConsentLanguage) => void;
-  onSave: (payload: { text: string; documentUrls: string[] }) => Promise<void>;
+  onSave: (payload: { text: string; documentUrls: string[]; mediaLinks: HealthMediaLink[] }) => Promise<void>;
   isLoading: boolean;
-  /** When true and no note on file, show the edit form with Save note (not Edit). */
   startInEditMode?: boolean;
 }
 
 export function AccountHealthNoteSection({
   currentText,
   documentUrls,
+  mediaLinks,
   lastModified,
   history,
   healthConsentGiven,
@@ -72,14 +62,10 @@ export function AccountHealthNoteSection({
   const [tab, setTab] = useState<HealthTab>("current");
   const [isEditing, setIsEditing] = useState(() => startInEditMode && !isHealthDisclosureComplete(currentText));
   const [draftText, setDraftText] = useState("");
-  const [draftDocs, setDraftDocs] = useState<string[]>([]);
-  const [attachedName, setAttachedName] = useState<string | null>(null);
-  const [attachedSize, setAttachedSize] = useState<number | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [fileTooLarge, setFileTooLarge] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [draftMediaLinks, setDraftMediaLinks] = useState<HealthMediaLink[]>([]);
   const consentCopy = CONSENT_COPY[consentLang];
 
+  const resolvedCurrentLinks = resolveHealthMediaLinks(mediaLinks, documentUrls);
   const hasCurrentNote = isHealthDisclosureComplete(currentText);
   const showConsentPrompt = isEditing && !healthConsentGiven;
 
@@ -89,20 +75,17 @@ export function AccountHealthNoteSection({
       setTab("current");
     }
   }, [startInEditMode, hasCurrentNote]);
+
   const saveDisabled =
     isLoading ||
-    isUploading ||
     !isHealthDisclosureComplete(draftText) ||
     (showConsentPrompt && !healthConsentChecked);
 
   useEffect(() => {
     if (!isEditing) return;
     setDraftText(currentText);
-    setDraftDocs(documentUrls);
-    setAttachedName(documentUrls[0] ? docLabel(documentUrls[0]) : null);
-    setAttachedSize(null);
-    setFileTooLarge(false);
-  }, [isEditing, currentText, documentUrls]);
+    setDraftMediaLinks(resolveHealthMediaLinks(mediaLinks, documentUrls));
+  }, [isEditing, currentText, mediaLinks, documentUrls]);
 
   const subTabBtn = (active: boolean) =>
     cn(
@@ -118,8 +101,7 @@ export function AccountHealthNoteSection({
   const cancelEdit = () => {
     setIsEditing(false);
     setDraftText(currentText);
-    setDraftDocs(documentUrls);
-    setFileTooLarge(false);
+    setDraftMediaLinks(resolveHealthMediaLinks(mediaLinks, documentUrls));
   };
 
   const handleSave = async () => {
@@ -131,42 +113,12 @@ export function AccountHealthNoteSection({
       });
       return;
     }
-    await onSave({ text: draftText.trim(), documentUrls: draftDocs });
+    await onSave({
+      text: draftText.trim(),
+      documentUrls: [],
+      mediaLinks: draftMediaLinks,
+    });
     setIsEditing(false);
-  };
-
-  const handleFilePick = async (file: File) => {
-    if (!isAllowedHealthDisclosureFile(file)) {
-      toast({
-        title: "Unsupported file",
-        description: "Only PDF or image files are supported.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (file.size > HEALTH_DOCUMENT_MAX_BYTES) {
-      setFileTooLarge(true);
-      return;
-    }
-    setFileTooLarge(false);
-    setIsUploading(true);
-    try {
-      const result = await uploadHealthDocumentFile(file);
-      if (!result.ok) {
-        if (result.tooLarge) {
-          setFileTooLarge(true);
-          return;
-        }
-        toast({ title: "Upload failed", description: result.message, variant: "destructive" });
-        return;
-      }
-      setDraftDocs([result.objectPath]);
-      setAttachedName(file.name);
-      setAttachedSize(file.size);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
   };
 
   return (
@@ -195,23 +147,23 @@ export function AccountHealthNoteSection({
           {history.length === 0 ? (
             <p className="text-sm text-muted-foreground">No previous notes yet.</p>
           ) : (
-            history.map((entry, i) => (
-              <div
-                key={`${entry.savedAt}-${i}`}
-                className="rounded-xl border border-primary/10 bg-primary/[0.02] p-4"
-              >
-                <p className="text-xs font-medium text-muted-foreground">
-                  {new Date(entry.savedAt).toLocaleDateString()}
-                </p>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
-                {entry.documentUrls.length > 0 ? (
-                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
-                    <FileText className="h-3.5 w-3.5" />
-                    {docLabel(entry.documentUrls[0])}
+            history.map((entry, i) => {
+              const entryLinks = resolveHealthMediaLinks(entry.mediaLinks, entry.documentUrls);
+              return (
+                <div
+                  key={`${entry.savedAt}-${i}`}
+                  className="rounded-xl border border-primary/10 bg-primary/[0.02] p-4"
+                >
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {new Date(entry.savedAt).toLocaleDateString()}
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{entry.text}</p>
+                  <div className="mt-2">
+                    <HealthMediaLinksSummary links={entryLinks} />
                   </div>
-                ) : null}
-              </div>
-            ))
+                </div>
+              );
+            })
           )}
         </div>
       ) : isEditing ? (
@@ -246,9 +198,12 @@ export function AccountHealthNoteSection({
                 variant="secondary"
                 className="rounded-xl border-2 border-dz-secondary/50 bg-dz-secondary/10 p-4"
                 label={
-                  <span className="flex items-start gap-2">
-                    <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-dz-secondary" aria-hidden />
-                    {consentCopy.healthConsent}
+                  <span className="flex items-start gap-2 text-sm leading-relaxed">
+                    <span className="mt-0.5 shrink-0" aria-hidden>💚</span>
+                    <span>
+                      {consentCopy.healthConsent} Links you share may be opened by our team in read-only mode; we do
+                      not store file contents.
+                    </span>
                   </span>
                 }
               />
@@ -278,8 +233,7 @@ export function AccountHealthNoteSection({
             size="sm"
             onClick={() => {
               setDraftText(HEALTH_NO_CONCERNS_TEXT);
-              setDraftDocs([]);
-              setAttachedName(null);
+              setDraftMediaLinks([]);
             }}
             className="rounded-full border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             data-testid="health-no-concerns"
@@ -288,60 +242,11 @@ export function AccountHealthNoteSection({
             No current concerns
           </Button>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground">
-              Supporting document (optional, max 1 MB)
-            </Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="sr-only"
-              accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFilePick(file);
-              }}
-            />
-            {draftDocs.length > 0 && attachedName ? (
-              <div className="flex items-center gap-2 rounded-xl border border-primary/15 bg-muted/50 px-3 py-2 text-sm">
-                <FileText className="h-4 w-4 text-primary" />
-                <span className="min-w-0 flex-1 truncate">{attachedName}</span>
-                {attachedSize != null ? (
-                  <span className="text-xs text-muted-foreground">{formatFileSize(attachedSize)}</span>
-                ) : null}
-                <button
-                  type="button"
-                  aria-label="Remove document"
-                  onClick={() => {
-                    setDraftDocs([]);
-                    setAttachedName(null);
-                    setAttachedSize(null);
-                  }}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isUploading}
-                onClick={() => fileInputRef.current?.click()}
-                data-testid="health-concerns-choose-file"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {isUploading ? "Uploading…" : "Upload document"}
-              </Button>
-            )}
-            {fileTooLarge ? (
-              <p className="flex items-center gap-1 text-xs text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {HEALTH_DOCUMENT_TOO_LARGE_MESSAGE}
-              </p>
-            ) : null}
-          </div>
+          <HealthMediaLinksEditor
+            value={draftMediaLinks}
+            onChange={setDraftMediaLinks}
+            disabled={isLoading}
+          />
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -357,7 +262,7 @@ export function AccountHealthNoteSection({
               type="button"
               variant="outline"
               onClick={cancelEdit}
-              disabled={isLoading || isUploading}
+              disabled={isLoading}
               className="flex-1 rounded-full py-6 font-bold"
             >
               Cancel
@@ -375,12 +280,9 @@ export function AccountHealthNoteSection({
                 </p>
               ) : null}
               <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">{currentText}</p>
-              {documentUrls.length > 0 ? (
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs">
-                  <FileText className="h-3.5 w-3.5" />
-                  {docLabel(documentUrls[0])}
-                </div>
-              ) : null}
+              <div className="mt-3">
+                <HealthMediaLinksSummary links={resolvedCurrentLinks} />
+              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">

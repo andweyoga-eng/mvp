@@ -29,7 +29,7 @@ interface OnboardingConsentPanelProps {
   onStepChange: (step: ConsentPanelStep) => void;
   onBack: () => void;
   onCancel: () => void;
-  onConsentComplete: (payload: ConsentSubmitPayload) => Promise<{ ok: boolean; code?: string }>;
+  onConsentComplete: (payload: ConsentSubmitPayload) => Promise<{ ok: boolean; code?: string; message?: string }>;
   mode?: "first_time" | "reconsent";
   requiredTypes?: ConsentType[];
   requireDateOfBirth?: boolean;
@@ -54,6 +54,7 @@ export function OnboardingConsentPanel({
   const [cbTerms, setCbTerms] = useState(false);
   const [cbAge, setCbAge] = useState(false);
   const [dobError, setDobError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const requireProfile = requiredTypes.includes("profile_booking");
@@ -70,13 +71,16 @@ export function OnboardingConsentPanel({
 
   const handleAgree = async () => {
     if (!canSubmit) return;
-    if (!isValidDateOfBirth(dateOfBirth)) {
-      setDobError(copy.invalidDob);
-      return;
-    }
-    if (!isAdult(dateOfBirth)) {
-      onStepChange("minor");
-      return;
+    setSubmitError("");
+    if (requireDateOfBirth) {
+      if (!isValidDateOfBirth(dateOfBirth)) {
+        setDobError(copy.invalidDob);
+        return;
+      }
+      if (!isAdult(dateOfBirth)) {
+        onStepChange("minor");
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -86,12 +90,16 @@ export function OnboardingConsentPanel({
         consentTerms: requireTerms ? true : undefined,
         consentAge: requireAge ? true : undefined,
       });
-      if (!result.ok && result.code === "underage") {
-        onStepChange("minor");
+      if (!result.ok) {
+        if (result.code === "underage") {
+          onStepChange("minor");
+          return;
+        }
+        setSubmitError(result.message?.trim() ? result.message : copy.genericError);
         return;
       }
     } catch {
-      setDobError(copy.genericError);
+      setSubmitError(copy.genericError);
     } finally {
       setLoading(false);
     }
@@ -219,6 +227,12 @@ export function OnboardingConsentPanel({
       <p className="rounded-xl border border-dz-glass-border bg-white/60 px-3 py-2.5 text-xs leading-relaxed text-dz-muted">
         {copy.trustSignal}
       </p>
+
+      {submitError ? (
+        <p className="text-sm text-destructive" role="alert" data-testid="consent-submit-error">
+          {submitError}
+        </p>
+      ) : null}
 
       <Button
         type="button"

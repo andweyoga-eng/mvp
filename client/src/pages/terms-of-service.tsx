@@ -9,6 +9,7 @@ const SECTIONS = [
   { id: "emergency", title: (lang: "en" | "kn") => (lang === "kn" ? "ತುರ್ತು ಸಂದರ್ಭಗಳು" : "No emergency reliance") },
   { id: "liability", title: (lang: "en" | "kn") => (lang === "kn" ? "ಅಪಾಯದ ಒಪ್ಪಿಗೆ" : "Assumption of risk") },
   { id: "payments", title: (lang: "en" | "kn") => (lang === "kn" ? "ಪಾವತಿಗಳು" : "Payments") },
+  { id: "data", title: (lang: "en" | "kn") => (lang === "kn" ? "ಡೇಟಾ ಸಂಸ್ಕರಣೆ" : "Data processing") },
   { id: "law", title: (lang: "en" | "kn") => (lang === "kn" ? "ಆಡಳಿತ ಕಾನೂನು" : "Governing law") },
 ];
 
@@ -103,6 +104,42 @@ export default function TermsOfServicePage() {
               {lang === "kn"
                 ? "ಎಲ್ಲ ಪಾವತಿಗಳನ್ನು ರೇಜರ್‌ಪೇ ಸಾಫ್ಟ್‌ವೇರ್ ಪ್ರೈವೇಟ್ ಲಿಮಿಟೆಡ್ ಮೂಲಕ ಸಂಸ್ಕರಿಸಲಾಗುತ್ತದೆ. ಬುಕ್ಕಿಂಗ್ ಪ್ರಾರಂಭಿಸುವ ಮೂಲಕ, ಪಾವತಿ ವಹಿವಾಟಿಗೆ ಅನ್ವಯವಾಗುವ ರೇಜರ್‌ಪೇ ನಿಯಮಗಳಿಗೂ ನೀವು ಒಪ್ಪುತ್ತೀರಿ. ವಿಫಲವಾದ ವಹಿವಾಟುಗಳು ಮತ್ತು ಮರುಪಾವತಿಗಳನ್ನು ರೇಜರ್‌ಪೇದ ಮಾನಕ ನಿಷ್ಪತ್ತಿ ವ್ಯವಸ್ಥೆಯ ಮೂಲಕ ಸಂಸ್ಕರಿಸಲಾಗುತ್ತದೆ."
                 : "All payments are processed through Razorpay Software Private Limited. By initiating a booking, you also agree to Razorpay's applicable terms governing the payment transaction. Failed transactions and refunds are processed through Razorpay's standard settlement pipeline."}
+            </p>
+          </section>
+
+          <section id="data">
+            <h2>{lang === "kn" ? "ಡೇಟಾ ಸಂಸ್ಕರಣೆ ಮತ್ತು ಉಪಪ್ರಕ್ರಿಯೆದಾರರು" : "Data processing and subprocessors"}</h2>
+            <p>
+              {lang === "kn" ? (
+                <>
+                  {LEGAL_CONFIG.brandName} ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಡಿಪಿಡಿಪಿ ಕಾಯಿದೆ, 2023 ಅಡಿಯಲ್ಲಿ ಸಂಸ್ಕರಿಸುತ್ತದೆ. ಇಂಟರಿಮ್
+                  ಅವಧಿಯಲ್ಲಿ ಅಪ್ಲಿಕೇಶನ್ ಮತ್ತು ಪ್ರಾಥಮಿಕ ಡೇಟಾಬೇಸ್ Railway Corp. ನ ಅಮೆರಿಕಾದ ಕ್ಲೌಡ್ ಮೂಲಸೌಕರ್ಯದಲ್ಲಿ ಹೋಸ್ಟ್
+                  ಆಗಿರಬಹುದು. ಉಪಪ್ರಕ್ರಿಯೆದಾರರ ಪೂರ್ಣ ಪಟ್ಟಿ, ಪಾತ್ರಗಳು ಮತ್ತು ಸ್ಥಳಗಳಿಗಾಗಿ ನಮ್ಮ{" "}
+                  <Link href="/privacy#subprocessors" className="text-primary underline">
+                    ಗೌಪ್ಯತಾ ಸೂಚನೆಯ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ವಿಭಾಗ
+                  </Link>
+                  {" "}ಮತ್ತು{" "}
+                  <Link href="/privacy#localisation" className="text-primary underline">
+                    ಸ್ಥಳೀಕರಣ ವಿಭಾಗ
+                  </Link>
+                  {" "}ಅನ್ನು ನೋಡಿ.
+                </>
+              ) : (
+                <>
+                  {LEGAL_CONFIG.brandName} processes your personal data under the DPDP Act, 2023. During an interim
+                  period, the application and primary database may be hosted on Railway Corp.&apos;s cloud
+                  infrastructure in the United States. For the full subprocessor schedule — including Railway Corp.,
+                  Razorpay, and Google — and our data localisation commitments, see the{" "}
+                  <Link href="/privacy#subprocessors" className="text-primary underline">
+                    Subprocessors
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy#localisation" className="text-primary underline">
+                    Data localisation
+                  </Link>{" "}
+                  sections of our Privacy Notice.
+                </>
+              )}
             </p>
           </section>
 

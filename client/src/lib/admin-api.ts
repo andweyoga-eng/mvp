@@ -46,6 +46,7 @@ export function validateClassTypeForm(form: {
   imageUrl: string;
   intensity: string;
   strictNoTo?: string;
+  termsAndConditions?: string;
 }) {
   const result = adminCreateClassTypeSchema.safeParse({
     name: form.name,
@@ -55,6 +56,7 @@ export function validateClassTypeForm(form: {
     imageUrl: form.imageUrl.trim(),
     intensity: form.intensity,
     strictNoTo: form.strictNoTo?.trim() || null,
+    termsAndConditions: form.termsAndConditions?.trim() || null,
   });
   if (result.success) return { ok: true as const, data: result.data, errors: {} };
   return { ok: false as const, data: null, errors: zodErrorsToFieldMap(result.error.issues) };

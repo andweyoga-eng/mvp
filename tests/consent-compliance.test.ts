@@ -50,7 +50,7 @@ describe("legal config placeholders", () => {
     assert.equal(LEGAL_CONFIG.cin, "U86900KA2024OPC189315");
     assert.equal(LEGAL_CONFIG.grievanceOfficer.email, "arun@andweyoga.com");
     assert.match(formatRegisteredOffice(), /560060/);
-    assert.equal(LEGAL_CONFIG.documentVersion, "v1.0.0_2026-06-30");
+    assert.equal(LEGAL_CONFIG.documentVersion, "v1.1.0_2026-07-06");
   });
 });
 

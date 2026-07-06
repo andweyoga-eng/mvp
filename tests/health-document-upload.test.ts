@@ -19,7 +19,7 @@ describe("health document upload validation", async () => {
     assert.equal(isAllowedHealthDocumentMeta("archive.zip", "application/zip"), false);
   });
 
-  it("enforces 1MB size limit", () => {
+  it("enforces 5MB size limit", () => {
     assert.equal(isHealthDocumentWithinSizeLimit(1), true);
     assert.equal(isHealthDocumentWithinSizeLimit(HEALTH_DOCUMENT_MAX_BYTES), true);
     assert.equal(isHealthDocumentWithinSizeLimit(HEALTH_DOCUMENT_MAX_BYTES + 1), false);

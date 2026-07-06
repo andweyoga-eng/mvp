@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
 import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import { formatScheduleDayHeader, getRollingWeekDateRange } from "@shared/schedule-display";
@@ -27,6 +28,7 @@ interface CalClassType {
   duration?: number;
   intensity?: string | null;
   imageUrl?: string | null;
+  strictNoTo?: string | null;
 }
 
 interface CalSession {
@@ -356,6 +358,7 @@ export default function Calendar() {
                         imageUrl={imageUrl}
                         soldOut={soldOut}
                         intensityLabel={sessionIntensity(cls)}
+                        strictNoTo={cls.classType.strictNoTo}
                         onBook={(id) => reserve(id)}
                       />
                     );
@@ -541,43 +544,48 @@ export default function Calendar() {
                           const soldOut = cls.currentBookings >= cls.maxCapacity;
                           const badge = getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode);
                           return (
-                            <div
-                              key={cls.id}
-                              className="flex items-center gap-3 border-b border-primary/5 py-2.5 last:border-0"
-                            >
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
-                                {instructorInitials(cls.instructor.name)}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div
-                                  className={cn(
-                                    "font-display text-sm font-semibold",
-                                    soldOut ? "text-dz-muted line-through" : "text-foreground",
-                                  )}
-                                >
-                                  {cls.classType.name}
+                            <div key={cls.id} className="border-b border-primary/5 py-2.5 last:border-0">
+                              <div className="flex items-center gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
+                                  {instructorInitials(cls.instructor.name)}
                                 </div>
-                                <div className="text-xs text-dz-muted">
-                                  {formatTimeIST(cls.date)} · {cls.instructor.name}
+                                <div className="min-w-0 flex-1">
+                                  <div
+                                    className={cn(
+                                      "font-display text-sm font-semibold",
+                                      soldOut ? "text-dz-muted line-through" : "text-foreground",
+                                    )}
+                                  >
+                                    {cls.classType.name}
+                                  </div>
+                                  <div className="text-xs text-dz-muted">
+                                    {formatTimeIST(cls.date)} · {cls.instructor.name}
+                                  </div>
                                 </div>
-                              </div>
-                              {badge ? (
-                                <Badge
-                                  variant="outline"
-                                  className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                                {badge ? (
+                                  <Badge
+                                    variant="outline"
+                                    className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                                  >
+                                    {badge}
+                                  </Badge>
+                                ) : null}
+                                <Button
+                                  size="sm"
+                                  className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
+                                  disabled={soldOut}
+                                  onClick={() => reserve(cls.id)}
+                                  data-testid={`book-class-${cls.id}`}
                                 >
-                                  {badge}
-                                </Badge>
-                              ) : null}
-                              <Button
-                                size="sm"
-                                className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
-                                disabled={soldOut}
-                                onClick={() => reserve(cls.id)}
-                                data-testid={`book-class-${cls.id}`}
-                              >
-                                {soldOut ? "Full" : "Book"}
-                              </Button>
+                                  {soldOut ? "Full" : "Book"}
+                                </Button>
+                              </div>
+                              <StrictNoToBlock
+                                strictNoTo={cls.classType.strictNoTo}
+                                compact
+                                alwaysShow={false}
+                                className="mt-2 border-none pt-0 pl-12"
+                              />
                             </div>
                           );
                         })}
@@ -645,6 +653,12 @@ export default function Calendar() {
                             </h4>
                             <p className="text-sm text-dz-muted">{cls.instructor.name}</p>
                           </div>
+                          <StrictNoToBlock
+                            strictNoTo={cls.classType.strictNoTo}
+                            compact
+                            alwaysShow={false}
+                            className="mb-3 w-full border-none pt-0"
+                          />
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="border-primary/30 text-primary">
                               {sessionIntensity(cls)}

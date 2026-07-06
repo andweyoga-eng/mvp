@@ -18,6 +18,7 @@ import {
   LEGAL_CONFIG,
   formatRegisteredOffice,
 } from "./consent";
+import { DATA_PROCESSING_DISCLOSURE, SUBPROCESSOR_SCHEDULE } from "@shared/legal-config";
 import {
   PENDING_CONSENT_COOKIE_NAME,
   buildPendingConsentCookieOptions,
@@ -44,7 +45,8 @@ export async function applyPendingConsentForNewUser(
   await storage.recordRegistrationConsents({
     userId,
     dateOfBirth: pending.dateOfBirth,
-    consentVersion: pending.consentVersion,
+    // Server is authoritative — pending cookie may carry a stale client bundle version.
+    consentVersion: consentVersion(),
     ...meta,
   });
   res.clearCookie(PENDING_CONSENT_COOKIE_NAME);
@@ -56,6 +58,8 @@ export function registerConsentRoutes(app: Express): void {
     res.json({
       ...LEGAL_CONFIG,
       registeredOfficeFormatted: formatRegisteredOffice(),
+      subprocessorSchedule: SUBPROCESSOR_SCHEDULE,
+      dataProcessingDisclosure: DATA_PROCESSING_DISCLOSURE,
     });
   });
 
@@ -76,7 +80,7 @@ export function registerConsentRoutes(app: Express): void {
 
       const payload = JSON.stringify({
         dateOfBirth: body.dateOfBirth,
-        consentVersion: body.consentVersion ?? consentVersion(),
+        consentVersion: consentVersion(),
       });
       res.cookie(PENDING_CONSENT_COOKIE_NAME, payload, buildPendingConsentCookieOptions());
       res.json({ ok: true });
@@ -172,11 +176,13 @@ export function registerConsentRoutes(app: Express): void {
         await storage.recordRegistrationConsents({
           userId: req.user!.id,
           dateOfBirth: body.dateOfBirth,
-          consentVersion: body.consentVersion ?? consentVersion(),
+          consentVersion: consentVersion(),
           ...meta,
         });
         return res.json({ ok: true });
       }
+
+      const recordedVersion = consentVersion();
 
       if (body.dateOfBirth) {
         const ageCheck = validateOnboardingDateOfBirth(body.dateOfBirth);
@@ -203,7 +209,7 @@ export function registerConsentRoutes(app: Express): void {
           userId: req.user!.id,
           consentType,
           action: "opt_in",
-          consentVersion: body.consentVersion ?? consentVersion(),
+          consentVersion: recordedVersion,
           ...meta,
         });
       }

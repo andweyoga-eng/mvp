@@ -21,6 +21,7 @@ import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/a
 import { MAX_TEXT_LENGTH, limitTextInput, PLACEHOLDER_OWNER_CANCEL_OTP, normalizeOwnerCancelOtpInput, isOwnerCancelFormSubmittable, ownerCancelFormBlocker } from "@shared/input-limits";
 import { FormErrorSummary } from "@/components/admin/field-error";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY, STRICT_NO_TO_MAX_LENGTH } from "@shared/schema";
+import { DEFAULT_SESSION_TERMS_AND_CONDITIONS, SESSION_TERMS_MAX_LENGTH } from "@shared/session-terms";
 import { parseStrictNoToTags, strictNoToCounterState } from "@/lib/strict-no-to";
 import { compressImageForUpload, validateAdminImageFile, ADMIN_IMAGE_MAX_FILE_BYTES } from "@/lib/image-upload";
 
@@ -33,6 +34,7 @@ export interface ClassType {
   imageUrl: string | null;
   intensity: string;
   strictNoTo?: string | null;
+  termsAndConditions?: string | null;
 }
 
 type ClassTypeForm = {
@@ -43,6 +45,7 @@ type ClassTypeForm = {
   imageUrl: string;
   intensity: string;
   strictNoTo: string;
+  termsAndConditions: string;
 };
 
 const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
@@ -53,6 +56,7 @@ const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
   imageUrl: "",
   intensity: DEFAULT_CLASS_INTENSITY,
   strictNoTo: "",
+  termsAndConditions: DEFAULT_SESSION_TERMS_AND_CONDITIONS,
 };
 
 function classTypeToForm(ct: ClassType): ClassTypeForm {
@@ -64,6 +68,7 @@ function classTypeToForm(ct: ClassType): ClassTypeForm {
     imageUrl: ct.imageUrl ?? "",
     intensity: ct.intensity ?? DEFAULT_CLASS_INTENSITY,
     strictNoTo: ct.strictNoTo ?? "",
+    termsAndConditions: ct.termsAndConditions?.trim() || DEFAULT_SESSION_TERMS_AND_CONDITIONS,
   };
 }
 
@@ -138,6 +143,35 @@ function ClassTypeFormFields({
         onChange={(strictNoTo) => setForm((f) => ({ ...f, strictNoTo }))}
         error={errors.strictNoTo}
       />
+      <div>
+        <Label>
+          Terms &amp; conditions <span className="text-red-500">*</span>
+        </Label>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Shown at checkout when members book this session type. Pre-filled with the platform default — edit as needed.
+        </p>
+        <Textarea
+          value={form.termsAndConditions}
+          onChange={(e) =>
+            setForm((f) => ({
+              ...f,
+              termsAndConditions: e.target.value.slice(0, SESSION_TERMS_MAX_LENGTH + 10),
+            }))
+          }
+          rows={4}
+          placeholder="Booking terms for this session type…"
+          className={errors.termsAndConditions ? "border-red-500" : ""}
+        />
+        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+          <span>Displayed expanded at checkout</span>
+          <span className="tabular-nums">
+            {form.termsAndConditions.length} / {SESSION_TERMS_MAX_LENGTH}
+          </span>
+        </div>
+        {errors.termsAndConditions && (
+          <p className="text-xs text-red-500 mt-1">{errors.termsAndConditions}</p>
+        )}
+      </div>
       <div className="grid grid-cols-1 gap-4">
         <div>
           <Label>

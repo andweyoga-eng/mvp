@@ -3,6 +3,7 @@ import { pgTable, text, varchar, integer, timestamp, decimal, boolean, jsonb } f
 import { z } from "zod";
 import { createInsertSchema } from "drizzle-zod";
 import type { HealthHistoryEntry } from "./health-disclosure";
+import { healthMediaLinkSchema } from "./health-media-links";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -18,6 +19,8 @@ export const users = pgTable("users", {
   // Health Update fields - mandatory for booking sessions
   healthUpdateText: text("health_update_text"),
   healthDocumentUrls: text("health_document_urls").array(),
+  /** Google Drive / Docs links only — no file bytes stored */
+  healthMediaLinks: jsonb("health_media_links").$type<import("./health-media-links").HealthMediaLink[]>(),
   profileCompletionStatus: text("profile_completion_status").default("incomplete"), // 'incomplete', 'complete'
   healthUpdateLastModified: timestamp("health_update_last_modified"),
   /** Archived health notes (max 5); see HealthHistoryEntry */
@@ -64,6 +67,8 @@ export const classTypes = pgTable("class_types", {
   retirementReason: text("retirement_reason"),
   /** Comma-separated contraindications shown as "Not Suitable" tags (E-01). */
   strictNoTo: text("strict_no_to"),
+  /** Booking terms shown at checkout; defaults applied in app when empty. */
+  termsAndConditions: text("terms_and_conditions"),
 });
 
 /** Max characters for class_types.strict_no_to (admin + server validation). */
@@ -384,6 +389,8 @@ export const insertUserSchema = createInsertSchema(users).omit({
   emailVerificationToken: true,
   profileCompletionStatus: true,
   healthUpdateLastModified: true,
+  healthUpdateHistory: true,
+  healthMediaLinks: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -434,6 +441,7 @@ export const updateProfilePartialSchema = updateProfileSchema.extend({
 export const healthUpdateSchema = z.object({
   healthUpdateText: z.string().min(1, "Health update is required. Enter 'None' if no health concerns to share."),
   healthDocumentUrls: z.array(z.string()).optional(),
+  healthMediaLinks: z.array(healthMediaLinkSchema).optional(),
 });
 
 // User document management schemas

@@ -128,23 +128,34 @@ export function PostAuthConsentGate({ children }: { children: ReactNode }) {
             setLocation("/");
           }}
           onConsentComplete={async (payload) => {
+            const policyVersion = consentStatus?.consentVersion ?? LEGAL_CONFIG.documentVersion;
             const result = await submitAuthenticatedConsent({
               ...payload,
-              consentVersion: LEGAL_CONFIG.documentVersion,
+              consentVersion: policyVersion,
             });
-            if (result.ok) {
-              await refreshUser();
-              const nextStatus = await fetchMyConsentStatus();
-              setConsentStatus(nextStatus);
-              const isNewUser =
-                sessionStorage.getItem(OAUTH_NEW_USER_KEY) === "1" ||
-                requirement.flow === "first_time";
-              if (isNewUser) {
-                sessionStorage.removeItem(OAUTH_NEW_USER_KEY);
-                setLocation(MY_ACCOUNT_PROFILE_URL);
-              }
-              showDeferredLoginToastIfNeeded(toast);
+            if (!result.ok) {
+              return result;
             }
+            await refreshUser();
+            const nextStatus = await fetchMyConsentStatus();
+            setConsentStatus(nextStatus);
+            if (nextStatus.requirement?.requiresConsent) {
+              toast({
+                title: "Consent could not be completed",
+                description:
+                  "Please try again. If this continues, refresh the page or sign out and back in.",
+                variant: "destructive",
+              });
+              return { ok: false };
+            }
+            const isNewUser =
+              sessionStorage.getItem(OAUTH_NEW_USER_KEY) === "1" ||
+              requirement.flow === "first_time";
+            if (isNewUser) {
+              sessionStorage.removeItem(OAUTH_NEW_USER_KEY);
+              setLocation(MY_ACCOUNT_PROFILE_URL);
+            }
+            showDeferredLoginToastIfNeeded(toast);
             return result;
           }}
           mode={requirement.flow === "reconsent" ? "reconsent" : "first_time"}

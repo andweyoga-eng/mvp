@@ -49,6 +49,10 @@ import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-ch
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
 import { ReleaseSpotToast } from "@/components/release-spot-toast";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import {
+  SessionTermsBlock,
+  SessionTermsAcceptanceCopy,
+} from "@/components/session-terms-block";
 import { SessionDeliveryInfo } from "@/components/session-delivery-info";
 import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
 import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
@@ -593,6 +597,11 @@ export default function Reserve() {
                           isWarning={checkout.holdCountdown.isWarning}
                         />
                       )}
+                      <SessionTermsBlock
+                        termsAndConditions={selected.classType.termsAndConditions}
+                        collapsible={false}
+                      />
+                      <SessionTermsAcceptanceCopy />
 
                       {reserved.useQrPayment && reserved.qrPayment && reserved.bookingId ? (
                         <ManualPaymentReferenceBlock
@@ -638,6 +647,12 @@ export default function Reserve() {
                           </AlertDescription>
                         </Alert>
                       )}
+                      <SessionTermsBlock
+                        termsAndConditions={selected.classType.termsAndConditions}
+                        collapsible={false}
+                        className="mb-3"
+                      />
+                      <SessionTermsAcceptanceCopy className="mb-3" />
                       <button
                         type="button"
                         onClick={handleConfirm}

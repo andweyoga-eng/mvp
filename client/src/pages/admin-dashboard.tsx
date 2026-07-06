@@ -53,6 +53,8 @@ import {
 import type { Instructor } from "@shared/schema";
 import type { PaginatedResponse } from "@shared/admin-pagination";
 import { AdminPagination } from "@/components/admin/admin-pagination";
+import { AdminHealthMaterialsPanel } from "@/components/admin/health-materials-panel";
+import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 import {
   getInstructorStatusLabel,
   getInstructorEmailVerificationLabel,
@@ -67,6 +69,7 @@ interface User {
   id: string; email: string; name: string; emailVerified: boolean;
   isActive?: boolean; sessionAttendanceCount?: number;
   healthUpdateText: string | null; healthDocumentUrls: string[] | null;
+  healthMediaLinks?: HealthMediaLink[] | null;
   completeness: {
     isComplete: boolean; healthUpdateComplete: boolean; documentsComplete: boolean;
     emailVerified: boolean; completionPercentage: number; flags: string[];
@@ -175,6 +178,7 @@ export default function AdminDashboard() {
   const [classTypesPage, setClassTypesPage] = useState(1);
   const [classTypesPageSize, setClassTypesPageSize] = useState(20);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [healthViewUser, setHealthViewUser] = useState<User | null>(null);
   const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
   const defaultScheduleWeekStart = useMemo(() => startOfWeek(new Date()), []);
   const visibleScheduleWeekStart = scheduleWeekAnchor ?? defaultScheduleWeekStart;
@@ -748,6 +752,15 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                           <div className="flex gap-1 flex-wrap justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              onClick={() => setHealthViewUser(user)}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Health
+                            </Button>
                             <Button size="sm" variant="outline" className="text-xs h-7"
                               onClick={() => toggleUserActive(user.id, !(user.isActive ?? true))}>
                               {(user.isActive ?? true) ? "Deactivate" : "Activate"}
@@ -1306,6 +1319,21 @@ export default function AdminDashboard() {
         bookingCount={sessionToCancel?.bookingCount ?? 0}
         onConfirm={handleCancelSessionWithBookings}
       />
+
+      {healthViewUser ? (
+        <AdminHealthMaterialsPanel
+          userName={healthViewUser.name}
+          healthText={healthViewUser.healthUpdateText}
+          mediaLinks={resolveHealthMediaLinks(
+            healthViewUser.healthMediaLinks,
+            healthViewUser.healthDocumentUrls,
+          )}
+          open={Boolean(healthViewUser)}
+          onOpenChange={(open) => {
+            if (!open) setHealthViewUser(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

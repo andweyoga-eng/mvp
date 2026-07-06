@@ -82,6 +82,7 @@ describe("account migration — single page + one drawer", () => {
       "health",
       "sessions",
       "payments",
+      "credits",
       "preferences",
       "security",
       "privacy",

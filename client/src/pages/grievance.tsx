@@ -7,6 +7,7 @@ const SECTIONS = [
   { id: "corporate", title: (lang: "en" | "kn") => (lang === "kn" ? "ಕಂಪನಿ ವಿವರ" : "Corporate disclosure") },
   { id: "officer", title: (lang: "en" | "kn") => (lang === "kn" ? "ದೂರು ಪರಿಹಾರಾಧಿಕಾರಿ" : "Grievance Officer") },
   { id: "raise", title: (lang: "en" | "kn") => (lang === "kn" ? "ನೀವು ಏನು ದೂರು ಸಲ್ಲಿಸಬಹುದು" : "What you can raise") },
+  { id: "subprocessors", title: (lang: "en" | "kn") => (lang === "kn" ? "ಉಪಪ್ರಕ್ರಿಯೆದಾರರು" : "Subprocessors") },
   { id: "response", title: (lang: "en" | "kn") => (lang === "kn" ? "ಪ್ರತಿಕ್ರಿಯೆ ಮಾನದಂಡ" : "Response standard") },
   { id: "withdrawal", title: (lang: "en" | "kn") => (lang === "kn" ? "ಸಮ್ಮತಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳುವಿಕೆ" : "Consent withdrawal") },
   { id: "escalation", title: (lang: "en" | "kn") => (lang === "kn" ? "ಮೇಲ್ಮನವಿ" : "Escalation") },
@@ -99,6 +100,39 @@ export default function GrievancePage() {
                   : "Reports of suspected unauthorised access to your account or suspicious activity."}
               </li>
             </ul>
+          </section>
+
+          <section id="subprocessors">
+            <h2>{lang === "kn" ? "ಉಪಪ್ರಕ್ರಿಯೆದಾರ ಪಟ್ಟಿ" : "Subprocessor schedule"}</h2>
+            <p>
+              {lang === "kn" ? (
+                <>
+                  ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಸಂಸ್ಕರಿಸುವ ಉಪಪ್ರಕ್ರಿಯೆದಾರರು — Railway Corp. (ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್), Razorpay,
+                  ಮತ್ತು Google ಸೇರಿದಂತೆ — ನಮ್ಮ{" "}
+                  <Link href="/privacy#subprocessors" className="text-primary underline">
+                    ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿ
+                  </Link>{" "}
+                  ಪಟ್ಟಿ ಮಾಡಲಾಗಿದೆ. ಸ್ಥಳೀಕರಣ ಮತ್ತು ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್ ಬಗ್ಗೆ{" "}
+                  <Link href="/privacy#localisation" className="text-primary underline">
+                    ಸ್ಥಳೀಕರಣ ವಿಭಾಗ
+                  </Link>
+                  {" "}ಅನ್ನು ನೋಡಿ.
+                </>
+              ) : (
+                <>
+                  Subprocessors that process personal data on our instructions — including Railway Corp. (interim
+                  hosting), Razorpay, and Google — are listed in our{" "}
+                  <Link href="/privacy#subprocessors" className="text-primary underline">
+                    Privacy Notice
+                  </Link>
+                  . For interim hosting and data localisation, see the{" "}
+                  <Link href="/privacy#localisation" className="text-primary underline">
+                    Data localisation
+                  </Link>{" "}
+                  section.
+                </>
+              )}
+            </p>
           </section>
 
           <section id="response">

@@ -19,6 +19,7 @@ import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
 
 interface ClassType {
   id: string;
@@ -27,6 +28,7 @@ interface ClassType {
   duration: number;
   price: number;
   imageUrl?: string;
+  strictNoTo?: string | null;
 }
 
 interface ScheduleDay {
@@ -239,6 +241,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
           initials: string;
           soldOut: boolean;
           sessionId: string;
+          strictNoTo: string | null | undefined;
           classType: ClassType;
         }
     > = [];
@@ -260,12 +263,14 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
           initials: instructorInitials(cls.instructor.name),
           soldOut,
           sessionId: cls.id,
+          strictNoTo: cls.classType.strictNoTo,
           classType: {
             id: cls.classType.id,
             name: cls.classType.name,
-            description: "",
-            duration: 60,
+            description: cls.classType.description ?? "",
+            duration: cls.classType.duration ?? 60,
             price: cls.classType.price,
+            strictNoTo: cls.classType.strictNoTo,
           },
         });
       }
@@ -351,6 +356,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                       price={cls.classType.price}
                       imageUrl={imageUrl}
                       soldOut={soldOut}
+                      strictNoTo={cls.classType.strictNoTo}
                       onBook={(id) => onBookingClick(id)}
                     />
                   );
@@ -532,39 +538,47 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                   ) : (
                     <div
                       key={`s-${row.sessionId}-${i}`}
-                      className="flex items-center gap-3 border-b border-primary/5 py-2.5 last:border-0"
+                      className="border-b border-primary/5 py-2.5 last:border-0"
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
-                        {row.initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className={cn(
-                            "font-display text-sm font-semibold",
-                            row.soldOut ? "text-dz-muted line-through" : "text-foreground",
-                          )}
-                        >
-                          {row.title}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
+                          {row.initials}
                         </div>
-                        <div className="text-xs text-dz-muted">{row.meta}</div>
-                      </div>
-                      {row.badge ? (
-                        <Badge
-                          variant="outline"
-                          className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className={cn(
+                              "font-display text-sm font-semibold",
+                              row.soldOut ? "text-dz-muted line-through" : "text-foreground",
+                            )}
+                          >
+                            {row.title}
+                          </div>
+                          <div className="text-xs text-dz-muted">{row.meta}</div>
+                        </div>
+                        {row.badge ? (
+                          <Badge
+                            variant="outline"
+                            className={cn("shrink-0 whitespace-nowrap", SESSION_INFO_BADGE_CLASSNAME)}
+                          >
+                            {row.badge}
+                          </Badge>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
+                          disabled={row.soldOut}
+                          onClick={() => onBookingClick(row.sessionId)}
+                          data-testid={`book-class-${row.sessionId}`}
                         >
-                          {row.badge}
-                        </Badge>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
-                        disabled={row.soldOut}
-                        onClick={() => onBookingClick(row.sessionId)}
-                        data-testid={`book-class-${row.sessionId}`}
-                      >
-                        {row.soldOut ? "Full" : "Book"}
-                      </Button>
+                          {row.soldOut ? "Full" : "Book"}
+                        </Button>
+                      </div>
+                      <StrictNoToBlock
+                        strictNoTo={row.strictNoTo}
+                        compact
+                        alwaysShow={false}
+                        className="mt-2 border-none pt-0 pl-12"
+                      />
                     </div>
                   ),
                 )

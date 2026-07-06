@@ -80,6 +80,7 @@ import {
   normalizeAdminPassword,
 } from "./admin-bootstrap";
 import { deleteHealthDocumentObject } from "./health-document-upload";
+import { hasHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 
 /** Resolves after first DB init + admin bootstrap sync (await before handling traffic). */
 let resolveStorageReady: () => void = () => {};
@@ -208,6 +209,7 @@ export interface IStorage {
   updateUserHealthData(id: string, healthData: { 
     healthUpdateText: string; 
     healthDocumentUrls: string[]; 
+    healthMediaLinks?: HealthMediaLink[];
     healthUpdateHistory?: HealthHistoryEntry[];
     profileCompletionStatus: string;
     healthUpdateLastModified: string;
@@ -642,6 +644,7 @@ export class DatabaseStorage implements IStorage {
   async updateUserHealthData(id: string, healthData: { 
     healthUpdateText: string; 
     healthDocumentUrls: string[]; 
+    healthMediaLinks?: HealthMediaLink[];
     healthUpdateHistory?: HealthHistoryEntry[];
     profileCompletionStatus: string;
     healthUpdateLastModified: string;
@@ -651,6 +654,9 @@ export class DatabaseStorage implements IStorage {
         .set({ 
           healthUpdateText: healthData.healthUpdateText,
           healthDocumentUrls: healthData.healthDocumentUrls,
+          ...(healthData.healthMediaLinks !== undefined
+            ? { healthMediaLinks: healthData.healthMediaLinks }
+            : {}),
           ...(healthData.healthUpdateHistory !== undefined
             ? { healthUpdateHistory: healthData.healthUpdateHistory }
             : {}),
@@ -3317,6 +3323,7 @@ export class DatabaseStorage implements IStorage {
         .set({
           healthUpdateText: null,
           healthDocumentUrls: null,
+          healthMediaLinks: [],
           healthUpdateHistory: [],
           healthUpdateLastModified: null,
           profileCompletionStatus: "incomplete",
@@ -3449,6 +3456,7 @@ export class DatabaseStorage implements IStorage {
         emergencyMobileCountryCode: "+91",
         healthUpdateText: null,
         healthDocumentUrls: null,
+        healthMediaLinks: [],
         healthUpdateHistory: [],
         healthUpdateLastModified: null,
         dateOfBirth: null,
@@ -3608,7 +3616,10 @@ export class DatabaseStorage implements IStorage {
   // Profile completeness calculation helper
   private calculateProfileCompleteness(user: User): ProfileCompleteness {
     const healthUpdateComplete = isHealthDisclosureComplete(user.healthUpdateText);
-    const documentsComplete = user.healthDocumentUrls ? user.healthDocumentUrls.length > 0 : false;
+    const documentsComplete = hasHealthMediaLinks(
+      user.healthMediaLinks,
+      user.healthDocumentUrls,
+    );
     const emailVerified = user.emailVerified || false;
 
     const isComplete = isAccountProfileComplete(user);
@@ -3621,7 +3632,7 @@ export class DatabaseStorage implements IStorage {
     if (!isComplete) {
       flags.push(...getAccountProfileIncompleteReasons(user));
     }
-    if (!documentsComplete) flags.push("No health documents uploaded");
+    if (!documentsComplete) flags.push("No health materials shared");
 
     return {
       isComplete,

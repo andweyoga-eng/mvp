@@ -17,6 +17,7 @@ import {
   buildClassTypeSharePayloadForUi,
 } from "@/components/session-share-menu";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { ClampedDescription } from "@/components/clamped-description";
 
 interface ClassesSectionProps {
   onBookingClick: (intent?: BookingIntent) => void;
@@ -170,9 +171,11 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                   >
                     {classType.name}
                   </h3>
-                  <p className="mb-4 flex-1 text-sm text-dz-muted" data-testid={`class-description-${classType.id}`}>
-                    {classType.description}
-                  </p>
+                  <ClampedDescription
+                    text={classType.description}
+                    className="mb-4 flex-1"
+                    testId={`class-description-${classType.id}`}
+                  />
                   <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-4 border-none pt-0" />
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>

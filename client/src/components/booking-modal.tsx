@@ -57,6 +57,10 @@ import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
 import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import {
+  SessionTermsBlock,
+  SessionTermsAcceptanceCopy,
+} from "@/components/session-terms-block";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ClassType, Class } from "@shared/schema";
@@ -317,6 +321,12 @@ export default function BookingModal({
       (displayClass as { sessionFrequency?: string } | undefined)?.sessionFrequency;
     return isTrialOrDropIn(freq);
   }, [selectedSession, displayClass]);
+
+  const checkoutSessionTerms =
+    selectedSession?.classType?.termsAndConditions ??
+    displayClass?.classType?.termsAndConditions ??
+    filteredClassType?.termsAndConditions ??
+    null;
 
   const canAccessCheckoutUi =
     !!user || !!getAuthToken() || !!getGuestCheckoutToken();
@@ -1501,6 +1511,12 @@ export default function BookingModal({
               )}
             </div>
 
+            <SessionTermsBlock
+              termsAndConditions={checkoutSessionTerms}
+              collapsible={false}
+            />
+            <SessionTermsAcceptanceCopy />
+
             {paymentResult.useQrPayment && paymentResult.qrPayment && paymentResult.bookingId ? (
               <ManualPaymentReferenceBlock
                 variant="qr"
@@ -1730,6 +1746,12 @@ export default function BookingModal({
                     className="border-0 bg-transparent p-0"
                   />
                 </div>
+                <SessionTermsBlock
+                  termsAndConditions={checkoutSessionTerms}
+                  collapsible={false}
+                  className="mb-1"
+                />
+                <SessionTermsAcceptanceCopy className="mb-1" />
                 <div className="flex gap-2">
                   <Button
                     className="w-full bg-primary !text-white"
@@ -1954,6 +1976,12 @@ export default function BookingModal({
                   )}
                 </div>
               )}
+
+              <SessionTermsBlock
+                termsAndConditions={checkoutSessionTerms}
+                collapsible={false}
+              />
+              <SessionTermsAcceptanceCopy />
 
               <div className="flex gap-3 pt-4">
                 <Button

@@ -4,10 +4,11 @@ export const HEALTH_NO_CONCERNS_TEXT = 'No health concerns.';
 /** Maximum characters for the “Yes, specify” free-text disclosure. */
 export const MAX_HEALTH_CONCERNS_CHARS = 500;
 
-export const HEALTH_DOCUMENT_MAX_BYTES = 1024 * 1024;
+export const HEALTH_DOCUMENT_MAX_MB = 5;
+export const HEALTH_DOCUMENT_MAX_BYTES = HEALTH_DOCUMENT_MAX_MB * 1024 * 1024;
 
 export const HEALTH_DOCUMENT_TOO_LARGE_MESSAGE =
-  'Your file is too large to upload here. Please email it to mudit@andweyoga.com and our team will update your record.';
+  `Your file is too large (maximum ${HEALTH_DOCUMENT_MAX_MB} MB). Please email it to mudit@andweyoga.com and our team will update your record.`;
 
 export type HealthDisclosureChoice = 'none' | 'concerns' | '';
 
@@ -99,11 +100,14 @@ export function validateHealthDisclosureDraft(
 const ALLOWED_DISCLOSURE_EXTENSIONS = new Set(['pdf', 'jpg', 'jpeg', 'png']);
 const ALLOWED_DISCLOSURE_MIMES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
+import type { HealthMediaLink } from "./health-media-links";
+
 /** Archived health note (max 5 per account). */
 export type HealthHistoryEntry = {
   text: string;
   savedAt: string;
   documentUrls: string[];
+  mediaLinks?: HealthMediaLink[];
 };
 
 export function parseHealthHistory(raw: unknown): HealthHistoryEntry[] {
