@@ -23,6 +23,10 @@ import {
   type InsertNotifyRequest,
   type Subscription,
   type InsertSubscription,
+  type CouponCode,
+  type InsertCouponCode,
+  type CouponRedemption,
+  type CouponShareLog,
   type PaymentQrCode,
   type InsertPaymentQrCode,
   type CarouselPromotion,
@@ -42,6 +46,9 @@ import {
   adminProfiles,
   classTypeNotifyRequests,
   subscriptions,
+  couponCodes,
+  couponRedemptions,
+  couponShareLogs,
   carouselPromotions,
   platformSettings,
   sessionMoodCheckins,
@@ -56,7 +63,13 @@ import {
 import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like } from "drizzle-orm";
+import {
+  QA_AGENT_CLASS_TYPE_PREFIX,
+  QA_FIXTURE_CLASS_TYPE_PREFIX,
+  QA_SMOKE_CLASS_TYPE_PREFIX,
+  SEED_CLASS_TYPE_NAMES,
+} from "../shared/seed-catalog";
 import { BOOKING_PAYMENT_STATUS, canResumePaymentCheckout, bookingCountsTowardCapacity } from "@shared/booking-payment-hold";
 import { paginationOffset } from "@shared/admin-pagination";
 import {
@@ -73,6 +86,11 @@ import {
 } from "@shared/member-booking-duplicate";
 import { getMeetJoinState } from "@shared/session-meet-access";
 import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod, usesHostedCheckout } from "@shared/payment-gateway";
+import {
+  evaluateCouponApplicability,
+  isCouponNotExpired,
+  normalizeCouponCode,
+} from "@shared/coupons";
 import { hashPassword, verifyPassword } from "./auth";
 import {
   getAdminBootstrapConfig,
@@ -176,6 +194,46 @@ export interface SubscriptionSummaryRow {
   createdAt: string;
 }
 
+export interface CouponAdminSummaryRow {
+  id: string;
+  code: string;
+  discountType: string;
+  discountValue: number;
+  classTypeId: string | null;
+  classTypeName: string | null;
+  classId: string | null;
+  sessionLabel: string | null;
+  expiresAt: string;
+  maxUses: number | null;
+  useCount: number;
+  status: string;
+  createdByAdminName: string;
+  notes: string | null;
+  createdAt: string;
+  isExpired: boolean;
+  redemptionCount: number;
+  totalDiscountPaise: number;
+}
+
+export interface CouponRedemptionRow {
+  id: string;
+  couponId: string;
+  couponCode: string;
+  userId: string | null;
+  userName: string | null;
+  userEmail: string | null;
+  bookingId: string | null;
+  paymentId: string | null;
+  classTypeId: string | null;
+  classTypeName: string | null;
+  classId: string | null;
+  sessionDate: string | null;
+  originalAmountPaise: number;
+  discountAmountPaise: number;
+  finalAmountPaise: number;
+  redeemedAt: string;
+}
+
 export interface AdminWaitlistRow {
   id: string;
   classTypeId: string;
@@ -183,6 +241,7 @@ export interface AdminWaitlistRow {
   userId: string | null;
   userName: string | null;
   email: string;
+  whatsapp: string | null;
   source: string;
   emailSendStatus: string | null;
   emailSendError: string | null;
@@ -273,7 +332,7 @@ export interface IStorage {
   upsertPlatformSetting(
     key: string,
     value: unknown,
-    updatedBy: string,
+    updatedBy: string | null,
   ): Promise<PlatformSetting>;
 
   createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest>;
@@ -468,6 +527,7 @@ export interface IStorage {
   getAllClassTypesPaginated(
     page: number,
     pageSize: number,
+    options?: { excludeQaFixtures?: boolean },
   ): Promise<{ rows: ClassType[]; total: number }>;
   getAllBookingsPaginated(
     page: number,
@@ -487,6 +547,35 @@ export interface IStorage {
   getSubscriptionSummariesForAdmin(): Promise<SubscriptionSummaryRow[]>;
   getSubscriptionSummariesForUser(userId: string): Promise<SubscriptionSummaryRow[]>;
   incrementSubscriptionUtilization(userId: string, classId: string): Promise<void>;
+
+  // Coupon codes
+  createCouponCode(data: InsertCouponCode): Promise<CouponCode>;
+  getCouponById(id: string): Promise<CouponCode | undefined>;
+  getActiveCouponByCode(code: string): Promise<CouponCode | undefined>;
+  getCouponSummariesForAdmin(): Promise<CouponAdminSummaryRow[]>;
+  getCouponRedemptionsForAdmin(couponId?: string): Promise<CouponRedemptionRow[]>;
+  revokeCoupon(id: string): Promise<CouponCode | undefined>;
+  recordCouponShareLog(data: {
+    couponId: string;
+    adminId: string;
+    userId: string;
+    channel: string;
+    status: string;
+    errorMessage?: string | null;
+    sentAt?: Date | null;
+  }): Promise<CouponShareLog>;
+  finalizeCouponRedemption(params: {
+    couponId: string;
+    userId: string | null;
+    bookingId: string;
+    paymentId: string;
+    classTypeId: string;
+    classId: string;
+    originalAmountPaise: number;
+    discountAmountPaise: number;
+    finalAmountPaise: number;
+  }): Promise<CouponRedemption | null>;
+
   insertAuditLog(entry: InsertAuditLog): Promise<void>;
 
   // Consent & erasure (DPDPA Ch. 7)
@@ -979,18 +1068,26 @@ export class DatabaseStorage implements IStorage {
   async upsertPlatformSetting(
     key: string,
     value: unknown,
-    updatedBy: string,
+    updatedBy: string | null,
   ): Promise<PlatformSetting> {
-    const now = new Date();
-    const [row] = await db
-      .insert(platformSettings)
-      .values({ key, value, updatedBy, updatedAt: now })
-      .onConflictDoUpdate({
-        target: platformSettings.key,
-        set: { value, updatedBy, updatedAt: now },
-      })
-      .returning();
-    return row;
+    try {
+      const now = new Date();
+      const [row] = await db
+        .insert(platformSettings)
+        .values({ key, value, updatedBy, updatedAt: now })
+        .onConflictDoUpdate({
+          target: platformSettings.key,
+          set: { value, updatedBy, updatedAt: now },
+        })
+        .returning();
+      if (!row) {
+        throw new Error(`Failed to save platform setting "${key}"`);
+      }
+      return row;
+    } catch (error) {
+      console.error("[DB] Error upserting platform setting:", key, error);
+      throw error;
+    }
   }
 
   async createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest> {
@@ -1059,6 +1156,7 @@ export class DatabaseStorage implements IStorage {
         userId: classTypeNotifyRequests.userId,
         userName: users.name,
         email: classTypeNotifyRequests.email,
+        whatsapp: classTypeNotifyRequests.whatsapp,
         source: classTypeNotifyRequests.source,
         emailSendStatus: classTypeNotifyRequests.emailSendStatus,
         emailSendError: classTypeNotifyRequests.emailSendError,
@@ -3540,6 +3638,252 @@ export class DatabaseStorage implements IStorage {
       .where(eq(subscriptions.id, active.id));
   }
 
+  async createCouponCode(data: InsertCouponCode): Promise<CouponCode> {
+    const [row] = await db.insert(couponCodes).values(data).returning();
+    return row;
+  }
+
+  async getCouponById(id: string): Promise<CouponCode | undefined> {
+    const [row] = await db.select().from(couponCodes).where(eq(couponCodes.id, id));
+    return row;
+  }
+
+  async getActiveCouponByCode(code: string): Promise<CouponCode | undefined> {
+    const normalized = normalizeCouponCode(code);
+    const [row] = await db
+      .select()
+      .from(couponCodes)
+      .where(
+        and(
+          eq(couponCodes.code, normalized),
+          eq(couponCodes.status, "active"),
+          gt(couponCodes.expiresAt, sql`CURRENT_TIMESTAMP`),
+        ),
+      );
+    return row;
+  }
+
+  async getCouponSummariesForAdmin(): Promise<CouponAdminSummaryRow[]> {
+    const rows = await db
+      .select({
+        id: couponCodes.id,
+        code: couponCodes.code,
+        discountType: couponCodes.discountType,
+        discountValue: couponCodes.discountValue,
+        classTypeId: couponCodes.classTypeId,
+        classTypeName: classTypes.name,
+        classId: couponCodes.classId,
+        sessionDate: classes.date,
+        expiresAt: couponCodes.expiresAt,
+        maxUses: couponCodes.maxUses,
+        useCount: couponCodes.useCount,
+        status: couponCodes.status,
+        createdByAdminName: adminUsers.name,
+        notes: couponCodes.notes,
+        createdAt: couponCodes.createdAt,
+      })
+      .from(couponCodes)
+      .innerJoin(adminUsers, eq(couponCodes.createdByAdminId, adminUsers.id))
+      .leftJoin(classTypes, eq(couponCodes.classTypeId, classTypes.id))
+      .leftJoin(classes, eq(couponCodes.classId, classes.id))
+      .orderBy(desc(couponCodes.createdAt));
+
+    const redemptionStats = await db
+      .select({
+        couponId: couponRedemptions.couponId,
+        redemptionCount: count(),
+        totalDiscountPaise: sql<number>`coalesce(sum(${couponRedemptions.discountAmountPaise}), 0)`,
+      })
+      .from(couponRedemptions)
+      .groupBy(couponRedemptions.couponId);
+
+    const statsByCoupon = new Map(
+      redemptionStats.map((s) => [
+        s.couponId,
+        {
+          redemptionCount: Number(s.redemptionCount),
+          totalDiscountPaise: Number(s.totalDiscountPaise),
+        },
+      ]),
+    );
+
+    const nowMs = Date.now();
+    return rows.map((r) => {
+      const stats = statsByCoupon.get(r.id) ?? { redemptionCount: 0, totalDiscountPaise: 0 };
+      let sessionLabel: string | null = null;
+      if (r.classTypeName && r.sessionDate) {
+        const when = new Date(r.sessionDate).toLocaleString("en-IN", {
+          day: "numeric",
+          month: "short",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        sessionLabel = `${r.classTypeName} on ${when}`;
+      } else if (r.classTypeName) {
+        sessionLabel = r.classTypeName;
+      }
+      return {
+        id: r.id,
+        code: r.code,
+        discountType: r.discountType,
+        discountValue: r.discountValue,
+        classTypeId: r.classTypeId,
+        classTypeName: r.classTypeName,
+        classId: r.classId,
+        sessionLabel,
+        expiresAt: r.expiresAt.toISOString(),
+        maxUses: r.maxUses,
+        useCount: r.useCount,
+        status: r.status,
+        createdByAdminName: r.createdByAdminName,
+        notes: r.notes,
+        createdAt: r.createdAt.toISOString(),
+        isExpired: !isCouponNotExpired(r.expiresAt, nowMs),
+        redemptionCount: stats.redemptionCount,
+        totalDiscountPaise: stats.totalDiscountPaise,
+      };
+    });
+  }
+
+  async getCouponRedemptionsForAdmin(couponId?: string): Promise<CouponRedemptionRow[]> {
+    const conditions = couponId ? eq(couponRedemptions.couponId, couponId) : undefined;
+    const rows = await db
+      .select({
+        id: couponRedemptions.id,
+        couponId: couponRedemptions.couponId,
+        couponCode: couponCodes.code,
+        userId: couponRedemptions.userId,
+        userName: users.name,
+        userEmail: users.email,
+        bookingId: couponRedemptions.bookingId,
+        paymentId: couponRedemptions.paymentId,
+        classTypeId: couponRedemptions.classTypeId,
+        classTypeName: classTypes.name,
+        classId: couponRedemptions.classId,
+        sessionDate: classes.date,
+        originalAmountPaise: couponRedemptions.originalAmountPaise,
+        discountAmountPaise: couponRedemptions.discountAmountPaise,
+        finalAmountPaise: couponRedemptions.finalAmountPaise,
+        redeemedAt: couponRedemptions.redeemedAt,
+      })
+      .from(couponRedemptions)
+      .innerJoin(couponCodes, eq(couponRedemptions.couponId, couponCodes.id))
+      .leftJoin(users, eq(couponRedemptions.userId, users.id))
+      .leftJoin(classTypes, eq(couponRedemptions.classTypeId, classTypes.id))
+      .leftJoin(classes, eq(couponRedemptions.classId, classes.id))
+      .where(conditions)
+      .orderBy(desc(couponRedemptions.redeemedAt));
+
+    return rows.map((r) => ({
+      ...r,
+      sessionDate: r.sessionDate?.toISOString() ?? null,
+      redeemedAt: r.redeemedAt.toISOString(),
+    }));
+  }
+
+  async revokeCoupon(id: string): Promise<CouponCode | undefined> {
+    const [row] = await db
+      .update(couponCodes)
+      .set({ status: "revoked", updatedAt: new Date() })
+      .where(eq(couponCodes.id, id))
+      .returning();
+    return row;
+  }
+
+  async recordCouponShareLog(data: {
+    couponId: string;
+    adminId: string;
+    userId: string;
+    channel: string;
+    status: string;
+    errorMessage?: string | null;
+    sentAt?: Date | null;
+  }): Promise<CouponShareLog> {
+    const [row] = await db
+      .insert(couponShareLogs)
+      .values({
+        couponId: data.couponId,
+        adminId: data.adminId,
+        userId: data.userId,
+        channel: data.channel,
+        status: data.status,
+        errorMessage: data.errorMessage ?? null,
+        sentAt: data.sentAt ?? null,
+      })
+      .returning();
+    return row;
+  }
+
+  async finalizeCouponRedemption(params: {
+    couponId: string;
+    userId: string | null;
+    bookingId: string;
+    paymentId: string;
+    classTypeId: string;
+    classId: string;
+    originalAmountPaise: number;
+    discountAmountPaise: number;
+    finalAmountPaise: number;
+  }): Promise<CouponRedemption | null> {
+    return db.transaction(async (tx) => {
+      const [coupon] = await tx
+        .select()
+        .from(couponCodes)
+        .where(eq(couponCodes.id, params.couponId))
+        .for("update");
+
+      if (!coupon) return null;
+
+      const applicability = evaluateCouponApplicability({
+        status: coupon.status as "active" | "revoked",
+        expiresAt: coupon.expiresAt,
+        maxUses: coupon.maxUses,
+        useCount: coupon.useCount,
+        classTypeId: coupon.classTypeId,
+        classId: coupon.classId,
+        targetClassTypeId: params.classTypeId,
+        targetClassId: params.classId,
+      });
+      if (!applicability.ok) return null;
+
+      const [updated] = await tx
+        .update(couponCodes)
+        .set({
+          useCount: sql`${couponCodes.useCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(couponCodes.id, params.couponId),
+            eq(couponCodes.status, "active"),
+            gt(couponCodes.expiresAt, sql`CURRENT_TIMESTAMP`),
+            or(isNull(couponCodes.maxUses), lt(couponCodes.useCount, couponCodes.maxUses)),
+          ),
+        )
+        .returning();
+
+      if (!updated) return null;
+
+      const [redemption] = await tx
+        .insert(couponRedemptions)
+        .values({
+          couponId: params.couponId,
+          userId: params.userId,
+          bookingId: params.bookingId,
+          paymentId: params.paymentId,
+          classTypeId: params.classTypeId,
+          classId: params.classId,
+          originalAmountPaise: params.originalAmountPaise,
+          discountAmountPaise: params.discountAmountPaise,
+          finalAmountPaise: params.finalAmountPaise,
+        })
+        .returning();
+
+      return redemption;
+    });
+  }
+
   async getUsersWithCompletenessPaginated(
     page: number,
     pageSize: number,
@@ -3582,16 +3926,24 @@ export class DatabaseStorage implements IStorage {
   async getAllClassTypesPaginated(
     page: number,
     pageSize: number,
+    options: { excludeQaFixtures?: boolean } = {},
   ): Promise<{ rows: ClassType[]; total: number }> {
+    const excludeQaFixtures = options.excludeQaFixtures !== false;
+    const whereClause = excludeQaFixtures
+      ? and(
+          isNull(classTypes.retiredAt),
+          not(inArray(classTypes.name, [...SEED_CLASS_TYPE_NAMES])),
+          not(like(classTypes.name, `${QA_FIXTURE_CLASS_TYPE_PREFIX}%`)),
+          not(like(classTypes.name, `${QA_SMOKE_CLASS_TYPE_PREFIX}%`)),
+          not(like(classTypes.name, `${QA_AGENT_CLASS_TYPE_PREFIX}%`)),
+        )
+      : isNull(classTypes.retiredAt);
     const offset = paginationOffset(page, pageSize);
-    const [{ total }] = await db
-      .select({ total: count() })
-      .from(classTypes)
-      .where(isNull(classTypes.retiredAt));
+    const [{ total }] = await db.select({ total: count() }).from(classTypes).where(whereClause);
     const rows = await db
       .select()
       .from(classTypes)
-      .where(isNull(classTypes.retiredAt))
+      .where(whereClause)
       .orderBy(classTypes.name)
       .limit(pageSize)
       .offset(offset);

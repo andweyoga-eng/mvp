@@ -37,7 +37,7 @@ export default function AllySection() {
         <div className="mb-10 text-center md:mb-12">
           <h2 className="font-display text-[clamp(1.875rem,5vw,3.25rem)] font-bold tracking-tight text-primary">
             and We Meet{" "}
-            <span className="font-accent italic font-normal text-dz-secondary">Yogis</span>
+            <span className="font-accent italic font-normal text-dz-secondary">Coach</span>
           </h2>
           <p className="mx-auto mt-2.5 max-w-2xl text-dz-muted">
             Meet our diverse community of certified instructors who bring authentic expertise and

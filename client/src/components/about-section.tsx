@@ -1,4 +1,5 @@
 import { navigateToHomeSection } from "@/lib/home-navigation";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/digital-zen/page-container";
 
 export default function AboutSection() {
@@ -6,13 +7,7 @@ export default function AboutSection() {
     <section id="about" className="bg-[#f4f1f8] py-16 md:py-20">
       <PageContainer className="max-w-3xl text-center">
         <h2 className="mb-6 flex flex-wrap items-center justify-center gap-3 font-display text-[clamp(1.875rem,5vw,3.25rem)] font-bold tracking-tight text-primary">
-          About{" "}
-          <span className="inline-flex items-center gap-0.5 text-[clamp(1.5rem,4vw,2.5rem)]">
-            <span className="font-semibold text-foreground">andWe</span>
-            <span className="text-primary">YO</span>
-            <span className="text-dz-secondary">^</span>
-            <span className="text-primary">ga</span>
-          </span>
+          About <BrandLogo imgClassName="h-[clamp(2.75rem,5.5vw,3.75rem)] w-auto" />
         </h2>
         <p className="mb-4 text-[clamp(0.9375rem,1.6vw,1.125rem)] leading-relaxed text-dz-muted">
           Founded in 2018, andWeYoga has been a sanctuary for wellness seekers and yoga practitioners
@@ -30,7 +25,7 @@ export default function AboutSection() {
             className="rounded-full bg-primary px-7 py-3.5 text-sm font-bold text-white shadow-dz-primary"
             data-testid="meet-instructors-button"
           >
-            and We Meet Yogis
+            and We Meet Coach
           </button>
           <button
             type="button"

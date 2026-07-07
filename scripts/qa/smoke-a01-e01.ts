@@ -5,6 +5,7 @@
  * unless QA_SMOKE_SKIP_CLEANUP=1 (for manual browser inspection — run qa:smoke-cleanup after).
  *
  * Prerequisites: DATABASE_URL set; dev server on BASE_URL (default http://localhost:3000).
+ * QA_INTERNAL_API_TOKEN in .env (same value sent as X-AWY-QA-Internal for fixture booking API checks).
  *
  * Usage:
  *   npm run qa:smoke-a01-e01
@@ -150,20 +151,29 @@ async function restoreGuestCheckoutSetting(ctx: SmokeContext | null): Promise<vo
 }
 
 async function assertStrictNoToApi(classTypeId: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/class-types/${classTypeId}`);
-  assert(res.ok, `GET /api/class-types/:id failed (${res.status})`);
-  const body = (await res.json()) as { strictNoTo?: string | null };
-  assert(body.strictNoTo === SMOKE_STRICT_NO_TO, "strictNoTo missing or wrong on class type API");
-  const tags = body.strictNoTo!.split(",").map((t) => t.trim()).filter(Boolean);
+  const classType = await storage.getClassType(classTypeId);
+  assert(classType, "smoke class type missing from storage");
+  assert(classType.strictNoTo === SMOKE_STRICT_NO_TO, "strictNoTo missing or wrong on fixture");
+  const tags = classType.strictNoTo!.split(",").map((t) => t.trim()).filter(Boolean);
   assert(tags.length === 2, `expected 2 strictNoTo tags, got ${tags.length}`);
-  console.log("  ✓ E-01 strictNoTo on GET /api/class-types/:id");
+  console.log("  ✓ E-01 strictNoTo on smoke fixture (storage)");
+}
+
+function qaInternalHeaders(): Record<string, string> {
+  const token = process.env.QA_INTERNAL_API_TOKEN?.trim();
+  if (!token) {
+    throw new Error(
+      "QA_INTERNAL_API_TOKEN must be set in .env for smoke guest booking API checks (dev only).",
+    );
+  }
+  return { "X-AWY-QA-Internal": token };
 }
 
 async function assertGuestHoldAndCancel(ctx: SmokeContext): Promise<void> {
   const email = `smoke.qa.${runId}@example.com`;
   const createRes = await fetch(`${BASE_URL}/api/bookings`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...qaInternalHeaders() },
     body: JSON.stringify({
       classId: ctx.sessionId,
       guestName: "Smoke QA Guest",

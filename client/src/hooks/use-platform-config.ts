@@ -4,9 +4,13 @@ export const PLATFORM_CONFIG_QUERY_KEY = ["/api/platform/config"] as const;
 
 export interface PlatformConfig {
   guestCheckoutEnabled: boolean;
+  maintenanceWindowEnabled: boolean;
 }
 
-const DEFAULT_CONFIG: PlatformConfig = { guestCheckoutEnabled: false };
+const DEFAULT_CONFIG: PlatformConfig = {
+  guestCheckoutEnabled: false,
+  maintenanceWindowEnabled: false,
+};
 
 async function fetchPlatformConfig(): Promise<PlatformConfig> {
   const res = await fetch("/api/platform/config");
@@ -14,6 +18,7 @@ async function fetchPlatformConfig(): Promise<PlatformConfig> {
   const data = (await res.json()) as Partial<PlatformConfig>;
   return {
     guestCheckoutEnabled: data.guestCheckoutEnabled !== false,
+    maintenanceWindowEnabled: data.maintenanceWindowEnabled === true,
   };
 }
 
@@ -22,11 +27,15 @@ export function usePlatformConfig() {
   const query = useQuery({
     queryKey: PLATFORM_CONFIG_QUERY_KEY,
     queryFn: fetchPlatformConfig,
-    staleTime: 60_000,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   return {
     ...query,
     guestCheckoutEnabled: query.data?.guestCheckoutEnabled ?? DEFAULT_CONFIG.guestCheckoutEnabled,
+    maintenanceWindowEnabled:
+      query.data?.maintenanceWindowEnabled ?? DEFAULT_CONFIG.maintenanceWindowEnabled,
   };
 }

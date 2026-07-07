@@ -24,7 +24,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
+import { BrandLogo } from "@/components/brand-logo";
 
 export type DashboardSection =
   | "sessions"
@@ -92,15 +92,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
       {/* ===== HEADER ===== */}
       <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px]">
         <PageContainer className="flex h-[76px] items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={() => setLocation("/dashboard")}
-            className="flex flex-shrink-0 items-center"
-            aria-label="andWeYoga dashboard"
-            data-testid="dashboard-logo"
-          >
-            <img src={logoPath} alt="andWeYoga" className="h-[clamp(38px,5.5vw,48px)] w-auto" />
-          </button>
+          <BrandLogo testId="dashboard-logo" />
 
           <div className="flex items-center gap-2.5">
             <button

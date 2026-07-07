@@ -4,7 +4,6 @@ import AllySection from "@/components/ally-section";
 import CareSection from "@/components/care-section";
 import VibeSection from "@/components/vibe-section";
 import BelieveSection from "@/components/believe-section";
-import ConnectSection from "@/components/connect-section";
 import ClassesSection from "@/components/classes-section";
 import ScheduleSection from "@/components/schedule-section";
 import AboutSection from "@/components/about-section";
@@ -173,7 +172,6 @@ export default function Home() {
       <CareSection />
       <VibeSection />
       <BelieveSection />
-      <ConnectSection />
       <AboutSection />
       <StorySection />
       <AllySection />

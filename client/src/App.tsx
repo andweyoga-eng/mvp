@@ -29,6 +29,7 @@ import SessionFeedback from "@/pages/session-feedback";
 import NotFound from "@/pages/not-found";
 import { MemberPostAuthLanding } from "@/components/member-post-auth-landing";
 import { PostAuthConsentGate } from "@/components/post-auth-consent-gate";
+import { MaintenanceWindowOverlay } from "@/components/maintenance-window-overlay";
 
 /** Legacy `/account/*` URLs now resolve to the single `/my-account` page anchor. */
 function LegacyAccountRedirect() {
@@ -104,6 +105,7 @@ function App() {
                 <Toaster />
                 <PostAuthConsentGate>
                   <MemberPostAuthLanding />
+                  <MaintenanceWindowOverlay />
                   <Router />
                 </PostAuthConsentGate>
               </AdminAuthProvider>

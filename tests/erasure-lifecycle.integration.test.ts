@@ -2,7 +2,7 @@
  * DB-backed erasure/withdrawal lifecycle coverage.
  * Run: npm test
  */
-import { before, describe, it } from "node:test";
+import { before, after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import express, { type Express } from "express";
 import http from "node:http";
@@ -851,4 +851,10 @@ describe("erasure enforcement and completion", { skip: !hasDb }, () => {
       process.env.NODE_ENV = previousNodeEnv;
     }
   });
+});
+
+after(async () => {
+  if (!hasDb) return;
+  const { purgeQaFixturesFromDb } = await import("../scripts/db/purge-qa-fixtures-core.ts");
+  await purgeQaFixturesFromDb();
 });

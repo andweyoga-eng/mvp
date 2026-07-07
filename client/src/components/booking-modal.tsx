@@ -30,6 +30,8 @@ import {
   sanitizeGuestPhoneInput,
   validateRequiredGuestPhone,
 } from "@shared/guest-phone";
+import { formatProfileWhatsapp } from "@shared/waitlist";
+import { navigateToDashboardAfterSpotRelease } from "@/lib/spot-release-navigation";
 import {
   type GuestFieldKey,
   validateGuestField,
@@ -142,6 +144,15 @@ export default function BookingModal({
   >("pay");
   const [isPaying, setIsPaying] = useState(false);
   const [paymentPhase, setPaymentPhase] = useState<PaymentProcessingPhase | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discountAmountPaise: number;
+    finalAmountPaise: number;
+    originalAmountPaise: number;
+  } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [heldUntil, setHeldUntil] = useState<string | null>(null);
   const holdCountdown = usePaymentHoldCountdown(
     paymentStep === "pay" && paymentResult?.paymentRequired !== false ? heldUntil : null,
@@ -171,6 +182,7 @@ export default function BookingModal({
   const guestCopy = CONSENT_COPY[consentLang];
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
   const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistWhatsapp, setWaitlistWhatsapp] = useState("");
   const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
   const resumeCheckoutStartedRef = useRef(false);
 
@@ -351,6 +363,7 @@ export default function BookingModal({
       setGuestFormBanner("");
       setNextBatchPrompt(null);
       setWaitlistEmail("");
+      setWaitlistWhatsapp("");
       setBookingAuthOpen(false);
       resumeCheckoutStartedRef.current = false;
       clearGuestCheckoutSession();
@@ -890,6 +903,15 @@ export default function BookingModal({
     }
   };
 
+  const handleReleaseSpot = async () => {
+    const ok = await releaseCheckout();
+    if (!ok) return;
+    onClose();
+    if (user) {
+      navigateToDashboardAfterSpotRelease(setLocation);
+    }
+  };
+
   const startRazorpayCheckout = async (booking: MemberBookingResult) => {
     if (!booking.bookingId || !booking.razorpayKeyId) return;
     const payerName = user?.name?.trim() || guestBooking.name.trim();
@@ -902,7 +924,10 @@ export default function BookingModal({
         method: "POST",
         headers: { "Content-Type": "application/json", ...checkoutAuthHeaders() },
         credentials: "include",
-        body: JSON.stringify({ bookingId: booking.bookingId }),
+        body: JSON.stringify({
+          bookingId: booking.bookingId,
+          ...(appliedCoupon?.code ? { couponCode: appliedCoupon.code } : {}),
+        }),
       });
       const orderData = await readResponseJson<{
         orderId: string;
@@ -1159,19 +1184,37 @@ export default function BookingModal({
       });
       return;
     }
+    const profileWhatsapp = user ? formatProfileWhatsapp(user) : null;
+    const whatsappPayload = profileWhatsapp ? undefined : waitlistWhatsapp.trim();
+    if (!profileWhatsapp && !whatsappPayload) {
+      toast({
+        title: "WhatsApp required",
+        description: "Please share your WhatsApp number so we can keep you posted.",
+        variant: "destructive",
+      });
+      return;
+    }
     const res = await fetch(`/api/class-types/${classTypeId}/notify`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
       credentials: "include",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email,
+        ...(whatsappPayload ? { whatsapp: whatsappPayload } : {}),
+      }),
     });
     if (!res.ok) {
-      toast({ title: "Could not join waitlist", variant: "destructive" });
+      const data = (await res.json().catch(() => null)) as { message?: string } | null;
+      toast({
+        title: "Could not join waitlist",
+        description: data?.message ?? "Please try again.",
+        variant: "destructive",
+      });
       return;
     }
     toast({
       title: "Added to waitlist",
-      description: "We will email you when the next batch opens.",
+      description: "We will email and WhatsApp you when the next batch opens.",
     });
     onClose();
   };
@@ -1340,13 +1383,56 @@ export default function BookingModal({
                 </p>
               </div>
             ) : (
-              !user && (
-                <Input
-                  value={waitlistEmail}
-                  onChange={(e) => setWaitlistEmail(e.target.value)}
-                  placeholder="you@example.com"
-                />
-              )
+              <div className="space-y-3">
+                {user ? (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-2">
+                    <p>
+                      <span className="font-semibold">Email:</span> {user.email}
+                    </p>
+                    {formatProfileWhatsapp(user) ? (
+                      <p>
+                        <span className="font-semibold">WhatsApp:</span> {formatProfileWhatsapp(user)}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <Label htmlFor="waitlist-whatsapp-modal">WhatsApp number</Label>
+                        <Input
+                          id="waitlist-whatsapp-modal"
+                          value={waitlistWhatsapp}
+                          onChange={(e) => setWaitlistWhatsapp(sanitizeGuestPhoneInput(e.target.value))}
+                          placeholder="10-digit mobile number"
+                          inputMode="numeric"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="waitlist-email-modal">Email</Label>
+                      <Input
+                        id="waitlist-email-modal"
+                        value={waitlistEmail}
+                        onChange={(e) => setWaitlistEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        type="email"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="waitlist-whatsapp-guest-modal">WhatsApp number</Label>
+                      <Input
+                        id="waitlist-whatsapp-guest-modal"
+                        value={waitlistWhatsapp}
+                        onChange={(e) => setWaitlistWhatsapp(sanitizeGuestPhoneInput(e.target.value))}
+                        placeholder="10-digit mobile number"
+                        inputMode="numeric"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             <div className="flex gap-2">
               {nextBatchPrompt ? (
@@ -1556,6 +1642,84 @@ export default function BookingModal({
             {!paymentResult.useQrPayment &&
             !isValidPaymentUrl(paymentResult.razorpayLink) &&
             paymentResult.useRazorpayCheckout ? (
+              <>
+                <div className="space-y-2 rounded-md border p-3">
+                  <Label htmlFor="booking-coupon-code">Coupon code</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="booking-coupon-code"
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError("");
+                        if (appliedCoupon) setAppliedCoupon(null);
+                      }}
+                      placeholder="Enter code"
+                      disabled={isPaying || !!paymentPhase}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isPaying || !!paymentPhase || !couponCode.trim() || isValidatingCoupon}
+                      onClick={async () => {
+                        if (!paymentResult.bookingId) return;
+                        setIsValidatingCoupon(true);
+                        setCouponError("");
+                        try {
+                          const res = await fetch("/api/coupons/validate", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              ...checkoutAuthHeaders(),
+                            },
+                            credentials: "include",
+                            body: JSON.stringify({
+                              code: couponCode.trim(),
+                              classId: paymentResult.classId ?? formData.classId,
+                            }),
+                          });
+                          const data = await readResponseJson<{
+                            valid?: boolean;
+                            message?: string;
+                            code?: string;
+                            discountAmountPaise?: number;
+                            finalAmountPaise?: number;
+                            originalAmountPaise?: number;
+                          }>(res);
+                          if (!res.ok || !data.valid) {
+                            setAppliedCoupon(null);
+                            setCouponError(data.message || "Invalid coupon");
+                            return;
+                          }
+                          setAppliedCoupon({
+                            code: data.code!,
+                            discountAmountPaise: data.discountAmountPaise!,
+                            finalAmountPaise: data.finalAmountPaise!,
+                            originalAmountPaise: data.originalAmountPaise!,
+                          });
+                          toast({
+                            title: "Coupon applied",
+                            description: `You save ₹${(data.discountAmountPaise! / 100).toLocaleString("en-IN")}`,
+                          });
+                        } catch {
+                          setCouponError("Could not validate coupon");
+                        } finally {
+                          setIsValidatingCoupon(false);
+                        }
+                      }}
+                    >
+                      {isValidatingCoupon ? "Checking…" : "Apply"}
+                    </Button>
+                  </div>
+                  {couponError && <p className="text-xs text-red-500">{couponError}</p>}
+                  {appliedCoupon && (
+                    <p className="text-xs text-green-700">
+                      {appliedCoupon.code} applied — pay ₹
+                      {(appliedCoupon.finalAmountPaise / 100).toLocaleString("en-IN")} (was ₹
+                      {(appliedCoupon.originalAmountPaise / 100).toLocaleString("en-IN")})
+                    </p>
+                  )}
+                </div>
               <Button
                 type="button"
                 className="w-full bg-green-600 hover:bg-green-700 !text-white font-bold"
@@ -1567,16 +1731,19 @@ export default function BookingModal({
                   ? paymentPhase === "verifying"
                     ? "Confirming payment…"
                     : "Payment in progress…"
-                  : `Pay ${formatSessionPrice(paymentResult.price) ?? "now"}`}
+                  : appliedCoupon
+                    ? `Pay ₹${(appliedCoupon.finalAmountPaise / 100).toLocaleString("en-IN")}`
+                    : `Pay ${formatSessionPrice(paymentResult.price) ?? "now"}`}
               </Button>
+              </>
             ) : null}
             <button
               type="button"
-              onClick={() => void releaseCheckout().then((ok) => ok && onClose())}
+              onClick={() => void handleReleaseSpot()}
               className="w-full py-2.5 text-[13px] text-muted-foreground underline decoration-muted-foreground/30 underline-offset-[3px]"
               disabled={isPaying || !!paymentPhase}
             >
-              Release my spot
+              Release my spot and leave
             </button>
           </div>
         )}

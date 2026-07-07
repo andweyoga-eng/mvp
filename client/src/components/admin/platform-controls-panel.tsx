@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Settings, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError } from "@/lib/admin-api";
-import { GUEST_CHECKOUT_SETTING_KEY } from "@shared/platform-settings";
+import { GUEST_CHECKOUT_SETTING_KEY, MAINTENANCE_WINDOW_SETTING_KEY, parseGuestCheckoutEnabled, parseMaintenanceWindowEnabled } from "@shared/platform-settings";
 import { adminSectionTabTrigger } from "@/lib/admin-tab-styles";
 
 interface PlatformSettingRow {
@@ -44,21 +44,30 @@ export function PlatformControlsPanel() {
   });
 
   const guestRow = settings.find((row) => row.key === GUEST_CHECKOUT_SETTING_KEY);
-  const guestEnabled = guestRow?.value === true;
+  const guestEnabled = guestRow ? parseGuestCheckoutEnabled(guestRow.value) : false;
+  const maintenanceRow = settings.find((row) => row.key === MAINTENANCE_WINDOW_SETTING_KEY);
+  const maintenanceEnabled = maintenanceRow ? parseMaintenanceWindowEnabled(maintenanceRow.value) : false;
+
+  async function patchPlatformSetting(key: string, enabled: boolean) {
+    const res = await fetch("/api/admin/platform-settings", {
+      method: "PATCH",
+      credentials: "include",
+      headers: adminHeaders(),
+      body: JSON.stringify({ key, enabled }),
+    });
+    if (!res.ok) {
+      const err = await parseAdminApiError(res);
+      throw new Error(err.message);
+    }
+    return res.json() as Promise<Record<string, unknown>>;
+  }
 
   const toggleMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      const res = await fetch("/api/admin/platform-settings/guest-checkout", {
-        method: "PATCH",
-        credentials: "include",
-        headers: adminHeaders(),
-        body: JSON.stringify({ enabled }),
-      });
-      if (!res.ok) {
-        const err = await parseAdminApiError(res);
-        throw new Error(err.message);
-      }
-      return res.json() as Promise<{ guestCheckoutEnabled: boolean }>;
+      const result = await patchPlatformSetting(GUEST_CHECKOUT_SETTING_KEY, enabled);
+      return { guestCheckoutEnabled: result.guestCheckoutEnabled === true } as {
+        guestCheckoutEnabled: boolean;
+      };
     },
     onMutate: async (enabled) => {
       await queryClient.cancelQueries({ queryKey: ["/api/admin/platform-settings"] });
@@ -98,6 +107,57 @@ export function PlatformControlsPanel() {
         description: result.guestCheckoutEnabled
           ? "Visitors can book drop-in and trial sessions without an account."
           : "New guest bookings are blocked. Visitors must sign in to book.",
+      });
+    },
+  });
+
+  const maintenanceToggleMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const result = await patchPlatformSetting(MAINTENANCE_WINDOW_SETTING_KEY, enabled);
+      return { maintenanceWindowEnabled: result.maintenanceWindowEnabled === true } as {
+        maintenanceWindowEnabled: boolean;
+      };
+    },
+    onMutate: async (enabled) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/admin/platform-settings"] });
+      const previous = queryClient.getQueryData<PlatformSettingRow[]>(["/api/admin/platform-settings"]);
+      queryClient.setQueryData<PlatformSettingRow[]>(
+        ["/api/admin/platform-settings"],
+        (old = []) => {
+          const rest = old.filter((row) => row.key !== MAINTENANCE_WINDOW_SETTING_KEY);
+          return [
+            ...rest,
+            {
+              key: MAINTENANCE_WINDOW_SETTING_KEY,
+              value: enabled,
+              updatedAt: new Date().toISOString(),
+              updatedBy: null,
+            },
+          ];
+        },
+      );
+      return { previous };
+    },
+    onError: (error, _enabled, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["/api/admin/platform-settings"], context.previous);
+      }
+      toast({
+        title: "Could not update setting",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/platform-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/platform/config"] });
+      toast({
+        title: result.maintenanceWindowEnabled
+          ? "Maintenance window enabled"
+          : "Maintenance window disabled",
+        description: result.maintenanceWindowEnabled
+          ? "Visitors see a maintenance overlay. Active members are notified on their consented channels."
+          : "The public site is accessible again.",
       });
     },
   });
@@ -152,6 +212,26 @@ export function PlatformControlsPanel() {
                     disabled={toggleMutation.isPending}
                     onCheckedChange={(checked) => toggleMutation.mutate(checked)}
                     data-testid="guest-checkout-toggle"
+                  />
+                </div>
+
+                <div className="flex items-start justify-between gap-4 rounded-lg border bg-white p-4">
+                  <div className="space-y-1.5 flex-1">
+                    <Label htmlFor="maintenance-window-toggle" className="text-base font-semibold text-gray-900">
+                      Enable maintenance window
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {maintenanceEnabled
+                        ? "The public site shows a frosted overlay — the carousel stays visible but booking and navigation are blocked. Active members are notified on channels they opted into (email and WhatsApp)."
+                        : "Visitors can use the public site normally. Turn on before planned downtime."}
+                    </p>
+                  </div>
+                  <Switch
+                    id="maintenance-window-toggle"
+                    checked={maintenanceEnabled}
+                    disabled={maintenanceToggleMutation.isPending}
+                    onCheckedChange={(checked) => maintenanceToggleMutation.mutate(checked)}
+                    data-testid="maintenance-window-toggle"
                   />
                 </div>
               </>

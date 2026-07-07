@@ -35,6 +35,8 @@ import {
   type MemberSession,
 } from "@/lib/member-sessions";
 import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { consumeSpotReleasedFlag } from "@/lib/spot-release-navigation";
+import { ReleaseSpotToast } from "@/components/release-spot-toast";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import type { Class, ClassType, Instructor } from "@shared/schema";
 import embraceImage from "@assets/embrace-carousel.png";
@@ -227,6 +229,13 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const carouselRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
+  const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
+
+  useEffect(() => {
+    if (!showReleaseToast) return;
+    const id = window.setTimeout(() => setShowReleaseToast(false), 2500);
+    return () => window.clearTimeout(id);
+  }, [showReleaseToast]);
 
   useEffect(() => {
     if (!authLoading && !user) setLocation("/");
@@ -648,6 +657,7 @@ export default function Dashboard() {
           </GlassCard>
         </section>
       </PageContainer>
+      <ReleaseSpotToast visible={showReleaseToast} />
     </DashboardShell>
   );
 }

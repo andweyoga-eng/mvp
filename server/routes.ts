@@ -9,10 +9,18 @@ import {
 } from "@shared/booking-eligibility";
 import { shouldBlockRecurringMidBatchBooking } from "@shared/recurring-batch";
 import { expandSessionOccurrences, serializeRecurrenceWeekdays } from "@shared/session-schedule";
+import {
+  GUEST_CHECKOUT_SETTING_KEY,
+  MAINTENANCE_WINDOW_SETTING_KEY,
+} from "@shared/platform-settings";
 import { storage, storageReady } from "./storage";
 import {
   getGuestCheckoutEnabled,
   setGuestCheckoutEnabled,
+  getMaintenanceWindowEnabled,
+  setMaintenanceWindowEnabled,
+  setPlatformSettingByKey,
+  ensureDefaultPlatformSettings,
   listPlatformSettings,
 } from "./platform-settings";
 import { getAdminBootstrapConfig, normalizeAdminEmail, normalizeAdminPassword } from "./admin-bootstrap";
@@ -34,6 +42,8 @@ import {
   toPublicInstructorProfile,
 } from "@shared/instructor-compliance";
 import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
+import { isQaFixtureClassTypeName, isQaFixtureInstructorName } from "@shared/seed-catalog";
+import { isSessionAllowedInPublicCatalog } from "./public-catalog-gate";
 import {
   ADMIN_AUTH_COOKIE_NAME,
   OAUTH_KEEP_COOKIE_NAME,
@@ -66,7 +76,12 @@ import {
 import { initialBookingHeldUntil } from "@shared/booking-payment-hold";
 import { buildResumeCheckoutPayload, bookingCanResumeCheckout } from "./resume-checkout";
 import { paginationQuerySchema, buildPaginatedResponse } from "@shared/admin-pagination";
-import { REQUIRED_PHONE_MESSAGE } from "@shared/guest-phone";
+import { REQUIRED_PHONE_MESSAGE, validateRequiredGuestPhone } from "@shared/guest-phone";
+import {
+  WAITLIST_SOURCE_GUEST,
+  WAITLIST_SOURCE_REGULAR,
+  formatProfileWhatsapp,
+} from "@shared/waitlist";
 import {
   buildInstructorVerifyEmailUrl,
   createInstructorEmailVerifiedHTML,
@@ -80,6 +95,9 @@ import {
   memberBookingBodySchema,
   createBookingRequestSchema,
   memberPaymentAckSchema,
+  createCouponCodeSchema,
+  shareCouponSchema,
+  validateCouponSchema,
   insertContactMessageSchema,
   insertCarouselPromotionSchema,
   updateCarouselPromotionSchema,
@@ -145,6 +163,19 @@ import {
   bookingContactPhone,
 } from "./booking-access";
 import { MANUAL_PAYMENT_SUBMITTED_COPY } from "@shared/manual-payment-ack";
+import {
+  computeFinalAmountPaise,
+  evaluateCouponApplicability,
+  generateCouponCode,
+  isCouponNotExpired,
+  normalizeCouponCode,
+} from "@shared/coupons";
+import {
+  couponCreateOtpHint,
+  deliverCouponShare,
+  resolveCouponSessionLabel,
+  verifyCouponCreateOtp,
+} from "./coupon-service";
 
 // Health document uploads: enabled when S3 is configured, or local disk in development.
 // Set ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES=false to disable explicitly.
@@ -855,7 +886,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
   app.get("/api/class-types", async (req, res) => {
     try {
-      const classTypes = await storage.getAllClassTypes();
+      const classTypes = (await storage.getAllClassTypes()).filter(
+        (ct) => !isQaFixtureClassTypeName(ct.name),
+      );
       res.json(classTypes);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch class types" });
@@ -865,7 +898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/class-types/:id", async (req, res) => {
     try {
       const classType = await storage.getClassType(req.params.id);
-      if (!classType) {
+      if (!classType || isQaFixtureClassTypeName(classType.name)) {
         return res.status(404).json({ message: "Class type not found" });
       }
       res.json(classType);
@@ -876,7 +909,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/class-types-availability/upcoming", async (_req, res) => {
     try {
-      const ids = await storage.getClassTypeIdsWithUpcomingSessions();
+      const publicTypeIds = new Set(
+        (await storage.getAllClassTypes())
+          .filter((ct) => !isQaFixtureClassTypeName(ct.name))
+          .map((ct) => ct.id),
+      );
+      const ids = (await storage.getClassTypeIdsWithUpcomingSessions()).filter((id) =>
+        publicTypeIds.has(id),
+      );
       res.json({ classTypeIds: ids });
     } catch {
       res.status(500).json({ message: "Failed to fetch class type availability" });
@@ -886,34 +926,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/class-types/:id/notify", optionalAuth, async (req: any, res) => {
     try {
       const classType = await storage.getClassType(req.params.id);
-      if (!classType) {
+      if (!classType || isQaFixtureClassTypeName(classType.name)) {
         return res.status(404).json({ message: "Session type not found" });
       }
       const body = z
         .object({
           email: z.string().email().optional(),
+          whatsapp: z.string().trim().optional(),
         })
         .parse(req.body ?? {});
       const user = req.user?.id ? await storage.getUser(req.user.id) : undefined;
       const email = (user?.email ?? body.email ?? "").trim().toLowerCase();
       if (!email) {
-        return res.status(400).json({ message: "Email is required for notification." });
+        return res.status(400).json({ message: "Email is required to join the waitlist." });
       }
+
+      let whatsapp = user ? formatProfileWhatsapp(user) : null;
+      if (!whatsapp && body.whatsapp) {
+        const phoneCheck = validateRequiredGuestPhone(body.whatsapp);
+        if (!phoneCheck.ok) {
+          return res.status(400).json({ message: phoneCheck.message });
+        }
+        whatsapp = `+91 ${phoneCheck.normalized}`;
+      }
+      if (!whatsapp) {
+        return res.status(400).json({
+          message: "WhatsApp number is required so we can keep you posted.",
+        });
+      }
+
       const request = await storage.createNotifyRequest({
         classTypeId: classType.id,
         userId: user?.id ?? null,
         email,
-        source: user ? "member" : "guest",
+        whatsapp,
+        source: user ? WAITLIST_SOURCE_REGULAR : WAITLIST_SOURCE_GUEST,
       });
       res.status(201).json({
         id: request.id,
-        message: "Thanks! We’ll notify you when sessions open.",
+        message: "Thanks! You're on the waitlist — we'll keep you posted when sessions open.",
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid input", errors: error.errors });
       }
-      res.status(500).json({ message: "Failed to save notification request" });
+      res.status(500).json({ message: "Failed to save waitlist request" });
     }
   });
 
@@ -1054,18 +1111,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/admin/class-types/:id/retire", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+  app.post("/api/admin/class-types/:id/retire", requireAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
+      const classType = await storage.getClassType(req.params.id);
+      if (!classType) {
+        return res.status(404).json({ message: "Session type not found" });
+      }
+
+      const isQaFixture = isQaFixtureClassTypeName(classType.name);
+      if (!isQaFixture && req.admin?.role !== "super_admin") {
+        return res.status(403).json({
+          message: "Only super admins can remove production session types.",
+        });
+      }
+
       const body = z
         .object({
           reason: z.string().min(3, "Retirement reason is required"),
-          ownerOtp: z.string().min(1, "Owner OTP is required"),
+          ownerOtp: z.string().optional(),
         })
         .parse(req.body);
 
-      const otp = validateOwnerCancelOtp(body.ownerOtp);
-      if (!otp.ok) {
-        return res.status(400).json({ message: otp.message });
+      if (!isQaFixture) {
+        const ownerOtp = body.ownerOtp?.trim() ?? "";
+        if (!ownerOtp) {
+          return res.status(400).json({ message: "Owner OTP is required." });
+        }
+        const otp = validateOwnerCancelOtp(ownerOtp);
+        if (!otp.ok) {
+          return res.status(400).json({ message: otp.message });
+        }
       }
 
       const result = await storage.retireClassTypeWithSessionCancellation(req.params.id, body.reason);
@@ -1143,6 +1218,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/admin/platform-settings", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const bodySchema = z.object({
+        key: z.enum([GUEST_CHECKOUT_SETTING_KEY, MAINTENANCE_WINDOW_SETTING_KEY]),
+        enabled: z.boolean(),
+      });
+      const { key, enabled } = bodySchema.parse(req.body);
+      if (!req.admin?.id) {
+        return res.status(401).json({ message: "Admin authentication required" });
+      }
+      const value = await setPlatformSettingByKey(key, enabled, req.admin.id, {
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+      if (key === GUEST_CHECKOUT_SETTING_KEY) {
+        return res.json({ key, guestCheckoutEnabled: value });
+      }
+      return res.json({ key, maintenanceWindowEnabled: value });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "key and enabled are required (enabled must be a boolean)",
+          errors: error.errors,
+        });
+      }
+      if (error instanceof Error && error.message.startsWith("Unknown platform setting")) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error("[platform-settings] PATCH failed:", error);
+      res.status(500).json({ message: "Failed to update platform setting" });
+    }
+  });
+
   app.patch("/api/admin/platform-settings/guest-checkout", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
       const bodySchema = z.object({ enabled: z.boolean() });
@@ -1163,6 +1271,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       res.status(500).json({ message: "Failed to update guest checkout setting" });
+    }
+  });
+
+  app.patch("/api/admin/platform-settings/maintenance-window", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const bodySchema = z.object({ enabled: z.boolean() });
+      const { enabled } = bodySchema.parse(req.body);
+      if (!req.admin?.id) {
+        return res.status(401).json({ message: "Admin authentication required" });
+      }
+      const maintenanceWindowEnabled = await setMaintenanceWindowEnabled(enabled, req.admin.id, {
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+      res.json({ maintenanceWindowEnabled });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "enabled must be a boolean",
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ message: "Failed to update maintenance window setting" });
     }
   });
 
@@ -1241,7 +1372,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================================
   app.get("/api/instructors", async (_req, res) => {
     try {
-      const instructors = await storage.getPublicInstructors();
+      const instructors = (await storage.getPublicInstructors()).filter(
+        (instructor) => !isQaFixtureInstructorName(instructor.name),
+      );
       res.json(instructors.map(toPublicInstructorProfile));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch instructors" });
@@ -1254,7 +1387,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!instructor) {
         return res.status(404).json({ message: "Instructor not found" });
       }
-      if (!isInstructorPublicVisible(instructor)) {
+      if (
+        !isInstructorPublicVisible(instructor) ||
+        isQaFixtureInstructorName(instructor.name)
+      ) {
         return res.status(404).json({ message: "Instructor not found" });
       }
       res.json(toPublicInstructorProfile(instructor));
@@ -1585,11 +1721,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /** Member booking + schedule: published session with active (session-pool) instructor. */
   async function enrichPublicClassForBooking(
     cls: Awaited<ReturnType<typeof storage.getClass>>,
+    req?: Pick<Request, "get">,
   ) {
     if (!cls || !isClassVisibleForBooking(cls)) return null;
     const classType = await storage.getClassType(cls.classTypeId);
     const instructor = await storage.getInstructor(cls.instructorId);
-    if (!classType || !instructor || !isInstructorSessionPoolEligible(instructor)) {
+    if (
+      !classType ||
+      !instructor ||
+      !isInstructorSessionPoolEligible(instructor) ||
+      !isSessionAllowedInPublicCatalog(classType, instructor, req)
+    ) {
       return null;
     }
     return sanitizePublicClass(cls, {
@@ -1603,7 +1745,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!cls || !isClassVisibleForBooking(cls)) return null;
     const classType = await storage.getClassType(cls.classTypeId);
     const instructor = await storage.getInstructor(cls.instructorId);
-    if (!classType || !instructor || !isInstructorPublicVisible(instructor)) return null;
+    if (
+      !classType ||
+      !instructor ||
+      !isInstructorPublicVisible(instructor) ||
+      !isSessionAllowedInPublicCatalog(classType, instructor)
+    ) {
+      return null;
+    }
     return sanitizePublicClass(cls, {
       classType,
       instructor: toPublicInstructorProfile(instructor) as typeof instructor,
@@ -1642,7 +1791,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!cls) {
         return res.status(404).json({ message: "Class not found" });
       }
-      const enriched = await enrichPublicClassForBooking(cls);
+      const enriched = await enrichPublicClassForBooking(cls, req);
       if (!enriched) {
         return res.status(404).json({ message: "Class not found" });
       }
@@ -2109,6 +2258,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const cls = await storage.getClass(classId);
       if (!cls) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+
+      const bookingClassType = await storage.getClassType(cls.classTypeId);
+      const bookingInstructor = await storage.getInstructor(cls.instructorId);
+      if (!isSessionAllowedInPublicCatalog(bookingClassType, bookingInstructor, req)) {
         return res.status(404).json({ message: "Class not found" });
       }
 
@@ -2596,7 +2751,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(503).json({ message: "Online payments are not configured yet." });
       }
 
-      const { bookingId } = z.object({ bookingId: z.string().min(1) }).parse(req.body);
+      const body = z
+        .object({
+          bookingId: z.string().min(1),
+          couponCode: z.string().trim().min(1).optional(),
+        })
+        .parse(req.body);
+
+      const { bookingId, couponCode } = body;
 
       const booking = await storage.getBooking(bookingId);
       if (!booking || !canAccessBooking(req, booking)) {
@@ -2642,16 +2804,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "This session has no fee configured" });
       }
 
-      const amountPaise = rupeesToPaise(classType.price);
+      const originalAmountPaise = rupeesToPaise(classType.price);
+      let amountPaise = originalAmountPaise;
+      let discountAmountPaise = 0;
+      let appliedCouponId: string | null = null;
+
+      if (couponCode) {
+        const coupon = await storage.getActiveCouponByCode(couponCode);
+        const applicability = evaluateCouponApplicability({
+          status: (coupon?.status ?? "revoked") as "active" | "revoked",
+          expiresAt: coupon?.expiresAt ?? new Date(0),
+          maxUses: coupon?.maxUses ?? null,
+          useCount: coupon?.useCount ?? 0,
+          classTypeId: coupon?.classTypeId ?? null,
+          classId: coupon?.classId ?? null,
+          targetClassTypeId: cls.classTypeId,
+          targetClassId: cls.id,
+        });
+        if (!coupon || !applicability.ok) {
+          const messages: Record<string, string> = {
+            not_found: "Coupon code not found",
+            revoked: "This coupon has been revoked",
+            expired: "This coupon has expired",
+            max_uses_reached: "This coupon has reached its usage limit",
+            wrong_session_type: "This coupon does not apply to this session type",
+            wrong_session: "This coupon does not apply to this session",
+          };
+          return res.status(400).json({
+            message: messages[applicability.ok ? "not_found" : applicability.reason],
+          });
+        }
+        const priced = computeFinalAmountPaise(
+          originalAmountPaise,
+          coupon.discountType as "fixed" | "percent",
+          coupon.discountValue,
+        );
+        amountPaise = priced.finalPaise;
+        discountAmountPaise = priced.discountPaise;
+        appliedCouponId = coupon.id;
+      }
+
       let payment = await storage.getPaymentByBookingId(bookingId);
 
-      if (payment?.razorpayOrderId && payment.status !== "paid") {
+      if (
+        payment?.razorpayOrderId &&
+        payment.status !== "paid" &&
+        payment.amountPaise === amountPaise &&
+        (payment.couponId ?? null) === appliedCouponId
+      ) {
         return res.json({
           orderId: payment.razorpayOrderId,
           amount: payment.amountPaise,
           currency: payment.currency ?? "INR",
           keyId: gateway.getPublicKeyId(),
           paymentId: payment.id,
+          originalAmountPaise,
+          discountAmountPaise: payment.discountAmountPaise ?? 0,
         });
       }
 
@@ -2662,12 +2870,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bookingId,
           userId: booking.userId ?? "guest",
           classId: cls.id,
+          ...(appliedCouponId ? { couponId: appliedCouponId } : {}),
         },
       });
 
       if (payment) {
         payment =
           (await storage.updatePayment(payment.id, {
+            amountPaise,
+            originalAmountPaise,
+            discountAmountPaise,
+            couponId: appliedCouponId,
             razorpayOrderId: order.orderId,
             gatewayProvider: gateway.id,
             gatewayReference: order.orderId,
@@ -2683,6 +2896,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: booking.userId ?? null,
           classId: cls.id,
           amountPaise,
+          originalAmountPaise,
+          discountAmountPaise,
+          couponId: appliedCouponId,
           currency: "INR",
           razorpayOrderId: order.orderId,
           gatewayProvider: gateway.id,
@@ -2701,6 +2917,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currency: order.currency,
         keyId: order.keyId,
         paymentId: payment.id,
+        originalAmountPaise,
+        discountAmountPaise,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2825,7 +3043,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/platform/config", async (_req, res) => {
     try {
-      res.json({ guestCheckoutEnabled: await getGuestCheckoutEnabled() });
+      res.json({
+        guestCheckoutEnabled: await getGuestCheckoutEnabled(),
+        maintenanceWindowEnabled: await getMaintenanceWindowEnabled(),
+      });
     } catch {
       res.status(500).json({ message: "Failed to load platform config" });
     }
@@ -3150,10 +3371,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/class-types", requireAdminAuth, async (req, res) => {
     try {
       const { page, pageSize } = paginationQuerySchema.parse(req.query);
-      const { rows, total } = await storage.getAllClassTypesPaginated(page, pageSize);
+      const { rows, total } = await storage.getAllClassTypesPaginated(page, pageSize, {
+        excludeQaFixtures: true,
+      });
       res.json(buildPaginatedResponse(rows, total, page, pageSize));
     } catch {
       res.status(500).json({ message: "Failed to fetch class types" });
+    }
+  });
+
+  app.post("/api/admin/purge-qa-fixtures", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const { purgeQaFixturesFromDb } = await import("../scripts/db/purge-qa-fixtures-core.ts");
+      const summary = await purgeQaFixturesFromDb();
+      await storage.insertAuditLog({
+        userId: req.admin?.id ?? null,
+        action: "qa_fixtures_purged",
+        resourceType: "class_type",
+        resourceId: null,
+        metadata: JSON.stringify(summary),
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+      res.json({
+        message: "Test fixture data removed.",
+        ...summary,
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to purge test fixtures" });
     }
   });
 
@@ -3445,6 +3690,257 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/subscriptions", requireAdminAuth, async (_req, res) => {
     const rows = await storage.getSubscriptionSummariesForAdmin();
     res.json(rows);
+  });
+
+  app.get("/api/admin/coupons/otp-hint", requireAdminAuth, async (_req, res) => {
+    res.json({
+      hint: couponCreateOtpHint(),
+      /** Dummy OTP — replace with finance-controller email flow in production. */
+      devOtp: process.env.NODE_ENV !== "production" ? process.env.COUPON_ADMIN_OTP?.trim() || "123456" : undefined,
+    });
+  });
+
+  app.get("/api/admin/coupons", requireAdminAuth, async (_req, res) => {
+    try {
+      const rows = await storage.getCouponSummariesForAdmin();
+      res.json(rows);
+    } catch (error) {
+      console.error("[admin/coupons]", error);
+      res.status(500).json({ message: "Failed to load coupons" });
+    }
+  });
+
+  app.get("/api/admin/coupons/redemptions", requireAdminAuth, async (req, res) => {
+    try {
+      const couponId = typeof req.query.couponId === "string" ? req.query.couponId : undefined;
+      const rows = await storage.getCouponRedemptionsForAdmin(couponId);
+      res.json(rows);
+    } catch (error) {
+      console.error("[admin/coupons/redemptions]", error);
+      res.status(500).json({ message: "Failed to load coupon redemptions" });
+    }
+  });
+
+  app.post("/api/admin/coupons", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const data = createCouponCodeSchema.parse(req.body);
+      if (!verifyCouponCreateOtp(data.otp)) {
+        return res.status(403).json({ message: "Invalid OTP. Coupon was not created." });
+      }
+
+      if (data.classId) {
+        const cls = await storage.getClass(data.classId);
+        if (!cls) return res.status(400).json({ message: "Selected session does not exist" });
+        if (data.classTypeId && data.classTypeId !== cls.classTypeId) {
+          return res.status(400).json({ message: "Session does not match the selected session type" });
+        }
+      }
+      if (data.classTypeId) {
+        const ct = await storage.getClassType(data.classTypeId);
+        if (!ct) return res.status(400).json({ message: "Selected session type does not exist" });
+      }
+
+      const code = normalizeCouponCode(data.code ?? generateCouponCode());
+      const existing = await storage.getActiveCouponByCode(code);
+      if (existing) {
+        return res.status(409).json({ message: "This coupon code is already in use" });
+      }
+
+      const discountValue =
+        data.discountType === "fixed"
+          ? Math.round(data.discountValue * 100)
+          : Math.round(data.discountValue);
+
+      const created = await storage.createCouponCode({
+        code,
+        discountType: data.discountType,
+        discountValue,
+        classTypeId: data.classTypeId ?? null,
+        classId: data.classId ?? null,
+        expiresAt: data.expiresAt,
+        maxUses: data.maxUses ?? null,
+        status: "active",
+        createdByAdminId: req.admin!.id,
+        notes: data.notes ?? null,
+      });
+
+      await storage.insertAuditLog({
+        action: "coupon_created",
+        resourceType: "coupon_code",
+        resourceId: created.id,
+        metadata: JSON.stringify({ code: created.code, discountType: created.discountType }),
+      });
+
+      const summaries = await storage.getCouponSummariesForAdmin();
+      const summary = summaries.find((c) => c.id === created.id);
+      res.status(201).json(summary ?? created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      console.error("[admin/coupons create]", error);
+      res.status(500).json({ message: "Failed to create coupon" });
+    }
+  });
+
+  app.post("/api/admin/coupons/:id/revoke", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const coupon = await storage.getCouponById(req.params.id);
+      if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+      const revoked = await storage.revokeCoupon(req.params.id);
+      await storage.insertAuditLog({
+        action: "coupon_revoked",
+        resourceType: "coupon_code",
+        resourceId: req.params.id,
+        metadata: JSON.stringify({ code: coupon.code }),
+      });
+      res.json(revoked);
+    } catch (error) {
+      console.error("[admin/coupons revoke]", error);
+      res.status(500).json({ message: "Failed to revoke coupon" });
+    }
+  });
+
+  app.post("/api/admin/coupons/:id/share", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      const data = shareCouponSchema.parse(req.body);
+      const coupon = await storage.getCouponById(req.params.id);
+      if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+      if (coupon.status !== "active" || !isCouponNotExpired(coupon.expiresAt)) {
+        return res.status(400).json({ message: "Cannot share an expired or revoked coupon" });
+      }
+
+      const classType = coupon.classTypeId
+        ? await storage.getClassType(coupon.classTypeId)
+        : undefined;
+      const cls = coupon.classId ? await storage.getClass(coupon.classId) : undefined;
+      const sessionLabel = resolveCouponSessionLabel(coupon, classType, cls);
+
+      const results: Array<{
+        userId: string;
+        channel: string;
+        status: string;
+        error?: string;
+      }> = [];
+
+      for (const userId of data.userIds) {
+        const user = await storage.getUser(userId);
+        if (!user || !user.isActive) {
+          for (const channel of data.channels) {
+            results.push({ userId, channel, status: "failed", error: "Member not found or inactive" });
+            await storage.recordCouponShareLog({
+              couponId: coupon.id,
+              adminId: req.admin!.id,
+              userId,
+              channel,
+              status: "failed",
+              errorMessage: "Member not found or inactive",
+            });
+          }
+          continue;
+        }
+
+        for (const channel of data.channels) {
+          const delivery = await deliverCouponShare(channel, user, coupon, sessionLabel);
+          await storage.recordCouponShareLog({
+            couponId: coupon.id,
+            adminId: req.admin!.id,
+            userId,
+            channel,
+            status: delivery.ok ? "sent" : "failed",
+            errorMessage: delivery.error ?? null,
+            sentAt: delivery.ok ? new Date() : null,
+          });
+          results.push({
+            userId,
+            channel,
+            status: delivery.ok ? "sent" : "failed",
+            error: delivery.error,
+          });
+        }
+      }
+
+      res.json({ results });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      console.error("[admin/coupons share]", error);
+      res.status(500).json({ message: "Failed to share coupon" });
+    }
+  });
+
+  app.post("/api/coupons/validate", requireBookingAuth, async (req: AuthRequest, res) => {
+    try {
+      const { code, classId } = validateCouponSchema.parse(req.body);
+      const cls = await storage.getClass(classId);
+      if (!cls) return res.status(404).json({ message: "Session not found" });
+      const classType = await storage.getClassType(cls.classTypeId);
+      const instructor = await storage.getInstructor(cls.instructorId);
+      if (!isSessionAllowedInPublicCatalog(classType, instructor, req)) {
+        return res.status(404).json({ message: "Session not found" });
+      }
+      if (!classType?.price) {
+        return res.status(400).json({ message: "This session has no fee" });
+      }
+
+      const coupon = await storage.getActiveCouponByCode(code);
+      const applicability = evaluateCouponApplicability({
+        status: (coupon?.status ?? "revoked") as "active" | "revoked",
+        expiresAt: coupon?.expiresAt ?? new Date(0),
+        maxUses: coupon?.maxUses ?? null,
+        useCount: coupon?.useCount ?? 0,
+        classTypeId: coupon?.classTypeId ?? null,
+        classId: coupon?.classId ?? null,
+        targetClassTypeId: cls.classTypeId,
+        targetClassId: cls.id,
+      });
+
+      if (!coupon || !applicability.ok) {
+        const messages: Record<string, string> = {
+          not_found: "Coupon code not found",
+          revoked: "This coupon has been revoked",
+          expired: "This coupon has expired",
+          max_uses_reached: "This coupon has reached its usage limit",
+          wrong_session_type: "This coupon does not apply to this session type",
+          wrong_session: "This coupon does not apply to this session",
+        };
+        return res.status(400).json({
+          valid: false,
+          message: messages[applicability.ok ? "not_found" : applicability.reason],
+        });
+      }
+
+      const originalPaise = rupeesToPaise(classType.price);
+      const { discountPaise, finalPaise } = computeFinalAmountPaise(
+        originalPaise,
+        coupon.discountType as "fixed" | "percent",
+        coupon.discountValue,
+      );
+
+      res.json({
+        valid: true,
+        code: coupon.code,
+        couponId: coupon.id,
+        discountType: coupon.discountType,
+        originalAmountPaise: originalPaise,
+        discountAmountPaise: discountPaise,
+        finalAmountPaise: finalPaise,
+        expiresAt: coupon.expiresAt.toISOString(),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid input", errors: error.errors });
+      }
+      console.error("[coupons/validate]", error);
+      res.status(500).json({ message: "Could not validate coupon" });
+    }
   });
 
   app.get("/api/admin/waitlist-users", requireAdminAuth, async (_req, res) => {

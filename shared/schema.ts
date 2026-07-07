@@ -247,6 +247,9 @@ export const payments = pgTable("payments", {
   receiptUrl: text("receipt_url"),
   invoiceUrl: text("invoice_url"),
   failureReason: text("failure_reason"),
+  couponId: varchar("coupon_id"),
+  originalAmountPaise: integer("original_amount_paise"),
+  discountAmountPaise: integer("discount_amount_paise").notNull().default(0),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   paidAt: timestamp("paid_at"),
@@ -355,7 +358,8 @@ export const classTypeNotifyRequests = pgTable("class_type_notify_requests", {
   classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
   userId: varchar("user_id").references(() => users.id),
   email: text("email").notNull(),
-  source: varchar("source", { length: 20 }).notNull().default("public"),
+  whatsapp: text("whatsapp"),
+  source: varchar("source", { length: 20 }).notNull().default("WL-G"),
   emailSendStatus: varchar("email_send_status", { length: 20 }).default("pending"),
   emailSendError: text("email_send_error"),
   emailSendCount: integer("email_send_count").notNull().default(0),
@@ -381,6 +385,51 @@ export const subscriptions = pgTable("subscriptions", {
   expiresAt: timestamp("expires_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** Checkout discount codes — admin-created, OTP-gated, strict expiry. */
+export const couponCodes = pgTable("coupon_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  discountType: varchar("discount_type", { length: 16 }).notNull(), // fixed | percent
+  /** Paise for fixed; 0–100 for percent */
+  discountValue: integer("discount_value").notNull(),
+  classTypeId: varchar("class_type_id").references(() => classTypes.id),
+  classId: varchar("class_id").references(() => classes.id),
+  expiresAt: timestamp("expires_at").notNull(),
+  maxUses: integer("max_uses"),
+  useCount: integer("use_count").notNull().default(0),
+  status: varchar("status", { length: 16 }).notNull().default("active"), // active | revoked
+  createdByAdminId: varchar("created_by_admin_id").notNull().references(() => adminUsers.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const couponRedemptions = pgTable("coupon_redemptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  couponId: varchar("coupon_id").notNull().references(() => couponCodes.id),
+  userId: varchar("user_id").references(() => users.id),
+  bookingId: varchar("booking_id").references(() => bookings.id),
+  paymentId: varchar("payment_id").references(() => payments.id),
+  classTypeId: varchar("class_type_id").references(() => classTypes.id),
+  classId: varchar("class_id").references(() => classes.id),
+  originalAmountPaise: integer("original_amount_paise").notNull(),
+  discountAmountPaise: integer("discount_amount_paise").notNull(),
+  finalAmountPaise: integer("final_amount_paise").notNull(),
+  redeemedAt: timestamp("redeemed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const couponShareLogs = pgTable("coupon_share_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  couponId: varchar("coupon_id").notNull().references(() => couponCodes.id),
+  adminId: varchar("admin_id").notNull().references(() => adminUsers.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  channel: varchar("channel", { length: 16 }).notNull(), // email | sms | whatsapp
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -483,6 +532,49 @@ export const insertNotifyRequestSchema = createInsertSchema(classTypeNotifyReque
 });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const createCouponCodeSchema = z
+  .object({
+    code: z.string().trim().min(4).max(32).optional(),
+    discountType: z.enum(["fixed", "percent"]),
+    /** Rupees for fixed; 1–100 for percent */
+    discountValue: z.coerce.number().positive(),
+    classTypeId: z.string().min(1).optional().nullable(),
+    classId: z.string().min(1).optional().nullable(),
+    expiresAt: z.coerce.date(),
+    maxUses: z.coerce.number().int().positive().optional().nullable(),
+    notes: z.string().trim().max(500).optional().nullable(),
+    otp: z.string().trim().length(6, "Enter the 6-digit OTP"),
+  })
+  .refine((v) => v.expiresAt.getTime() > Date.now(), {
+    message: "Deadline must be in the future",
+    path: ["expiresAt"],
+  })
+  .refine(
+    (v) =>
+      v.discountType !== "percent" ||
+      (v.discountValue >= 1 && v.discountValue <= 100),
+    { message: "Percent discount must be between 1 and 100", path: ["discountValue"] },
+  );
+
+export const shareCouponSchema = z.object({
+  userIds: z.array(z.string().min(1)).min(1, "Select at least one member"),
+  channels: z
+    .array(z.enum(["email", "sms", "whatsapp"]))
+    .min(1, "Select at least one channel"),
+});
+
+export const validateCouponSchema = z.object({
+  code: z.string().trim().min(1),
+  classId: z.string().min(1),
+});
+
+export const insertCouponCodeSchema = createInsertSchema(couponCodes).omit({
+  id: true,
+  useCount: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -620,5 +712,9 @@ export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect
 export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type CouponCode = typeof couponCodes.$inferSelect;
+export type InsertCouponCode = z.infer<typeof insertCouponCodeSchema>;
+export type CouponRedemption = typeof couponRedemptions.$inferSelect;
+export type CouponShareLog = typeof couponShareLogs.$inferSelect;
 export type ConsentAuditLog = typeof consentAuditLogs.$inferSelect;
 export type ErasureRequest = typeof erasureRequests.$inferSelect;

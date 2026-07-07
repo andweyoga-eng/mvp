@@ -16,13 +16,17 @@ describe("home navigation", () => {
   });
 
   it("header logo links to home carousel from any page", () => {
-    const source = readFileSync(
+    const navSource = readFileSync(
       join(root, "client/src/components/navigation.tsx"),
       "utf8",
     );
-    assert.match(source, /href="\/"/);
-    assert.match(source, /goToHomeSection\("home"\)/);
-    assert.match(source, /navigateToHomeSection/);
+    const logoSource = readFileSync(
+      join(root, "client/src/components/brand-logo.tsx"),
+      "utf8",
+    );
+    assert.match(navSource, /BrandLogo/);
+    assert.match(logoSource, /href="\/"/);
+    assert.match(logoSource, /navigateToHomeSection\("home"\)/);
   });
 
   it("AWY menu uses cross-page home section navigation", () => {
@@ -31,7 +35,8 @@ describe("home navigation", () => {
       "utf8",
     );
     assert.match(source, /id: "care"/);
-    assert.match(source, /id: "connect"/);
+    assert.match(source, /id: "ally"/);
+    assert.doesNotMatch(source, /id: "connect"/);
     assert.match(source, /goToHomeSection\(link\.id\)/);
     assert.doesNotMatch(source, /scrollToSection/);
   });

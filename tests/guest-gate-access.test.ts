@@ -9,6 +9,7 @@ describe("guest gate admin access control (SPEC-GG-01)", () => {
   it("platform settings admin routes use requireSuperAdminAuth", () => {
     const source = readFileSync(join(root, "server/routes.ts"), "utf8");
     assert.match(source, /app\.get\("\/api\/admin\/platform-settings", requireSuperAdminAuth/);
+    assert.match(source, /app\.patch\("\/api\/admin\/platform-settings", requireSuperAdminAuth/);
     assert.match(
       source,
       /app\.patch\("\/api\/admin\/platform-settings\/guest-checkout", requireSuperAdminAuth/,
@@ -19,6 +20,14 @@ describe("guest gate admin access control (SPEC-GG-01)", () => {
     const source = readFileSync(join(root, "server/routes.ts"), "utf8");
     assert.match(source, /enabled: z\.boolean\(\)/);
     assert.match(source, /enabled must be a boolean/);
+  });
+
+  it("maintenance window admin route uses requireSuperAdminAuth", () => {
+    const source = readFileSync(join(root, "server/routes.ts"), "utf8");
+    assert.match(
+      source,
+      /app\.patch\("\/api\/admin\/platform-settings\/maintenance-window", requireSuperAdminAuth/,
+    );
   });
 
   it("Platform Controls tab is super_admin only in admin dashboard", () => {

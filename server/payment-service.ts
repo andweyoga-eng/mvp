@@ -122,6 +122,24 @@ export async function markPaymentPaid(params: {
     heldUntil: null,
   });
 
+  if (payment.couponId && (payment.discountAmountPaise ?? 0) > 0) {
+    const bookingForCoupon = await storage.getBooking(payment.bookingId);
+    const clsForCoupon = await storage.getClass(payment.classId);
+    if (bookingForCoupon && clsForCoupon) {
+      await storage.finalizeCouponRedemption({
+        couponId: payment.couponId,
+        userId: bookingForCoupon.userId ?? null,
+        bookingId: payment.bookingId,
+        paymentId: payment.id,
+        classTypeId: clsForCoupon.classTypeId,
+        classId: clsForCoupon.id,
+        originalAmountPaise: payment.originalAmountPaise ?? payment.amountPaise,
+        discountAmountPaise: payment.discountAmountPaise ?? 0,
+        finalAmountPaise: payment.amountPaise,
+      });
+    }
+  }
+
   const updated = await storage.getPaymentById(payment.id);
   if (!updated) return null;
 

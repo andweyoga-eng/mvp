@@ -17,8 +17,8 @@ import {
   isAuthUserProfileComplete,
 } from "@/lib/account-profile-complete";
 import { navigateToHomeSection } from "@/lib/home-navigation";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/digital-zen/page-container";
-import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 
 interface NavigationProps {
   onBookingClick: () => void;
@@ -30,8 +30,7 @@ const DRAWER_LINKS = [
   { id: "teach", label: "and We", accent: "Flow" },
   { id: "story", label: "and Our", accent: "Story" },
   { id: "believe", label: "and We", accent: "Believe" },
-  { id: "connect", label: "and We", accent: "Connect" },
-  { id: "ally", label: "and We Meet", accent: "Yogis" },
+  { id: "ally", label: "and We Meet", accent: "Coach" },
 ] as const;
 
 export default function Navigation({ onBookingClick }: NavigationProps) {
@@ -77,23 +76,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             )}
           </div>
 
-          <a
-            href="/"
-            onClick={(e) => {
-              e.preventDefault();
-              goToHomeSection("home");
-            }}
-            className="absolute left-1/2 -translate-x-1/2"
-            data-testid="desktop-logo-link"
-            aria-label="andWeYoga home"
-          >
-            <img
-              src={logoPath}
-              alt="andWeYoga"
-              className="h-[clamp(38px,5.5vw,48px)] w-auto hover:opacity-90 transition-opacity"
-              data-testid="logo"
-            />
-          </a>
+          <BrandLogo className="absolute left-1/2 -translate-x-1/2" testId="desktop-logo-link" />
 
           <div className="relative flex flex-shrink-0 items-center">
             {authLoading ? (

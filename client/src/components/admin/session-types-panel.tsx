@@ -19,6 +19,7 @@ import { Plus, Pencil, Trash2, BookOpen, Upload, Loader2, ShieldAlert } from "lu
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateClassTypeForm } from "@/lib/admin-api";
 import { MAX_TEXT_LENGTH, limitTextInput, PLACEHOLDER_OWNER_CANCEL_OTP, normalizeOwnerCancelOtpInput, isOwnerCancelFormSubmittable, ownerCancelFormBlocker } from "@shared/input-limits";
+import { isQaFixtureClassTypeName } from "@shared/seed-catalog";
 import { FormErrorSummary } from "@/components/admin/field-error";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY, STRICT_NO_TO_MAX_LENGTH } from "@shared/schema";
 import { DEFAULT_SESSION_TERMS_AND_CONDITIONS, SESSION_TERMS_MAX_LENGTH } from "@shared/session-terms";
@@ -598,22 +599,30 @@ function EditClassTypeDialog({
 function RetireClassTypeButton({
   classType,
   onRetired,
+  isQaFixture = false,
 }: {
   classType: ClassType;
   onRetired: () => void;
+  isQaFixture?: boolean;
 }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(isQaFixture ? "Remove integration-test fixture" : "");
   const [ownerOtp, setOwnerOtp] = useState("");
 
   const reset = () => {
-    setReason("");
+    setReason(isQaFixture ? "Remove integration-test fixture" : "");
     setOwnerOtp("");
   };
 
-  const canSubmit = isOwnerCancelFormSubmittable(reason, ownerOtp);
-  const submitBlocker = ownerCancelFormBlocker(reason, ownerOtp);
+  const canSubmit = isQaFixture
+    ? reason.trim().length >= 3
+    : isOwnerCancelFormSubmittable(reason, ownerOtp);
+  const submitBlocker = isQaFixture
+    ? reason.trim().length < 3
+      ? "Enter a reason (at least 3 characters)."
+      : null
+    : ownerCancelFormBlocker(reason, ownerOtp);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -623,7 +632,7 @@ function RetireClassTypeButton({
         credentials: "include",
         body: JSON.stringify({
           reason: reason.trim(),
-          ownerOtp: normalizeOwnerCancelOtpInput(ownerOtp) || ownerOtp.trim(),
+          ...(isQaFixture ? {} : { ownerOtp: normalizeOwnerCancelOtpInput(ownerOtp) || ownerOtp.trim() }),
         }),
       });
       if (!res.ok) {
@@ -660,19 +669,21 @@ function RetireClassTypeButton({
         <DialogHeader>
           <DialogTitle>Remove {classType.name}?</DialogTitle>
           <DialogDescription>
-            All upcoming sessions for this type will be cancelled. Members with bookings will be
-            notified by email, SMS, and WhatsApp (SMS/WhatsApp are placeholders until those channels
-            go live).
+            {isQaFixture
+              ? "This is integration-test data and can be removed without owner OTP."
+              : "All upcoming sessions for this type will be cancelled. Members with bookings will be notified by email, SMS, and WhatsApp (SMS/WhatsApp are placeholders until those channels go live)."}
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-amber-200 bg-amber-50">
-          <ShieldAlert className="h-4 w-4 text-amber-800" />
-          <AlertDescription className="text-amber-950 text-sm">
-            <strong>Owner OTP (placeholder):</strong> use <strong>000000</strong> after confirming
-            with the studio owner. Live SMS OTP will replace this later.
-          </AlertDescription>
-        </Alert>
+        {!isQaFixture ? (
+          <Alert className="border-amber-200 bg-amber-50">
+            <ShieldAlert className="h-4 w-4 text-amber-800" />
+            <AlertDescription className="text-amber-950 text-sm">
+              <strong>Owner OTP (placeholder):</strong> use <strong>000000</strong> after confirming
+              with the studio owner. Live SMS OTP will replace this later.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="space-y-3">
           <div className="space-y-2">
@@ -682,39 +693,45 @@ function RetireClassTypeButton({
               value={reason}
               maxLength={MAX_TEXT_LENGTH.cancelReason}
               onChange={(e) => setReason(limitTextInput(e.target.value, MAX_TEXT_LENGTH.cancelReason))}
-              placeholder="e.g. This discipline is no longer offered at the studio"
+              placeholder={
+                isQaFixture
+                  ? "Remove integration-test fixture"
+                  : "e.g. This discipline is no longer offered at the studio"
+              }
               rows={3}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor={`retire-otp-${classType.id}`}>Owner OTP</Label>
-            <div className="flex gap-2">
-              <Input
-                id={`retire-otp-${classType.id}`}
-                value={ownerOtp}
-                maxLength={MAX_TEXT_LENGTH.ownerOtp}
-                onChange={(e) =>
-                  setOwnerOtp(
-                    limitTextInput(normalizeOwnerCancelOtpInput(e.target.value), MAX_TEXT_LENGTH.ownerOtp),
-                  )
-                }
-                placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
-                autoComplete="off"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="font-mono tracking-widest"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setOwnerOtp(PLACEHOLDER_OWNER_CANCEL_OTP)}
-              >
-                Use {PLACEHOLDER_OWNER_CANCEL_OTP}
-              </Button>
+          {!isQaFixture ? (
+            <div className="space-y-2">
+              <Label htmlFor={`retire-otp-${classType.id}`}>Owner OTP</Label>
+              <div className="flex gap-2">
+                <Input
+                  id={`retire-otp-${classType.id}`}
+                  value={ownerOtp}
+                  maxLength={MAX_TEXT_LENGTH.ownerOtp}
+                  onChange={(e) =>
+                    setOwnerOtp(
+                      limitTextInput(normalizeOwnerCancelOtpInput(e.target.value), MAX_TEXT_LENGTH.ownerOtp),
+                    )
+                  }
+                  placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
+                  autoComplete="off"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  className="font-mono tracking-widest"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setOwnerOtp(PLACEHOLDER_OWNER_CANCEL_OTP)}
+                >
+                  Use {PLACEHOLDER_OWNER_CANCEL_OTP}
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
 
         {submitBlocker && !mutation.isPending ? (
@@ -806,8 +823,12 @@ export function SessionTypesPanel({
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <EditClassTypeDialog classType={ct} onUpdated={onDataChange} />
-                    {isSuperAdmin ? (
-                      <RetireClassTypeButton classType={ct} onRetired={onDataChange} />
+                    {isSuperAdmin || isQaFixtureClassTypeName(ct.name) ? (
+                      <RetireClassTypeButton
+                        classType={ct}
+                        onRetired={onDataChange}
+                        isQaFixture={isQaFixtureClassTypeName(ct.name)}
+                      />
                     ) : null}
                   </div>
                 </div>

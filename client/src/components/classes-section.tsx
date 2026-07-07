@@ -18,6 +18,8 @@ import {
 } from "@/components/session-share-menu";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { ClampedDescription } from "@/components/clamped-description";
+import { sanitizeGuestPhoneInput } from "@shared/guest-phone";
+import { formatProfileWhatsapp } from "@shared/waitlist";
 
 interface ClassesSectionProps {
   onBookingClick: (intent?: BookingIntent) => void;
@@ -26,8 +28,10 @@ interface ClassesSectionProps {
 export default function ClassesSection({ onBookingClick }: ClassesSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [notifyType, setNotifyType] = useState<ClassType | null>(null);
+  const [waitlistType, setWaitlistType] = useState<ClassType | null>(null);
   const [guestEmail, setGuestEmail] = useState("");
+  const [guestWhatsapp, setGuestWhatsapp] = useState("");
+  const [memberWhatsapp, setMemberWhatsapp] = useState("");
   const { data: classTypes, isLoading, error } = useQuery<ClassType[]>({
     queryKey: ["/api/class-types"],
   });
@@ -62,33 +66,58 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
     return getSessionBadgeLabel(row?.sessionFrequency, row?.deliveryMode);
   };
 
-  const handleNotifySubmit = async () => {
-    if (!notifyType) return;
+  const resetWaitlistForm = () => {
+    setWaitlistType(null);
+    setGuestEmail("");
+    setGuestWhatsapp("");
+    setMemberWhatsapp("");
+  };
+
+  const profileWhatsapp = user ? formatProfileWhatsapp(user) : null;
+
+  const handleWaitlistSubmit = async () => {
+    if (!waitlistType) return;
     const email = user?.email ?? guestEmail.trim();
     if (!email) {
       toast({
         title: "Email required",
-        description: "Share your email to get session notifications.",
+        description: "Share your email so we can keep you posted.",
         variant: "destructive",
       });
       return;
     }
-    const res = await fetch(`/api/class-types/${notifyType.id}/notify`, {
+    const whatsappPayload = profileWhatsapp ? undefined : (memberWhatsapp || guestWhatsapp).trim();
+    if (!profileWhatsapp && !whatsappPayload) {
+      toast({
+        title: "WhatsApp required",
+        description: "Share your WhatsApp number so we can keep you posted.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const res = await fetch(`/api/class-types/${waitlistType.id}/notify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email,
+        ...(whatsappPayload ? { whatsapp: whatsappPayload } : {}),
+      }),
     });
     if (!res.ok) {
-      toast({ title: "Could not save notification request", variant: "destructive" });
+      const data = (await res.json().catch(() => null)) as { message?: string } | null;
+      toast({
+        title: "Could not join waitlist",
+        description: data?.message ?? "Please try again.",
+        variant: "destructive",
+      });
       return;
     }
     toast({
-      title: "You're on the notify list",
-      description: "We'll email you when sessions open. Explore other sessions in the meantime.",
+      title: "You're on the waitlist",
+      description: "We'll reach out by email and WhatsApp when sessions open.",
     });
-    setNotifyType(null);
-    setGuestEmail("");
+    resetWaitlistForm();
   };
 
   if (error) {
@@ -178,9 +207,13 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                   />
                   <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-4 border-none pt-0" />
                   <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>
-                      ₹{classType.price}/session
-                    </span>
+                    {user ? (
+                      <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>
+                        ₹{classType.price}/session
+                      </span>
+                    ) : (
+                      <span aria-hidden className="flex-1" />
+                    )}
                     <div className="flex items-center gap-2">
                       <SessionShareMenu
                         payload={buildClassTypeSharePayloadForUi(classType)}
@@ -197,11 +230,11 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => setNotifyType(classType)}
+                        onClick={() => setWaitlistType(classType)}
                         className="rounded-xl bg-dz-secondary px-4 font-semibold text-white hover:bg-dz-secondary/90"
-                        data-testid={`notify-button-${classType.id}`}
+                        data-testid={`waitlist-button-${classType.id}`}
                       >
-                        Notify me
+                        Join Waitlist
                       </Button>
                     )}
                     </div>
@@ -212,36 +245,74 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
           </div>
         )}
 
-        <Dialog open={!!notifyType} onOpenChange={(open) => !open && setNotifyType(null)}>
+        <Dialog open={!!waitlistType} onOpenChange={(open) => !open && resetWaitlistForm()}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Notify me when sessions open</DialogTitle>
+              <DialogTitle>Join the waitlist</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                {notifyType?.name ?? "This session type"} is coming soon. We can notify you as soon
-                as a session is scheduled.
+                {waitlistType?.name ?? "This session type"} is coming soon. Share your details and
+                we&apos;ll keep you posted by email and WhatsApp when sessions open.
               </p>
-              {!user && (
-                <div className="space-y-2">
-                  <Label htmlFor="notify-email">Email</Label>
-                  <Input
-                    id="notify-email"
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="you@example.com"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sign up later to book recurring sessions. Drop-in and trial can be booked as
-                    guest sessions.
-                  </p>
+              {user ? (
+                <div className="space-y-3 rounded-lg border bg-muted/40 p-3 text-sm">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Name</p>
+                    <p className="font-medium text-foreground">{user.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email</p>
+                    <p className="font-medium text-foreground">{user.email}</p>
+                  </div>
+                  {profileWhatsapp ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">WhatsApp</p>
+                      <p className="font-medium text-foreground">{profileWhatsapp}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="waitlist-member-whatsapp">WhatsApp number</Label>
+                      <Input
+                        id="waitlist-member-whatsapp"
+                        value={memberWhatsapp}
+                        onChange={(e) => setMemberWhatsapp(sanitizeGuestPhoneInput(e.target.value))}
+                        placeholder="10-digit mobile number"
+                        inputMode="numeric"
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="waitlist-email">Email</Label>
+                    <Input
+                      id="waitlist-email"
+                      type="email"
+                      value={guestEmail}
+                      onChange={(e) => setGuestEmail(e.target.value)}
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="waitlist-whatsapp">WhatsApp number</Label>
+                    <Input
+                      id="waitlist-whatsapp"
+                      value={guestWhatsapp}
+                      onChange={(e) => setGuestWhatsapp(sanitizeGuestPhoneInput(e.target.value))}
+                      placeholder="10-digit mobile number"
+                      inputMode="numeric"
+                      required
+                    />
+                  </div>
                 </div>
               )}
               <div className="flex gap-2">
-                <Button className="w-full" onClick={() => void handleNotifySubmit()}>
-                  Save notification request
+                <Button className="w-full" onClick={() => void handleWaitlistSubmit()}>
+                  Join Waitlist
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => setNotifyType(null)}>
+                <Button variant="outline" className="w-full" onClick={resetWaitlistForm}>
                   Cancel
                 </Button>
               </div>

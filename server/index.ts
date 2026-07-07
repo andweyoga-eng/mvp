@@ -124,6 +124,13 @@ app.use((req, res, next) => {
     console.error(
       "   Fix: In Railway → Postgres → Connect, copy DATABASE_PUBLIC_URL into .env (and webapp vars).\n",
     );
+  } else {
+    try {
+      const { ensureDefaultPlatformSettings } = await import("./platform-settings");
+      await ensureDefaultPlatformSettings();
+    } catch (err) {
+      console.error("[startup] Could not seed default platform settings:", err);
+    }
   }
 
   const server = await registerRoutes(app);

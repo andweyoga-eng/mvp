@@ -47,8 +47,8 @@ import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { AlreadyBookedSessionContent } from "@/components/already-booked-session-content";
 import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
-import { ReleaseSpotToast } from "@/components/release-spot-toast";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { navigateToDashboardAfterSpotRelease } from "@/lib/spot-release-navigation";
 import {
   SessionTermsBlock,
   SessionTermsAcceptanceCopy,
@@ -60,7 +60,7 @@ import {
   formatRecurringScheduleLine,
   isFixedRecurringCheckout,
 } from "@/lib/recurring-series-display";
-import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
+import { BrandLogo } from "@/components/brand-logo";
 import type { Class, ClassType } from "@shared/schema";
 
 interface EnrichedClass extends Class {
@@ -115,7 +115,6 @@ export default function Reserve() {
   const exitPath = fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
   const backLabel = fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
-  const [showReleaseToast, setShowReleaseToast] = useState(false);
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
 
   const checkout = useBookingCheckout({
@@ -285,8 +284,7 @@ export default function Reserve() {
     checkout.isPaying || checkout.paymentPhase != null;
 
   const navigateAfterRelease = () => {
-    setShowReleaseToast(true);
-    window.setTimeout(() => setLocation(exitPath), 2500);
+    navigateToDashboardAfterSpotRelease(setLocation);
   };
 
   const handleReleaseSpot = async () => {
@@ -325,9 +323,7 @@ export default function Reserve() {
       {/* HEADER */}
       <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px]">
         <PageContainer className="flex h-[76px] items-center justify-between gap-4">
-          <button type="button" onClick={() => setLocation("/dashboard")} aria-label="andWeYoga dashboard">
-            <img src={logoPath} alt="andWeYoga" className="h-[clamp(38px,5.5vw,48px)] w-auto" />
-          </button>
+          <BrandLogo testId="reserve-logo" />
           <button
             type="button"
             onClick={handleBackClick}
@@ -584,7 +580,7 @@ export default function Reserve() {
                         {checkout.isPaying ? "Opening…" : "Retry payment"}
                       </Button>
                       <Button variant="outline" className="w-full" onClick={() => void handleReleaseSpot()}>
-                        Release my spot
+                        Release my spot and leave
                       </Button>
                     </div>
                   ) : checkout.step === "pay" && reserved && checkout.holdCountdown.expired ? (
@@ -635,7 +631,7 @@ export default function Reserve() {
                         onClick={() => void handleReleaseSpot()}
                         className="w-full py-2.5 text-[13px] text-muted-foreground underline decoration-muted-foreground/30 underline-offset-[3px]"
                       >
-                        Release my spot
+                        Release my spot and leave
                       </button>
                     </div>
                   ) : (
@@ -686,8 +682,6 @@ export default function Reserve() {
         </PageContainer>
       </main>
 
-      <ReleaseSpotToast visible={showReleaseToast} />
-
       <AlertDialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -700,7 +694,7 @@ export default function Reserve() {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep my spot</AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmBackRelease()}>
-              Release and leave
+              Release my spot and leave
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

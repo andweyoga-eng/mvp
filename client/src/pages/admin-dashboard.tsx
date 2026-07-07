@@ -14,6 +14,8 @@ import {
   Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
   GalleryHorizontalEnd
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
+import { waitlistMarketingLabel } from "@shared/waitlist";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders } from "@/lib/admin-api";
 import {
@@ -31,6 +33,7 @@ import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
 import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
+import { OffersPromotionsPanel } from "@/components/admin/offers-promotions-panel";
 import { PlatformControlsPanel } from "@/components/admin/platform-controls-panel";
 import { ConsentLogPanel } from "@/components/admin/consent-log-panel";
 import {
@@ -128,8 +131,10 @@ interface SubscriptionSummary {
 interface AdminWaitlistUser {
   id: string;
   classTypeName: string;
+  userId: string | null;
   userName: string | null;
   email: string;
+  whatsapp: string | null;
   source: string;
   emailSendStatus: string | null;
   emailSendError: string | null;
@@ -520,9 +525,10 @@ export default function AdminDashboard() {
     pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-500";
 
   const now = Date.now();
-  const [sessionsSubTab, setSessionsSubTab] = useState(() =>
-    readStoredTab(ADMIN_SESSIONS_SUBTAB_KEY, "manage"),
-  );
+  const [sessionsSubTab, setSessionsSubTab] = useState(() => {
+    const stored = readStoredTab(ADMIN_SESSIONS_SUBTAB_KEY, "manage");
+    return stored === "waitlisted-users" ? "waitlist" : stored;
+  });
   const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -560,7 +566,7 @@ export default function AdminDashboard() {
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-[#3d1b80]">andWeYoga</span>
+            <BrandLogo imgClassName="h-9 w-auto" testId="admin-logo" />
             <span className="text-gray-400 text-sm">Admin</span>
             <Badge variant="secondary" className="text-xs">{admin.role}</Badge>
           </div>
@@ -969,8 +975,8 @@ export default function AdminDashboard() {
                     <TabsTrigger value="carousel" className={adminSectionTabTrigger}>
                       <GalleryHorizontalEnd className="w-4 h-4 mr-2" /> Carousel
                     </TabsTrigger>
-                    <TabsTrigger value="waitlisted-users" className={adminSectionTabTrigger}>
-                      <Users className="w-4 h-4 mr-2" /> Wait Listed users
+                    <TabsTrigger value="waitlist" className={adminSectionTabTrigger}>
+                      <Users className="w-4 h-4 mr-2" /> Waitlist
                     </TabsTrigger>
                   </TabsList>
 
@@ -1093,10 +1099,10 @@ export default function AdminDashboard() {
                     <CarouselPromotionsPanel sessions={upcomingSessions} />
                   </TabsContent>
 
-                  <TabsContent value="waitlisted-users">
+                  <TabsContent value="waitlist">
                     <div className="mb-3 flex items-center justify-between">
                       <p className="text-sm text-muted-foreground">
-                        Waitlisted users and email notification status
+                        Waitlist sign-ups for upcoming session types (WL-R = member, WL-G = guest)
                       </p>
                       <Button variant="outline" size="sm" onClick={() => refetchWaitlist()}>
                         Refresh
@@ -1108,20 +1114,27 @@ export default function AdminDashboard() {
                           <tr className="border-b text-left text-muted-foreground">
                             <th className="py-2 px-3">Session Type</th>
                             <th className="py-2 px-3">User</th>
+                            <th className="py-2 px-3">Tag</th>
                             <th className="py-2 px-3">Email</th>
+                            <th className="py-2 px-3">WhatsApp</th>
                             <th className="py-2 px-3">Requested</th>
                             <th className="py-2 px-3">Email status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {waitlistUsers.map((row) => (
+                          {waitlistUsers.map((row) => {
+                            const marketingTag = waitlistMarketingLabel(row.source, row.userId);
+                            return (
                             <tr key={row.id} className="border-b">
                               <td className="py-2 px-3">{row.classTypeName}</td>
+                              <td className="py-2 px-3">{row.userName ?? "Guest"}</td>
                               <td className="py-2 px-3">
-                                {row.userName ?? "Guest"}{" "}
-                                <span className="text-xs text-muted-foreground">({row.source})</span>
+                                <Badge variant={marketingTag === "WL-R" ? "default" : "secondary"}>
+                                  {marketingTag}
+                                </Badge>
                               </td>
                               <td className="py-2 px-3">{row.email}</td>
+                              <td className="py-2 px-3">{row.whatsapp ?? "—"}</td>
                               <td className="py-2 px-3">
                                 {new Date(row.createdAt).toLocaleString("en-IN")}
                               </td>
@@ -1141,11 +1154,12 @@ export default function AdminDashboard() {
                                 )}
                               </td>
                             </tr>
-                          ))}
+                          );
+                          })}
                         </tbody>
                       </table>
                       {waitlistUsers.length === 0 && (
-                        <div className="p-4 text-sm text-muted-foreground">No waitlisted users yet.</div>
+                        <div className="p-4 text-sm text-muted-foreground">No waitlist sign-ups yet.</div>
                       )}
                     </div>
                   </TabsContent>
@@ -1182,6 +1196,16 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="subscriptions">
+            <Tabs defaultValue="subscriptions-list" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="subscriptions-list" className={adminSectionTabTrigger}>
+                  Subscriptions
+                </TabsTrigger>
+                <TabsTrigger value="offers-promotions" className={adminSectionTabTrigger}>
+                  Offers &amp; Promotions
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="subscriptions-list">
             <Card>
               <CardHeader>
                 <CardTitle>Subscription Management</CardTitle>
@@ -1227,6 +1251,21 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+              </TabsContent>
+              <TabsContent value="offers-promotions">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Offers &amp; Promotions</CardTitle>
+                    <CardDescription>
+                      Coupon codes, member sharing, and redemption tracking for cash-flow oversight.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <OffersPromotionsPanel />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="consent-logs">

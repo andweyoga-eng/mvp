@@ -1,4 +1,5 @@
 import { Facebook, Instagram, Youtube, Twitter } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { detectConsentLanguage } from "@/lib/consent-language";
@@ -23,11 +24,8 @@ export default function Footer() {
       <PageContainer>
         <div className="grid grid-cols-1 gap-8 border-b border-white/15 pb-8 md:grid-cols-2 lg:grid-cols-4">
           <div>
-            <div className="mb-3.5 font-display text-xl font-extrabold">
-              <span className="text-white">andWe</span>
-              <span className="text-[#cbb6ff]">YO</span>
-              <span className="text-[#fdb98a]">^</span>
-              <span className="text-[#cbb6ff]">ga</span>
+            <div className="mb-3.5">
+              <BrandLogo imgClassName="h-10 w-auto" testId="footer-logo" />
             </div>
             <p className="text-sm leading-relaxed text-white/72">
               Transform your life through the power of yoga. Join our community today.
