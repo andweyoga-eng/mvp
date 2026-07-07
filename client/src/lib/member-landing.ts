@@ -1,6 +1,5 @@
 import {
   getPendingBooking,
-  clearPendingBooking,
   type BookingIntent,
 } from "@/lib/pending-booking";
 import { MY_SESSIONS_UPCOMING_URL, myAccountHref } from "@/lib/account-routes";
@@ -33,9 +32,39 @@ export function markMemberLandingChecked(): void {
   }
 }
 
+export type ReserveCheckoutSource = "home" | "login" | "profile";
+
+/** Build the member Reserve checkout URL for a session or class-type intent. */
+export function reserveHrefFromIntent(
+  intent: BookingIntent,
+  from: ReserveCheckoutSource = "login",
+): string | null {
+  if (intent.sessionId) {
+    return `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=${from}`;
+  }
+  if (intent.classTypeId) {
+    return `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=${from}`;
+  }
+  return null;
+}
+
 /** Full navigation so dashboard sees fresh profile completion from the server. */
 export function redirectToMemberDashboardAfterProfileComplete(): void {
   markMemberLandingChecked();
+  window.location.assign(MEMBER_DASHBOARD_URL);
+}
+
+/**
+ * After onboarding, resume an in-progress booking on Reserve when intent was saved;
+ * otherwise land on the member dashboard.
+ */
+export function redirectAfterProfileComplete(): void {
+  markMemberLandingChecked();
+  const reserveHref = reserveHrefFromIntent(getPendingBooking() ?? {}, "profile");
+  if (reserveHref) {
+    window.location.assign(reserveHref);
+    return;
+  }
   window.location.assign(MEMBER_DASHBOARD_URL);
 }
 
@@ -90,19 +119,10 @@ export function resolveMemberLandingPath(
 /** Routes that represent "just signed in" and may be auto-redirected once. */
 const POST_LOGIN_LANDING_PATHS = new Set(["/", "/dashboard"]);
 
-/** A signed-in member with a session/class intent finishes checkout on the Reserve page. */
-function reserveHrefFromIntent(intent: BookingIntent): string | null {
-  if (intent.sessionId)
-    return `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=login`;
-  if (intent.classTypeId)
-    return `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=login`;
-  return null;
-}
-
 /**
  * Redirect once per browser session after login. A pending session/class booking
- * resumes on the Reserve page; otherwise the member lands on the Dashboard or
- * Contact info when onboarding is incomplete.
+ * resumes on the Reserve page when the profile is complete; otherwise onboarding
+ * runs first while intent stays in sessionStorage for checkout afterward.
  * Guest-modal-only intents (no ids) on Home are left for the Home page to resume.
  */
 export async function applyPostLoginLandingIfNeeded(
@@ -114,7 +134,7 @@ export async function applyPostLoginLandingIfNeeded(
   if (hasMemberLandingBeenChecked()) return;
 
   const pending = getPendingBooking();
-  const reserveHref = pending ? reserveHrefFromIntent(pending) : null;
+  const reserveHref = pending ? reserveHrefFromIntent(pending, "login") : null;
 
   // A modal-only intent (scrollTo, no ids) is resumed inline by the Home page.
   if (pending && !reserveHref && pathname === "/") return;
@@ -127,8 +147,14 @@ export async function applyPostLoginLandingIfNeeded(
   markMemberLandingChecked();
 
   if (reserveHref) {
-    clearPendingBooking();
-    setLocation(reserveHref);
+    if (user?.profileCompletionStatus === "complete") {
+      setLocation(reserveHref);
+      return;
+    }
+    const onboarding = resolveMemberLandingPath(user);
+    if (onboarding !== pathname) {
+      setLocation(onboarding);
+    }
     return;
   }
 

@@ -20,18 +20,15 @@ import {
   type BookingIntent,
 } from "@/lib/pending-booking";
 import { normalizeBookingIntent, scrollToBookingSection } from "@/lib/booking-flow";
+import {
+  reserveHrefFromIntent,
+  resolveMemberLandingPath,
+} from "@/lib/member-landing";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
+import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { setGuestCheckoutToken } from "@/lib/guest-checkout";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-
-/** Signed-in members complete checkout on the Reserve page; guests use the inline modal. */
-function reserveHref(intent: BookingIntent): string | null {
-  if (intent.sessionId) return `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=home`;
-  if (intent.classTypeId)
-    return `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=home`;
-  return null;
-}
 
 function parseMoodCaptureFromUrl(): { phase: MoodPhase; classId: string } | null {
   const params = new URLSearchParams(window.location.search);
@@ -63,7 +60,7 @@ export default function Home() {
   const handleBookingOpen = (input?: string | BookingIntent) => {
     const intent = normalizeBookingIntent(input);
     // Signed-in members go straight to the full-page Reserve checkout.
-    const href = reserveHref(intent);
+    const href = reserveHrefFromIntent(intent, "home");
     if (user && href) {
       setLocation(href);
       return;
@@ -78,7 +75,10 @@ export default function Home() {
     setIsBookingModalOpen(false);
     setBookingIntent({});
     setResumeBookingId(null);
-    clearPendingBooking();
+    const pending = getPendingBooking();
+    if (!pending?.sessionId && !pending?.classTypeId) {
+      clearPendingBooking();
+    }
   };
 
   useEffect(() => {
@@ -137,10 +137,13 @@ export default function Home() {
 
     if (user) {
       resumedBookingRef.current = true;
-      const href = reserveHref(pending);
-      if (href) {
-        clearPendingBooking();
+      const href = reserveHrefFromIntent(pending, "home");
+      if (href && isAuthUserProfileComplete(user)) {
         setLocation(href);
+        return;
+      }
+      if (href && !isAuthUserProfileComplete(user)) {
+        setLocation(resolveMemberLandingPath(user));
         return;
       }
       setBookingIntent(pending);

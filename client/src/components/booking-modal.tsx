@@ -66,6 +66,7 @@ import {
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ClassType, Class } from "@shared/schema";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { setPendingBooking, clearPendingBooking } from "@/lib/pending-booking";
 import {
   fetchMemberSessions,
@@ -253,6 +254,7 @@ export default function BookingModal({
   const { data: allClasses } = useQuery<EnrichedClass[]>({
     queryKey: ["/api/classes"],
     enabled: isOpen,
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
   const { data: classTypes } = useQuery<ClassType[]>({
@@ -442,6 +444,15 @@ export default function BookingModal({
     setAlreadyBookedView((view) => (view ? null : view));
   }, [isOpen, user, formData.classId, sessionId, memberSessions, paymentResult]);
 
+  const persistBookingIntentForProfile = () => {
+    const classId = formData.classId || sessionId || "";
+    setPendingBooking({
+      sessionId: sessionId || classId || undefined,
+      classTypeId: filterClassTypeId ?? undefined,
+      scrollTo: sessionId ? "schedule" : filterClassTypeId ? "teach" : "schedule",
+    });
+  };
+
   const bookingMutation = useMutation({
     mutationFn: async (payload: {
       classId: string;
@@ -622,6 +633,7 @@ export default function BookingModal({
       resumeCheckout?: MemberBookingResult | null;
     }) => {
       if (error.status === 409 && error.requiresHealthUpdate) {
+        persistBookingIntentForProfile();
         onClose();
 
         toast({
@@ -761,6 +773,7 @@ export default function BookingModal({
     }
 
     if (user && !isProfileComplete && !bookingSessionIsTrialDropIn) {
+      persistBookingIntentForProfile();
       onClose();
 
       toast({
@@ -841,6 +854,7 @@ export default function BookingModal({
   };
 
   const handleGoToProfile = () => {
+    persistBookingIntentForProfile();
     onClose();
     setLocation("/my-account#profile");
   };

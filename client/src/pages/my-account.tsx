@@ -63,7 +63,8 @@ import {
   type AccountProfileCheckInput,
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
-import { MEMBER_DASHBOARD_URL, redirectToMemberDashboardAfterProfileComplete } from "@/lib/member-landing";
+import { getPendingBooking } from "@/lib/pending-booking";
+import { redirectAfterProfileComplete } from "@/lib/member-landing";
 import { parseHealthHistory } from "@shared/health-disclosure";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 
@@ -453,9 +454,11 @@ export default function MyAccount() {
       if (profileJustCompletedOnServer(wasIncomplete, updatedUser?.profileCompletionStatus)) {
         toast({
           title: "You're all set",
-          description: "Your profile is complete. Welcome to your dashboard.",
+          description: getPendingBooking()
+            ? "Your profile is complete. Taking you to checkout."
+            : "Your profile is complete. Welcome to your dashboard.",
         });
-        redirectToMemberDashboardAfterProfileComplete();
+        redirectAfterProfileComplete();
         return;
       }
       setActiveSection("health");
@@ -513,9 +516,11 @@ export default function MyAccount() {
       if (profileJustCompletedOnServer(wasIncomplete, data.profileCompletionStatus)) {
         toast({
           title: "You're all set",
-          description: "Your profile is complete. Welcome to your dashboard.",
+          description: getPendingBooking()
+            ? "Your profile is complete. Taking you to checkout."
+            : "Your profile is complete. Welcome to your dashboard.",
         });
-        redirectToMemberDashboardAfterProfileComplete();
+        redirectAfterProfileComplete();
         return;
       }
       await refreshUser();

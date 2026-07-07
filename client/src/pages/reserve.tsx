@@ -30,6 +30,7 @@ import { PageContainer } from "@/components/digital-zen/page-container";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { formatSessionPrice, isValidPaymentUrl } from "@/lib/booking-payment";
 import { filterBookableSessions, sessionDurationMinutes } from "@/lib/booking-flow";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { isTrialOrDropIn } from "@shared/booking-eligibility";
 import {
@@ -72,6 +73,14 @@ interface EnrichedClass extends Class {
 const MY_SESSIONS_URL = "/my-account#sessions";
 const CALENDAR_URL = "/calendar";
 
+function persistReserveIntent(sessionId: string | null, classTypeId: string | null) {
+  setPendingBooking({
+    sessionId: sessionId ?? undefined,
+    classTypeId: classTypeId ?? undefined,
+    scrollTo: classTypeId ? "teach" : "schedule",
+  });
+}
+
 function dayKey(date: string | Date): string {
   return new Date(date).toDateString();
 }
@@ -112,13 +121,19 @@ export default function Reserve() {
   const sessionId = params.get("sessionId");
   const classTypeId = params.get("classTypeId");
   const fromLogin = params.get("from") === "login";
-  const exitPath = fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
-  const backLabel = fromLogin ? "Back to My Sessions" : "Back to Calendar";
+  const fromProfile = params.get("from") === "profile";
+  const fromHome = params.get("from") === "home";
+  const exitPath = fromProfile || fromHome ? "/#schedule" : fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
+  const backLabel =
+    fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
 
   const checkout = useBookingCheckout({
-    onProfileRequired: (redirectTo) => setLocation(redirectTo),
+    onProfileRequired: (redirectTo) => {
+      persistReserveIntent(sessionId, classTypeId);
+      setLocation(redirectTo);
+    },
   });
 
   // Redirect guests to the home booking modal (keeps the guest/trial path intact).
@@ -136,12 +151,15 @@ export default function Reserve() {
 
   const { data: allClasses = [], isLoading: classesLoading } = useQuery<EnrichedClass[]>({
     queryKey: ["/api/classes"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
   const { data: singleClass } = useQuery<EnrichedClass>({
     queryKey: ["/api/classes", sessionId],
     enabled: !!sessionId,
     retry: 1,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const { data: memberSessions = [] } = useQuery({
@@ -260,6 +278,7 @@ export default function Reserve() {
   const handleConfirm = () => {
     if (!selected) return;
     if (user && !profileComplete && !isTrialDrop) {
+      persistReserveIntent(sessionId, classTypeId);
       toast({
         title: "Profile incomplete",
         description: "Complete your profile and health update before booking.",
