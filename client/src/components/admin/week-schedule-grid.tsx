@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Pause, Play, Trash2 } from "lucide-react";
 import type { AdminClassSessionForEdit } from "@/components/admin/create-session-modal";
+import { isAdminSessionPaused } from "@shared/admin-session-actions";
 import { parseRecurrenceWeekdays } from "@shared/session-schedule";
 import { useIsBelowLg } from "@/hooks/use-mobile";
 
@@ -26,6 +27,7 @@ interface SessionRow {
   qrContactEmail?: string | null;
   status?: string;
   publishedAt?: string | null;
+  pausedAt?: string | null;
   recurrenceKind?: string | null;
   recurrenceWeekdays?: string | null;
   seriesId?: string | null;
@@ -75,14 +77,20 @@ export function WeekScheduleGrid({
   weekStart: controlledWeekStart,
   onWeekStartChange,
   onEditSession,
+  onPauseSession,
+  onResumeSession,
   onDeleteSession,
+  isSuperAdmin = false,
 }: {
   sessions: SessionRow[];
   /** When set, grid jumps to this week (e.g. after creating a session). */
   weekStart?: Date;
   onWeekStartChange?: (start: Date) => void;
   onEditSession?: (session: AdminClassSessionForEdit) => void;
+  onPauseSession?: (session: SessionRow) => void;
+  onResumeSession?: (session: SessionRow) => void;
   onDeleteSession?: (session: SessionRow) => void;
+  isSuperAdmin?: boolean;
 }) {
   const isBelowLg = useIsBelowLg();
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -164,6 +172,9 @@ export function WeekScheduleGrid({
     seriesWeekCount: s.seriesWeekCount,
   });
 
+  const showSessionActions =
+    onEditSession || onPauseSession || onResumeSession || onDeleteSession;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -225,50 +236,79 @@ export function WeekScheduleGrid({
               </span>
             </p>
             <div className="space-y-1">
-              {(byDay[day.getDay()] || []).map((s) => (
-                <div key={s.id} className="rounded-md bg-[#f5f0ff] px-2 py-1.5 text-xs">
-                  <p className="font-medium truncate">{s.classType?.name || "Session"}</p>
-                  <p className="text-gray-500 truncate">
-                    {new Date(s.date).toLocaleTimeString("en-IN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "Asia/Kolkata",
-                    })}{" "}
-                    · {s.instructor?.name}
-                  </p>
-                  {s.status && s.status !== "published" && (
-                    <Badge variant="outline" className="mt-1 text-[10px] h-5">
-                      {s.status}
-                    </Badge>
-                  )}
-                  {(onEditSession || onDeleteSession) && (
-                    <div className="flex gap-1 mt-1.5">
-                      {onEditSession && s.classTypeId && s.instructorId && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-1.5 text-[10px]"
-                          onClick={() => onEditSession(toEditPayload(s))}
-                        >
-                          <Pencil className="h-3 w-3 mr-0.5" /> Edit
-                        </Button>
-                      )}
-                      {onDeleteSession && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-1.5 text-[10px] text-red-600 border-red-200"
-                          onClick={() => onDeleteSession(s)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-0.5" /> Del
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+              {(byDay[day.getDay()] || []).map((s) => {
+                const paused = isAdminSessionPaused(s);
+                return (
+                  <div key={s.id} className="rounded-md bg-[#f5f0ff] px-2 py-1.5 text-xs">
+                    <p className="font-medium truncate">{s.classType?.name || "Session"}</p>
+                    <p className="text-gray-500 truncate">
+                      {new Date(s.date).toLocaleTimeString("en-IN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Asia/Kolkata",
+                      })}{" "}
+                      · {s.instructor?.name}
+                    </p>
+                    {paused ? (
+                      <Badge variant="outline" className="mt-1 text-[10px] h-5 border-amber-300 text-amber-800">
+                        Paused
+                      </Badge>
+                    ) : s.status && s.status !== "published" ? (
+                      <Badge variant="outline" className="mt-1 text-[10px] h-5">
+                        {s.status}
+                      </Badge>
+                    ) : null}
+                    {showSessionActions && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {onEditSession && s.classTypeId && s.instructorId && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px]"
+                            onClick={() => onEditSession(toEditPayload(s))}
+                          >
+                            <Pencil className="h-3 w-3 mr-0.5" /> Edit
+                          </Button>
+                        )}
+                        {!paused && onPauseSession && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-amber-700 border-amber-200"
+                            onClick={() => onPauseSession(s)}
+                          >
+                            <Pause className="h-3 w-3 mr-0.5" /> Pause
+                          </Button>
+                        )}
+                        {paused && onResumeSession && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-green-700 border-green-200"
+                            onClick={() => onResumeSession(s)}
+                          >
+                            <Play className="h-3 w-3 mr-0.5" /> Resume
+                          </Button>
+                        )}
+                        {isSuperAdmin && onDeleteSession && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-red-600 border-red-200"
+                            onClick={() => onDeleteSession(s)}
+                          >
+                            <Trash2 className="h-3 w-3 mr-0.5" /> Delete
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {!byDay[day.getDay()]?.length && (
                 <p className="text-[10px] text-gray-400 italic">No sessions</p>
               )}

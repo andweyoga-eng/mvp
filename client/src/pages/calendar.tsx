@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import { formatScheduleDayHeader, getRollingWeekDateRange } from "@shared/schedule-display";
 import { CLASS_INTENSITIES, type ClassIntensity } from "@shared/schema";
@@ -119,15 +120,16 @@ export default function Calendar() {
 
   const { data: weeklySchedule, isLoading, error } = useQuery<ScheduleDay[]>({
     queryKey: ["/api/schedule/week"],
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
   const { data: promotions } = useQuery<
     Array<{ promotionId: string; position: number; session: CalSession }>
   >({
     queryKey: ["/api/carousel/promotions"],
-    refetchInterval: 30000,
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const rollingWeek = useMemo(() => getRollingWeekDateRange(), []);

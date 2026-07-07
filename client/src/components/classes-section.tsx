@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,8 @@ import { useAuth } from "@/lib/auth";
 import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import type { ClassType } from "@shared/schema";
 import type { BookingIntent } from "@/lib/pending-booking";
+import { isClassVisibleForBooking } from "@shared/class-visibility";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import {
   SessionShareMenu,
   buildClassTypeSharePayloadForUi,
@@ -37,26 +39,38 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
   });
   const { data: availability } = useQuery<{ classTypeIds: string[] }>({
     queryKey: ["/api/class-types-availability/upcoming"],
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
   const { data: upcomingClasses = [] } = useQuery<Array<{
     classTypeId: string;
     date: string;
     sessionFrequency?: string | null;
     deliveryMode?: string | null;
+    status?: string | null;
+    pausedAt?: string | null;
+    cancelledAt?: string | null;
   }>>({
     queryKey: ["/api/classes"],
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
+
+  const bookableClassTypeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const cls of upcomingClasses) {
+      if (!isClassVisibleForBooking(cls)) continue;
+      ids.add(cls.classTypeId);
+    }
+    for (const id of availability?.classTypeIds ?? []) {
+      ids.add(id);
+    }
+    return ids;
+  }, [availability?.classTypeIds, upcomingClasses]);
 
   const handleClassBooking = (classTypeId: string) => {
     onBookingClick({ classTypeId, scrollTo: "schedule" });
   };
 
-  const hasUpcomingSession = (classTypeId: string) =>
-    !!availability?.classTypeIds?.includes(classTypeId);
+  const hasUpcomingSession = (classTypeId: string) => bookableClassTypeIds.has(classTypeId);
 
   const frequencyBadge = (classTypeId: string): string | null => {
     const now = Date.now();

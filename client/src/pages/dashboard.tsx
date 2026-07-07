@@ -24,6 +24,7 @@ import { getMeetJoinMessage } from "@shared/session-meet-access";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { formatSessionPrice } from "@/lib/booking-payment";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import {
   collapseBookableForCarousel,
   formatHubCarouselSchedule,
@@ -264,6 +265,7 @@ export default function Dashboard() {
 
   const { data: allClasses = [] } = useQuery<EnrichedClass[]>({
     queryKey: ["/api/classes"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
   const { data: instructors = [] } = useQuery<PublicInstructor[]>({

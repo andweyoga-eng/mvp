@@ -19,6 +19,7 @@ import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 
 interface ClassType {
@@ -98,15 +99,16 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
 
   const { data: weeklySchedule, isLoading, error } = useQuery<ScheduleDay[]>({
     queryKey: ["/api/schedule/week"],
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
   const { data: promotions } = useQuery<
     Array<{ promotionId: string; position: number; session: ScheduleDay["classes"][number] }>
   >({
     queryKey: ["/api/carousel/promotions"],
-    refetchInterval: 30000,
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const upcomingSchedule = useMemo(

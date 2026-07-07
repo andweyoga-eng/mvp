@@ -106,6 +106,19 @@ export const storageReady = new Promise<void>((resolve) => {
   resolveStorageReady = resolve;
 });
 
+/** SQL filter shared by all member-facing session catalog queries. */
+function bookableClassSqlConditions(now: Date = new Date()) {
+  return and(
+    isNull(classes.pausedAt),
+    isNull(classes.cancelledAt),
+    not(inArray(classes.status, ["paused", "cancelled", "draft"])),
+    or(
+      eq(classes.status, "published"),
+      and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
+    ),
+  );
+}
+
 // Profile completeness interface for admin console
 export interface MemberSessionRow {
   id: string;
@@ -385,10 +398,32 @@ export interface IStorage {
   getPublishedClasses(): Promise<Class[]>;
   getClass(id: string): Promise<Class | undefined>;
   getClassesByDate(date: Date): Promise<Class[]>;
+  getBookableClassesByDate(date: Date): Promise<Class[]>;
   getClassesInRange(start: Date, end: Date): Promise<Class[]>;
   createClass(classData: InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }): Promise<Class>;
   updateClassSession(id: string, updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>): Promise<Class | undefined>;
+  pauseClassSession(id: string): Promise<Class | undefined>;
+  resumeClassSession(id: string): Promise<Class | undefined>;
   deleteClassSession(id: string): Promise<{ ok: boolean; message?: string }>;
+  hardDeleteClassSession(
+    id: string,
+    reason: string,
+  ): Promise<{
+    ok: boolean;
+    message?: string;
+    classTypeName?: string;
+    instructorName?: string;
+    sessionDateIso?: string;
+    bookingCount?: number;
+    recipients?: Array<{
+      key: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      phoneCountryCode: string | null;
+      whatsappConsent: boolean;
+    }>;
+  }>;
   cancelClassSession(
     id: string,
     reason: string,
@@ -929,16 +964,7 @@ export class DatabaseStorage implements IStorage {
         })
         .from(classes)
         .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
-        .where(
-          and(
-            isNull(classes.pausedAt),
-            isNull(classes.cancelledAt),
-            or(
-              eq(classes.status, "published"),
-              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
-            ),
-          ),
-        );
+        .where(bookableClassSqlConditions(now));
       const nowMs = now.getTime();
       const open = new Set<string>();
       for (const row of rows) {
@@ -1206,14 +1232,7 @@ export class DatabaseStorage implements IStorage {
     excludeSeriesId?: string | null,
   ): Promise<Class | undefined> {
     const now = new Date();
-    const visibility = and(
-      isNull(classes.pausedAt),
-      isNull(classes.cancelledAt),
-      or(
-        eq(classes.status, "published"),
-        and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
-      ),
-    );
+    const visibility = bookableClassSqlConditions(now);
     const whereClause = excludeSeriesId
       ? and(
           eq(classes.classTypeId, classTypeId),
@@ -1666,20 +1685,10 @@ export class DatabaseStorage implements IStorage {
 
   async getPublishedClasses(): Promise<Class[]> {
     try {
-      const now = new Date();
       return await db
         .select()
         .from(classes)
-        .where(
-          and(
-            isNull(classes.pausedAt),
-            isNull(classes.cancelledAt),
-            or(
-              eq(classes.status, "published"),
-              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
-            ),
-          ),
-        )
+        .where(bookableClassSqlConditions())
         .orderBy(classes.date);
     } catch (error) {
       console.error("[DB] Error getting published classes:", error);
@@ -1704,10 +1713,35 @@ export class DatabaseStorage implements IStorage {
       const endOfDay = new Date(date);
       endOfDay.setHours(23, 59, 59, 999);
 
-      return await db.select().from(classes)
+      return await db
+        .select()
+        .from(classes)
         .where(and(gte(classes.date, startOfDay), lte(classes.date, endOfDay)));
     } catch (error) {
       console.error('[DB] Error getting classes by date:', error);
+      return [];
+    }
+  }
+
+  async getBookableClassesByDate(date: Date): Promise<Class[]> {
+    try {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      return await db
+        .select()
+        .from(classes)
+        .where(
+          and(
+            gte(classes.date, startOfDay),
+            lte(classes.date, endOfDay),
+            bookableClassSqlConditions(),
+          ),
+        );
+    } catch (error) {
+      console.error("[DB] Error getting bookable classes by date:", error);
       return [];
     }
   }
@@ -1754,6 +1788,24 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async pauseClassSession(id: string): Promise<Class | undefined> {
+    const cls = await this.updateClassSession(id, {
+      status: "paused",
+      pausedAt: new Date(),
+    });
+    if (cls) {
+      await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, id));
+    }
+    return cls;
+  }
+
+  async resumeClassSession(id: string): Promise<Class | undefined> {
+    return this.updateClassSession(id, {
+      status: "published",
+      pausedAt: null,
+    });
+  }
+
   async countBookingsForClass(classId: string): Promise<number> {
     try {
       const rows = await db
@@ -1784,6 +1836,62 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  private async deleteClassDependents(classId: string): Promise<void> {
+    const classBookings = await db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(eq(bookings.classId, classId));
+    const bookingIds = classBookings.map((row) => row.id);
+
+    if (bookingIds.length) {
+      await db.delete(consentAuditLogs).where(inArray(consentAuditLogs.bookingId, bookingIds));
+      await db.delete(payments).where(inArray(payments.bookingId, bookingIds));
+      await db.delete(bookings).where(inArray(bookings.id, bookingIds));
+    }
+
+    await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, classId));
+    await db.delete(sessionMoodCheckins).where(eq(sessionMoodCheckins.classId, classId));
+    await db.delete(sessionJoinEvents).where(eq(sessionJoinEvents.classId, classId));
+    await db.delete(userSessionMappings).where(eq(userSessionMappings.classId, classId));
+    await db.delete(classes).where(eq(classes.id, classId));
+  }
+
+  async hardDeleteClassSession(id: string, reason: string) {
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) {
+      return {
+        ok: false as const,
+        message: "Please enter a deletion reason (at least 3 characters).",
+      };
+    }
+
+    try {
+      const cls = await this.getClass(id);
+      if (!cls) return { ok: false as const, message: "Session not found" };
+
+      const [classType, instructor, bookingCount, recipients] = await Promise.all([
+        this.getClassType(cls.classTypeId),
+        this.getInstructor(cls.instructorId),
+        this.countBookingsForClass(id),
+        this.getCancellationRecipientsForClass(id),
+      ]);
+
+      await this.deleteClassDependents(id);
+
+      return {
+        ok: true as const,
+        classTypeName: classType?.name ?? "Session",
+        instructorName: instructor?.name,
+        sessionDateIso: cls.date.toISOString(),
+        bookingCount,
+        recipients,
+      };
+    } catch (error) {
+      console.error("[DB] Error hard-deleting class session:", error);
+      return { ok: false as const, message: "Failed to delete session" };
+    }
+  }
+
   async cancelClassSessionWithBookings(
     id: string,
     reason: string,
@@ -1810,12 +1918,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(classes.classTypeId, classTypeId),
             gte(classes.date, after),
-            isNull(classes.pausedAt),
-            isNull(classes.cancelledAt),
-            or(
-              eq(classes.status, "published"),
-              and(eq(classes.status, "scheduled"), lte(classes.publishedAt, now)),
-            ),
+            bookableClassSqlConditions(now),
           ),
         )
         .orderBy(classes.date);

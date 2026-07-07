@@ -2,6 +2,7 @@ export const MAX_TEXT_LENGTH = {
   guestName: 80,
   guestEmail: 120,
   cancelReason: 300,
+  deleteCompensation: 500,
   ownerOtp: 12,
 } as const;
 

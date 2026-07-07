@@ -1,5 +1,6 @@
 import type { BookingIntent, BookingScrollTarget } from "@/lib/pending-booking";
 import { isSessionBookable } from "@shared/booking-eligibility";
+import { isClassVisibleForBooking } from "@shared/class-visibility";
 import {
   DEFAULT_SESSION_DURATION_MINUTES,
   isSessionWindowOpen,
@@ -27,6 +28,10 @@ export interface BookableSession {
   maxCapacity: number;
   classType?: { duration?: number | null };
   sessionFrequency?: string | null;
+  status?: string | null;
+  publishedAt?: string | Date | null;
+  pausedAt?: string | Date | null;
+  cancelledAt?: string | Date | null;
 }
 
 export interface ScheduleDayLike<T extends { date: Date | string; classType?: { duration?: number | null } }> {
@@ -53,6 +58,7 @@ export function filterBookableSessions<T extends BookableSession>(
   now: Date = new Date(),
 ): T[] {
   return sessions
+    .filter((cls) => isClassVisibleForBooking(cls))
     .filter((cls) =>
       isSessionBookable(
         cls.date,

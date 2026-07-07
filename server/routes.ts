@@ -42,6 +42,7 @@ import {
   toPublicInstructorProfile,
 } from "@shared/instructor-compliance";
 import { isClassVisibleForBooking, sanitizePublicClass } from "./public-class";
+import { setPublicCatalogNoStore } from "./public-catalog-cache";
 import { isQaFixtureClassTypeName, isQaFixtureInstructorName } from "@shared/seed-catalog";
 import { isSessionAllowedInPublicCatalog } from "./public-catalog-gate";
 import {
@@ -909,6 +910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/class-types-availability/upcoming", async (_req, res) => {
     try {
+      setPublicCatalogNoStore(res);
       const publicTypeIds = new Set(
         (await storage.getAllClassTypes())
           .filter((ct) => !isQaFixtureClassTypeName(ct.name))
@@ -1761,6 +1763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/classes", async (req, res) => {
     try {
+      setPublicCatalogNoStore(res);
       const { date } = req.query;
 
       if (date && typeof date === 'string') {
@@ -1768,7 +1771,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (isNaN(filterDate.getTime())) {
           return res.status(400).json({ message: "Invalid date format" });
         }
-        const classes = await storage.getClassesByDate(filterDate);
+        const classes = await storage.getBookableClassesByDate(filterDate);
         const enrichedClasses = (
           await Promise.all(classes.map((cls) => enrichPublicClassForBooking(cls)))
         ).filter(Boolean);
@@ -1787,6 +1790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/classes/:id", async (req, res) => {
     try {
+      setPublicCatalogNoStore(res);
       const cls = await storage.getClass(req.params.id);
       if (!cls) {
         return res.status(404).json({ message: "Class not found" });
@@ -2016,6 +2020,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Weekly schedule (public read)
   app.get("/api/schedule/week", async (req, res) => {
     try {
+      setPublicCatalogNoStore(res);
       const today = new Date();
       const startDay = new Date(today);
       startDay.setHours(0, 0, 0, 0);
@@ -2027,7 +2032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const currentDay = new Date(startDay);
         currentDay.setDate(startDay.getDate() + i);
 
-        const dayClasses = await storage.getClassesByDate(currentDay);
+        const dayClasses = await storage.getBookableClassesByDate(currentDay);
         const enrichedClasses = (
           await Promise.all(dayClasses.map((cls) => enrichPublicClassForBooking(cls)))
         ).filter((cls): cls is NonNullable<typeof cls> => cls != null);
@@ -2063,6 +2068,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // When empty, the client falls back to the regular today's-sessions carousel.
   app.get("/api/carousel/promotions", async (_req, res) => {
     try {
+      setPublicCatalogNoStore(res);
       const promotions = await storage.getActiveCarouselPromotions();
       const out: Array<{ promotionId: string; position: number; session: unknown }> = [];
       for (const promotion of promotions) {
@@ -2258,6 +2264,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const cls = await storage.getClass(classId);
       if (!cls) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+      if (!isClassVisibleForBooking(cls)) {
         return res.status(404).json({ message: "Class not found" });
       }
 
@@ -3546,14 +3555,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/admin/classes/:id", requireAdminAuth, async (req, res) => {
+  app.delete("/api/admin/classes/:id", requireSuperAdminAuth, async (req, res) => {
+    res.status(410).json({
+      message: "Use POST /api/admin/classes/:id/delete with reason and owner OTP instead.",
+    });
+  });
+
+  app.post("/api/admin/classes/:id/delete", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
-      const result = await storage.deleteClassSession(req.params.id);
-      if (!result.ok) {
-        return res.status(400).json({ message: result.message || "Cannot delete session" });
+      const body = z
+        .object({
+          reason: z.string().min(3, "Deletion reason is required"),
+          compensation: z.string().optional(),
+          ownerOtp: z.string().min(1, "Owner OTP is required"),
+        })
+        .parse(req.body);
+
+      const otp = validateOwnerCancelOtp(body.ownerOtp);
+      if (!otp.ok) {
+        return res.status(400).json({ message: otp.message });
       }
-      res.json({ message: "Session deleted" });
-    } catch {
+
+      const compensation = body.compensation?.trim() ?? "";
+      const bookingCount = await storage.countBookingsForClass(req.params.id);
+      if (bookingCount > 0 && compensation.length < 3) {
+        return res.status(400).json({
+          message: "Compensation details are required when the session has bookings.",
+        });
+      }
+
+      const prep = await storage.hardDeleteClassSession(req.params.id, body.reason);
+      if (!prep.ok) {
+        return res.status(400).json({ message: prep.message || "Could not delete session" });
+      }
+
+      const notifySummary = await notifySessionCancellation(prep.recipients ?? [], {
+        kind: "session_deleted",
+        reason: body.reason,
+        compensation: compensation || undefined,
+        classTypeName: prep.classTypeName ?? "Session",
+        sessionDateIso: prep.sessionDateIso,
+        instructorName: prep.instructorName,
+      });
+
+      await storage.insertAuditLog({
+        userId: req.admin?.id ?? null,
+        action: "session_deleted",
+        resourceType: "class_session",
+        resourceId: req.params.id,
+        metadata: JSON.stringify({
+          reason: body.reason,
+          compensation: compensation || null,
+          performedByEmail: req.admin?.email,
+          recipientCount: notifySummary.recipientCount,
+          bookingCount,
+        }),
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+
+      res.json({
+        message:
+          notifySummary.recipientCount > 0
+            ? `Session deleted. ${notifySummary.recipientCount} member(s) notified by email (SMS/WhatsApp queued when channels go live).`
+            : "Session deleted.",
+        notifications: notifySummary,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+        });
+      }
       res.status(500).json({ message: "Failed to delete session" });
     }
   });
@@ -3616,19 +3689,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.patch("/api/admin/classes/:id/pause", requireAdminAuth, async (req, res) => {
-    const cls = await storage.updateClassSession(req.params.id, {
-      status: "paused",
-      pausedAt: new Date(),
-    });
+    const cls = await storage.pauseClassSession(req.params.id);
     if (!cls) return res.status(404).json({ message: "Session not found" });
     res.json(cls);
   });
 
   app.patch("/api/admin/classes/:id/resume", requireAdminAuth, async (req, res) => {
-    const cls = await storage.updateClassSession(req.params.id, {
-      status: "published",
-      pausedAt: null,
-    });
+    const cls = await storage.resumeClassSession(req.params.id);
     if (!cls) return res.status(404).json({ message: "Session not found" });
     res.json(cls);
   });

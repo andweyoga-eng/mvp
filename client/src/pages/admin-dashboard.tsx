@@ -28,7 +28,8 @@ import {
   adminActionTabTrigger,
 } from "@/lib/admin-tab-styles";
 import { WeekScheduleGrid, startOfWeek } from "@/components/admin/week-schedule-grid";
-import { CancelSessionDialog } from "@/components/admin/cancel-session-dialog";
+import { PUBLIC_SESSION_CATALOG_QUERY_KEYS } from "@/lib/public-session-catalog";
+import { DeleteSessionDialog } from "@/components/admin/delete-session-dialog";
 import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
@@ -443,7 +444,7 @@ export default function AdminDashboard() {
     setSessionEditorOpen(true);
   };
 
-  function openCancelOrDeleteSession(session: {
+  function openDeleteSession(session: {
     id: string;
     date: string;
     currentBookings?: number;
@@ -451,56 +452,64 @@ export default function AdminDashboard() {
   }) {
     const bookingCount = session.currentBookings ?? 0;
     const label = `${session.classType?.name ?? "Session"} · ${new Date(session.date).toLocaleString("en-IN")}`;
-    if (isSuperAdmin || bookingCount > 0) {
-      setSessionToCancel({ id: session.id, label, bookingCount });
-      setCancelDialogOpen(true);
-      return;
-    }
-    void handleDeleteSession(session.id);
+    setSessionToDelete({ id: session.id, label, bookingCount });
+    setDeleteDialogOpen(true);
   }
 
-  function handleDeleteSession(sessionId: string) {
-    const session = sessions.find((s) => s.id === sessionId);
-    const bookingCount = session?.currentBookings ?? 0;
-    if (bookingCount > 0) {
-      const label = session?.classType?.name
-        ? `${session.classType.name} · ${new Date(session.date).toLocaleString("en-IN")}`
-        : "This session";
-      setSessionToCancel({ id: sessionId, label, bookingCount });
-      setCancelDialogOpen(true);
-      return;
+  async function refreshSessionViews() {
+    await Promise.all([refetchSess(), refetchWeekSessions()]);
+    for (const key of PUBLIC_SESSION_CATALOG_QUERY_KEYS) {
+      qc.invalidateQueries({ queryKey: [key] });
     }
-    if (!confirm("Delete this session? This cannot be undone.")) return;
-    void performDeleteSession(sessionId);
+    qc.invalidateQueries({ queryKey: ["/api/admin/classes"] });
+    qc.invalidateQueries({ queryKey: ["/api/admin/classes/week"] });
   }
 
-  async function performDeleteSession(sessionId: string) {
-    const res = await fetch(`/api/admin/classes/${sessionId}`, {
-      method: "DELETE",
+  async function handlePauseSession(sessionId: string) {
+    const res = await fetch(`/api/admin/classes/${sessionId}/pause`, {
+      method: "PATCH",
       headers: adminHeaders(),
+      credentials: "include",
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast({
-        title: "Could not delete",
-        description: body.message || "Delete failed",
+        title: "Could not pause session",
+        description: body.message || "Pause failed",
         variant: "destructive",
       });
       return;
     }
-    toast({ title: "Session deleted" });
-    refetchSess();
-    refetchWeekSessions();
+    toast({ title: "Session paused", description: "Hidden from booking until resumed." });
+    await refreshSessionViews();
   }
 
-  // DEAD-01 FIX: performCancelSession removed — was defined but never called.
+  async function handleResumeSession(sessionId: string) {
+    const res = await fetch(`/api/admin/classes/${sessionId}/resume`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      credentials: "include",
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Could not resume session",
+        description: body.message || "Resume failed",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Session resumed", description: "Available for booking on the main page." });
+    await refreshSessionViews();
+  }
 
-  async function handleCancelSessionWithBookings(payload: {
+  async function handleDeleteSessionWithNotify(payload: {
     reason: string;
+    compensation: string;
     ownerOtp: string;
   }) {
-    if (!sessionToCancel) return;
-    const res = await fetch(`/api/admin/classes/${sessionToCancel.id}/cancel`, {
+    if (!sessionToDelete) return;
+    const res = await fetch(`/api/admin/classes/${sessionToDelete.id}/delete`, {
       method: "POST",
       headers: { ...adminHeaders(), "Content-Type": "application/json" },
       credentials: "include",
@@ -509,16 +518,15 @@ export default function AdminDashboard() {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast({
-        title: "Could not cancel session",
-        description: body.message || "Cancellation failed",
+        title: "Could not delete session",
+        description: body.message || "Delete failed",
         variant: "destructive",
       });
-      throw new Error(body.message || "Cancellation failed");
+      throw new Error(body.message || "Delete failed");
     }
-    toast({ title: "Session cancelled", description: body.message });
-    setSessionToCancel(null);
-    refetchSess();
-    refetchWeekSessions();
+    toast({ title: "Session deleted", description: body.message });
+    setSessionToDelete(null);
+    await refreshSessionViews();
   }
 
   const getCompletenessColor = (pct: number) =>
@@ -531,8 +539,8 @@ export default function AdminDashboard() {
   });
   const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [sessionToCancel, setSessionToCancel] = useState<{
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<{
     id: string;
     label: string;
     bookingCount: number;
@@ -993,7 +1001,8 @@ export default function AdminDashboard() {
                     </div>
 
                     <p className="text-sm text-muted-foreground mb-4">
-                      Sessions in this week ({weekSessions.length}). Edit or delete from the week view.
+                      Sessions in this week ({weekSessions.length}). Edit, pause, or resume from the week view.
+                      {isSuperAdmin ? " Super admins can permanently delete sessions." : ""}
                     </p>
                     {weekSessionsLoading ? (
                       <div className="flex items-center justify-center py-12">
@@ -1007,7 +1016,10 @@ export default function AdminDashboard() {
                             weekStart={scheduleWeekAnchor}
                             onWeekStartChange={setScheduleWeekAnchor}
                             onEditSession={openEditSession}
-                            onDeleteSession={openCancelOrDeleteSession}
+                            onPauseSession={(s) => void handlePauseSession(s.id)}
+                            onResumeSession={(s) => void handleResumeSession(s.id)}
+                            onDeleteSession={openDeleteSession}
+                            isSuperAdmin={isSuperAdmin}
                           />
                         </div>
                         {weekSessions.length === 0 && (
@@ -1351,12 +1363,12 @@ export default function AdminDashboard() {
         </Tabs>
       </main>
 
-      <CancelSessionDialog
-        open={cancelDialogOpen}
-        onOpenChange={setCancelDialogOpen}
-        sessionLabel={sessionToCancel?.label ?? "Session"}
-        bookingCount={sessionToCancel?.bookingCount ?? 0}
-        onConfirm={handleCancelSessionWithBookings}
+      <DeleteSessionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        sessionLabel={sessionToDelete?.label ?? "Session"}
+        bookingCount={sessionToDelete?.bookingCount ?? 0}
+        onConfirm={handleDeleteSessionWithNotify}
       />
 
       {healthViewUser ? (
