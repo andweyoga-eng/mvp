@@ -49,7 +49,7 @@ No feature is **done** until automated checks pass and you sign off in the brows
 
 - [ ] Paid session: **Confirm & Reserve** → countdown chip visible before Pay
 - [ ] Back / leave checkout → confirm dialog → spot released (toast)
-- [ ] Session type with **Not Suitable** → tags on reserve, booking modal, dashboard card, We Flow
+- [ ] Session type with **Not Suitable** → tags on reserve, booking modal, dashboard card, We Workout
 - [ ] **Send a message** opens SMS to support number; office hours match Mon–Sat 9:30–1:30 & 3:30–5:30 IST
 
 ## Commands

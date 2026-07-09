@@ -176,4 +176,28 @@ describe("client/server duplicate-booking parity", () => {
       true,
     );
   });
+
+  it("paid flexi occurrence blocks rebooking through its anchor class", () => {
+    const rows = [
+      session({
+        bookingId: "b-flexi",
+        classId: "class-occurrence",
+        anchorClassId: "class-anchor",
+        paymentStatus: "paid",
+        status: "upcoming",
+        isFlexi: true,
+      }),
+    ];
+    assert.equal(findUpcomingMemberSessionForClass(rows, "class-anchor")?.bookingId, "b-flexi");
+    assert.equal(
+      existingBookingBlocksNewBooking({
+        hasBookingRow: true,
+        mappingStatus: "upcoming",
+        paymentStatus: "paid",
+        classSessionStartMs: FUTURE_MS,
+        nowMs: NOW_MS,
+      }),
+      true,
+    );
+  });
 });

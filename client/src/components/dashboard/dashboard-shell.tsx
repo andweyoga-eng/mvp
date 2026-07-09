@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Search,
   Bell,
-  Menu,
   CalendarDays,
   Smile,
   GraduationCap,
@@ -13,17 +12,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { AccountDrawer } from "@/components/account-drawer";
+import { AccountMenuControls } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
-import { useAuth } from "@/lib/auth";
-import { getIncompleteAccountHref } from "@/lib/account-profile-complete";
 import { useProfileCompletionGuard } from "@/hooks/use-profile-completion-guard";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { BrandLogo } from "@/components/brand-logo";
 
 export type DashboardSection =
@@ -46,7 +37,7 @@ const LAUNCHER_ITEMS: LauncherItem[] = [
   { id: "sessions", label: "Sessions", icon: Sparkles, href: "/dashboard" },
   { id: "calendar", label: "Calendar", icon: CalendarDays, href: "/calendar" },
   { id: "emojou", label: "Emojou", icon: Smile, href: "/emojou" },
-  { id: "workshops", label: "Workshops", icon: GraduationCap, href: "/workshops" },
+  { id: "workshops", label: "we learn", icon: GraduationCap, href: "/workshops" },
   { id: "trips", label: "Trips", icon: Mountain, href: "/trips" },
   { id: "explore", label: "Explore", icon: Compass, href: "/explore" },
 ];
@@ -57,13 +48,9 @@ interface DashboardShellProps {
 }
 
 export function DashboardShell({ active, children }: DashboardShellProps) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { user } = useAuth();
   useProfileCompletionGuard();
-
-  const incompleteHref = getIncompleteAccountHref(user);
 
   const go = (href?: string) => {
     if (!href) {
@@ -112,44 +99,19 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
               <Bell className="h-5 w-5" />
               <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-dz-secondary ring-2 ring-dz-surface" />
             </button>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (incompleteHref) {
-                        setLocation(incompleteHref);
-                        return;
-                      }
-                      setDrawerOpen(true);
-                    }}
-                    className={cn(
-                      "flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold shadow-dz-primary transition-transform hover:shadow-dz-hero active:scale-95",
-                      incompleteHref
-                        ? "bg-orange-600 text-white hover:bg-orange-700"
-                        : "bg-primary text-primary-foreground",
-                    )}
-                    data-testid="dashboard-account-toggle"
-                  >
-                    <span className="hidden sm:inline">My Account</span>
-                    <Menu className="h-[17px] w-[17px]" />
-                  </button>
-                </TooltipTrigger>
-                {incompleteHref ? (
-                  <TooltipContent side="bottom" className="max-w-xs text-center">
-                    Complete your phone number and health note to book sessions.
-                  </TooltipContent>
-                ) : null}
-              </Tooltip>
-            </TooltipProvider>
+            <AccountMenuControls
+              showHeaderButton
+              showFloatingMenuWhenScrolled
+              headerTestId="dashboard-account-toggle"
+              fabTestId="dashboard-fab"
+            />
           </div>
         </PageContainer>
 
         {/* ===== SECTION LAUNCHER ===== */}
         <div className="border-t border-dz-glass-border/60 bg-dz-surface/55">
           <PageContainer>
-            <nav className="grid grid-cols-6 gap-2 py-3">
+            <nav className="grid grid-cols-6 gap-1 py-2 sm:gap-2 sm:py-3">
               {LAUNCHER_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = item.id === active;
@@ -160,24 +122,24 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
                     onClick={() => go(item.href)}
                     title={item.href ? item.label : `${item.label} (coming soon)`}
                     className={cn(
-                      "group flex flex-col items-center gap-2 rounded-xl px-1 py-1.5 text-center transition-transform",
+                      "group flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-1 text-center transition-transform sm:gap-2 sm:px-1 sm:py-1.5",
                       item.href ? "hover:-translate-y-0.5" : "cursor-default opacity-70",
                     )}
                     data-testid={`launcher-${item.id}`}
                   >
                     <span
                       className={cn(
-                        "inline-flex h-11 w-11 items-center justify-center rounded-[14px] bg-gradient-to-br from-[#8159c4] via-[#4b3282] to-dz-secondary text-white",
+                        "inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#8159c4] via-[#4b3282] to-dz-secondary text-white sm:h-11 sm:w-11 sm:rounded-[14px]",
                         isActive
                           ? "shadow-[0_16px_30px_rgba(52,25,106,0.5),0_0_0_5px_rgba(52,25,106,0.12)]"
                           : "shadow-[0_14px_26px_rgba(52,25,106,0.4)]",
                       )}
                     >
-                      <Icon className="h-[22px] w-[22px]" />
+                      <Icon className="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px]" />
                     </span>
                     <span
                       className={cn(
-                        "text-[13px] leading-none",
+                        "max-w-full text-[10px] leading-tight sm:text-[13px] sm:leading-none sm:whitespace-nowrap",
                         isActive ? "font-bold text-primary" : "font-semibold text-muted-foreground",
                       )}
                     >
@@ -193,20 +155,6 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
 
       {/* ===== MAIN ===== */}
       <main className="relative z-[1]">{children}</main>
-
-      {/* ===== ACCOUNT DRAWER (shared across all pages) ===== */}
-      <AccountDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
-
-      {/* ===== FAB ===== */}
-      <button
-        type="button"
-        onClick={() => setDrawerOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white shadow-dz-hero transition-transform hover:scale-105 active:scale-95"
-        aria-label="Open menu"
-        data-testid="dashboard-fab"
-      >
-        <Menu className="h-7 w-7" />
-      </button>
     </div>
   );
 }

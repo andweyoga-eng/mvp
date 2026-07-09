@@ -650,10 +650,10 @@ export default function MyAccount() {
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:flex-col min-[900px]:pb-0 min-[900px]:pt-6">
         <button
           onClick={() => setLocation("/dashboard")}
-          data-testid="back-to-hub"
+          data-testid="back-to-dashboard"
           className="mb-4 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to hub
+          <ArrowLeft className="h-4 w-4" /> Back to dashboard
         </button>
 
         {/* Profile band + completeness meter */}

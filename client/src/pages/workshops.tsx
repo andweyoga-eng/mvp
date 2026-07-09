@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
+import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -133,14 +134,14 @@ export default function Workshops() {
     <DashboardShell active="workshops">
       <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
         {/* ===== HERO ===== */}
-        <section className="relative mb-8 flex min-h-[300px] items-center overflow-hidden rounded-3xl p-8 sm:min-h-[360px] sm:p-12">
+        <section className="relative mb-8 flex min-h-[300px] items-end overflow-hidden rounded-3xl sm:min-h-[360px] lg:items-center">
           <div
             className="absolute inset-0 z-0 bg-cover bg-center"
             style={{ backgroundImage: `url(${elevateImg})` }}
             aria-hidden
           />
-          <div className="absolute inset-0 z-0 bg-gradient-to-r from-primary/85 via-primary/55 to-transparent" aria-hidden />
-          <div className="relative z-10 max-w-xl text-white">
+          <ImageHeroScrim variant="brand-horizontal" />
+          <ImageHeroContent className="relative z-10 max-w-xl p-8 text-white sm:p-12">
             <span className="mb-3 inline-block rounded-full bg-dz-secondary/90 px-3.5 py-1 text-xs font-semibold uppercase tracking-wide backdrop-blur">
               Season Finale
             </span>
@@ -166,7 +167,7 @@ export default function Workshops() {
                 My Registrations
               </Button>
             </div>
-          </div>
+          </ImageHeroContent>
         </section>
 
         {/* ===== FILTERS & SORT ===== */}

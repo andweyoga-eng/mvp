@@ -100,13 +100,28 @@ import { Badge } from "@/components/ui/badge";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
 import { DEFAULT_SESSION_DURATION_MINUTES } from "@shared/session-window";
 import { cn } from "@/lib/utils";
+import { defaultFlexiTermsItems, isFlexiEnabledSchedule } from "@shared/flexi-mode";
+import {
+  FlexiCheckoutSection,
+  isFlexiCheckoutReady,
+  validateFlexiBeforeCheckout,
+  type FlexiOptionsData,
+} from "@/components/flexi-checkout-section";
+import type { FlexiSelection } from "@/components/flexi-selection-builder";
+import {
+  formatFixedSlotScheduleLine,
+  formatSessionTime,
+  getRecurringWeekdays,
+  isFixedRecurringCheckout,
+} from "@/lib/recurring-series-display";
+import { Separator } from "@/components/ui/separator";
 
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** Scheduled session id (from Week Schedule). */
   sessionId?: string | null;
-  /** Class type id (from and We Flow). User picks an upcoming session of this type. */
+  /** Class type id (from and We Workout). User picks an upcoming session of this type. */
   filterClassTypeId?: string | null;
   /** Resume payment for an existing held booking (email retry link). */
   resumeBookingId?: string | null;
@@ -185,11 +200,13 @@ export default function BookingModal({
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistWhatsapp, setWaitlistWhatsapp] = useState("");
   const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
+  const [memberBookingMode, setMemberBookingMode] = useState<"series" | "flexi">("series");
+  const [memberFlexiSelections, setMemberFlexiSelections] = useState<FlexiSelection[]>([]);
   const resumeCheckoutStartedRef = useRef(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, isLoading, refreshUser } = useAuth();
+  const { user, isLoading, refreshUser, logout } = useAuth();
   const { guestCheckoutEnabled } = usePlatformConfig();
   const [, setLocation] = useLocation();
 
@@ -344,6 +361,46 @@ export default function BookingModal({
 
   const canAccessCheckoutUi =
     !!user || !!getAuthToken() || !!getGuestCheckoutToken();
+  const flexiEligibleSession = !!selectedSession && isFlexiEnabledSchedule(selectedSession);
+  const fixedSlotsLabel =
+    selectedSession && isFixedRecurringCheckout(selectedSession)
+      ? formatFixedSlotScheduleLine(selectedSession)
+      : "";
+  const fixedWeekdays =
+    selectedSession && isFixedRecurringCheckout(selectedSession)
+      ? getRecurringWeekdays(selectedSession)
+      : [];
+  const fixedTimeLabel = selectedSession ? formatSessionTime(selectedSession.date) : "";
+
+  const {
+    data: flexiOptions,
+    isLoading: flexiOptionsLoading,
+    isError: flexiOptionsError,
+    refetch: refetchFlexiOptions,
+  } = useQuery<FlexiOptionsData>({
+    queryKey: ["/api/flexi/options", selectedSession?.id ?? displayClass?.id ?? ""],
+    enabled:
+      !!user &&
+      !!(selectedSession?.id ?? displayClass?.id) &&
+      !!flexiEligibleSession,
+    retry: false,
+    queryFn: async () => {
+      const anchorId = selectedSession?.id ?? displayClass?.id;
+      const res = await fetch(`/api/flexi/options/${anchorId}`, {
+        credentials: "include",
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body.message === "string"
+            ? body.message
+            : "Failed to load Flexi options",
+        );
+      }
+      return res.json();
+    },
+  });
 
   const checkoutAuthHeaders = () =>
     getCheckoutAuthHeaders({
@@ -367,6 +424,8 @@ export default function BookingModal({
       setWaitlistEmail("");
       setWaitlistWhatsapp("");
       setBookingAuthOpen(false);
+      setMemberBookingMode("series");
+      setMemberFlexiSelections([]);
       resumeCheckoutStartedRef.current = false;
       clearGuestCheckoutSession();
       return;
@@ -836,7 +895,7 @@ export default function BookingModal({
       return;
     }
 
-    const payload: Record<string, string | boolean> = { classId };
+    const payload: Record<string, string | boolean | FlexiSelection[]> = { classId };
     if (!user && effectiveCanGuestBook) {
       if (!validateGuestCheckoutForm()) return;
       const phoneCheck = validateRequiredGuestPhone(guestBooking.phone);
@@ -848,6 +907,26 @@ export default function BookingModal({
       payload.guestConsentTerms = true;
       payload.guestConsentAge = true;
       payload.consentVersion = LEGAL_CONFIG.documentVersion;
+    }
+
+    if (user && memberBookingMode === "flexi") {
+      const flexiCheck = validateFlexiBeforeCheckout({
+        isLoading: flexiOptionsLoading,
+        isError: flexiOptionsError,
+        flexiOptions,
+        selections: memberFlexiSelections,
+        fixedWeekdays,
+        fixedTimeLabel,
+      });
+      if (!flexiCheck.ok) {
+        toast({
+          title: flexiCheck.title,
+          description: flexiCheck.description,
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.flexiSelections = memberFlexiSelections;
     }
 
     bookingMutation.mutate(payload as { classId: string });
@@ -870,6 +949,30 @@ export default function BookingModal({
     markMemberLandingChecked();
     onClose();
     setLocation(MY_SESSIONS_UPCOMING_URL);
+  };
+
+  const goToDashboard = () => {
+    clearPendingBooking();
+    clearGuestCheckoutSession();
+    setPaymentResult(null);
+    setPaymentOutcome(null);
+    setPaymentStep("pay");
+    setIsPaying(false);
+    setPaymentPhase(null);
+    onClose();
+    setLocation("/dashboard");
+  };
+
+  const goToMyAccount = () => {
+    clearPendingBooking();
+    clearGuestCheckoutSession();
+    setPaymentResult(null);
+    setPaymentOutcome(null);
+    setPaymentStep("pay");
+    setIsPaying(false);
+    setPaymentPhase(null);
+    onClose();
+    setLocation("/my-account");
   };
 
   const goToHomeCarousel = () => {
@@ -1152,6 +1255,16 @@ export default function BookingModal({
     return `${cls.classType.name} with ${cls.instructor.name}, ${dateStr} at ${timeStr} (${cls.currentBookings}/${cls.maxCapacity})`;
   };
 
+  const formatSessionPickerSlot = (cls: EnrichedClass) =>
+    new Date(cls.date).toLocaleString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+
   const showSessionPicker = !hasPreselectedSession;
   const hideDialogClose =
     !!user &&
@@ -1353,6 +1466,8 @@ export default function BookingModal({
 
         {paymentResult && canAccessCheckoutUi && paymentStep === "payment-confirmed" && paymentOutcome && (
           <PaymentConfirmedContent
+            variant="compact"
+            flexiSummary={paymentResult.flexiSummary ?? undefined}
             details={{
               bookingId: paymentOutcome.bookingId,
               className: paymentOutcome.className,
@@ -1362,7 +1477,9 @@ export default function BookingModal({
               sessionDurationMinutes: displayClass ? sessionDurationMinutes(displayClass) : 60,
             }}
             onViewSessions={goToMySessionsUpcoming}
-            onCancel={onClose}
+            onGoToDashboard={goToDashboard}
+            onGoToMyAccount={goToMyAccount}
+            onLogout={logout}
           />
         )}
 
@@ -1609,11 +1726,26 @@ export default function BookingModal({
                   Amount: {formatSessionPrice(paymentResult.price)}
                 </p>
               )}
+              {paymentResult.flexiSummary?.length ? (
+                <div className="pt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Your Flexi selection
+                  </p>
+                  <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                    {paymentResult.flexiSummary.map((item) => (
+                      <li key={`${item.weekday}-${item.sourceClassId}`}>
+                        {item.weekdayLabel} · {item.timeLabel}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
 
             <SessionTermsBlock
               termsAndConditions={checkoutSessionTerms}
               collapsible={false}
+              items={paymentResult?.flexiBookingId ? defaultFlexiTermsItems().slice(1) : []}
             />
             <SessionTermsAcceptanceCopy />
 
@@ -1931,6 +2063,7 @@ export default function BookingModal({
                   termsAndConditions={checkoutSessionTerms}
                   collapsible={false}
                   className="mb-1"
+                  items={[]}
                 />
                 <SessionTermsAcceptanceCopy className="mb-1" />
                 <div className="flex gap-2">
@@ -2114,6 +2247,54 @@ export default function BookingModal({
                             ? "No upcoming sessions with spots for this class. Try the week schedule or another class."
                             : "No classes with available spots right now."}
                         </p>
+                      ) : hasClassTypeFilter ? (
+                        <div className="mt-2 space-y-2" data-testid="booking-class-select">
+                          {getAvailableClasses.map((cls) => {
+                            const active = formData.classId === cls.id;
+                            return (
+                              <button
+                                key={cls.id}
+                                type="button"
+                                onClick={() => {
+                                  setFormData({ classId: cls.id });
+                                  showAlreadyBookedForClass(cls.id);
+                                }}
+                                className={cn(
+                                  "w-full rounded-xl border p-3 text-left transition-colors",
+                                  active
+                                    ? "border-primary bg-primary/5 shadow-sm"
+                                    : "border-border bg-background hover:border-primary/30 hover:bg-primary/5",
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-foreground">
+                                      {formatSessionPickerSlot(cls)}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      With {cls.instructor.name}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {cls.currentBookings}/{cls.maxCapacity} spots filled
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 flex-col items-end gap-1">
+                                    {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode) ? (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode)}
+                                      </Badge>
+                                    ) : null}
+                                    {active ? (
+                                      <span className="text-[11px] font-semibold text-primary">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
                       ) : (
                         <Select
                           value={formData.classId || undefined}
@@ -2161,8 +2342,33 @@ export default function BookingModal({
               <SessionTermsBlock
                 termsAndConditions={checkoutSessionTerms}
                 collapsible={false}
+                items={memberBookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
               />
               <SessionTermsAcceptanceCopy />
+
+              {flexiEligibleSession ? (
+                <FlexiCheckoutSection
+                  bookingMode={memberBookingMode}
+                  onBookingModeChange={setMemberBookingMode}
+                  flexiOptions={flexiOptions}
+                  isLoading={flexiOptionsLoading}
+                  isError={flexiOptionsError}
+                  onRetry={() => void refetchFlexiOptions()}
+                  selections={memberFlexiSelections}
+                  onSelectionsChange={setMemberFlexiSelections}
+                  fixedSlotsLabel={fixedSlotsLabel}
+                  fixedWeekdays={fixedWeekdays}
+                  fixedTimeLabel={fixedTimeLabel}
+                />
+              ) : null}
+
+              <Separator className="my-3" />
+              <div className="mb-3 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Step 2
+                </p>
+                <p className="text-sm font-medium">Reserve and pay.</p>
+              </div>
 
               <div className="flex gap-3 pt-4">
                 <Button
@@ -2184,7 +2390,16 @@ export default function BookingModal({
                     (showSessionPicker &&
                       getAvailableClasses.length > 0 &&
                       !formData.classId &&
-                      !sessionId)
+                      !sessionId) ||
+                    !isFlexiCheckoutReady({
+                      bookingMode: memberBookingMode,
+                      isLoading: flexiOptionsLoading,
+                      isError: flexiOptionsError,
+                      flexiOptions,
+                      selections: memberFlexiSelections,
+                      fixedWeekdays,
+                      fixedTimeLabel,
+                    })
                   }
                   data-testid="booking-confirm"
                 >

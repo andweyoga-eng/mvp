@@ -32,6 +32,8 @@ interface SessionRow {
   recurrenceWeekdays?: string | null;
   seriesId?: string | null;
   seriesWeekCount?: number | null;
+  flexiEnabled?: boolean | null;
+  flexiSelectionCount?: number | null;
   classType?: { name: string };
   instructor?: { name: string };
 }
@@ -170,6 +172,8 @@ export function WeekScheduleGrid({
     occurrenceCount: s.seriesWeekCount != null ? String(s.seriesWeekCount) : "1",
     seriesId: s.seriesId,
     seriesWeekCount: s.seriesWeekCount,
+    flexiEnabled: !!s.flexiEnabled,
+    flexiSelectionCount: s.flexiSelectionCount ?? null,
   });
 
   const showSessionActions =

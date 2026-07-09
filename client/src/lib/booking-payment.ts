@@ -33,6 +33,13 @@ export interface MemberBookingResult {
   isGuestCheckout?: boolean;
   /** ISO timestamp — seat hold expiry (A-01), duplicated at top level for convenience */
   heldUntil?: string | null;
+  flexiBookingId?: string | null;
+  flexiSummary?: Array<{
+    weekday: number;
+    weekdayLabel: string;
+    timeLabel: string;
+    sourceClassId: string;
+  }> | null;
 }
 
 export interface PaymentVerifyResult {

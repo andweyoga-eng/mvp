@@ -8,6 +8,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -112,8 +113,8 @@ export default function Explore() {
                 alt="Lunar Awakening Flow"
                 className="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105 md:h-[480px]"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent" />
-              <div className="absolute bottom-0 left-0 p-6 text-white">
+              <ImageHeroScrim variant="brand-bottom" />
+              <div className="absolute bottom-0 left-0 z-[3] p-6 text-white">
                 <span className="mb-3 inline-block rounded-md bg-dz-secondary px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
                   Masterclass
                 </span>

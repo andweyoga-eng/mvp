@@ -71,6 +71,14 @@ export async function applyPaymentFailureHold(bookingId: string): Promise<Bookin
       : BOOKING_PAYMENT_STATUS.PENDING,
   });
   if (!updated) return undefined;
+  const flexi = await storage.getFlexiBookingByBookingId(bookingId);
+  if (flexi) {
+    await storage.updateFlexiBookingPaymentHold(flexi.id, {
+      paymentStatus: updated.paymentStatus,
+      holdExpiresAt: heldUntil.toISOString(),
+      status: "pending",
+    });
+  }
 
   const cls = await storage.getClass(booking.classId);
   const classType = cls ? await storage.getClassType(cls.classTypeId) : undefined;
@@ -129,6 +137,14 @@ export async function cancelGuestCheckout(bookingId: string): Promise<Booking | 
     heldUntil: null,
   });
   if (updated) {
+    const flexi = await storage.getFlexiBookingByBookingId(bookingId);
+    if (flexi) {
+      await storage.updateFlexiBookingPaymentHold(flexi.id, {
+        paymentStatus: BOOKING_PAYMENT_STATUS.CANCELLED_BY_USER,
+        holdExpiresAt: null,
+        status: "cancelled",
+      });
+    }
     await storage.syncClassBookingCount(booking.classId);
   }
   return updated;
@@ -144,6 +160,14 @@ export async function expirePaymentHolds(): Promise<number> {
       heldUntil: null,
     });
     if (updated) {
+      const flexi = await storage.getFlexiBookingByBookingId(row.id);
+      if (flexi) {
+        await storage.updateFlexiBookingPaymentHold(flexi.id, {
+          paymentStatus: BOOKING_PAYMENT_STATUS.HOLD_EXPIRED,
+          holdExpiresAt: null,
+          status: "expired",
+        });
+      }
       await storage.syncClassBookingCount(row.classId);
       count += 1;
     }

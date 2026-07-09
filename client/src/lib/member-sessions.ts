@@ -12,6 +12,7 @@ export interface MemberSession {
   id: string;
   bookingId: string;
   classId: string;
+  anchorClassId?: string | null;
   className: string;
   instructorName: string;
   date: string;
@@ -27,12 +28,15 @@ export interface MemberSession {
   receiptUrl: string | null;
   invoiceUrl: string | null;
   bookedAt: string;
+  isFlexi?: boolean;
+  flexiBookingId?: string | null;
 }
 
 type MemberSessionApiRow = {
   id: string;
   bookingId: string;
   classId: string;
+  anchorClassId?: string | null;
   className: string;
   instructorName: string;
   sessionDate: string;
@@ -47,6 +51,8 @@ type MemberSessionApiRow = {
   receiptUrl: string | null;
   invoiceUrl: string | null;
   bookedAt: string;
+  isFlexi?: boolean;
+  flexiBookingId?: string | null;
 };
 
 export function mapMemberSessions(rows: MemberSessionApiRow[]): MemberSession[] {
@@ -56,6 +62,7 @@ export function mapMemberSessions(rows: MemberSessionApiRow[]): MemberSession[] 
       id: r.id,
       bookingId: r.bookingId,
       classId: r.classId,
+      anchorClassId: r.anchorClassId ?? null,
       className: r.className,
       instructorName: r.instructorName,
       date: r.sessionDate,
@@ -71,6 +78,8 @@ export function mapMemberSessions(rows: MemberSessionApiRow[]): MemberSession[] 
       receiptUrl: r.receiptUrl,
       invoiceUrl: r.invoiceUrl,
       bookedAt: r.bookedAt,
+      isFlexi: !!r.isFlexi,
+      flexiBookingId: r.flexiBookingId ?? null,
     };
   });
 }
@@ -137,7 +146,7 @@ export function findUpcomingMemberSessionForClass(
 ): MemberSession | undefined {
   return sessions.find(
     (s) =>
-      s.classId === classId &&
+      (s.classId === classId || s.anchorClassId === classId) &&
       s.status === "upcoming" &&
       (s.paymentStatus === "paid" || s.paymentStatus === "waived"),
   );

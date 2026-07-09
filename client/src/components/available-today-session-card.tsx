@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { FlexiInfoBadge } from "@/components/flexi-info-badge";
 
 export interface AvailableTodaySessionCardProps {
   sessionId: string;
@@ -13,6 +14,7 @@ export interface AvailableTodaySessionCardProps {
   soldOut: boolean;
   intensityLabel?: string;
   strictNoTo?: string | null;
+  flexiEnabled?: boolean;
   onBook: (sessionId: string) => void;
 }
 
@@ -34,6 +36,7 @@ export function AvailableTodaySessionCard({
   soldOut,
   intensityLabel,
   strictNoTo,
+  flexiEnabled,
   onBook,
 }: AvailableTodaySessionCardProps) {
   return (
@@ -71,6 +74,7 @@ export function AvailableTodaySessionCard({
               <span className="text-xs font-semibold">{timeLabel}</span>
             </div>
             <h4 className="font-display text-lg font-semibold leading-tight">{className}</h4>
+            {flexiEnabled ? <FlexiInfoBadge className="mt-2" /> : null}
           </div>
           <span className="min-h-[1.25rem] shrink-0 whitespace-nowrap text-right font-bold text-primary">
             {price != null && price > 0 ? `₹${price}` : "\u00a0"}

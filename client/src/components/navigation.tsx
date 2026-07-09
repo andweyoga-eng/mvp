@@ -18,6 +18,7 @@ import {
 } from "@/lib/account-profile-complete";
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { BrandLogo } from "@/components/brand-logo";
+import { AccountMenuDrawerButton } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
 
 interface NavigationProps {
@@ -27,7 +28,7 @@ interface NavigationProps {
 const DRAWER_LINKS = [
   { id: "care", label: "and We", accent: "Care" },
   { id: "vibe", label: "and We", accent: "Vibe" },
-  { id: "teach", label: "and We", accent: "Flow" },
+  { id: "teach", label: "and We", accent: "Workout" },
   { id: "story", label: "and Our", accent: "Story" },
   { id: "believe", label: "and We", accent: "Believe" },
   { id: "ally", label: "and We Meet", accent: "Coach" },
@@ -174,6 +175,24 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             <span className="text-dz-secondary">{link.accent}</span>
           </button>
         ))}
+        {user ? (
+          <div className="mt-4 border-t border-dz-glass-border pt-4">
+            <AccountMenuDrawerButton onNavigate={() => setIsDrawerOpen(false)} />
+          </div>
+        ) : (
+          <div className="mt-4 border-t border-dz-glass-border pt-4">
+            <Button
+              className="w-full rounded-full bg-primary font-bold text-primary-foreground"
+              onClick={() => {
+                setBookingAuthOpen(true);
+                setIsDrawerOpen(false);
+              }}
+              data-testid="mobile-nav-book-signup"
+            >
+              Book / Sign up
+            </Button>
+          </div>
+        )}
         {user && celebrationCount > 0 && (
           <div className="mt-4 border-t border-dz-glass-border pt-4">
             <Button

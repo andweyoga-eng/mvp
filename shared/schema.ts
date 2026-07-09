@@ -146,6 +146,10 @@ export const classes = pgTable("classes", {
   venueAddress: text("venue_address"),
   venueMapLink: text("venue_map_link"),
   venueContactPhone: text("venue_contact_phone"),
+  /** Flexi Mode lets registered members mix eligible recurring schedule days/times. */
+  flexiEnabled: boolean("flexi_enabled").notNull().default(false),
+  /** Exact number of weekly selections required when starting checkout from this schedule. */
+  flexiSelectionCount: integer("flexi_selection_count"),
   seriesId: varchar("series_id"),
   externalProvider: varchar("external_provider", { length: 32 }),
   externalEventId: text("external_event_id"),
@@ -373,6 +377,7 @@ export const subscriptions = pgTable("subscriptions", {
   userId: varchar("user_id").notNull().references(() => users.id),
   classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
   bookingId: varchar("booking_id").references(() => bookings.id),
+  flexiBookingId: varchar("flexi_booking_id"),
   subscriptionType: varchar("subscription_type", { length: 16 }).notNull(), // drop_in | trial | recurring
   totalSessions: integer("total_sessions").notNull().default(1),
   utilizedSessions: integer("utilized_sessions").notNull().default(0),
@@ -383,6 +388,52 @@ export const subscriptions = pgTable("subscriptions", {
   totalAmountPaise: integer("total_amount_paise").notNull().default(0),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const flexiBookings = pgTable("flexi_bookings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  anchorClassId: varchar("anchor_class_id").notNull().references(() => classes.id),
+  classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
+  instructorId: varchar("instructor_id").notNull().references(() => instructors.id),
+  subscriptionId: varchar("subscription_id"),
+  bookingId: varchar("booking_id").references(() => bookings.id),
+  selectionCount: integer("selection_count").notNull(),
+  horizonStartAt: timestamp("horizon_start_at").notNull(),
+  horizonEndAt: timestamp("horizon_end_at").notNull(),
+  holdExpiresAt: timestamp("hold_expires_at"),
+  paymentStatus: varchar("payment_status", { length: 24 }).notNull().default("pending"),
+  paymentMethod: varchar("payment_method", { length: 20 }),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  editCount: integer("edit_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const flexiBookingSelections = pgTable("flexi_booking_selections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  flexiBookingId: varchar("flexi_booking_id")
+    .notNull()
+    .references(() => flexiBookings.id),
+  weekday: integer("weekday").notNull(),
+  sourceSeriesId: varchar("source_series_id").notNull(),
+  sourceClassId: varchar("source_class_id").notNull().references(() => classes.id),
+  sourceTimeLabel: text("source_time_label"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const flexiBookingOccurrences = pgTable("flexi_booking_occurrences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  flexiBookingId: varchar("flexi_booking_id")
+    .notNull()
+    .references(() => flexiBookings.id),
+  classId: varchar("class_id").notNull().references(() => classes.id),
+  weekday: integer("weekday").notNull(),
+  occurrenceDate: timestamp("occurrence_date").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("reserved"),
+  holdExpiresAt: timestamp("hold_expires_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -535,6 +586,20 @@ export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   createdAt: true,
   updatedAt: true,
 });
+export const insertFlexiBookingSchema = createInsertSchema(flexiBookings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertFlexiBookingSelectionSchema = createInsertSchema(flexiBookingSelections).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertFlexiBookingOccurrenceSchema = createInsertSchema(flexiBookingOccurrences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 
 export const createCouponCodeSchema = z
   .object({
@@ -622,6 +687,16 @@ export const createBookingRequestSchema = memberBookingBodySchema.extend({
   guestConsentTerms: z.boolean().optional(),
   guestConsentAge: z.boolean().optional(),
   consentVersion: z.string().optional(),
+  flexiSelections: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        sourceSeriesId: z.string().min(1),
+        sourceClassId: z.string().min(1),
+        timeLabel: z.string().min(1),
+      }),
+    )
+    .optional(),
 });
 
 export const memberPaymentAckSchema = z.object({
@@ -712,6 +787,12 @@ export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect
 export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type FlexiBooking = typeof flexiBookings.$inferSelect;
+export type InsertFlexiBooking = z.infer<typeof insertFlexiBookingSchema>;
+export type FlexiBookingSelection = typeof flexiBookingSelections.$inferSelect;
+export type InsertFlexiBookingSelection = z.infer<typeof insertFlexiBookingSelectionSchema>;
+export type FlexiBookingOccurrence = typeof flexiBookingOccurrences.$inferSelect;
+export type InsertFlexiBookingOccurrence = z.infer<typeof insertFlexiBookingOccurrenceSchema>;
 export type CouponCode = typeof couponCodes.$inferSelect;
 export type InsertCouponCode = z.infer<typeof insertCouponCodeSchema>;
 export type CouponRedemption = typeof couponRedemptions.$inferSelect;

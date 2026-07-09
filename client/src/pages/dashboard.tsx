@@ -7,17 +7,14 @@ import {
   Timer,
   User as UserIcon,
   Flower2,
-  Flame,
   CalendarCheck,
-  Stars,
   CalendarDays,
   ArrowRight,
   Video,
-  GraduationCap,
-  Mountain,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
+import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getMeetJoinMessage } from "@shared/session-meet-access";
@@ -84,64 +81,9 @@ function formatDayTime(date: string | Date): string {
   return `${d.toLocaleDateString("en-US", { weekday: "short" })}, ${formatTime(d)}`;
 }
 
-/** Consecutive-day streak ending today/yesterday across attended sessions. */
-function wellnessStreak(completed: MemberSession[], now = new Date()): number {
-  const days = new Set(
-    completed.map((s) => new Date(s.date).toDateString()),
-  );
-  if (days.size === 0) return 0;
-  let streak = 0;
-  const cursor = new Date(now);
-  // Allow the streak to count even if today has no session yet (start from today).
-  for (let i = 0; i < 400; i += 1) {
-    if (days.has(cursor.toDateString())) {
-      streak += 1;
-    } else if (streak > 0) {
-      break;
-    } else if (i > 1) {
-      // no session today or yesterday → no active streak
-      break;
-    }
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return streak;
-}
-
-function StatTile({
-  icon: Icon,
-  label,
-  value,
-  unit,
-  accent,
-}: {
-  icon: typeof Flame;
-  label: string;
-  value: string | number;
-  unit?: string;
-  accent: string;
-}) {
-  return (
-    <GlassCard
-      className="flex items-center gap-[18px] rounded-[18px] p-[22px] transition-transform hover:-translate-y-[3px]"
-      style={{ borderLeft: `4px solid ${accent}` }}
-    >
-      <span
-        className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full"
-        style={{ background: `${accent}1a`, color: accent }}
-      >
-        <Icon className="h-[26px] w-[26px]" />
-      </span>
-      <div>
-        <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
-          {label}
-        </p>
-        <h3 className="font-display text-2xl font-bold text-primary">
-          {value}{" "}
-          {unit ? <span className="text-sm font-normal text-muted-foreground">{unit}</span> : null}
-        </h3>
-      </div>
-    </GlassCard>
-  );
+function scrollCarouselEl(el: HTMLDivElement | null, dir: number) {
+  if (!el) return;
+  el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.85, 306), behavior: "smooth" });
 }
 
 function SessionCard({
@@ -225,10 +167,65 @@ function SessionCard({
   );
 }
 
+function ClassTypeCard({
+  classType,
+  onBook,
+}: {
+  classType: ClassType;
+  onBook: (classTypeId: string) => void;
+}) {
+  const price = formatSessionPrice(classType.price);
+
+  return (
+    <article
+      className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
+      aria-label={classType.name}
+      data-testid={`hub-workout-card-${classType.id}`}
+    >
+      <div className="relative flex h-[160px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]">
+        {classType.imageUrl ? (
+          <img
+            src={classType.imageUrl}
+            alt=""
+            aria-hidden
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Flower2 className="h-16 w-16 text-primary/25" aria-hidden />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-2.5 flex items-start justify-between gap-2">
+          <h3 className="font-display text-[19px] font-semibold text-primary">{classType.name}</h3>
+          {price ? (
+            <span className="whitespace-nowrap text-base font-bold text-primary">{price}</span>
+          ) : null}
+        </div>
+        <div className="mb-[18px] flex gap-4 text-[13px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Timer className="h-[17px] w-[17px]" />
+            {classType.duration} min
+          </span>
+        </div>
+        <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-3 border-none pt-0" />
+        <button
+          type="button"
+          onClick={() => onBook(classType.id)}
+          className="mt-auto w-full rounded-xl border-[1.5px] border-primary/25 py-2.5 text-sm font-bold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
+          data-testid={`workout-book-${classType.id}`}
+        >
+          Book Now
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
   const carouselRef = useRef<HTMLDivElement>(null);
+  const workoutCarouselRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
   const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
 
@@ -268,6 +265,10 @@ export default function Dashboard() {
     ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
+  const { data: classTypes = [] } = useQuery<ClassType[]>({
+    queryKey: ["/api/class-types"],
+  });
+
   const { data: instructors = [] } = useQuery<PublicInstructor[]>({
     queryKey: ["/api/instructors"],
   });
@@ -286,11 +287,6 @@ export default function Dashboard() {
     [memberSessions],
   );
 
-  const completed = useMemo(
-    () => memberSessions.filter((s) => s.status === "completed"),
-    [memberSessions],
-  );
-
   const todaySession = useMemo(() => {
     const today = new Date().toDateString();
     const live = upcomingBooked.find((s) => s.meetJoinState === "active");
@@ -298,24 +294,12 @@ export default function Dashboard() {
     return upcomingBooked.find((s) => new Date(s.date).toDateString() === today);
   }, [upcomingBooked]);
 
-  const attendedThisMonth = useMemo(() => {
-    const now = new Date();
-    return completed.filter((s) => {
-      const d = new Date(s.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
-  }, [completed]);
-
-  const streak = useMemo(() => wellnessStreak(completed), [completed]);
-
   const reserve = (cls: EnrichedClass) => {
     setLocation(`/reserve?sessionId=${encodeURIComponent(cls.id)}&from=dashboard`);
   };
 
-  const scrollCarousel = (dir: number) => {
-    const el = carouselRef.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.85, 306), behavior: "smooth" });
+  const bookClassType = (classTypeId: string) => {
+    setLocation(`/reserve?classTypeId=${encodeURIComponent(classTypeId)}&from=dashboard`);
   };
 
   const isLive = todaySession?.meetJoinState === "active" && !!todaySession.googleMeetLink;
@@ -325,9 +309,9 @@ export default function Dashboard() {
       <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
         {/* ===== HERO ===== */}
         <section className="mb-6">
-          <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-center overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient">
+          <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-end overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient lg:items-center">
             <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#e6dff1] via-[#d9d2ea] to-[#e7d8cd]" />
-            <div className="absolute inset-y-0 right-0 z-[1] w-[62%] overflow-hidden">
+            <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
               {HERO_IMAGES.map((src, i) => (
                 <img
                   key={i}
@@ -341,9 +325,12 @@ export default function Dashboard() {
                 />
               ))}
             </div>
-            <div className="absolute inset-0 z-[2] bg-gradient-to-r from-dz-surface via-dz-surface/85 to-transparent" />
+            <ImageHeroScrim variant="light-side" />
 
-            <div className="relative z-[3] w-full max-w-[640px] p-[clamp(24px,4vw,44px)]">
+            <ImageHeroContent
+              glassOnMobile
+              className="flex w-full max-w-[640px] flex-col justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:justify-center"
+            >
               <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
                 {greeting()},{" "}
                 <span className="font-accent text-[1.15em] italic">
@@ -444,33 +431,99 @@ export default function Dashboard() {
                   <ArrowRight className="h-4 w-4" />
                 </button>
               )}
-            </div>
+            </ImageHeroContent>
           </div>
         </section>
 
-        {/* ===== STATS ===== */}
-        <section className="mb-14 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          <StatTile
-            icon={CalendarCheck}
-            label="Sessions Attended"
-            value={attendedThisMonth}
-            unit="this month"
-            accent="#34196a"
-          />
-          <StatTile
-            icon={Flame}
-            label="Upcoming Booked"
-            value={upcomingBooked.length}
-            unit={upcomingBooked.length === 1 ? "session" : "sessions"}
-            accent="#9a4612"
-          />
-          <StatTile
-            icon={Stars}
-            label="Wellness Streak"
-            value={streak}
-            unit={streak === 1 ? "day" : "days"}
-            accent="#354c3a"
-          />
+        {/* ===== AND WE WORKOUT CAROUSEL ===== */}
+        <section className="mb-14">
+          <div className="mb-5">
+            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+              and We{" "}
+              <span className="font-accent italic font-normal text-dz-secondary">Workout</span>
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Discover the perfect class for your practice level and goals
+            </p>
+          </div>
+
+          {classTypes.length === 0 ? (
+            <GlassCard className="p-10 text-center text-muted-foreground">
+              Class offerings are on the way. Please check back soon.
+            </GlassCard>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, -1)}
+                aria-label="Previous workout classes"
+                className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, 1)}
+                aria-label="Next workout classes"
+                className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+              <div
+                ref={workoutCarouselRef}
+                className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {classTypes.map((classType) => (
+                  <ClassTypeCard key={classType.id} classType={classType} onBook={bookClassType} />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ===== YOUR SCHEDULE ===== */}
+        <section className="mb-14">
+          <h2 className="mb-5 font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+            Your Schedule
+          </h2>
+          <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
+            <div className="relative z-[1]">
+              <p className="mb-5 text-sm leading-relaxed text-white/80">
+                {sessionsLoading
+                  ? "Loading your booked sessions…"
+                  : upcomingBooked.length === 0
+                    ? "You have no upcoming booked sessions yet."
+                    : `You have ${upcomingBooked.length} session${upcomingBooked.length === 1 ? "" : "s"} scheduled.`}
+              </p>
+              <div className="flex flex-col gap-2.5">
+                {upcomingBooked.slice(0, 4).map((s) => (
+                  <button
+                    key={s.bookingId}
+                    type="button"
+                    onClick={() => setLocation("/my-account#sessions")}
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.18]"
+                  >
+                    <div>
+                      <div className="text-sm font-bold text-white">{s.className}</div>
+                      <div className="text-[11px] text-white/70">{formatDayTime(s.date)}</div>
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-white" />
+                  </button>
+                ))}
+                {!sessionsLoading && upcomingBooked.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => (window.location.href = "/#schedule")}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+                  >
+                    Find a session
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
+          </div>
         </section>
 
         {/* ===== UPCOMING SESSIONS CAROUSEL ===== */}
@@ -502,7 +555,7 @@ export default function Dashboard() {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => scrollCarousel(-1)}
+                onClick={() => scrollCarouselEl(carouselRef.current, -1)}
                 aria-label="Previous sessions"
                 className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
               >
@@ -510,7 +563,7 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => scrollCarousel(1)}
+                onClick={() => scrollCarouselEl(carouselRef.current, 1)}
                 aria-label="Next sessions"
                 className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
               >
@@ -528,135 +581,49 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* ===== MENTORS + YOUR SCHEDULE ===== */}
-        <section className="mb-14 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-[18px]">
-            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-              Your Mentors
-            </h2>
-            <div className="flex flex-col gap-3.5">
-              {instructors.slice(0, 4).map((mentor) => (
-                <GlassCard
-                  key={mentor.id}
-                  className="flex items-center gap-3.5 rounded-2xl p-3.5 transition-transform hover:translate-x-1.5"
-                >
-                  <div className="flex h-[54px] w-[54px] flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary via-[#4b3282] to-dz-secondary font-display text-lg font-bold text-white">
-                    {mentor.imageUrl ? (
-                      <img
-                        src={mentor.imageUrl}
-                        alt={mentor.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      mentor.name
-                        .split(" ")
-                        .map((p) => p[0])
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase()
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-display text-base font-semibold text-primary">
-                      {mentor.name}
-                    </h4>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {mentor.specialties?.[0] ?? mentor.bio ?? "andWeYoga Instructor"}
-                    </p>
-                  </div>
-                </GlassCard>
-              ))}
-              {instructors.length === 0 && (
-                <GlassCard className="p-6 text-center text-sm text-muted-foreground">
-                  Mentor profiles are on the way.
-                </GlassCard>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-[18px]">
-            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-              Your Schedule
-            </h2>
-            <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
-              <div className="relative z-[1]">
-                <p className="mb-5 text-sm leading-relaxed text-white/80">
-                  {sessionsLoading
-                    ? "Loading your booked sessions…"
-                    : upcomingBooked.length === 0
-                      ? "You have no upcoming booked sessions yet."
-                      : `You have ${upcomingBooked.length} session${upcomingBooked.length === 1 ? "" : "s"} scheduled.`}
-                </p>
-                <div className="flex flex-col gap-2.5">
-                  {upcomingBooked.slice(0, 4).map((s) => (
-                    <button
-                      key={s.bookingId}
-                      type="button"
-                      onClick={() => setLocation("/my-account#sessions")}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.18]"
-                    >
-                      <div>
-                        <div className="text-sm font-bold text-white">{s.className}</div>
-                        <div className="text-[11px] text-white/70">{formatDayTime(s.date)}</div>
-                      </div>
-                      <ArrowRight className="h-5 w-5 text-white" />
-                    </button>
-                  ))}
-                  {!sessionsLoading && upcomingBooked.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={() => (window.location.href = "/#schedule")}
-                      className="flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
-                    >
-                      Find a session
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
+        {/* ===== YOUR MENTORS ===== */}
+        <section className="mb-14">
+          <h2 className="mb-5 font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+            Your Mentors
+          </h2>
+          <div className="flex flex-col gap-3.5">
+            {instructors.slice(0, 4).map((mentor) => (
+              <GlassCard
+                key={mentor.id}
+                className="flex items-center gap-3.5 rounded-2xl p-3.5 transition-transform hover:translate-x-1.5"
+              >
+                <div className="flex h-[54px] w-[54px] flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary via-[#4b3282] to-dz-secondary font-display text-lg font-bold text-white">
+                  {mentor.imageUrl ? (
+                    <img
+                      src={mentor.imageUrl}
+                      alt={mentor.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    mentor.name
+                      .split(" ")
+                      .map((p) => p[0])
+                      .slice(0, 2)
+                      .join("")
+                      .toUpperCase()
                   )}
                 </div>
-              </div>
-              <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
-            </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-display text-base font-semibold text-primary">
+                    {mentor.name}
+                  </h4>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {mentor.specialties?.[0] ?? mentor.bio ?? "andWeYoga Instructor"}
+                  </p>
+                </div>
+              </GlassCard>
+            ))}
+            {instructors.length === 0 && (
+              <GlassCard className="p-6 text-center text-sm text-muted-foreground">
+                Mentor profiles are on the way.
+              </GlassCard>
+            )}
           </div>
-        </section>
-
-        {/* ===== COMING SOON ===== */}
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <GlassCard className="flex flex-col justify-between rounded-[22px] p-[30px]">
-            <div>
-              <div className="mb-[22px] flex items-center justify-between">
-                <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-dz-secondary/10 text-dz-secondary">
-                  <GraduationCap className="h-[25px] w-[25px]" />
-                </span>
-                <span className="rounded-md bg-dz-secondary/10 px-2.5 py-1 text-[11px] font-bold tracking-[0.1em] text-dz-secondary">
-                  COMING SOON
-                </span>
-              </div>
-              <h3 className="mb-3 font-display text-[26px] font-bold text-primary">
-                Workshops &amp; Events
-              </h3>
-              <p className="text-[15px] leading-relaxed text-muted-foreground">
-                Curated intensive sessions for deep technical mastery and spiritual growth. Stay
-                tuned for our inaugural schedule.
-              </p>
-            </div>
-          </GlassCard>
-          <GlassCard className="flex flex-col justify-between rounded-[22px] p-[30px]">
-            <div>
-              <div className="mb-[22px] flex items-center justify-between">
-                <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-primary/10 text-primary">
-                  <Mountain className="h-[25px] w-[25px]" />
-                </span>
-                <span className="rounded-md bg-primary/10 px-2.5 py-1 text-[11px] font-bold tracking-[0.1em] text-primary">
-                  COMING SOON
-                </span>
-              </div>
-              <h3 className="mb-3 font-display text-[26px] font-bold text-primary">Trips &amp; Treks</h3>
-              <p className="text-[15px] leading-relaxed text-muted-foreground">
-                Immersive wellness retreats in the world's most serene natural landscapes. Launching
-                soon.
-              </p>
-            </div>
-          </GlassCard>
         </section>
       </PageContainer>
       <ReleaseSpotToast visible={showReleaseToast} />

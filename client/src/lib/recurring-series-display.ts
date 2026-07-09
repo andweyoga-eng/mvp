@@ -40,6 +40,11 @@ export function formatSessionTime(date: Date | string): string {
   });
 }
 
+export function formatCompactRecurringWeekdayList(weekdays: number[]): string {
+  if (!weekdays.length) return "";
+  return weekdays.map((d) => WEEKDAY_LABELS[d] ?? "").join("-");
+}
+
 export function formatSessionLongDate(date: Date | string): string {
   return new Date(date).toLocaleDateString("en-US", {
     weekday: "short",
@@ -59,6 +64,17 @@ export function formatRecurringScheduleLine(
   const when = timeSource ?? session.date;
   if (!days || !when) return "";
   return `Every ${days} · ${formatSessionTime(when)}`;
+}
+
+export function formatFixedSlotScheduleLine(
+  session: RecurringSessionLike,
+  timeSource?: Date | string,
+): string {
+  const weekdays = getRecurringWeekdays(session);
+  const days = formatCompactRecurringWeekdayList(weekdays);
+  const when = timeSource ?? session.date;
+  if (!days || !when) return "";
+  return `${days} ${formatSessionTime(when)}`;
 }
 
 export function formatSeriesDurationWeeks(seriesWeekCount: number | null | undefined): string | null {

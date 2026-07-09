@@ -35,6 +35,20 @@ export interface PaymentSuccessPayload {
   invoiceUrl: string | null;
 }
 
+async function syncFlexiPaymentStatusForBooking(
+  bookingId: string,
+  paymentStatus: "paid" | "pending" | "failed",
+): Promise<void> {
+  const flexi = await storage.getFlexiBookingByBookingId(bookingId);
+  if (!flexi) return;
+
+  await storage.updateFlexiBookingPaymentHold(flexi.id, {
+    paymentStatus,
+    holdExpiresAt: paymentStatus === "paid" ? null : flexi.holdExpiresAt?.toISOString() ?? null,
+    status: paymentStatus === "paid" ? "paid" : flexi.status,
+  });
+}
+
 export async function markPaymentPaid(params: {
   paymentId: string;
   razorpayPaymentId: string;
@@ -45,6 +59,7 @@ export async function markPaymentPaid(params: {
   if (!payment) return null;
 
   if (payment.status === "paid") {
+    await syncFlexiPaymentStatusForBooking(payment.bookingId, "paid");
     return buildPayloadFromPayment(payment);
   }
 
@@ -121,6 +136,7 @@ export async function markPaymentPaid(params: {
     paymentStatus: "paid",
     heldUntil: null,
   });
+  await syncFlexiPaymentStatusForBooking(payment.bookingId, "paid");
 
   if (payment.couponId && (payment.discountAmountPaise ?? 0) > 0) {
     const bookingForCoupon = await storage.getBooking(payment.bookingId);
@@ -249,6 +265,7 @@ export async function verifyManualPayment(
         : "pending";
 
   await storage.updateBookingPaymentStatus(booking.id, paymentStatus);
+  await syncFlexiPaymentStatusForBooking(booking.id, paymentStatus);
   await storage.updatePayment(payment.id, {
     status: paymentStatus,
     adminDisposition: disposition,
@@ -280,6 +297,14 @@ export async function confirmQrBookingPayment(bookingId: string): Promise<Paymen
 
   const updated = await storage.confirmQrBooking(bookingId);
   if (!updated) return null;
+  const flexi = await storage.getFlexiBookingByBookingId(bookingId);
+  if (flexi) {
+    await storage.updateFlexiBookingPaymentHold(flexi.id, {
+      paymentStatus: "paid",
+      holdExpiresAt: null,
+      status: "paid",
+    });
+  }
 
   await sendBookingConfirmationEmail(booking.id);
 

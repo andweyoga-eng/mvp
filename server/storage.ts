@@ -23,6 +23,12 @@ import {
   type InsertNotifyRequest,
   type Subscription,
   type InsertSubscription,
+  type FlexiBooking,
+  type InsertFlexiBooking,
+  type FlexiBookingSelection,
+  type InsertFlexiBookingSelection,
+  type FlexiBookingOccurrence,
+  type InsertFlexiBookingOccurrence,
   type CouponCode,
   type InsertCouponCode,
   type CouponRedemption,
@@ -46,6 +52,9 @@ import {
   adminProfiles,
   classTypeNotifyRequests,
   subscriptions,
+  flexiBookings,
+  flexiBookingSelections,
+  flexiBookingOccurrences,
   couponCodes,
   couponRedemptions,
   couponShareLogs,
@@ -60,10 +69,19 @@ import {
   userDocuments,
   DEFAULT_CLASS_INTENSITY,
 } from "@shared/schema";
+import {
+  buildFlexiCandidate,
+  formatFlexiTimeLabel,
+  isFlexiEnabledSchedule,
+  resolveFlexiSelectionCount,
+  sharesFlexiPool,
+  type FlexiSelectionCandidate,
+} from "@shared/flexi-mode";
+import { parseRecurrenceWeekdays, WEEKDAY_LABELS } from "@shared/session-schedule";
 import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like, ne } from "drizzle-orm";
 import {
   QA_AGENT_CLASS_TYPE_PREFIX,
   QA_FIXTURE_CLASS_TYPE_PREFIX,
@@ -85,6 +103,7 @@ import {
   existingBookingBlocksNewBooking,
 } from "@shared/member-booking-duplicate";
 import { getMeetJoinState } from "@shared/session-meet-access";
+import { resolveEffectiveSessionPaymentStatus } from "@shared/session-payment-status";
 import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod, usesHostedCheckout } from "@shared/payment-gateway";
 import {
   evaluateCouponApplicability,
@@ -124,6 +143,7 @@ export interface MemberSessionRow {
   id: string;
   bookingId: string;
   classId: string;
+  anchorClassId: string | null;
   className: string;
   instructorName: string;
   sessionDate: string;
@@ -141,6 +161,8 @@ export interface MemberSessionRow {
   bookedAt: string;
   sessionDurationMinutes: number;
   meetJoinState: "hidden" | "disabled" | "active";
+  isFlexi: boolean;
+  flexiBookingId: string | null;
 }
 
 export interface PendingQrBookingRow {
@@ -195,6 +217,7 @@ export interface SubscriptionSummaryRow {
   classTypeId: string;
   classTypeName: string;
   subscriptionType: string;
+  flexiBookingId: string | null;
   totalAmountPaise: number;
   totalSessions: number;
   utilizedSessions: number;
@@ -205,6 +228,52 @@ export interface SubscriptionSummaryRow {
   status: string;
   expiresAt: string | null;
   createdAt: string;
+}
+
+export interface FlexiOptionRow {
+  anchorClassId: string;
+  classTypeId: string;
+  classTypeName: string;
+  instructorId: string;
+  instructorName: string;
+  selectionCount: number;
+  horizonStartAt: string;
+  horizonEndAt: string;
+  options: Array<
+    FlexiSelectionCandidate & {
+      weekdayLabel: string;
+      classId: string;
+      sourceClassDate: string;
+      capacityAvailable: boolean;
+      sourceSetWeekdays: number[];
+    }
+  >;
+}
+
+export interface FlexiAdminSummaryRow {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  classTypeId: string;
+  classTypeName: string;
+  instructorId: string;
+  instructorName: string;
+  anchorClassId: string;
+  selectionCount: number;
+  editCount: number;
+  status: string;
+  paymentStatus: string;
+  horizonStartAt: string;
+  horizonEndAt: string;
+  canRematch: boolean;
+  selections: Array<{
+    weekday: number;
+    weekdayLabel: string;
+    sourceSeriesId: string;
+    sourceClassId: string;
+    timeLabel: string;
+  }>;
 }
 
 export interface CouponAdminSummaryRow {
@@ -468,7 +537,14 @@ export interface IStorage {
   getBooking(id: string): Promise<Booking | undefined>;
   getBookingsByClass(classId: string): Promise<Booking[]>;
   createBooking(booking: InsertBooking): Promise<Booking>;
-  countActiveBookingsForClass(classId: string): Promise<number>;
+  countActiveBookingsForClass(
+    classId: string,
+    options?: { excludeFlexiBookingId?: string },
+  ): Promise<number>;
+  getActiveBookingCountsForClasses(
+    classIds: string[],
+    options?: { excludeFlexiBookingId?: string },
+  ): Promise<Map<string, number>>;
   syncClassBookingCount(classId: string): Promise<number>;
   findResumableBookingForClass(userId: string, classId: string): Promise<Booking | undefined>;
   findResumableGuestBookingForClass(
@@ -520,6 +596,39 @@ export interface IStorage {
     disposition: string,
   ): Promise<Payment | undefined>;
   getMemberSessions(userId: string): Promise<MemberSessionRow[]>;
+  getFlexiOptions(
+    anchorClassId: string,
+    options?: {
+      excludeFlexiBookingId?: string;
+      selectionCount?: number;
+      horizonStartAt?: Date;
+      horizonEndAt?: Date;
+    },
+  ): Promise<FlexiOptionRow | undefined>;
+  getFlexiOptionsForBooking(
+    flexiBookingId: string,
+  ): Promise<(FlexiOptionRow & { flexiBookingId: string; editCount: number }) | undefined>;
+  listFlexiBookingsForAdmin(): Promise<FlexiAdminSummaryRow[]>;
+  createFlexiBooking(data: InsertFlexiBooking): Promise<FlexiBooking>;
+  createFlexiBookingSelections(rows: InsertFlexiBookingSelection[]): Promise<FlexiBookingSelection[]>;
+  createFlexiBookingOccurrences(rows: InsertFlexiBookingOccurrence[]): Promise<FlexiBookingOccurrence[]>;
+  getFlexiBooking(id: string): Promise<FlexiBooking | undefined>;
+  getFlexiBookingByBookingId(bookingId: string): Promise<FlexiBooking | undefined>;
+  getFlexiBookingSelections(flexiBookingId: string): Promise<FlexiBookingSelection[]>;
+  getFlexiBookingOccurrences(flexiBookingId: string): Promise<FlexiBookingOccurrence[]>;
+  updateFlexiBookingPaymentHold(
+    flexiBookingId: string,
+    data: { paymentStatus?: string; holdExpiresAt?: string | null; status?: string },
+  ): Promise<FlexiBooking | undefined>;
+  rematchFlexiBooking(
+    flexiBookingId: string,
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      timeLabel: string;
+    }>,
+  ): Promise<{ ok: boolean; message?: string; flexiBooking?: FlexiBooking }>;
   getAllPaymentQrCodes(): Promise<PaymentQrCode[]>;
   getPaymentQrCode(id: string): Promise<PaymentQrCode | undefined>;
   createPaymentQrCode(data: InsertPaymentQrCode): Promise<PaymentQrCode>;
@@ -1706,6 +1815,174 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getFlexiOptions(
+    anchorClassId: string,
+    options?: { excludeFlexiBookingId?: string; selectionCount?: number; horizonStartAt?: Date; horizonEndAt?: Date },
+  ): Promise<FlexiOptionRow | undefined> {
+    try {
+      const anchor = await this.getClass(anchorClassId);
+      if (!anchor || !isFlexiEnabledSchedule(anchor)) return undefined;
+      const classType = await this.getClassType(anchor.classTypeId);
+      const instructor = await this.getInstructor(anchor.instructorId);
+      if (!classType || !instructor) return undefined;
+      const selectionCount = options?.selectionCount ?? resolveFlexiSelectionCount(anchor);
+      const horizonStartAt = options?.horizonStartAt ?? new Date(anchor.date);
+      const horizonEndAt =
+        options?.horizonEndAt ??
+        (() => {
+          const end = new Date(anchor.date);
+          end.setDate(end.getDate() + ((anchor.seriesWeekCount ?? 1) * 7 - 1));
+          return end;
+        })();
+      const pool = (await this.getPublishedClasses()).filter(
+        (candidate) =>
+          candidate.id === anchor.id ||
+          (isFlexiEnabledSchedule(candidate) && sharesFlexiPool(anchor, candidate)),
+      );
+      const optionRows: FlexiOptionRow["options"] = [];
+      const capacityByClassId = new Map<string, number>();
+      const seriesMap = new Map<string, Class[]>();
+      for (const candidate of pool) {
+        if (!candidate.seriesId) continue;
+        const existing = seriesMap.get(candidate.seriesId) ?? [];
+        existing.push(candidate);
+        seriesMap.set(candidate.seriesId, existing);
+      }
+      for (const [, seriesClasses] of seriesMap) {
+        const sortedSeries = [...seriesClasses].sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        );
+        const candidate = sortedSeries[0];
+        const candidateEnd = new Date(candidate.date);
+        candidateEnd.setDate(candidateEnd.getDate() + ((candidate.seriesWeekCount ?? 1) * 7 - 1));
+        if (candidateEnd.getTime() < horizonEndAt.getTime()) continue;
+        let candidateCount = capacityByClassId.get(candidate.id);
+        if (candidateCount === undefined) {
+          candidateCount = options?.excludeFlexiBookingId
+            ? await this.countActiveBookingsForClass(candidate.id, {
+                excludeFlexiBookingId: options.excludeFlexiBookingId,
+              })
+            : candidate.currentBookings ?? 0;
+          capacityByClassId.set(candidate.id, candidateCount);
+        }
+        const weekdays = parseRecurrenceWeekdays(candidate.recurrenceWeekdays);
+        for (const weekday of weekdays) {
+          const weekdaySource =
+            sortedSeries.find((row) => new Date(row.date).getDay() === weekday) ?? candidate;
+          optionRows.push({
+            ...buildFlexiCandidate(weekdaySource, weekday),
+            weekdayLabel: WEEKDAY_LABELS[weekday] ?? String(weekday),
+            classId: candidate.id,
+            sourceClassDate: new Date(weekdaySource.date).toISOString(),
+            capacityAvailable: candidateCount < candidate.maxCapacity,
+            sourceSetWeekdays: weekdays,
+          });
+        }
+      }
+      return {
+        anchorClassId: anchor.id,
+        classTypeId: anchor.classTypeId,
+        classTypeName: classType.name,
+        instructorId: anchor.instructorId,
+        instructorName: instructor.name,
+        selectionCount,
+        horizonStartAt: horizonStartAt.toISOString(),
+        horizonEndAt: horizonEndAt.toISOString(),
+        options: optionRows,
+      };
+    } catch (error) {
+      console.error("[DB] Error getting Flexi options:", error);
+      return undefined;
+    }
+  }
+
+  async getFlexiOptionsForBooking(
+    flexiBookingId: string,
+  ): Promise<(FlexiOptionRow & { flexiBookingId: string; editCount: number }) | undefined> {
+    const flexi = await this.getFlexiBooking(flexiBookingId);
+    if (!flexi) return undefined;
+    const options = await this.getFlexiOptions(flexi.anchorClassId, {
+      excludeFlexiBookingId: flexiBookingId,
+      selectionCount: flexi.selectionCount,
+      horizonStartAt: new Date(flexi.horizonStartAt),
+      horizonEndAt: new Date(flexi.horizonEndAt),
+    });
+    if (!options) return undefined;
+    return {
+      ...options,
+      flexiBookingId,
+      editCount: flexi.editCount ?? 0,
+    };
+  }
+
+  async listFlexiBookingsForAdmin(): Promise<FlexiAdminSummaryRow[]> {
+    try {
+      const rows = await db
+        .select({
+          id: flexiBookings.id,
+          userId: flexiBookings.userId,
+          userName: users.name,
+          userEmail: users.email,
+          classTypeId: flexiBookings.classTypeId,
+          classTypeName: classTypes.name,
+          instructorId: flexiBookings.instructorId,
+          instructorName: instructors.name,
+          anchorClassId: flexiBookings.anchorClassId,
+          selectionCount: flexiBookings.selectionCount,
+          editCount: flexiBookings.editCount,
+          status: flexiBookings.status,
+          paymentStatus: flexiBookings.paymentStatus,
+          horizonStartAt: flexiBookings.horizonStartAt,
+          horizonEndAt: flexiBookings.horizonEndAt,
+        })
+        .from(flexiBookings)
+        .innerJoin(users, eq(flexiBookings.userId, users.id))
+        .innerJoin(classTypes, eq(flexiBookings.classTypeId, classTypes.id))
+        .innerJoin(instructors, eq(flexiBookings.instructorId, instructors.id))
+        .orderBy(desc(flexiBookings.createdAt));
+
+      const now = Date.now();
+      const summaries: FlexiAdminSummaryRow[] = [];
+      for (const row of rows) {
+        const selections = await this.getFlexiBookingSelections(row.id);
+        summaries.push({
+          id: row.id,
+          userId: row.userId,
+          userName: row.userName,
+          userEmail: row.userEmail,
+          classTypeId: row.classTypeId,
+          classTypeName: row.classTypeName,
+          instructorId: row.instructorId,
+          instructorName: row.instructorName,
+          anchorClassId: row.anchorClassId,
+          selectionCount: row.selectionCount,
+          editCount: row.editCount ?? 0,
+          status: row.status,
+          paymentStatus: row.paymentStatus,
+          horizonStartAt: new Date(row.horizonStartAt).toISOString(),
+          horizonEndAt: new Date(row.horizonEndAt).toISOString(),
+          canRematch:
+            (row.editCount ?? 0) < 1 &&
+            new Date(row.horizonEndAt).getTime() > now &&
+            (row.paymentStatus === BOOKING_PAYMENT_STATUS.PAID ||
+              row.paymentStatus === BOOKING_PAYMENT_STATUS.WAIVED ||
+              row.paymentStatus === BOOKING_PAYMENT_STATUS.PENDING),
+          selections: selections.map((selection) => ({
+            weekday: selection.weekday,
+            weekdayLabel: WEEKDAY_LABELS[selection.weekday] ?? String(selection.weekday),
+            sourceSeriesId: selection.sourceSeriesId,
+            sourceClassId: selection.sourceClassId,
+            timeLabel: selection.sourceTimeLabel ?? "",
+          })),
+        });
+      }
+      return summaries;
+    } catch (error) {
+      console.error("[DB] Error listing Flexi bookings:", error);
+      return [];
+    }
+  }
+
   async getClassesByDate(date: Date): Promise<Class[]> {
     try {
       const startOfDay = new Date(date);
@@ -2166,8 +2443,290 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async countActiveBookingsForClass(classId: string): Promise<number> {
+  async createFlexiBooking(data: InsertFlexiBooking): Promise<FlexiBooking> {
+    const [row] = await db.insert(flexiBookings).values(data).returning();
+    return row;
+  }
+
+  async createFlexiBookingSelections(
+    rows: InsertFlexiBookingSelection[],
+  ): Promise<FlexiBookingSelection[]> {
+    if (!rows.length) return [];
+    return db.insert(flexiBookingSelections).values(rows).returning();
+  }
+
+  async createFlexiBookingOccurrences(
+    rows: InsertFlexiBookingOccurrence[],
+  ): Promise<FlexiBookingOccurrence[]> {
+    if (!rows.length) return [];
+    const inserted = await db.insert(flexiBookingOccurrences).values(rows).returning();
+    const classCounts = new Map<string, number>();
+    for (const row of rows) {
+      classCounts.set(row.classId, (classCounts.get(row.classId) ?? 0) + 1);
+    }
+    for (const [classId, incrementBy] of classCounts) {
+      await db
+        .update(classes)
+        .set({
+          currentBookings: sql`${classes.currentBookings} + ${incrementBy}`,
+        })
+        .where(eq(classes.id, classId));
+    }
+    return inserted;
+  }
+
+  async getFlexiBooking(id: string): Promise<FlexiBooking | undefined> {
+    const [row] = await db.select().from(flexiBookings).where(eq(flexiBookings.id, id));
+    return row ?? undefined;
+  }
+
+  async getFlexiBookingByBookingId(bookingId: string): Promise<FlexiBooking | undefined> {
+    const [row] = await db
+      .select()
+      .from(flexiBookings)
+      .where(eq(flexiBookings.bookingId, bookingId));
+    return row ?? undefined;
+  }
+
+  async getFlexiBookingSelections(flexiBookingId: string): Promise<FlexiBookingSelection[]> {
+    return db
+      .select()
+      .from(flexiBookingSelections)
+      .where(eq(flexiBookingSelections.flexiBookingId, flexiBookingId));
+  }
+
+  async getFlexiBookingOccurrences(flexiBookingId: string): Promise<FlexiBookingOccurrence[]> {
+    return db
+      .select()
+      .from(flexiBookingOccurrences)
+      .where(eq(flexiBookingOccurrences.flexiBookingId, flexiBookingId))
+      .orderBy(flexiBookingOccurrences.occurrenceDate);
+  }
+
+  async updateFlexiBookingPaymentHold(
+    flexiBookingId: string,
+    data: { paymentStatus?: string; holdExpiresAt?: string | null; status?: string },
+  ): Promise<FlexiBooking | undefined> {
+    const holdExpiresAt =
+      data.holdExpiresAt === undefined
+        ? undefined
+        : data.holdExpiresAt === null
+          ? null
+          : new Date(data.holdExpiresAt);
+    const occurrenceStatus =
+      data.paymentStatus === BOOKING_PAYMENT_STATUS.PAID ||
+      data.paymentStatus === BOOKING_PAYMENT_STATUS.WAIVED
+        ? "paid"
+        : data.paymentStatus === BOOKING_PAYMENT_STATUS.CANCELLED_BY_USER ||
+            data.paymentStatus === BOOKING_PAYMENT_STATUS.HOLD_EXPIRED
+          ? "cancelled"
+          : undefined;
+    const [row] = await db
+      .update(flexiBookings)
+      .set({
+        ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
+        ...(data.status ? { status: data.status } : {}),
+        ...(holdExpiresAt !== undefined ? { holdExpiresAt } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(flexiBookings.id, flexiBookingId))
+      .returning();
+    if (!row) return undefined;
+    await db
+      .update(flexiBookingOccurrences)
+      .set({
+        ...(holdExpiresAt !== undefined ? { holdExpiresAt } : {}),
+        ...(occurrenceStatus ? { status: occurrenceStatus } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(flexiBookingOccurrences.flexiBookingId, flexiBookingId));
+    const occurrences = await this.getFlexiBookingOccurrences(flexiBookingId);
+    for (const occurrence of occurrences) {
+      await this.syncClassBookingCount(occurrence.classId);
+    }
+    return row;
+  }
+
+  async rematchFlexiBooking(
+    flexiBookingId: string,
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      timeLabel: string;
+    }>,
+  ): Promise<{ ok: boolean; message?: string; flexiBooking?: FlexiBooking }> {
+    const flexi = await this.getFlexiBooking(flexiBookingId);
+    if (!flexi) return { ok: false, message: "Flexi booking not found" };
+    if (flexi.editCount >= 1) {
+      return { ok: false, message: "This Flexi booking has already been rematched once." };
+    }
+    if (new Date(flexi.horizonEndAt).getTime() <= Date.now()) {
+      return { ok: false, message: "This Flexi package has already ended." };
+    }
+    if (selections.length !== flexi.selectionCount) {
+      return {
+        ok: false,
+        message: `Choose exactly ${flexi.selectionCount} weekly selections.`,
+      };
+    }
+    const weekdaySet = new Set<number>();
+    for (const selection of selections) {
+      if (weekdaySet.has(selection.weekday)) {
+        return { ok: false, message: "Only one slot per weekday is allowed." };
+      }
+      weekdaySet.add(selection.weekday);
+    }
+
+    const horizonStart = new Date(flexi.horizonStartAt);
+    const horizonEnd = new Date(flexi.horizonEndAt);
+    const weekCount = Math.max(
+      1,
+      Math.round((horizonEnd.getTime() - horizonStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1,
+    );
+    const poolClasses = (await this.getClassesInRange(horizonStart, horizonEnd)).filter(
+      (candidate) =>
+        isFlexiEnabledSchedule(candidate) &&
+        candidate.classTypeId === flexi.classTypeId &&
+        candidate.instructorId === flexi.instructorId,
+    );
+    const occurrencesToReserve: Array<{
+      classId: string;
+      weekday: number;
+      occurrenceDate: Date;
+    }> = [];
+    for (const selection of selections) {
+      const source = await this.getClass(selection.sourceClassId);
+      if (
+        !source ||
+        !isFlexiEnabledSchedule(source) ||
+        source.classTypeId !== flexi.classTypeId ||
+        source.instructorId !== flexi.instructorId ||
+        source.seriesId !== selection.sourceSeriesId
+      ) {
+        return { ok: false, message: "One or more Flexi selections are invalid." };
+      }
+      const sourceEnd = new Date(source.date);
+      sourceEnd.setDate(sourceEnd.getDate() + ((source.seriesWeekCount ?? 1) * 7 - 1));
+      if (sourceEnd.getTime() < horizonEnd.getTime()) {
+        return {
+          ok: false,
+          message: "Selected Flexi slot does not cover the full package duration.",
+        };
+      }
+      const matchingOccurrences = poolClasses
+        .filter(
+          (candidate) =>
+            candidate.seriesId === selection.sourceSeriesId &&
+            new Date(candidate.date).getDay() === selection.weekday,
+        )
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const neededOccurrences = matchingOccurrences
+        .filter(
+          (candidate) =>
+            new Date(candidate.date).getTime() >= horizonStart.getTime() &&
+            new Date(candidate.date).getTime() <= horizonEnd.getTime(),
+        )
+        .slice(0, weekCount);
+      if (neededOccurrences.length < weekCount) {
+        return {
+          ok: false,
+          message: "Selected Flexi slot does not have enough weeks to cover your package.",
+        };
+      }
+      for (const occurrence of neededOccurrences) {
+        const activeCount = await this.countActiveBookingsForClass(occurrence.id, {
+          excludeFlexiBookingId: flexiBookingId,
+        });
+        if (activeCount >= occurrence.maxCapacity) {
+          return {
+            ok: false,
+            message: "One of the selected Flexi slots is full. Choose another combination.",
+          };
+        }
+        occurrencesToReserve.push({
+          classId: occurrence.id,
+          weekday: selection.weekday,
+          occurrenceDate: new Date(occurrence.date),
+        });
+      }
+    }
+
+    const previousOccurrences = await this.getFlexiBookingOccurrences(flexiBookingId);
+    const now = new Date();
+    const futurePrevious = previousOccurrences.filter(
+      (occurrence) => new Date(occurrence.occurrenceDate).getTime() > now.getTime(),
+    );
+    if (futurePrevious.length) {
+      await db
+        .update(flexiBookingOccurrences)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(
+          and(
+            eq(flexiBookingOccurrences.flexiBookingId, flexiBookingId),
+            gt(flexiBookingOccurrences.occurrenceDate, now),
+          ),
+        );
+    }
+    await db
+      .delete(flexiBookingSelections)
+      .where(eq(flexiBookingSelections.flexiBookingId, flexiBookingId));
+    await this.createFlexiBookingSelections(
+      selections.map((selection) => ({
+        flexiBookingId,
+        weekday: selection.weekday,
+        sourceSeriesId: selection.sourceSeriesId,
+        sourceClassId: selection.sourceClassId,
+        sourceTimeLabel: selection.timeLabel,
+      })),
+    );
+    await this.createFlexiBookingOccurrences(
+      occurrencesToReserve.map((occurrence) => ({
+        flexiBookingId,
+        classId: occurrence.classId,
+        weekday: occurrence.weekday,
+        occurrenceDate: occurrence.occurrenceDate,
+        status:
+          flexi.paymentStatus === BOOKING_PAYMENT_STATUS.PAID ||
+          flexi.paymentStatus === BOOKING_PAYMENT_STATUS.WAIVED
+            ? "paid"
+            : "reserved",
+        holdExpiresAt: flexi.holdExpiresAt,
+      })),
+    );
+    const [updated] = await db
+      .update(flexiBookings)
+      .set({
+        editCount: (flexi.editCount ?? 0) + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(flexiBookings.id, flexiBookingId))
+      .returning();
+    const touchedClassIds = new Set([
+      ...futurePrevious.map((row) => row.classId),
+      ...occurrencesToReserve.map((row) => row.classId),
+    ]);
+    for (const classId of touchedClassIds) {
+      await this.syncClassBookingCount(classId);
+    }
+    return { ok: true, flexiBooking: updated };
+  }
+
+  async countActiveBookingsForClass(
+    classId: string,
+    options?: { excludeFlexiBookingId?: string },
+  ): Promise<number> {
+    const counts = await this.getActiveBookingCountsForClasses([classId], options);
+    return counts.get(classId) ?? 0;
+  }
+
+  async getActiveBookingCountsForClasses(
+    classIds: string[],
+    options?: { excludeFlexiBookingId?: string },
+  ): Promise<Map<string, number>> {
     try {
+      const ids = [...new Set(classIds.filter(Boolean))];
+      if (!ids.length) return new Map();
       const capacityFilter = or(
         inArray(bookings.paymentStatus, [
           BOOKING_PAYMENT_STATUS.PAID,
@@ -2183,8 +2742,11 @@ export class DatabaseStorage implements IStorage {
         ),
       );
 
-      const rows = await db
-        .select({ id: bookings.id })
+      const bookingRows = await db
+        .select({
+          classId: bookings.classId,
+          value: sql<number>`count(distinct ${bookings.id})`,
+        })
         .from(bookings)
         .leftJoin(
           userSessionMappings,
@@ -2195,15 +2757,56 @@ export class DatabaseStorage implements IStorage {
         )
         .where(
           and(
-            eq(bookings.classId, classId),
+            inArray(bookings.classId, ids),
             capacityFilter,
             or(isNull(userSessionMappings.status), sql`${userSessionMappings.status} <> 'cancelled'`),
           ),
-        );
-      return rows.length;
+        )
+        .groupBy(bookings.classId);
+      const flexiConditions = [
+        inArray(flexiBookingOccurrences.classId, ids),
+        inArray(flexiBookingOccurrences.status, ["reserved", "paid"]),
+        or(
+          eq(flexiBookings.paymentStatus, BOOKING_PAYMENT_STATUS.PAID),
+          eq(flexiBookings.paymentStatus, BOOKING_PAYMENT_STATUS.WAIVED),
+          and(
+            eq(flexiBookings.paymentStatus, BOOKING_PAYMENT_STATUS.PENDING),
+            or(
+              isNull(flexiBookings.holdExpiresAt),
+              gt(flexiBookings.holdExpiresAt, sql`NOW()`),
+            ),
+          ),
+          and(
+            eq(flexiBookings.paymentStatus, BOOKING_PAYMENT_STATUS.FAILED),
+            gt(flexiBookings.holdExpiresAt, sql`NOW()`),
+          ),
+        ),
+      ];
+      if (options?.excludeFlexiBookingId) {
+        flexiConditions.push(ne(flexiBookings.id, options.excludeFlexiBookingId));
+      }
+      const flexiRows = await db
+        .select({
+          classId: flexiBookingOccurrences.classId,
+          value: count(),
+        })
+        .from(flexiBookingOccurrences)
+        .innerJoin(flexiBookings, eq(flexiBookingOccurrences.flexiBookingId, flexiBookings.id))
+        .where(and(...flexiConditions))
+        .groupBy(flexiBookingOccurrences.classId);
+
+      const counts = new Map<string, number>();
+      for (const id of ids) counts.set(id, 0);
+      for (const row of bookingRows) {
+        counts.set(row.classId, (counts.get(row.classId) ?? 0) + Number(row.value ?? 0));
+      }
+      for (const row of flexiRows) {
+        counts.set(row.classId, (counts.get(row.classId) ?? 0) + Number(row.value ?? 0));
+      }
+      return counts;
     } catch (error) {
       console.error("[DB] Error counting active bookings:", error);
-      return 0;
+      return new Map(classIds.filter(Boolean).map((id) => [id, 0]));
     }
   }
 
@@ -2338,10 +2941,38 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
 
       if (!row) return false;
-      return existingBookingBlocksNewBooking({
+      const hasStandardBooking = existingBookingBlocksNewBooking({
         hasBookingRow: true,
         mappingStatus: row.mappingStatus,
         paymentStatus: row.paymentStatus,
+        classSessionStartMs: new Date(cls.date).getTime(),
+      });
+      if (hasStandardBooking) return true;
+
+      const [flexiRow] = await db
+        .select({
+          paymentStatus: flexiBookings.paymentStatus,
+        })
+        .from(flexiBookings)
+        .leftJoin(
+          flexiBookingOccurrences,
+          eq(flexiBookingOccurrences.flexiBookingId, flexiBookings.id),
+        )
+        .where(
+          and(
+            eq(flexiBookings.userId, userId),
+            or(
+              eq(flexiBookings.anchorClassId, classId),
+              eq(flexiBookingOccurrences.classId, classId),
+            ),
+          ),
+        )
+        .limit(1);
+
+      return existingBookingBlocksNewBooking({
+        hasBookingRow: !!flexiRow,
+        mappingStatus: "upcoming",
+        paymentStatus: flexiRow?.paymentStatus ?? "pending",
         classSessionStartMs: new Date(cls.date).getTime(),
       });
     } catch (error) {
@@ -2825,8 +3456,9 @@ export class DatabaseStorage implements IStorage {
             eq(userSessionMappings.classId, bookings.classId),
           ),
         )
+        .leftJoin(flexiBookings, eq(flexiBookings.bookingId, bookings.id))
         .leftJoin(payments, eq(payments.bookingId, bookings.id))
-        .where(eq(bookings.userId, userId))
+        .where(and(eq(bookings.userId, userId), isNull(flexiBookings.id)))
         .orderBy(sql`${bookings.createdAt} DESC`);
 
       const seen = new Set<string>();
@@ -2837,7 +3469,7 @@ export class DatabaseStorage implements IStorage {
       });
 
       const now = new Date();
-      return unique.map((r) => {
+      const mappedStandard = unique.map((r) => {
         const isPaid = r.paymentStatus === "paid" || r.paymentStatus === "waived";
         const { status, isLive } = classifyMemberSessionStatus({
           mappingStatus: r.mappingStatus ?? "upcoming",
@@ -2863,6 +3495,7 @@ export class DatabaseStorage implements IStorage {
           id: r.mappingId ?? r.bookingId,
           bookingId: r.bookingId,
           classId: r.classId,
+          anchorClassId: null,
           className: r.className,
           instructorName: r.instructorName,
           sessionDate: r.sessionDate.toISOString(),
@@ -2880,8 +3513,93 @@ export class DatabaseStorage implements IStorage {
           bookedAt: r.bookedAt.toISOString(),
           sessionDurationMinutes: duration,
           meetJoinState,
+          isFlexi: false,
+          flexiBookingId: null,
         };
       });
+      const flexiRows = await db
+        .select({
+          occurrenceId: flexiBookingOccurrences.id,
+          flexiBookingId: flexiBookings.id,
+          bookingId: bookings.id,
+          classId: classes.id,
+          anchorClassId: flexiBookings.anchorClassId,
+          className: classTypes.name,
+          instructorName: instructors.name,
+          sessionDate: classes.date,
+          sessionDurationMinutes: classTypes.duration,
+          googleMeetLink: classes.googleMeetLink,
+          classCancelledAt: classes.cancelledAt,
+          classCancellationReason: classes.cancellationReason,
+          paymentStatus: flexiBookings.paymentStatus,
+          bookingPaymentStatus: bookings.paymentStatus,
+          paymentRecordStatus: payments.status,
+          paymentMethod: flexiBookings.paymentMethod,
+          paidAt: payments.paidAt,
+          receiptUrl: payments.receiptUrl,
+          invoiceUrl: payments.invoiceUrl,
+          amountPaise: payments.amountPaise,
+          bookedAt: flexiBookings.createdAt,
+        })
+        .from(flexiBookingOccurrences)
+        .innerJoin(flexiBookings, eq(flexiBookingOccurrences.flexiBookingId, flexiBookings.id))
+        .innerJoin(classes, eq(flexiBookingOccurrences.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .innerJoin(instructors, eq(classes.instructorId, instructors.id))
+        .leftJoin(bookings, eq(flexiBookings.bookingId, bookings.id))
+        .leftJoin(payments, eq(payments.bookingId, bookings.id))
+        .where(eq(flexiBookings.userId, userId));
+      const mappedFlexi = flexiRows.map((r) => {
+        const effectivePaymentStatus = resolveEffectiveSessionPaymentStatus({
+          sessionPaymentStatus: r.paymentStatus,
+          bookingPaymentStatus: r.bookingPaymentStatus,
+          paymentRecordStatus: r.paymentRecordStatus,
+        });
+        const isPaid =
+          effectivePaymentStatus === "paid" || effectivePaymentStatus === "waived";
+        const { status, isLive } = classifyMemberSessionStatus({
+          mappingStatus: "upcoming",
+          classCancelledAt: r.classCancelledAt,
+          sessionStart: r.sessionDate,
+          durationMinutes: r.sessionDurationMinutes,
+          now,
+        });
+        const duration = r.sessionDurationMinutes ?? 60;
+        const meetJoinState = getMeetJoinState({
+          sessionStart: r.sessionDate,
+          sessionDurationMinutes: duration,
+          isPaid,
+          hasMeetLink: !!r.googleMeetLink?.trim(),
+        });
+        return {
+          id: r.occurrenceId,
+          bookingId: r.bookingId ?? r.occurrenceId,
+          classId: r.classId,
+          anchorClassId: r.anchorClassId,
+          className: r.className,
+          instructorName: r.instructorName,
+          sessionDate: r.sessionDate.toISOString(),
+          googleMeetLink: isPaid ? r.googleMeetLink : null,
+          status,
+          isLive,
+          cancellationReason: r.classCancellationReason?.trim() || null,
+          paymentStatus: effectivePaymentStatus,
+          paymentMethod: r.paymentMethod ?? null,
+          verificationStatus: null,
+          paidAt: r.paidAt?.toISOString() ?? null,
+          receiptUrl: r.receiptUrl,
+          invoiceUrl: r.invoiceUrl,
+          amountPaise: r.amountPaise,
+          bookedAt: r.bookedAt.toISOString(),
+          sessionDurationMinutes: duration,
+          meetJoinState,
+          isFlexi: true,
+          flexiBookingId: r.flexiBookingId,
+        };
+      });
+      return [...mappedStandard, ...mappedFlexi].sort(
+        (a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime(),
+      );
     } catch (error) {
       console.error("[DB] Error getting member sessions:", error);
       return [];
@@ -3070,7 +3788,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  /** Keep And We Flow catalogue images in sync when assets are added to the repo. */
+  /** Keep And We Workout catalogue images in sync when assets are added to the repo. */
   private async syncClassTypeImages(): Promise<void> {
     const imageByName: Record<string, string> = {
       "Hatha Yoga": "/attached_assets/hatha_yoga_1756809174781.png",
@@ -3339,6 +4057,7 @@ export class DatabaseStorage implements IStorage {
         classTypeId: subscriptions.classTypeId,
         classTypeName: classTypes.name,
         subscriptionType: subscriptions.subscriptionType,
+        flexiBookingId: subscriptions.flexiBookingId,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
         utilizedSessions: subscriptions.utilizedSessions,
@@ -3371,6 +4090,7 @@ export class DatabaseStorage implements IStorage {
         classTypeId: subscriptions.classTypeId,
         classTypeName: classTypes.name,
         subscriptionType: subscriptions.subscriptionType,
+        flexiBookingId: subscriptions.flexiBookingId,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
         utilizedSessions: subscriptions.utilizedSessions,

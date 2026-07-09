@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { FlexiInfoBadge } from "@/components/flexi-info-badge";
 
 interface ClassType {
   id: string;
@@ -44,6 +45,9 @@ interface ScheduleDay {
     maxCapacity: number;
     sessionFrequency?: string | null;
     deliveryMode?: string | null;
+    recurrenceKind?: string | null;
+    seriesId?: string | null;
+    flexiEnabled?: boolean | null;
   }>;
 }
 
@@ -240,6 +244,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
           title: string;
           meta: string;
           badge: string | null;
+          flexiEnabled: boolean;
           initials: string;
           soldOut: boolean;
           sessionId: string;
@@ -262,6 +267,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
           title: cls.classType.name,
           meta: `${formatTimeIST(cls.date)} · ${cls.instructor.name}`,
           badge: getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode),
+          flexiEnabled: !!cls.flexiEnabled && cls.recurrenceKind === "weekly" && !!cls.seriesId,
           initials: instructorInitials(cls.instructor.name),
           soldOut,
           sessionId: cls.id,
@@ -359,6 +365,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                       imageUrl={imageUrl}
                       soldOut={soldOut}
                       strictNoTo={cls.classType.strictNoTo}
+                      flexiEnabled={!!cls.flexiEnabled && cls.recurrenceKind === "weekly" && !!cls.seriesId}
                       onBook={(id) => onBookingClick(id)}
                     />
                   );
@@ -547,13 +554,16 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                           {row.initials}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div
-                            className={cn(
-                              "font-display text-sm font-semibold",
-                              row.soldOut ? "text-dz-muted line-through" : "text-foreground",
-                            )}
-                          >
-                            {row.title}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div
+                              className={cn(
+                                "font-display text-sm font-semibold",
+                                row.soldOut ? "text-dz-muted line-through" : "text-foreground",
+                              )}
+                            >
+                              {row.title}
+                            </div>
+                            {row.flexiEnabled ? <FlexiInfoBadge /> : null}
                           </div>
                           <div className="text-xs text-dz-muted">{row.meta}</div>
                         </div>

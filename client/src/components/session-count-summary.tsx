@@ -22,7 +22,16 @@ type NestSession = {
   date: string;
   instructorName: string;
   isLive?: boolean;
+  isFlexi?: boolean;
 };
+
+function flexiBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800">
+      Flexi
+    </span>
+  );
+}
 
 function groupSessionsByClassName(sessions: NestSession[]): Map<string, NestSession[]> {
   const map = new Map<string, NestSession[]>();
@@ -79,11 +88,13 @@ function PackageNest({
   title,
   subtitle,
   sessions,
+  isFlexi = false,
   defaultOpen = false,
 }: {
   title: string;
   subtitle: string;
   sessions: NestSession[];
+  isFlexi?: boolean;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -97,7 +108,10 @@ function PackageNest({
   if (sessions.length === 0) {
     return (
       <div className="rounded-xl border border-primary/10 bg-white/80 px-3 py-2.5">
-        <p className="text-sm font-semibold text-primary">{title}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-primary">{title}</p>
+          {isFlexi ? flexiBadge() : null}
+        </div>
         <p className="text-xs text-muted-foreground">{subtitle}</p>
         <p className="mt-1 text-xs text-muted-foreground">No session rows yet for this package.</p>
       </div>
@@ -114,7 +128,10 @@ function PackageNest({
         >
           <Package className="h-4 w-4 shrink-0 text-primary/70" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-primary">{title}</span>
+            <span className="flex items-center gap-2">
+              <span className="block truncate text-sm font-semibold text-primary">{title}</span>
+              {isFlexi ? flexiBadge() : null}
+            </span>
             <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
           </span>
           <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">
@@ -225,6 +242,7 @@ export function PackageUsageCollapsible({
                     title={sub.classTypeName}
                     subtitle={`${formatSubscriptionUsage(balance)} · ${sub.subscriptionType.replace("_", " ")} batch`}
                     sessions={packageSessions}
+                    isFlexi={!!sub.flexiBookingId}
                   />
                 );
               })}

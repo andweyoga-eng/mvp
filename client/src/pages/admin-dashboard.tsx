@@ -35,6 +35,7 @@ import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
 import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
 import { OffersPromotionsPanel } from "@/components/admin/offers-promotions-panel";
+import { FlexiRematchPanel } from "@/components/admin/flexi-rematch-panel";
 import { PlatformControlsPanel } from "@/components/admin/platform-controls-panel";
 import { ConsentLogPanel } from "@/components/admin/consent-log-panel";
 import {
@@ -104,6 +105,8 @@ interface ClassSession {
   recurrenceWeekdays?: string | null;
   seriesId?: string | null;
   seriesWeekCount?: number | null;
+  flexiEnabled?: boolean | null;
+  flexiSelectionCount?: number | null;
   classType?: { name: string };
   instructor?: { name: string };
 }
@@ -1213,6 +1216,11 @@ export default function AdminDashboard() {
                 <TabsTrigger value="subscriptions-list" className={adminSectionTabTrigger}>
                   Subscriptions
                 </TabsTrigger>
+                {isSuperAdmin ? (
+                  <TabsTrigger value="flexi-rematch" className={adminSectionTabTrigger}>
+                    Flexi Rematch
+                  </TabsTrigger>
+                ) : null}
                 <TabsTrigger value="offers-promotions" className={adminSectionTabTrigger}>
                   Offers &amp; Promotions
                 </TabsTrigger>
@@ -1264,6 +1272,11 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
               </TabsContent>
+              {isSuperAdmin ? (
+                <TabsContent value="flexi-rematch">
+                  <FlexiRematchPanel />
+                </TabsContent>
+              ) : null}
               <TabsContent value="offers-promotions">
                 <Card>
                   <CardHeader>

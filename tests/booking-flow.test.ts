@@ -199,7 +199,7 @@ describe("normalizeBookingIntent — every Book entry point", () => {
     });
   });
 
-  it("and We Teach → Book Now passes classTypeId", () => {
+  it("and We Workout → Book Now passes classTypeId", () => {
     assert.deepEqual(
       normalizeBookingIntent({ classTypeId: "type-hatha", scrollTo: "teach" }),
       { sessionId: undefined, classTypeId: "type-hatha", scrollTo: "teach" },
@@ -227,7 +227,7 @@ describe("normalizeBookingIntent — every Book entry point", () => {
   });
 });
 
-describe("and We Teach — class type filter on dropdown options", () => {
+describe("and We Workout — class type filter on dropdown options", () => {
   it("only shows upcoming sessions for selected class type", () => {
     const all = [
       session("h1", "2026-05-20T10:00:00.000Z", 0, 10, "type-hatha"),
@@ -277,7 +277,7 @@ describe("pending booking (login redirect restore)", () => {
     });
   });
 
-  it("persists and We Teach class type across redirect", () => {
+  it("persists and We Workout class type across redirect", () => {
     setPendingBooking({ classTypeId: "type-hatha", scrollTo: "teach" });
     assert.deepEqual(getPendingBooking(), {
       classTypeId: "type-hatha",
@@ -310,7 +310,7 @@ describe("entry point checklist (manual QA map)", () => {
     const entryPoints = [
       { source: "Nav desktop", testId: "nav-book-session" },
       { source: "Schedule row", testId: "book-class-<sessionId>" },
-      { source: "and We Teach card", testId: "book-button-<classTypeId>" },
+      { source: "and We Workout card", testId: "book-button-<classTypeId>" },
       { source: "Booking modal confirm", testId: "booking-confirm" },
       { source: "Booking modal pay", testId: "booking-pay-razorpay" },
       { source: "Booking modal dropdown", testId: "booking-class-select" },

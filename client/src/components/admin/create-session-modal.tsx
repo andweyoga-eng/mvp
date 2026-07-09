@@ -17,7 +17,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { WEEKDAY_LABELS } from "@shared/session-schedule";
+import { MAX_WEEKLY_OCCURRENCES, WEEKDAY_LABELS } from "@shared/session-schedule";
+import { flexiTooltipCopy } from "@shared/flexi-mode";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
@@ -96,6 +97,8 @@ const INITIAL_FORM = {
   recurrenceKind: "once" as "once" | "weekly",
   occurrenceCount: "4",
   recurrenceWeekdays: [] as number[],
+  flexiEnabled: false,
+  flexiSelectionCount: "1",
 };
 
 const MAX_QR_LOCAL_PHONE_DIGITS = 10;
@@ -161,6 +164,8 @@ export interface AdminClassSessionForEdit {
   occurrenceCount?: string;
   seriesId?: string | null;
   seriesWeekCount?: number | null;
+  flexiEnabled?: boolean | null;
+  flexiSelectionCount?: number | null;
 }
 
 function toDatetimeLocalValue(iso: string): string {
@@ -210,6 +215,10 @@ function sessionToForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
         ? String(sess.seriesWeekCount)
         : (sess.occurrenceCount ?? "4"),
     recurrenceWeekdays: sess.recurrenceWeekdays ?? [],
+    flexiEnabled: !!sess.flexiEnabled,
+    flexiSelectionCount: String(
+      sess.flexiSelectionCount ?? sess.recurrenceWeekdays?.length ?? 1,
+    ),
   };
 }
 
@@ -264,6 +273,8 @@ export function CreateSessionModal({
         recurrenceKind: payload!.recurrenceKind,
         occurrenceCount: payload!.occurrenceCount,
         recurrenceWeekdays: payload!.recurrenceWeekdays,
+        flexiEnabled: payload!.flexiEnabled,
+        flexiSelectionCount: payload!.flexiSelectionCount,
       };
       const url = isEdit ? `/api/admin/classes/${sessionToEdit!.id}` : "/api/classes";
       const method = isEdit ? "PATCH" : "POST";
@@ -498,6 +509,14 @@ export function CreateSessionModal({
                     Series length: <span className="font-medium">{form.occurrenceCount}</span>{" "}
                     week(s)
                   </p>
+                  <p className="text-sm text-muted-foreground">
+                    Flexi Mode:{" "}
+                    <span className="font-medium">
+                      {form.flexiEnabled
+                        ? `On · exactly ${form.flexiSelectionCount} weekly selection(s)`
+                        : "Off"}
+                    </span>
+                  </p>
                 </div>
               )}
 
@@ -612,9 +631,12 @@ export function CreateSessionModal({
                             recurrenceKind: on ? "weekly" : "once",
                             occurrenceCount: on ? (parseInt(f.occurrenceCount, 10) >= 2 ? f.occurrenceCount : "4") : "1",
                             recurrenceWeekdays: on ? f.recurrenceWeekdays : [],
+                            flexiEnabled: on ? f.flexiEnabled : false,
+                            flexiSelectionCount: on ? f.flexiSelectionCount : "1",
                           }));
                           clearFieldError("occurrenceCount");
                           clearFieldError("recurrenceWeekdays");
+                          clearFieldError("flexiSelectionCount");
                         }}
                       />
                       <div className="space-y-0.5">
@@ -666,7 +688,7 @@ export function CreateSessionModal({
                         <Input
                           type="number"
                           min={2}
-                          max={12}
+                          max={MAX_WEEKLY_OCCURRENCES}
                           value={form.occurrenceCount}
                           onChange={(e) => {
                             setForm((f) => ({ ...f, occurrenceCount: e.target.value }));
@@ -676,6 +698,53 @@ export function CreateSessionModal({
                         />
                         <FieldError message={errors.occurrenceCount} />
                       </div>
+                      <div className="sm:col-span-2">
+                        <label className="flex items-start gap-3 rounded-md border p-3 bg-background">
+                          <Checkbox
+                            checked={form.flexiEnabled}
+                            onCheckedChange={(on) => {
+                              setForm((f) => ({
+                                ...f,
+                                flexiEnabled: !!on,
+                                flexiSelectionCount: String(
+                                  Math.max(
+                                    1,
+                                    parseInt(f.flexiSelectionCount, 10) || f.recurrenceWeekdays.length || 1,
+                                  ),
+                                ),
+                              }));
+                              clearFieldError("flexiSelectionCount");
+                            }}
+                          />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">Flexi Mode</p>
+                            <p className="text-xs text-muted-foreground">{flexiTooltipCopy()}</p>
+                          </div>
+                        </label>
+                      </div>
+                      {form.flexiEnabled ? (
+                        <div>
+                          <Label>
+                            Exact weekly selections <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={7}
+                            value={form.flexiSelectionCount}
+                            onChange={(e) => {
+                              setForm((f) => ({ ...f, flexiSelectionCount: e.target.value }));
+                              clearFieldError("flexiSelectionCount");
+                            }}
+                            className={errors.flexiSelectionCount ? "border-red-500" : ""}
+                          />
+                          <FieldError message={errors.flexiSelectionCount} />
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Registered members must choose exactly this many weekday/time slots when
+                            they start Flexi checkout from this schedule.
+                          </p>
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>

@@ -28,6 +28,8 @@ function toEditPayload(s: {
   recurrenceWeekdays?: string | null;
   seriesId?: string | null;
   seriesWeekCount?: number | null;
+  flexiEnabled?: boolean | null;
+  flexiSelectionCount?: number | null;
 }) {
   return {
     id: s.id,
@@ -51,6 +53,8 @@ function toEditPayload(s: {
     recurrenceKind: s.recurrenceKind,
     seriesId: s.seriesId,
     seriesWeekCount: s.seriesWeekCount,
+    flexiEnabled: !!s.flexiEnabled,
+    flexiSelectionCount: s.flexiSelectionCount ?? null,
   };
 }
 

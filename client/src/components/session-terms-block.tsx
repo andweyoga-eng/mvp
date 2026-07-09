@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { resolveSessionTermsAndConditions } from "@shared/session-terms";
+import { resolveSessionTermsItems, type SessionTermsItem } from "@shared/session-terms";
 import { cn } from "@/lib/utils";
 
 interface SessionTermsBlockProps {
@@ -16,6 +16,7 @@ interface SessionTermsBlockProps {
    * payment / reserve checkout.
    */
   collapsible?: boolean;
+  items?: SessionTermsItem[];
 }
 
 export function SessionTermsAcceptanceCopy({ className }: { className?: string }) {
@@ -31,10 +32,12 @@ export function SessionTermsBlock({
   className,
   defaultExpanded = true,
   collapsible = true,
+  items = [],
 }: SessionTermsBlockProps) {
-  const text = resolveSessionTermsAndConditions(termsAndConditions);
+  const resolvedItems = resolveSessionTermsItems(termsAndConditions, items);
   const alwaysVisible = !collapsible;
   const [expanded, setExpanded] = useState(alwaysVisible || defaultExpanded);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const panelId = useId();
 
   useEffect(() => {
@@ -88,7 +91,30 @@ export function SessionTermsBlock({
           )}
           data-testid="session-terms-panel"
         >
-          <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{text}</p>
+          <div className="space-y-2">
+            {resolvedItems.map((item) => {
+              const itemExpanded = expandedKeys.includes(item.key);
+              return (
+                <div key={item.key} className="text-xs leading-relaxed text-muted-foreground">
+                  <span>{item.summary} </span>
+                  <button
+                    type="button"
+                    className="text-primary underline"
+                    onClick={() =>
+                      setExpandedKeys((prev) =>
+                        itemExpanded ? prev.filter((key) => key !== item.key) : [...prev, item.key],
+                      )
+                    }
+                  >
+                    {itemExpanded ? "show less" : "...more"}
+                  </button>
+                  {itemExpanded ? (
+                    <p className="mt-1 whitespace-pre-wrap">{item.details}</p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
     </div>

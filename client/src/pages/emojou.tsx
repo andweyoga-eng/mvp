@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
+import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -83,8 +84,8 @@ export default function Emojou() {
               alt="Sound healing session"
               className="h-full w-full scale-105 object-cover transition-transform duration-1000 group-hover:scale-100"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
-            <div className="absolute inset-0 flex flex-col justify-end p-7 sm:p-12">
+            <ImageHeroScrim variant="dark-bottom" />
+            <ImageHeroContent className="absolute inset-0 flex flex-col justify-end p-7 sm:p-12">
               <div className="max-w-3xl">
                 <span className="mb-3 inline-block rounded-full border border-white/30 bg-white/15 px-3.5 py-1 text-xs font-semibold text-white backdrop-blur">
                   Vibe check: zen mode engaged
@@ -108,7 +109,7 @@ export default function Emojou() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </ImageHeroContent>
           </div>
         </section>
 

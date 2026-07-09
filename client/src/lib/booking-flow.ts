@@ -71,7 +71,7 @@ export function filterBookableSessions<T extends BookableSession>(
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-/** Normalizes schedule (session id string) vs structured intent from and We Flow / nav. */
+/** Normalizes schedule (session id string) vs structured intent from and We Workout / nav. */
 export function normalizeBookingIntent(
   input?: string | BookingIntent | null,
 ): BookingIntent {

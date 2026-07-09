@@ -10,6 +10,13 @@ import {
 import { shouldBlockRecurringMidBatchBooking } from "@shared/recurring-batch";
 import { expandSessionOccurrences, serializeRecurrenceWeekdays } from "@shared/session-schedule";
 import {
+  defaultFlexiTermsItems,
+  flexiTooltipCopy,
+  formatFlexiTimeLabel,
+  isFlexiEnabledSchedule,
+  resolveFlexiSelectionCount,
+} from "@shared/flexi-mode";
+import {
   GUEST_CHECKOUT_SETTING_KEY,
   MAINTENANCE_WINDOW_SETTING_KEY,
 } from "@shared/platform-settings";
@@ -1805,6 +1812,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/flexi/options/:anchorClassId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const cls = await storage.getClass(req.params.anchorClassId);
+      if (!cls || !isFlexiEnabledSchedule(cls)) {
+        return res.status(404).json({ message: "Flexi options not available for this schedule." });
+      }
+      const options = await storage.getFlexiOptions(req.params.anchorClassId);
+      if (!options) {
+        return res.status(404).json({ message: "Flexi options not available for this schedule." });
+      }
+      res.json({
+        ...options,
+        tooltip: flexiTooltipCopy(),
+        terms: defaultFlexiTermsItems(),
+      });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch Flexi options" });
+    }
+  });
+
   // ─── Payment QR codes (admin) ─────────────────────────────────────────────
   app.get("/api/admin/payment-qr-codes", requireAdminAuth, async (_req, res) => {
     try {
@@ -1928,6 +1955,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
               : null,
           seriesWeekCount:
             validatedData.recurrenceKind === "weekly" ? validatedData.occurrenceCount : null,
+          flexiEnabled:
+            validatedData.recurrenceKind === "weekly" ? validatedData.flexiEnabled : false,
+          flexiSelectionCount:
+            validatedData.recurrenceKind === "weekly" ? validatedData.flexiSelectionCount : null,
           seriesId,
         });
         created.push(cls);
@@ -2608,6 +2639,247 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: "You have already booked this session.",
           code: "already_booked",
           redirectTo: "/my-account#sessions",
+        });
+      }
+
+      const requestedFlexiSelections = payload.flexiSelections ?? [];
+      const isFlexiBookingRequest =
+        requestedFlexiSelections.length > 0 &&
+        !!req.user?.id &&
+        isFlexiEnabledSchedule(cls);
+
+      if (requestedFlexiSelections.length > 0 && !isFlexiBookingRequest) {
+        return res.status(400).json({
+          message: "Flexi selection is only available to signed-in members on eligible schedules.",
+        });
+      }
+
+      if (isFlexiBookingRequest) {
+        const selectionCount = resolveFlexiSelectionCount(cls);
+        if (requestedFlexiSelections.length !== selectionCount) {
+          return res.status(400).json({
+            message: `Choose exactly ${selectionCount} weekly selections for this Flexi package.`,
+          });
+        }
+        const weekdaySet = new Set<number>();
+        for (const selection of requestedFlexiSelections) {
+          if (weekdaySet.has(selection.weekday)) {
+            return res.status(400).json({
+              message: "You can choose only one slot per weekday in Flexi Mode.",
+            });
+          }
+          weekdaySet.add(selection.weekday);
+        }
+
+        const horizonStart = new Date(cls.date);
+        const horizonEnd = new Date(cls.date);
+        horizonEnd.setDate(horizonEnd.getDate() + ((cls.seriesWeekCount ?? 1) * 7 - 1));
+        const classesInHorizon = await storage.getClassesInRange(horizonStart, horizonEnd);
+        const poolClasses = classesInHorizon.filter(
+          (candidate) =>
+            isFlexiEnabledSchedule(candidate) &&
+            candidate.classTypeId === cls.classTypeId &&
+            candidate.instructorId === cls.instructorId,
+        );
+        const occurrencesToReserve: Array<{
+          classId: string;
+          weekday: number;
+          occurrenceDate: Date;
+        }> = [];
+        for (const selection of requestedFlexiSelections) {
+          const source = await storage.getClass(selection.sourceClassId);
+          if (
+            !source ||
+            !isFlexiEnabledSchedule(source) ||
+            source.classTypeId !== cls.classTypeId ||
+            source.instructorId !== cls.instructorId ||
+            source.seriesId !== selection.sourceSeriesId
+          ) {
+            return res.status(400).json({ message: "One or more Flexi selections are invalid." });
+          }
+          const sourceEnd = new Date(source.date);
+          sourceEnd.setDate(sourceEnd.getDate() + ((source.seriesWeekCount ?? 1) * 7 - 1));
+          if (sourceEnd.getTime() < horizonEnd.getTime()) {
+            return res.status(400).json({
+              message: "Selected Flexi slot does not cover the full package duration.",
+            });
+          }
+          const matchingOccurrences = poolClasses
+            .filter(
+              (candidate) =>
+                candidate.seriesId === selection.sourceSeriesId &&
+                new Date(candidate.date).getDay() === selection.weekday,
+            )
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const neededOccurrences = matchingOccurrences.filter(
+            (candidate) =>
+              new Date(candidate.date).getTime() >= horizonStart.getTime() &&
+              new Date(candidate.date).getTime() <= horizonEnd.getTime(),
+          );
+          if (neededOccurrences.length < (cls.seriesWeekCount ?? 1)) {
+            return res.status(400).json({
+              message: "Selected Flexi slot does not have enough weeks to cover your package.",
+            });
+          }
+          for (const occurrence of neededOccurrences.slice(0, cls.seriesWeekCount ?? 1)) {
+            occurrencesToReserve.push({
+              classId: occurrence.id,
+              weekday: selection.weekday,
+              occurrenceDate: new Date(occurrence.date),
+            });
+          }
+        }
+        const capacityCounts = await storage.getActiveBookingCountsForClasses(
+          occurrencesToReserve.map((occurrence) => occurrence.classId),
+        );
+        for (const occurrence of occurrencesToReserve) {
+          const sourceClass = poolClasses.find((candidate) => candidate.id === occurrence.classId);
+          if (!sourceClass) {
+            return res.status(400).json({ message: "One of your selected Flexi slots is invalid." });
+          }
+          const activeCount = capacityCounts.get(occurrence.classId) ?? 0;
+          if (activeCount >= sourceClass.maxCapacity) {
+            return res.status(400).json({
+              message: "One of your selected Flexi slots is full. Please choose another time.",
+            });
+          }
+        }
+
+        const memberPrice = classTypeForBooking?.price ?? null;
+        const memberHasPrice =
+          memberPrice !== null && memberPrice !== "" && parseFloat(String(memberPrice)) > 0;
+        const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
+        const booking = resumableBooking
+          ? resumableBooking
+          : await storage.createBooking({
+              userId: user.id,
+              classId,
+              ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
+            });
+        const classType = await storage.getClassType(cls.classTypeId);
+        const instructor = await storage.getInstructor(cls.instructorId);
+        const price = classType?.price ?? null;
+        const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
+        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+        const checkoutGateway = getConfiguredCheckoutGateway();
+        const checkoutEnabled =
+          hasPrice && usesHostedCheckout(sessionPaymentMethod) && !!checkoutGateway;
+        const flexiBooking = await storage.createFlexiBooking({
+          userId: user.id,
+          anchorClassId: cls.id,
+          classTypeId: cls.classTypeId,
+          instructorId: cls.instructorId,
+          bookingId: booking.id,
+          selectionCount,
+          horizonStartAt: horizonStart,
+          horizonEndAt: horizonEnd,
+          holdExpiresAt: memberHoldUntil,
+          paymentStatus: hasPrice ? "pending" : "waived",
+          paymentMethod: sessionPaymentMethod,
+          status: "pending",
+        });
+        await storage.createFlexiBookingSelections(
+          requestedFlexiSelections.map((selection) => ({
+            flexiBookingId: flexiBooking.id,
+            weekday: selection.weekday,
+            sourceSeriesId: selection.sourceSeriesId,
+            sourceClassId: selection.sourceClassId,
+            sourceTimeLabel: selection.timeLabel,
+          })),
+        );
+        await storage.createFlexiBookingOccurrences(
+          occurrencesToReserve.map((occurrence) => ({
+            flexiBookingId: flexiBooking.id,
+            classId: occurrence.classId,
+            weekday: occurrence.weekday,
+            occurrenceDate: occurrence.occurrenceDate,
+            status: hasPrice ? "reserved" : "paid",
+            holdExpiresAt: memberHoldUntil,
+          })),
+        );
+        if (!hasPrice) {
+          await storage.updateBookingPaymentStatus(booking.id, "waived");
+        } else {
+          const amountPaise = rupeesToPaise(classType!.price);
+          const provider = providerForSessionMethod(sessionPaymentMethod);
+          await storage.ensurePaymentStubForBooking({
+            bookingId: booking.id,
+            userId: user.id,
+            classId: cls.id,
+            amountPaise,
+            gatewayProvider: provider,
+            payerName: user.name,
+            payerEmail: user.email,
+            payerPhone: user.primaryMobile ?? null,
+          });
+          try {
+            await storage.createSubscription({
+              userId: user.id,
+              classTypeId: cls.classTypeId,
+              bookingId: booking.id,
+              flexiBookingId: flexiBooking.id,
+              subscriptionType: cls.sessionFrequency ?? "recurring",
+              totalSessions: occurrencesToReserve.length,
+              totalAmountPaise: amountPaise,
+              status: "active",
+            });
+          } catch (subErr) {
+            console.error("[bookings] flexi subscription row (non-fatal):", subErr);
+          }
+        }
+        let qrPayment: {
+          qrCodeName: string;
+          qrImageUrl: string;
+          contactPhone: string;
+          contactEmail: string;
+        } | null = null;
+        if (
+          hasPrice &&
+          usesQrManualVerification(sessionPaymentMethod) &&
+          cls.paymentQrCodeId
+        ) {
+          const qr = await storage.getPaymentQrCode(cls.paymentQrCodeId);
+          if (qr) {
+            qrPayment = {
+              qrCodeName: qr.name,
+              qrImageUrl: qr.imageUrl,
+              contactPhone: cls.qrContactPhone?.trim() || qr.contactPhone || "",
+              contactEmail: cls.qrContactEmail?.trim() || qr.contactEmail || "",
+            };
+          }
+        }
+        let checkoutAuthToken: string | undefined;
+        if (checkoutEnabled && req.user?.id) {
+          checkoutAuthToken = generateToken(user.id);
+          setAuthCookie(res, checkoutAuthToken);
+        }
+        return res.status(201).json({
+          booking,
+          bookingId: booking.id,
+          classId: cls.id,
+          className: classType?.name ?? "Yoga Session",
+          instructorName: instructor?.name ?? "",
+          sessionDate: cls.date,
+          price,
+          paymentMethod: sessionPaymentMethod,
+          razorpayLink: hasPrice && sessionPaymentMethod === "razorpay_link" ? (cls.razorpayLink ?? null) : null,
+          googleMeetLink: null,
+          useRazorpayCheckout: checkoutEnabled,
+          useQrPayment: !!qrPayment,
+          qrPayment,
+          razorpayKeyId: checkoutEnabled ? checkoutGateway!.getPublicKeyId() : null,
+          paymentRequired: hasPrice,
+          isGuestCheckout: false,
+          token: checkoutAuthToken ?? null,
+          resumedPendingBooking: !!resumableBooking,
+          heldUntil: booking.heldUntil ? new Date(booking.heldUntil).toISOString() : null,
+          flexiBookingId: flexiBooking.id,
+          flexiSummary: requestedFlexiSelections.map((selection) => ({
+            weekday: selection.weekday,
+            weekdayLabel: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][selection.weekday],
+            timeLabel: selection.timeLabel || formatFlexiTimeLabel(cls.date),
+            sourceClassId: selection.sourceClassId,
+          })),
         });
       }
 
@@ -3541,6 +3813,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             : null,
         seriesWeekCount:
           validated.recurrenceKind === "weekly" ? validated.occurrenceCount : null,
+        flexiEnabled:
+          validated.recurrenceKind === "weekly" ? validated.flexiEnabled : false,
+        flexiSelectionCount:
+          validated.recurrenceKind === "weekly" ? validated.flexiSelectionCount : null,
       });
       if (!updated) return res.status(404).json({ message: "Session not found" });
       res.json(updated);
@@ -3554,6 +3830,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to update session" });
     }
   });
+
+  app.patch(
+    "/api/admin/flexi-bookings/:id/rematch",
+    requireSuperAdminAuth,
+    async (req: AdminAuthRequest, res) => {
+      try {
+        const body = z
+          .object({
+            selections: z
+              .array(
+                z.object({
+                  weekday: z.number().int().min(0).max(6),
+                  sourceSeriesId: z.string().min(1),
+                  sourceClassId: z.string().min(1),
+                  timeLabel: z.string().min(1),
+                }),
+              )
+              .min(1),
+          })
+          .parse(req.body);
+        const result = await storage.rematchFlexiBooking(req.params.id, body.selections);
+        if (!result.ok) {
+          return res.status(400).json({ message: result.message ?? "Could not rematch Flexi booking" });
+        }
+        res.json({
+          message: "Flexi booking rematched successfully.",
+          flexiBooking: result.flexiBooking,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({
+            message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+            errors: error.errors,
+          });
+        }
+        res.status(500).json({ message: "Failed to rematch Flexi booking" });
+      }
+    },
+  );
+
+  app.get("/api/admin/flexi-bookings", requireSuperAdminAuth, async (_req, res) => {
+    try {
+      const rows = await storage.listFlexiBookingsForAdmin();
+      res.json(rows);
+    } catch (error) {
+      console.error("[admin/flexi-bookings]", error);
+      res.status(500).json({ message: "Failed to load Flexi bookings" });
+    }
+  });
+
+  app.get(
+    "/api/admin/flexi-bookings/:id/options",
+    requireSuperAdminAuth,
+    async (req, res) => {
+      try {
+        const options = await storage.getFlexiOptionsForBooking(req.params.id);
+        if (!options) {
+          return res.status(404).json({ message: "Flexi booking or options not found" });
+        }
+        res.json(options);
+      } catch (error) {
+        console.error("[admin/flexi-bookings/:id/options]", error);
+        res.status(500).json({ message: "Failed to load Flexi rematch options" });
+      }
+    },
+  );
 
   app.delete("/api/admin/classes/:id", requireSuperAdminAuth, async (req, res) => {
     res.status(410).json({

@@ -9,6 +9,7 @@ export interface MemberSubscriptionSummary {
   id: string;
   classTypeName: string;
   subscriptionType: string;
+  flexiBookingId: string | null;
   totalSessions: number;
   utilizedSessions: number;
   refundedSessions: number;

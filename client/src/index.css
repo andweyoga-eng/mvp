@@ -126,6 +126,68 @@
   background: var(--gradient-hero);
 }
 
+/* Image-hero scrims — text must never sit directly on photography */
+.dz-scrim-light-side-desktop {
+  background: linear-gradient(
+    90deg,
+    #fbf9f7 0%,
+    rgba(251, 249, 247, 0.86) 34%,
+    rgba(251, 249, 247, 0.3) 62%,
+    transparent 100%
+  );
+}
+
+.dz-scrim-light-side-mobile {
+  background: linear-gradient(
+    to top,
+    #fbf9f7 0%,
+    rgba(251, 249, 247, 0.94) 38%,
+    rgba(251, 249, 247, 0.72) 58%,
+    rgba(251, 249, 247, 0.35) 78%,
+    transparent 100%
+  );
+}
+
+.dz-scrim-brand-desktop {
+  background: linear-gradient(
+    90deg,
+    rgba(52, 25, 106, 0.88) 0%,
+    rgba(52, 25, 106, 0.62) 40%,
+    rgba(52, 25, 106, 0.28) 68%,
+    transparent 100%
+  );
+}
+
+.dz-scrim-brand-mobile {
+  background: linear-gradient(
+    to top,
+    rgba(52, 25, 106, 0.92) 0%,
+    rgba(52, 25, 106, 0.78) 42%,
+    rgba(52, 25, 106, 0.45) 68%,
+    transparent 100%
+  );
+}
+
+.dz-scrim-dark-bottom {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.68) 0%,
+    rgba(0, 0, 0, 0.32) 42%,
+    rgba(0, 0, 0, 0.08) 72%,
+    transparent 100%
+  );
+}
+
+.dz-scrim-brand-bottom {
+  background: linear-gradient(
+    to top,
+    rgba(52, 25, 106, 0.84) 0%,
+    rgba(52, 25, 106, 0.5) 45%,
+    rgba(52, 25, 106, 0.15) 72%,
+    transparent 100%
+  );
+}
+
 /* Carousel animations */
 .carousel-slide {
   display: none;

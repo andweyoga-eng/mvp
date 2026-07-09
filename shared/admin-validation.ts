@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { INSTRUCTOR_LICENSE_STATUSES } from "./instructor-compliance";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "./schema";
+import { MAX_WEEKLY_OCCURRENCES } from "./session-schedule";
 import { SESSION_TERMS_MAX_LENGTH } from "./session-terms";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
@@ -294,7 +295,7 @@ export const adminCreateClassSessionSchema = z
         const n = typeof v === "number" ? v : parseInt(String(v).trim(), 10);
         return Number.isFinite(n) ? n : 1;
       })
-      .pipe(z.number().int().min(1).max(12)),
+      .pipe(z.number().int().min(1).max(MAX_WEEKLY_OCCURRENCES)),
     recurrenceWeekdays: z
       .union([z.array(z.number().int().min(0).max(6)), z.string()])
       .optional()
@@ -308,6 +309,15 @@ export const adminCreateClassSessionSchema = z
           .map((x) => parseInt(x.trim(), 10))
           .filter((d) => Number.isFinite(d) && d >= 0 && d <= 6);
         return [...new Set(days)].sort((a, b) => a - b);
+      }),
+    flexiEnabled: z.boolean().optional().default(false),
+    flexiSelectionCount: z
+      .union([z.string(), z.number(), z.null(), z.undefined()])
+      .optional()
+      .transform((v) => {
+        if (v == null || v === "") return null;
+        const n = typeof v === "number" ? v : parseInt(String(v).trim(), 10);
+        return Number.isFinite(n) ? n : null;
       }),
   })
   .superRefine((data, ctx) => {
@@ -324,6 +334,30 @@ export const adminCreateClassSessionSchema = z
         message: "Select at least one day of the week",
         path: ["recurrenceWeekdays"],
       });
+    }
+    if (data.flexiEnabled && data.recurrenceKind !== "weekly") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flexi Mode is only available for weekly schedules",
+        path: ["flexiEnabled"],
+      });
+    }
+    if (data.flexiEnabled) {
+      const requiredSelections = data.flexiSelectionCount ?? data.recurrenceWeekdays.length;
+      if (!requiredSelections || requiredSelections < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Flexi selection count must be at least 1",
+          path: ["flexiSelectionCount"],
+        });
+      }
+      if (requiredSelections > 7) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Flexi selection count cannot exceed 7",
+          path: ["flexiSelectionCount"],
+        });
+      }
     }
     if (data.date.getTime() < Date.now() - 60_000) {
       ctx.addIssue({
@@ -485,6 +519,11 @@ export const adminCreateClassSessionSchema = z
       occurrenceCount: data.occurrenceCount,
       recurrenceWeekdays:
         data.recurrenceKind === "weekly" ? data.recurrenceWeekdays : [],
+      flexiEnabled: data.recurrenceKind === "weekly" ? data.flexiEnabled : false,
+      flexiSelectionCount:
+        data.recurrenceKind === "weekly" && data.flexiEnabled
+          ? data.flexiSelectionCount ?? data.recurrenceWeekdays.length
+          : null,
       scheduleSource: "manual" as const,
     };
   });

@@ -64,7 +64,7 @@ function toJoinPrompt(session: MemberSession, popupDismissed: boolean): JoinProm
 }
 
 export function PaymentVerifiedProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [pathname, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -204,6 +204,20 @@ export function PaymentVerifiedProvider({ children }: { children: ReactNode }) {
     setLocation(MY_SESSIONS_UPCOMING_URL);
   }, [paymentConfirmed, closePaymentConfirmed, setLocation]);
 
+  const goToDashboard = useCallback(() => {
+    if (paymentConfirmed) {
+      closePaymentConfirmed(paymentConfirmed.bookingId);
+    }
+    setLocation("/dashboard");
+  }, [paymentConfirmed, closePaymentConfirmed, setLocation]);
+
+  const goToMyAccount = useCallback(() => {
+    if (paymentConfirmed) {
+      closePaymentConfirmed(paymentConfirmed.bookingId);
+    }
+    setLocation("/my-account");
+  }, [paymentConfirmed, closePaymentConfirmed, setLocation]);
+
   const openCelebrationFromMenu = useCallback(() => {
     if (!joinPrompts.length) return;
     setForceShowJoinBookingId(joinPrompts[0].bookingId);
@@ -232,7 +246,9 @@ export function PaymentVerifiedProvider({ children }: { children: ReactNode }) {
             sessionDurationMinutes: paymentConfirmed.sessionDurationMinutes ?? 60,
           }}
           onViewSessions={viewMySessions}
-          onCancel={() => closePaymentConfirmed(paymentConfirmed.bookingId)}
+          onGoToDashboard={goToDashboard}
+          onGoToMyAccount={goToMyAccount}
+          onLogout={logout}
           onOpenChange={(open) => {
             if (!open) closePaymentConfirmed(paymentConfirmed.bookingId);
           }}

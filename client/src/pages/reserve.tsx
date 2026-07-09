@@ -59,10 +59,24 @@ import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/sessi
 import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
 import {
   formatRecurringScheduleLine,
+  formatFixedSlotScheduleLine,
+  formatSessionTime,
+  getRecurringWeekdays,
   isFixedRecurringCheckout,
 } from "@/lib/recurring-series-display";
 import { BrandLogo } from "@/components/brand-logo";
+import { AccountMenuControls } from "@/components/account-menu-controls";
+import { PAYMENT_HOLD_MINUTES } from "@shared/booking-payment-hold";
 import type { Class, ClassType } from "@shared/schema";
+import { defaultFlexiTermsItems, isFlexiEnabledSchedule } from "@shared/flexi-mode";
+import {
+  FlexiCheckoutSection,
+  isFlexiCheckoutReady,
+  validateFlexiBeforeCheckout,
+  type FlexiOptionsData,
+} from "@/components/flexi-checkout-section";
+import type { FlexiSelection } from "@/components/flexi-selection-builder";
+import { Separator } from "@/components/ui/separator";
 
 interface EnrichedClass extends Class {
   classType: ClassType;
@@ -110,7 +124,7 @@ function formatLongDate(date: string | Date): string {
 }
 
 export default function Reserve() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, logout } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -128,6 +142,8 @@ export default function Reserve() {
     fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [bookingMode, setBookingMode] = useState<"series" | "flexi">("series");
+  const [flexiSelections, setFlexiSelections] = useState<FlexiSelection[]>([]);
 
   const checkout = useBookingCheckout({
     onProfileRequired: (redirectTo) => {
@@ -249,6 +265,7 @@ export default function Reserve() {
   );
 
   const isFixedRecurring = isFixedRecurringCheckout(selected);
+  const flexiEligible = !!selected && isFlexiEnabledSchedule(selected);
   const showDatePicker = !isFixedRecurring && dayGroups.length > 1;
   const showTimePicker = !isFixedRecurring && timesForSelectedDay.length > 1;
 
@@ -266,6 +283,11 @@ export default function Reserve() {
   const recurringScheduleLine = selected && isFixedRecurring
     ? formatRecurringScheduleLine(selected)
     : null;
+  const fixedSlotsLabel = selected && isFixedRecurring
+    ? formatFixedSlotScheduleLine(selected)
+    : "";
+  const fixedWeekdays = selected && isFixedRecurring ? getRecurringWeekdays(selected) : [];
+  const fixedTimeLabel = selected ? formatSessionTime(selected.date) : "";
 
   const existingBooking = selected
     ? findUpcomingMemberSessionForClass(memberSessions, selected.id)
@@ -274,6 +296,30 @@ export default function Reserve() {
   const price = selected ? formatSessionPrice(selected.classType.price) : null;
   const profileComplete = isAuthUserProfileComplete(user);
   const isTrialDrop = isTrialOrDropIn(selected?.sessionFrequency ?? null);
+  const {
+    data: flexiOptions,
+    isLoading: flexiOptionsLoading,
+    isError: flexiOptionsError,
+    refetch: refetchFlexiOptions,
+  } = useQuery<FlexiOptionsData>({
+    queryKey: ["/api/flexi/options", selected?.id],
+    enabled: !!user && !!selected?.id && flexiEligible,
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(`/api/flexi/options/${selected!.id}`, {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body.message === "string"
+            ? body.message
+            : "Failed to load Flexi options",
+        );
+      }
+      return res.json();
+    },
+  });
 
   const handleConfirm = () => {
     if (!selected) return;
@@ -287,10 +333,48 @@ export default function Reserve() {
       setLocation("/my-account#profile");
       return;
     }
+    if (bookingMode === "flexi") {
+      const flexiCheck = validateFlexiBeforeCheckout({
+        isLoading: flexiOptionsLoading,
+        isError: flexiOptionsError,
+        flexiOptions,
+        selections: flexiSelections,
+        fixedWeekdays,
+        fixedTimeLabel,
+      });
+      if (!flexiCheck.ok) {
+        toast({
+          title: flexiCheck.title,
+          description: flexiCheck.description,
+          variant: "destructive",
+        });
+        return;
+      }
+      checkout.startBooking(selected.id, { flexiSelections });
+      return;
+    }
     checkout.startBooking(selected.id);
   };
 
   const goToSessions = () => setLocation(MY_SESSIONS_URL);
+  const goToDashboard = () => setLocation("/dashboard");
+  const goToMyAccount = () => setLocation("/my-account");
+  const alreadyBookedDetails = checkout.alreadyBookedView ?? (
+    existingBooking
+      ? {
+          className: existingBooking.className,
+          instructorName: existingBooking.instructorName,
+          sessionDate: existingBooking.date,
+        }
+      : selected
+        ? {
+            className: selected.classType.name,
+            instructorName: selected.instructor.name,
+            sessionDate:
+              typeof selected.date === "string" ? selected.date : selected.date.toISOString(),
+          }
+        : null
+  );
 
   const reserved = checkout.paymentResult;
   const isMidHold =
@@ -343,14 +427,22 @@ export default function Reserve() {
       <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px]">
         <PageContainer className="flex h-[76px] items-center justify-between gap-4">
           <BrandLogo testId="reserve-logo" />
-          <button
-            type="button"
-            onClick={handleBackClick}
-            className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span>{backLabel}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <AccountMenuControls
+              showHeaderButton
+              showFloatingMenuWhenScrolled
+              headerTestId="reserve-account-toggle"
+              fabTestId="reserve-account-fab"
+            />
+            <button
+              type="button"
+              onClick={handleBackClick}
+              className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span className="hidden sm:inline">{backLabel}</span>
+            </button>
+          </div>
         </PageContainer>
       </header>
 
@@ -364,7 +456,8 @@ export default function Reserve() {
               Reserve your <span className="font-accent text-[1.1em] italic">spot</span>
             </h1>
             <p className="mt-2 text-[15px] text-muted-foreground">
-              Seat held for 10 minutes once you confirm — complete payment to lock it in.
+              Seat held for {PAYMENT_HOLD_MINUTES} minutes once you confirm — complete payment to
+              lock it in.
             </p>
           </div>
 
@@ -511,33 +604,37 @@ export default function Reserve() {
               {/* RIGHT */}
               <div className="flex-[1_1_300px] lg:sticky lg:top-[96px]">
                 <GlassCard className="rounded-[22px] p-6">
-                  <h3 className="mb-[18px] font-display text-lg font-semibold">Booking summary</h3>
-                  <div className="flex flex-col gap-3 border-b border-primary/10 pb-[18px]">
-                    <SummaryRow label="Session" value={selected.classType.name} />
-                    {isFixedRecurring && recurringScheduleLine ? (
-                      <SummaryRow label="Schedule" value={recurringScheduleLine} />
-                    ) : (
-                      <>
-                        <SummaryRow label="Date" value={formatLongDate(selected.date)} />
-                        <SummaryRow label="Time" value={formatTime(selected.date)} />
-                      </>
-                    )}
-                    <SummaryRow label="Instructor" value={selected.instructor.name} />
-                    <SummaryRow
-                      label={
-                        normalizeDeliveryMode(selected.deliveryMode) === "online"
-                          ? "Mode"
-                          : "Location"
-                      }
-                      value={formatSessionDeliverySummary(selected)}
-                    />
-                  </div>
-                  <div className="flex items-baseline justify-between py-[18px]">
-                    <span className="text-[15px] font-semibold">Total</span>
-                    <span className="font-display text-[26px] font-bold text-primary">
-                      {price ?? "N/A"}
-                    </span>
-                  </div>
+                  {checkout.step !== "payment-confirmed" ? (
+                    <>
+                      <h3 className="mb-[18px] font-display text-lg font-semibold">Booking summary</h3>
+                      <div className="flex flex-col gap-3 border-b border-primary/10 pb-[18px]">
+                        <SummaryRow label="Session" value={selected.classType.name} />
+                        {isFixedRecurring && recurringScheduleLine ? (
+                          <SummaryRow label="Schedule" value={recurringScheduleLine} />
+                        ) : (
+                          <>
+                            <SummaryRow label="Date" value={formatLongDate(selected.date)} />
+                            <SummaryRow label="Time" value={formatTime(selected.date)} />
+                          </>
+                        )}
+                        <SummaryRow label="Instructor" value={selected.instructor.name} />
+                        <SummaryRow
+                          label={
+                            normalizeDeliveryMode(selected.deliveryMode) === "online"
+                              ? "Mode"
+                              : "Location"
+                          }
+                          value={formatSessionDeliverySummary(selected)}
+                        />
+                      </div>
+                      <div className="flex items-baseline justify-between py-[18px]">
+                        <span className="text-[15px] font-semibold">Total</span>
+                        <span className="font-display text-[26px] font-bold text-primary">
+                          {price ?? "N/A"}
+                        </span>
+                      </div>
+                    </>
+                  ) : null}
 
                   {/* ===== CHECKOUT STATE MACHINE ===== */}
                   {checkout.processingCopy && (
@@ -560,6 +657,8 @@ export default function Reserve() {
                     />
                   ) : checkout.step === "payment-confirmed" && checkout.paymentOutcome ? (
                     <PaymentConfirmedContent
+                      variant="compact"
+                      flexiSummary={checkout.paymentResult?.flexiSummary ?? undefined}
                       details={{
                         bookingId: checkout.paymentOutcome.bookingId,
                         className: checkout.paymentOutcome.className,
@@ -569,21 +668,20 @@ export default function Reserve() {
                         sessionDurationMinutes: sessionDurationMinutes(selected),
                       }}
                       onViewSessions={goToSessions}
-                      onCancel={() => setLocation(exitPath)}
+                      onGoToDashboard={goToDashboard}
+                      onGoToMyAccount={goToMyAccount}
+                      onLogout={logout}
                     />
                   ) : checkout.step === "manual-submitted" ? (
                     <ManualPaymentSubmittedMessage onViewSessions={goToSessions} />
-                  ) : checkout.step === "already-booked" ? (
-                    <div className="space-y-3">
-                      <Alert className="border-amber-200 bg-amber-50">
-                        <AlertDescription className="text-amber-950">
-                          You have already booked this session.
-                        </AlertDescription>
-                      </Alert>
-                      <Button className="w-full" onClick={goToSessions}>
-                        View My Sessions
-                      </Button>
-                    </div>
+                  ) : checkout.step === "already-booked" && alreadyBookedDetails ? (
+                    <AlreadyBookedSessionContent
+                      className={alreadyBookedDetails.className}
+                      instructorName={alreadyBookedDetails.instructorName}
+                      sessionDate={alreadyBookedDetails.sessionDate}
+                      onViewSessions={goToSessions}
+                      onCancel={() => setLocation(exitPath)}
+                    />
                   ) : checkout.step === "failed" ? (
                     <div className="space-y-3">
                       <Alert variant="destructive">
@@ -615,6 +713,7 @@ export default function Reserve() {
                       <SessionTermsBlock
                         termsAndConditions={selected.classType.termsAndConditions}
                         collapsible={false}
+                        items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
                       />
                       <SessionTermsAcceptanceCopy />
 
@@ -655,6 +754,23 @@ export default function Reserve() {
                     </div>
                   ) : (
                     <>
+                      {flexiEligible ? (
+                        <div className="mb-3">
+                          <FlexiCheckoutSection
+                            bookingMode={bookingMode}
+                            onBookingModeChange={setBookingMode}
+                            flexiOptions={flexiOptions}
+                            isLoading={flexiOptionsLoading}
+                            isError={flexiOptionsError}
+                            onRetry={() => void refetchFlexiOptions()}
+                            selections={flexiSelections}
+                            onSelectionsChange={setFlexiSelections}
+                            fixedSlotsLabel={fixedSlotsLabel}
+                            fixedWeekdays={fixedWeekdays}
+                            fixedTimeLabel={fixedTimeLabel}
+                          />
+                        </div>
+                      ) : null}
                       {selected.hasPaymentConfigured === false && (
                         <Alert className="mb-3 border-amber-200 bg-amber-50">
                           <AlertDescription className="text-xs text-amber-900">
@@ -666,15 +782,32 @@ export default function Reserve() {
                         termsAndConditions={selected.classType.termsAndConditions}
                         collapsible={false}
                         className="mb-3"
+                        items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
                       />
                       <SessionTermsAcceptanceCopy className="mb-3" />
+                      <Separator className="mb-3" />
+                      <div className="mb-3 space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Step 2
+                        </p>
+                        <p className="text-sm font-medium">Reserve and pay.</p>
+                      </div>
                       <button
                         type="button"
                         onClick={handleConfirm}
                         disabled={
                           checkout.isReserving ||
                           checkout.isPaying ||
-                          selected.hasPaymentConfigured === false
+                          selected.hasPaymentConfigured === false ||
+                          !isFlexiCheckoutReady({
+                            bookingMode,
+                            isLoading: flexiOptionsLoading,
+                            isError: flexiOptionsError,
+                            flexiOptions,
+                            selections: flexiSelections,
+                            fixedWeekdays,
+                            fixedTimeLabel,
+                          })
                         }
                         className="flex w-full items-center justify-center gap-2 rounded-[14px] bg-primary py-[15px] text-[15px] font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         data-testid="reserve-confirm"
@@ -684,7 +817,9 @@ export default function Reserve() {
                           ? "Reserving…"
                           : checkout.isPaying
                             ? "Opening payment…"
-                            : "Reserve and Pay"}
+                            : bookingMode === "flexi"
+                              ? "Reserve Flexi Package"
+                              : "Reserve and Pay"}
                       </button>
                       <p className="mt-3.5 flex items-center gap-2 text-xs text-muted-foreground">
                         <CreditCard className="h-4 w-4 text-[#354c3a]" />

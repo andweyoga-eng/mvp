@@ -97,6 +97,20 @@ describe("findUpcomingMemberSessionForClass", () => {
     ];
     assert.equal(findUpcomingMemberSessionForClass(rows, "class-a"), undefined);
   });
+
+  it("matches flexi occurrences by anchor class id", () => {
+    const rows = [
+      session({
+        bookingId: "b-flexi",
+        classId: "class-occurrence",
+        anchorClassId: "class-anchor",
+        paymentStatus: "paid",
+        status: "upcoming",
+        isFlexi: true,
+      }),
+    ];
+    assert.equal(findUpcomingMemberSessionForClass(rows, "class-anchor")?.bookingId, "b-flexi");
+  });
 });
 
 describe("sessionAwaitingPaymentUpdate", () => {

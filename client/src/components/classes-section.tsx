@@ -156,7 +156,7 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
       <div className="mx-auto w-full max-w-dz px-[clamp(1rem,4vw,1.5rem)]">
         <div className="mb-10 text-center md:mb-12">
           <h2 className="font-display text-[clamp(1.875rem,5vw,3.25rem)] font-bold tracking-tight text-primary">
-            and We <span className="font-accent italic font-normal text-dz-secondary">Flow</span>
+            and We <span className="font-accent italic font-normal text-dz-secondary">Workout</span>
           </h2>
           <p className="mx-auto mt-2.5 max-w-2xl text-dz-muted">
             Discover the perfect class for your practice level and goals

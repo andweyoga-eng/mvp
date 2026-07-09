@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth, getAuthHeaders, setAuthToken } from "@/lib/auth";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/payment-processing-messages";
 import { TRIAL_DROPIN_MIDSESSION_MESSAGE } from "@shared/booking-eligibility";
 import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
+import type { FlexiSelection } from "@/components/flexi-selection-builder";
 
 /** Signed-in member checkout state machine. Mirrors the booking-modal member flow. */
 export type CheckoutStep =
@@ -67,6 +68,7 @@ export function useBookingCheckout({
     sessionDate: string;
   } | null>(null);
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
+  const checkoutSettledRef = useRef(false);
 
   const holdCountdown = usePaymentHoldCountdown(
     step === "pay" && paymentResult?.paymentRequired !== false ? heldUntil : null,
@@ -80,6 +82,7 @@ export function useBookingCheckout({
   }, [queryClient]);
 
   const reset = useCallback(() => {
+    checkoutSettledRef.current = false;
     setPaymentResult(null);
     setPaymentOutcome(null);
     setStep("idle");
@@ -134,6 +137,7 @@ export function useBookingCheckout({
       setIsPaying(true);
       setPaymentPhase("creating-order");
       try {
+        checkoutSettledRef.current = false;
         const orderRes = await fetch("/api/payments/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -172,6 +176,7 @@ export function useBookingCheckout({
           },
           onModalOpen: () => setPaymentPhase("checkout-open"),
           onSuccess: async (rzp) => {
+            checkoutSettledRef.current = true;
             setPaymentPhase("verifying");
             try {
               const verifyRes = await fetch("/api/payments/verify", {
@@ -215,6 +220,7 @@ export function useBookingCheckout({
             }
           },
           onDismiss: () => {
+            if (checkoutSettledRef.current) return;
             setIsPaying(false);
             setPaymentPhase(null);
             setStep("pay");
@@ -225,6 +231,7 @@ export function useBookingCheckout({
           },
         });
       } catch (err) {
+        checkoutSettledRef.current = false;
         setIsPaying(false);
         setPaymentPhase(null);
         setStep("failed");
@@ -238,7 +245,11 @@ export function useBookingCheckout({
     [user, toast, invalidateSessions, onConfirmed],
   );
 
-  const bookingMutation = useMutation<MemberBookingResult, BookingError, { classId: string }>({
+  const bookingMutation = useMutation<
+    MemberBookingResult,
+    BookingError,
+    { classId: string; flexiSelections?: FlexiSelection[] }
+  >({
     mutationFn: async (payload) => {
       const response = await fetch("/api/bookings", {
         method: "POST",
@@ -365,9 +376,12 @@ export function useBookingCheckout({
   });
 
   const startBooking = useCallback(
-    (classId: string) => {
+    (classId: string, options?: { flexiSelections?: FlexiSelection[] }) => {
       if (bookingMutation.isPending || isPaying) return;
-      bookingMutation.mutate({ classId });
+      bookingMutation.mutate({
+        classId,
+        ...(options?.flexiSelections?.length ? { flexiSelections: options.flexiSelections } : {}),
+      });
     },
     [bookingMutation, isPaying],
   );

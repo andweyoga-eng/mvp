@@ -10,7 +10,7 @@ export const RECURRENCE_KINDS = ["once", "weekly"] as const;
 export type RecurrenceKind = (typeof RECURRENCE_KINDS)[number];
 
 /** Max weekly repeats for MVP (admin-created series). */
-export const MAX_WEEKLY_OCCURRENCES = 12;
+export const MAX_WEEKLY_OCCURRENCES = 52;
 
 export const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -54,7 +54,7 @@ export interface PublicScheduleSlot {
 export interface RecurringScheduleInput {
   startAt: Date;
   recurrenceKind: RecurrenceKind;
-  /** For weekly: number of calendar weeks in the series (2–12). */
+  /** For weekly: number of calendar weeks in the series (2–52). */
   occurrenceCount: number;
   /** 0=Sun … 6=Sat; empty defaults to the start date's weekday only. */
   recurrenceWeekdays?: number[];
