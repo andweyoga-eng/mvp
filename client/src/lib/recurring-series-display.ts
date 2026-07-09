@@ -33,10 +33,11 @@ export function formatRecurringWeekdayList(weekdays: number[]): string {
 }
 
 export function formatSessionTime(date: Date | string): string {
-  return new Date(date).toLocaleTimeString("en-US", {
+  return new Date(date).toLocaleTimeString("en-IN", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -46,11 +47,12 @@ export function formatCompactRecurringWeekdayList(weekdays: number[]): string {
 }
 
 export function formatSessionLongDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString("en-US", {
+  return new Date(date).toLocaleDateString("en-IN", {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "Asia/Kolkata",
   });
 }
 

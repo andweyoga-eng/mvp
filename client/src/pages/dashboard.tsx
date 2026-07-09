@@ -69,16 +69,17 @@ function greeting(now = new Date()): string {
 }
 
 function formatTime(date: string | Date): string {
-  return new Date(date).toLocaleTimeString("en-US", {
+  return new Date(date).toLocaleTimeString("en-IN", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   });
 }
 
 function formatDayTime(date: string | Date): string {
   const d = new Date(date);
-  return `${d.toLocaleDateString("en-US", { weekday: "short" })}, ${formatTime(d)}`;
+  return `${d.toLocaleDateString("en-IN", { weekday: "short", timeZone: "Asia/Kolkata" })}, ${formatTime(d)}`;
 }
 
 function scrollCarouselEl(el: HTMLDivElement | null, dir: number) {

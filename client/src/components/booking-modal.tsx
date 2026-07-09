@@ -1246,23 +1246,40 @@ export default function BookingModal({
 
   const formatClassOption = (cls: EnrichedClass) => {
     const date = new Date(cls.date);
-    const dateStr = date.toLocaleDateString();
-    const timeStr = date.toLocaleTimeString("en-US", {
+    const dateStr = date.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    });
+    const timeStr = date.toLocaleTimeString("en-IN", {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
     });
     return `${cls.classType.name} with ${cls.instructor.name}, ${dateStr} at ${timeStr} (${cls.currentBookings}/${cls.maxCapacity})`;
   };
 
   const formatSessionPickerSlot = (cls: EnrichedClass) =>
-    new Date(cls.date).toLocaleString("en-US", {
+    new Date(cls.date).toLocaleString("en-IN", {
       weekday: "short",
       month: "short",
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+      timeZone: "Asia/Kolkata",
+    });
+
+  const formatSessionDateLabel = (date: string | Date) =>
+    new Date(date).toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+    });
+
+  const formatSessionTimeLabel = (date: string | Date) =>
+    new Date(date).toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
     });
 
   const showSessionPicker = !hasPreselectedSession;
@@ -1505,12 +1522,8 @@ export default function BookingModal({
               <div className="rounded-md border bg-muted p-3 text-sm">
                 <p className="font-semibold text-primary">Next batch starts</p>
                 <p className="text-muted-foreground">
-                  {new Date(nextBatchPrompt.date).toLocaleDateString()} at{" "}
-                  {new Date(nextBatchPrompt.date).toLocaleTimeString("en-US", {
-                    hour: "numeric",
-                    minute: "2-digit",
-                    hour12: true,
-                  })}
+                  {formatSessionDateLabel(nextBatchPrompt.date)} at{" "}
+                  {formatSessionTimeLabel(nextBatchPrompt.date)}
                 </p>
               </div>
             ) : (
@@ -1599,12 +1612,8 @@ export default function BookingModal({
             <div className="p-3 bg-muted rounded-md space-y-2 text-sm">
               <p className="font-bold text-purple-600">{paymentOutcome.className}</p>
               <p className="text-muted-foreground">
-                {new Date(paymentOutcome.sessionDate).toLocaleDateString()} at{" "}
-                {new Date(paymentOutcome.sessionDate).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {formatSessionDateLabel(paymentOutcome.sessionDate)} at{" "}
+                {formatSessionTimeLabel(paymentOutcome.sessionDate)}
               </p>
               {paymentOutcome.instructorName && (
                 <p className="text-muted-foreground">With {paymentOutcome.instructorName}</p>
@@ -1711,12 +1720,8 @@ export default function BookingModal({
             <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
               <p className="font-bold text-purple-600">{paymentResult.className}</p>
               <p className="text-muted-foreground">
-                {new Date(paymentResult.sessionDate).toLocaleDateString()} at{" "}
-                {new Date(paymentResult.sessionDate).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {formatSessionDateLabel(paymentResult.sessionDate)} at{" "}
+                {formatSessionTimeLabel(paymentResult.sessionDate)}
               </p>
               {paymentResult.instructorName && (
                 <p className="text-muted-foreground">With {paymentResult.instructorName}</p>
@@ -1910,12 +1915,8 @@ export default function BookingModal({
                 <div className="text-left p-3 bg-muted rounded-md">
                   <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {new Date(displayClass.date).toLocaleDateString()} at{" "}
-                    {new Date(displayClass.date).toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {formatSessionDateLabel(displayClass.date)} at{" "}
+                    {formatSessionTimeLabel(displayClass.date)}
                   </p>
                 </div>
                 <Alert className="border-green-200 bg-green-50">
@@ -2100,12 +2101,8 @@ export default function BookingModal({
                 <div className="text-left p-3 bg-muted rounded-md">
                   <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    {new Date(displayClass.date).toLocaleDateString()} at{" "}
-                    {new Date(displayClass.date).toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                      hour12: true,
-                    })}
+                    {formatSessionDateLabel(displayClass.date)} at{" "}
+                    {formatSessionTimeLabel(displayClass.date)}
                   </p>
                 </div>
                 <p className="text-purple-600 font-medium">
@@ -2182,12 +2179,8 @@ export default function BookingModal({
                         {displayClass.classType.name}
                       </p>
                       <p className="text-sm text-muted-foreground" data-testid="selected-class-details">
-                        {new Date(displayClass.date).toLocaleDateString()} at{" "}
-                        {new Date(displayClass.date).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })}
+                        {formatSessionDateLabel(displayClass.date)} at{" "}
+                        {formatSessionTimeLabel(displayClass.date)}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         With {displayClass.instructor.name}

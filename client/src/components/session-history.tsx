@@ -15,7 +15,7 @@ import {
   ExternalLink,
   ChevronDown,
 } from "lucide-react";
-import { endOfWeek, format, startOfWeek } from "date-fns";
+import { endOfWeek, startOfWeek } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
   fetchMemberSessions,
@@ -56,7 +56,28 @@ function withSessionActions(sessions: MemberSession[]): SessionData[] {
 }
 
 function formatSessionTime(dateIso: string): string {
-  return format(new Date(dateIso), "h:mm a");
+  return new Date(dateIso).toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function formatSessionWeekday(dateIso: string): string {
+  return new Date(dateIso).toLocaleDateString("en-IN", {
+    weekday: "short",
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function formatSessionShortDate(dateIso: string): string {
+  return new Date(dateIso).toLocaleDateString("en-IN", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 function sessionLocation(session: SessionData): string {
@@ -272,7 +293,12 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="h-4 w-4 shrink-0 text-primary/70" />
-            {format(start, "MMM d, yyyy")}
+              {new Date(session.date).toLocaleDateString("en-IN", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                timeZone: "Asia/Kolkata",
+              })}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-4 w-4 shrink-0 text-primary/70" />
@@ -418,7 +444,7 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <p className="text-sm font-semibold text-foreground">
-              {format(start, "EEE, MMM d")}
+              {formatSessionShortDate(session.date)}
             </p>
             <p className="text-sm font-medium text-foreground">{formatSessionTime(session.date)}</p>
             {statusBadge(session)}
@@ -512,7 +538,7 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
 
     const isOpen = !!openFlexiGroups[item.flexiBookingId];
     const uniqueWeekdays = Array.from(
-      new Set(item.sessions.map((s) => format(new Date(s.date), "EEE"))),
+      new Set(item.sessions.map((s) => formatSessionWeekday(s.date))),
     );
     const timeLabel = formatSessionTime(primary.date);
     const weekStart = startOfWeek(new Date(primary.date), { weekStartsOn: 1 });
@@ -546,7 +572,7 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {item.sessions.length} upcoming session{item.sessions.length === 1 ? "" : "s"} · Next{" "}
-              {format(new Date(primary.date), "EEE, MMM d")}
+              {formatSessionShortDate(primary.date)}
             </p>
           </div>
           <ChevronDown
