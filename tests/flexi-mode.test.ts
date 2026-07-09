@@ -5,6 +5,7 @@ import {
   defaultFlexiTermsItems,
   flexiOptionsMatchFixedSlots,
   flexiTooltipCopy,
+  formatFlexiTimeLabel,
   isFlexiEnabledSchedule,
   resolveFlexiSelectionCount,
   sharesFlexiPool,
@@ -95,6 +96,17 @@ describe("flexi-mode helpers", () => {
     assert.equal(candidate.sourceSeriesId, "series-a");
     assert.equal(candidate.sourceClassId, "class-1");
     assert.ok(candidate.timeLabel.length > 0);
+  });
+
+  it("formats flexi time labels in IST regardless of server timezone", () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      assert.equal(formatFlexiTimeLabel("2026-07-08T13:00:00.000Z"), "6:30 pm");
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
   });
 
   it("detects when flexi options match fixed slots", () => {

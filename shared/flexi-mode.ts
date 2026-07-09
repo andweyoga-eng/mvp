@@ -37,10 +37,11 @@ export function resolveFlexiSelectionCount(
 }
 
 export function formatFlexiTimeLabel(date: Date | string): string {
-  return new Date(date).toLocaleTimeString("en-US", {
+  return new Date(date).toLocaleTimeString("en-IN", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    timeZone: "Asia/Kolkata",
   });
 }
 
