@@ -54,12 +54,12 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
         <PageContainer className="flex h-[76px] items-center justify-between gap-4">
           <div className="relative flex-shrink-0">
             <Button
-              className="rounded-full bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-4 sm:text-sm"
+              className="h-9 w-9 rounded-full bg-primary p-0 text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:h-10 sm:w-10"
               onClick={() => setIsDrawerOpen(true)}
               data-testid="mobile-menu-toggle"
+              aria-label="Open menu"
             >
-              <Menu className="mr-1.5 h-4 w-4 sm:mr-2" />
-              aWY
+              <Menu className="h-4 w-4" />
             </Button>
             {user && celebrationCount > 0 && (
               <button
@@ -77,7 +77,11 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             )}
           </div>
 
-          <BrandLogo className="absolute left-1/2 -translate-x-1/2" testId="desktop-logo-link" />
+          <BrandLogo
+            className="absolute left-1/2 -translate-x-1/2"
+            imgClassName="h-[clamp(44px,7vw,58px)] w-auto"
+            testId="desktop-logo-link"
+          />
 
           <div className="relative flex flex-shrink-0 items-center">
             {authLoading ? (
@@ -93,7 +97,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      className={`rounded-full px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-4 sm:text-sm ${
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-3.5 sm:py-2 sm:text-sm ${
                         !isProfileComplete
                           ? "bg-orange-600 hover:bg-orange-700"
                           : "bg-primary hover:bg-primary/90"
@@ -123,7 +127,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             ) : (
               <>
                 <Button
-                  className="rounded-full bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-4 sm:text-sm"
+                  className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
                   data-testid="nav-book-session"
                   onClick={() => setBookingAuthOpen(true)}
                 >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ import { SessionHistory } from "@/components/session-history";
 import { PaymentHistory } from "@/components/payment-history";
 import { PrivacyConsentSection } from "@/components/privacy-consent-section";
 import { AccountHealthNoteSection } from "@/components/account-health-note-section";
+import { AccountComingSoonBadge, AccountFoldSection } from "@/components/account-fold-section";
 import { DateOfBirthField } from "@/components/date-of-birth-field";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import {
@@ -45,11 +46,11 @@ import {
   getAddressStatesForCountry,
   hasPredefinedAddressStates,
 } from "@shared/address-regions";
-import { type ConsentLanguage, isAdult, isValidDateOfBirth, CONSENT_COPY } from "@shared/consent";
+import { type ConsentLanguage, type ConsentRequirement, isAdult, isValidDateOfBirth, CONSENT_COPY } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { LEGAL_CONFIG } from "@shared/legal-config";
-import { useAuth, getAuthHeaders } from "@/lib/auth";
+import { useAuth, getAuthHeaders, type User as AuthUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
@@ -60,20 +61,15 @@ import {
 import {
   isHealthDisclosureComplete,
   isAccountProfileComplete,
+  isProfileFieldsSectionComplete,
+  getFirstIncompleteAccountAnchor,
   type AccountProfileCheckInput,
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
 import { getPendingBooking } from "@/lib/pending-booking";
 import { redirectAfterProfileComplete } from "@/lib/member-landing";
-import { parseHealthHistory } from "@shared/health-disclosure";
+import { parseHealthHistory, HEALTH_NO_CONCERNS_TEXT } from "@shared/health-disclosure";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
-
-function profileJustCompletedOnServer(
-  wasIncomplete: boolean,
-  status: string | null | undefined,
-): boolean {
-  return wasIncomplete && status === "complete";
-}
 
 /**
  * MY ACCOUNT — the single source of truth for the member account experience.
@@ -125,6 +121,24 @@ const DESKTOP_MQ = "(min-width: 900px)";
 /** Id of the internally-scrolling content panel (desktop/tablet). */
 const SCROLL_PANEL_ID = "account-scroll";
 
+function scrollToAccountSection(id: AccountAnchor) {
+  window.location.hash = id;
+  requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function healthSectionSummary(text: string, lastModified: string | null | undefined): string {
+  if (!isHealthDisclosureComplete(text)) {
+    return "Add your health note to book sessions";
+  }
+  const preview = text.length > 72 ? `${text.slice(0, 72)}…` : text;
+  if (lastModified) {
+    return `Updated ${new Date(lastModified).toLocaleDateString()} · ${preview}`;
+  }
+  return preview;
+}
+
 export default function MyAccount() {
   const { user, updateProfile, logout, refreshUser } = useAuth();
   const [, setLocation] = useLocation();
@@ -133,6 +147,7 @@ export default function MyAccount() {
   const [payTab, setPayTab] = useState<"history" | "methods">("history");
   const [activeSection, setActiveSection] = useState<AccountAnchor>("profile");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [openSections, setOpenSections] = useState<Partial<Record<AccountAnchor, boolean>>>({});
 
   const [profileData, setProfileData] = useState({
     name: "",
@@ -161,8 +176,17 @@ export default function MyAccount() {
   });
   // Preferences are UI-only placeholders until the notifications backend ships.
   const [prefs, setPrefs] = useState({ reminders: true, updates: true, promos: false });
-  const [healthConsentGiven, setHealthConsentGiven] = useState(true);
+  // Fail-closed default: never assume health-data consent is already given until
+  // the server confirms it. Assuming `true` here let onboarding skip recording it.
+  const [healthConsentGiven, setHealthConsentGiven] = useState(false);
   const [healthConsentChecked, setHealthConsentChecked] = useState(false);
+  const [consentRequirement, setConsentRequirement] = useState<ConsentRequirement | null>(null);
+  const [pendingHealthSave, setPendingHealthSave] = useState<{
+    text: string;
+    documentUrls: string[];
+    mediaLinks: HealthMediaLink[];
+  } | null>(null);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
   const [dobError, setDobError] = useState("");
   const dobLocked = Boolean(user?.dateOfBirth);
@@ -173,16 +197,29 @@ export default function MyAccount() {
       .then((data) => {
         const health = data.categories.find((c) => c.consentType === "health_data");
         setHealthConsentGiven(health?.status === "active");
+        setConsentRequirement(data.requirement);
       })
-      .catch(() => setHealthConsentGiven(false));
+      .catch(() => {
+        setHealthConsentGiven(false);
+        setConsentRequirement(null);
+      });
   }, [user?.id]);
 
   useEffect(() => {
     if (!user) setLocation("/");
   }, [user, setLocation]);
 
+  // Hydrate the form ONCE per signed-in user. Re-running on every `user` change
+  // would clobber locally-typed-but-unsaved fields (e.g. emergency contact, DOB)
+  // whenever a background silent save (primary mobile) mutates `user`.
+  const hydratedUserId = useRef<string | null>(null);
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      hydratedUserId.current = null;
+      return;
+    }
+    if (hydratedUserId.current === user.id) return;
+    hydratedUserId.current = user.id;
     const next = {
       name: user.name || "",
       dateOfBirth: user.dateOfBirth || "",
@@ -261,6 +298,10 @@ export default function MyAccount() {
         new URLSearchParams(window.location.search).get("tab"),
       );
       const id = hash || tabAnchor || "";
+      if (id && NAV.some((n) => n.id === id)) {
+        setActiveSection(id as AccountAnchor);
+        setOpenSections((current) => ({ ...current, [id]: true }));
+      }
       if (!id) return;
       const el = document.getElementById(id);
       if (!el) return;
@@ -372,6 +413,102 @@ export default function MyAccount() {
     });
   };
 
+  // Single source of truth for the Contact Info PUT payload so the standalone
+  // "Save changes" submit and the onboarding finish step persist identical data.
+  // DOB is only sent when unlocked AND present, so we never clobber a DOB the
+  // member supplied via the consent panel instead of the contact form.
+  const buildContactPayload = () => ({
+    name: profileData.name,
+    primaryMobile: profileData.primaryMobile,
+    primaryMobileCountryCode: profileData.primaryMobileCountryCode,
+    secondaryMobile: profileData.secondaryMobile,
+    secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
+    emergencyMobile: profileData.emergencyMobile,
+    emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
+    whatsappConsent: profileData.whatsappConsent,
+    whatsappConsentSource: profileData.whatsappConsent ? "profile_primary_mobile" : undefined,
+    addressStreet: profileData.addressStreet.trim() || undefined,
+    addressLine2: profileData.addressLine2.trim() || undefined,
+    addressCity: profileData.addressCity.trim() || undefined,
+    addressCountry: profileData.addressCountry || DEFAULT_ADDRESS_COUNTRY,
+    addressState: profileData.addressState.trim() || undefined,
+    addressPincode: profileData.addressPincode.trim() || undefined,
+    ...(!dobLocked && profileData.dateOfBirth.trim()
+      ? { dateOfBirth: profileData.dateOfBirth }
+      : {}),
+  });
+
+  const buildCheckFromUser = (u: AuthUser): AccountProfileCheckInput => ({
+    emailVerified: Boolean(u.emailVerified),
+    name: u.name,
+    primaryMobile: u.primaryMobile,
+    primaryMobileCountryCode: u.primaryMobileCountryCode,
+    secondaryMobile: u.secondaryMobile,
+    secondaryMobileCountryCode: u.secondaryMobileCountryCode,
+    emergencyMobile: u.emergencyMobile,
+    emergencyMobileCountryCode: u.emergencyMobileCountryCode,
+    healthUpdateText: u.healthUpdateText,
+  });
+
+  const routeToAnchor = (anchor: AccountAnchor) => {
+    setActiveSection(anchor);
+    setOpenSections((current) => ({ ...current, [anchor]: true }));
+    scrollToAccountSection(anchor);
+  };
+
+  /**
+   * The single, fail-closed exit gate for onboarding. Re-fetches the member AND
+   * their consent requirement FRESH from the server, then either routes to the
+   * first still-incomplete My Account step (profile → health → privacy) or, only
+   * when profile + health + mandatory consent are ALL confirmed complete,
+   * redirects the member onward. Any failure keeps them in My Account.
+   * Returns true only when it redirected away.
+   */
+  const resolveNextStepAndRoute = async (): Promise<boolean> => {
+    // Fail-closed: assume consent is still required until the server proves it isn't.
+    let requiresConsent = true;
+    let serverUser: AuthUser | null = null;
+    try {
+      const [status, refreshed] = await Promise.all([
+        fetchMyConsentStatus(),
+        refreshUser(),
+      ]);
+      requiresConsent = Boolean(status.requirement?.requiresConsent);
+      setConsentRequirement(status.requirement);
+      const health = status.categories.find((c) => c.consentType === "health_data");
+      setHealthConsentGiven(health?.status === "active");
+      serverUser = refreshed;
+    } catch {
+      serverUser = null;
+    }
+
+    if (!serverUser) {
+      toast({
+        title: "Couldn't confirm your setup",
+        description: "Please check your connection and try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    const anchor = getFirstIncompleteAccountAnchor(buildCheckFromUser(serverUser), {
+      requiresConsent,
+    });
+    if (anchor) {
+      routeToAnchor(anchor);
+      return false;
+    }
+
+    toast({
+      title: "You're all set",
+      description: getPendingBooking()
+        ? "Your profile is complete. Taking you to checkout."
+        : "Your profile is complete. Welcome to your dashboard.",
+    });
+    redirectAfterProfileComplete();
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileData.name.trim())
@@ -416,24 +553,7 @@ export default function MyAccount() {
     setIsLoading(true);
     const wasIncomplete = user?.profileCompletionStatus !== "complete";
     try {
-      const contactPayload = {
-        name: profileData.name,
-        primaryMobile: profileData.primaryMobile,
-        primaryMobileCountryCode: profileData.primaryMobileCountryCode,
-        secondaryMobile: profileData.secondaryMobile,
-        secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
-        emergencyMobile: profileData.emergencyMobile,
-        emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
-        whatsappConsent: profileData.whatsappConsent,
-        whatsappConsentSource: profileData.whatsappConsent ? "profile_primary_mobile" : undefined,
-        addressStreet: profileData.addressStreet.trim() || undefined,
-        addressLine2: profileData.addressLine2.trim() || undefined,
-        addressCity: profileData.addressCity.trim() || undefined,
-        addressCountry: profileData.addressCountry || DEFAULT_ADDRESS_COUNTRY,
-        addressState: profileData.addressState.trim() || undefined,
-        addressPincode: profileData.addressPincode.trim() || undefined,
-        ...(dobLocked ? {} : { dateOfBirth: profileData.dateOfBirth }),
-      };
+      const contactPayload = buildContactPayload();
       const checkAfterSave: AccountProfileCheckInput = {
         emailVerified: Boolean(user?.emailVerified),
         name: contactPayload.name,
@@ -447,30 +567,61 @@ export default function MyAccount() {
       };
       const completesProfile =
         wasIncomplete && isAccountProfileComplete(checkAfterSave);
-      const updatedUser = await updateProfile(contactPayload, {
+      await updateProfile(contactPayload, {
         successTitle: completesProfile ? undefined : "Contact info saved",
         silent: completesProfile,
       });
-      if (profileJustCompletedOnServer(wasIncomplete, updatedUser?.profileCompletionStatus)) {
-        toast({
-          title: "You're all set",
-          description: getPendingBooking()
-            ? "Your profile is complete. Taking you to checkout."
-            : "Your profile is complete. Welcome to your dashboard.",
-        });
-        redirectAfterProfileComplete();
+      if (wasIncomplete) {
+        // Onboarding: let the fail-closed gate decide the next step (health →
+        // privacy) or redirect — it verifies consent fresh from the server, so a
+        // completed profile can never skip mandatory consent.
+        await resolveNextStepAndRoute();
         return;
       }
-      setActiveSection("health");
-      window.location.hash = "health";
-      requestAnimationFrame(() => {
-        document.getElementById("health")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      // A returning member simply edited their contact details — stay in place.
     } catch {
       // updateProfile already shows error toast
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const persistHealthUpdate = async (payload: {
+    text: string;
+    documentUrls: string[];
+    mediaLinks: HealthMediaLink[];
+  }) => {
+    if (!user?.id) return null;
+    const body: Record<string, unknown> = {
+      healthUpdateText: payload.text,
+      healthDocumentUrls: payload.documentUrls,
+      healthMediaLinks: payload.mediaLinks,
+    };
+    if (!healthConsentGiven) {
+      body.healthDataConsent = true;
+      body.consentVersion = LEGAL_CONFIG.documentVersion;
+    }
+    const res = await fetch(`/api/users/${user.id}/health-update`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      message?: string;
+      profileCompletionStatus?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error || data.message || "Failed to save");
+    }
+    return data;
+  };
+
+  const advanceToPrivacyStep = () => {
+    setActiveSection("privacy");
+    setOpenSections((current) => ({ ...current, privacy: true }));
+    scrollToAccountSection("privacy");
   };
 
   const handleHealthSave = async (payload: {
@@ -482,60 +633,77 @@ export default function MyAccount() {
     if (!isHealthDisclosureComplete(payload.text)) {
       toast({
         title: "Health update required",
-        description: 'Add your health note or tap "No current concerns".',
+        description: `Add your health note or tap "${HEALTH_NO_CONCERNS_TEXT}".`,
         variant: "destructive",
       });
       return;
     }
-    setIsLoading(true);
-    const wasIncomplete = user.profileCompletionStatus !== "complete";
-    try {
-      const body: Record<string, unknown> = {
-        healthUpdateText: payload.text,
-        healthDocumentUrls: payload.documentUrls,
-        healthMediaLinks: payload.mediaLinks,
-      };
-      if (!healthConsentGiven) {
-        body.healthDataConsent = true;
-        body.consentVersion = LEGAL_CONFIG.documentVersion;
-      }
-      const res = await fetch(`/api/users/${user.id}/health-update`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify(body),
+
+    setProfileData((prev) => ({
+      ...prev,
+      healthUpdateText: payload.text,
+      healthDocumentUrls: payload.documentUrls,
+      healthMediaLinks: payload.mediaLinks,
+    }));
+
+    if (!healthConsentGiven && consentRequirement?.requiresConsent) {
+      setPendingHealthSave(payload);
+      toast({
+        title: "Almost there",
+        description: "Review privacy & consent to save your health note and finish setup.",
       });
-      const data = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        message?: string;
-        profileCompletionStatus?: string;
-      };
-      if (!res.ok) {
-        throw new Error(data.error || data.message || "Failed to save");
-      }
-      if (profileJustCompletedOnServer(wasIncomplete, data.profileCompletionStatus)) {
-        toast({
-          title: "You're all set",
-          description: getPendingBooking()
-            ? "Your profile is complete. Taking you to checkout."
-            : "Your profile is complete. Welcome to your dashboard.",
-        });
-        redirectAfterProfileComplete();
+      advanceToPrivacyStep();
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await persistHealthUpdate(payload);
+      setPendingHealthSave(null);
+      setHealthConsentGiven(true);
+      const wasIncomplete = user?.profileCompletionStatus !== "complete";
+      if (wasIncomplete) {
+        // Fail-closed gate: routes to privacy when consent is still required and
+        // only redirects once profile + health + consent are all confirmed done.
+        await resolveNextStepAndRoute();
         return;
       }
       await refreshUser();
-      setProfileData((prev) => ({
-        ...prev,
-        healthUpdateText: payload.text,
-        healthDocumentUrls: payload.documentUrls,
-        healthMediaLinks: payload.mediaLinks,
-      }));
-      setHealthConsentGiven(true);
       toast({ title: "Health note saved" });
     } catch (err) {
       toast({
         title: "Error",
         description: err instanceof Error ? err.message : "Failed to save",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePrivacyOnboardingComplete = async () => {
+    setIsLoading(true);
+    try {
+      // 1) Save the deferred health note (if any) so health + consent land together.
+      if (pendingHealthSave) {
+        await persistHealthUpdate(pendingHealthSave);
+        setPendingHealthSave(null);
+        setHealthConsentGiven(true);
+      }
+
+      // 2) Persist the full Contact Info the member typed during onboarding.
+      //    Only the primary mobile is silently auto-saved; name/DOB/emergency/
+      //    address would otherwise be dropped on the post-consent navigation and
+      //    the member re-prompted for "mandatory" details they already entered.
+      await updateProfile(buildContactPayload(), { silent: true });
+
+      // 3) Single fail-closed gate confirms profile + health + consent server-side
+      //    before redirecting; otherwise it stays in-page on the remaining step.
+      await resolveNextStepAndRoute();
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to finish setup",
         variant: "destructive",
       });
     } finally {
@@ -554,8 +722,27 @@ export default function MyAccount() {
     emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
     healthUpdateText: profileData.healthUpdateText,
   };
-  const isBookingReady = isAccountProfileComplete(statusInput);
+  const isBookingReady =
+    isAccountProfileComplete(statusInput) && !consentRequirement?.requiresConsent;
   const healthHistory = parseHealthHistory(user?.healthUpdateHistory);
+  const onboardingAnchor = getFirstIncompleteAccountAnchor(statusInput, {
+    requiresConsent: consentRequirement?.requiresConsent,
+  });
+  const needsProfileOnboarding = onboardingAnchor === "profile";
+  const needsHealthOnboarding = onboardingAnchor === "health";
+  const needsPrivacyOnboarding = onboardingAnchor === "privacy";
+  const isSetupInProgress = Boolean(onboardingAnchor);
+  const showPrivacyOnboardingForm =
+    needsPrivacyOnboarding ||
+    (Boolean(consentRequirement?.requiresConsent) &&
+      isProfileFieldsSectionComplete(statusInput) &&
+      isHealthDisclosureComplete(profileData.healthUpdateText));
+
+  useEffect(() => {
+    if (!user || !isSetupInProgress || !onboardingAnchor) return;
+    setActiveSection(onboardingAnchor);
+    setOpenSections((current) => ({ ...current, [onboardingAnchor]: true }));
+  }, [user?.id, onboardingAnchor, isSetupInProgress]);
 
   // Completeness meter (5 signals) — a friendlier replacement for a binary badge.
   const checks = [
@@ -582,12 +769,43 @@ export default function MyAccount() {
       ok: isHealthDisclosureComplete(profileData.healthUpdateText),
       hint: "add a health note",
     },
+    {
+      ok: !consentRequirement?.requiresConsent,
+      hint: "review privacy & consent",
+    },
   ];
   const pct = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
   const firstGap = checks.find((c) => !c.ok);
-  const pctHint = pct === 100 ? "All set. You're ready to book." : `Next: ${firstGap?.hint}.`;
+  const pctHint =
+    pct === 100
+      ? "All set. You're ready to book."
+      : onboardingAnchor === "privacy"
+        ? "Next: review privacy & consent."
+        : `Next: ${firstGap?.hint}.`;
   const consentCopy = CONSENT_COPY[consentLang];
-  const needsHealthOnboarding = !isHealthDisclosureComplete(profileData.healthUpdateText);
+
+  const isSectionOpen = (id: AccountAnchor) => {
+    if (id === "profile" && needsProfileOnboarding) return true;
+    if (id === "health" && needsHealthOnboarding) return true;
+    if (id === "privacy" && needsPrivacyOnboarding) return true;
+    return openSections[id] ?? false;
+  };
+
+  const setSectionOpen = (id: AccountAnchor, open: boolean) => {
+    if (
+      (id === "profile" && needsProfileOnboarding) ||
+      (id === "health" && needsHealthOnboarding) ||
+      (id === "privacy" && needsPrivacyOnboarding)
+    ) {
+      return;
+    }
+    setOpenSections((current) => ({ ...current, [id]: open }));
+  };
+
+  const healthSummary = healthSectionSummary(
+    profileData.healthUpdateText,
+    user?.healthUpdateLastModified,
+  );
 
   const initials = (profileData.name || user?.name || "A W")
     .split(" ")
@@ -610,37 +828,21 @@ export default function MyAccount() {
     { field: "secondaryMobile", label: "Alternate", icon: Phone, placeholder: "Secondary number" },
   ];
 
-  const sectionCard =
-    "scroll-mt-36 md:scroll-mt-4 rounded-[20px] border border-primary/10 bg-white/70 backdrop-blur-xl p-5 sm:p-7 shadow-[0_8px_30px_rgba(27,28,27,0.04)]";
-  const sectionHead = (
-    Icon: typeof User,
-    title: string,
-    sub: string,
-    opts?: { soon?: boolean; required?: boolean },
-  ) => (
-    <div className="flex items-center gap-3">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="flex-1">
-        <h2 className="font-display text-xl font-semibold text-foreground">
-          {title}
-          {opts?.required ? <span className="ml-1 font-bold text-dz-secondary">*</span> : null}
-        </h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{sub}</p>
-      </div>
-      {opts?.soon ? (
-        <span className="rounded-full bg-dz-secondary/10 px-2.5 py-1 text-[10px] font-bold tracking-wider text-dz-secondary">
-          SOON
-        </span>
-      ) : null}
-    </div>
-  );
+  const profileSummary =
+    profileData.name.trim() || profileData.primaryMobile.trim()
+      ? [profileData.name.trim(), profileData.primaryMobile.trim() && `+${profileData.primaryMobileCountryCode.replace("+", "")} ${profileData.primaryMobile}`]
+          .filter(Boolean)
+          .join(" · ")
+      : "Add your contact details";
+
+  const privacySummary = consentRequirement?.requiresConsent
+    ? "Review and accept required consents"
+    : "Manage consent and account erasure";
 
   const subTabBtn = (active: boolean) =>
     cn(
       "flex-1 rounded-[10px] px-2 py-2 text-[13px] font-semibold transition-colors",
-      active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-primary",
+      active ? "bg-primary text-primary-foreground" : "font-semibold text-foreground/75 hover:text-primary",
     );
 
   return (
@@ -649,11 +851,12 @@ export default function MyAccount() {
 
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:flex-col min-[900px]:pb-0 min-[900px]:pt-6">
         <button
-          onClick={() => setLocation("/dashboard")}
+          onClick={() => setLocation(isBookingReady ? "/dashboard" : "#profile")}
           data-testid="back-to-dashboard"
           className="mb-4 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to dashboard
+          <ArrowLeft className="h-4 w-4" />{" "}
+          {isBookingReady ? "Back to dashboard" : "Finish setup to reach dashboard"}
         </button>
 
         {/* Profile band + completeness meter */}
@@ -738,14 +941,12 @@ export default function MyAccount() {
                   <n.icon className="h-5 w-5" />
                   <span className="flex-1">{n.label}</span>
                   {n.soon && (
-                    <span
+                    <AccountComingSoonBadge
                       className={cn(
-                        "rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide",
-                        isActive ? "bg-white/20 text-white" : "bg-dz-secondary/10 text-dz-secondary",
+                        "px-1.5 py-0.5 text-[9px]",
+                        isActive && "bg-white/20 text-white",
                       )}
-                    >
-                      SOON
-                    </span>
+                    />
                   )}
                 </a>
               );
@@ -758,13 +959,21 @@ export default function MyAccount() {
             className="flex min-w-0 flex-col gap-5 min-[900px]:min-h-0 min-[900px]:overflow-y-auto min-[900px]:pb-10 min-[900px]:pr-2"
           >
             {/* CONTACT INFO (anchor id stays `profile`) */}
-            <section id="profile" className={sectionCard} data-testid="profile-content">
-              {sectionHead(User, "Contact Info", "Your details, kept private", { required: true })}
-              <div className="my-5 h-px bg-primary/10" />
+            <AccountFoldSection
+              id="profile"
+              icon={User}
+              title="Contact Info"
+              subtitle="Your details, kept private"
+              required
+              open={isSectionOpen("profile")}
+              onOpenChange={(open) => setSectionOpen("profile", open)}
+              summary={profileSummary}
+              testId="profile-content"
+            >
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <Label htmlFor="name" className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                    <Label htmlFor="name" className="mb-1.5 block text-sm font-medium text-foreground">
                       Full name
                     </Label>
                     <Input
@@ -779,7 +988,7 @@ export default function MyAccount() {
                   <div>
                     <Label
                       htmlFor="email"
-                      className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"
+                      className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground"
                     >
                       Email <Lock className="h-3.5 w-3.5" />
                     </Label>
@@ -795,7 +1004,7 @@ export default function MyAccount() {
                     <DateOfBirthField
                       id="dateOfBirth"
                       label={
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                        <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                           Date of birth {dobLocked ? <Lock className="h-3.5 w-3.5" /> : null}
                           {!dobLocked ? <span className="font-bold text-dz-secondary">*</span> : null}
                         </span>
@@ -809,8 +1018,12 @@ export default function MyAccount() {
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2.5 text-xs font-semibold text-muted-foreground">Contact numbers</p>
+                <AccountFoldSection
+                  nested
+                  title="Contact numbers"
+                  subtitle="Mobile and emergency contacts"
+                  defaultOpen={!profileData.primaryMobile.trim()}
+                >
                   <div className="space-y-2.5">
                     {phoneRows.map((row) => {
                       const v = mobileValidation[row.field];
@@ -820,7 +1033,7 @@ export default function MyAccount() {
                         <div key={row.field} className="flex flex-wrap items-center gap-2.5">
                           <div className="flex w-[130px] shrink-0 items-center gap-2">
                             <row.icon className="h-[18px] w-[18px] text-primary" />
-                            <span className="text-sm font-medium">{row.label}</span>
+                            <span className="text-sm font-medium text-foreground">{row.label}</span>
                             {row.required && <span className="font-bold text-dz-secondary">*</span>}
                           </div>
                           <div className="flex min-w-0 flex-1 basis-60 gap-2">
@@ -870,7 +1083,7 @@ export default function MyAccount() {
                       );
                     })}
                   </div>
-                </div>
+                </AccountFoldSection>
 
                 {profileData.primaryMobile.trim().length > 0 ? (
                   <ConsentCheckbox
@@ -883,25 +1096,26 @@ export default function MyAccount() {
                   />
                 ) : null}
 
-                <div className="space-y-3 rounded-xl border border-primary/10 bg-primary/[0.02] p-4">
-                  <p className="text-sm font-semibold text-foreground">Mailing address</p>
-                  <p className="text-xs text-muted-foreground">
-                    Optional. Helps us share studio directions and local updates.
-                  </p>
+                <AccountFoldSection
+                  nested
+                  title="Mailing address"
+                  subtitle="Optional — so we can send you session materials and local updates"
+                  defaultOpen={false}
+                >
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="sm:col-span-2">
-                      <Label htmlFor="addressStreet" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressStreet" className="text-sm font-medium text-foreground">
                         Street address
                       </Label>
                       <Input
                         id="addressStreet"
                         value={profileData.addressStreet}
                         onChange={(e) => handleInputChange("addressStreet", e.target.value)}
-                        placeholder="House / flat, street"
+                        placeholder="Street address"
                       />
                     </div>
                     <div className="sm:col-span-2">
-                      <Label htmlFor="addressLine2" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressLine2" className="text-sm font-medium text-foreground">
                         Apartment, suite, etc. (optional)
                       </Label>
                       <Input
@@ -911,7 +1125,7 @@ export default function MyAccount() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="addressCity" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressCity" className="text-sm font-medium text-foreground">
                         City
                       </Label>
                       <Input
@@ -921,7 +1135,7 @@ export default function MyAccount() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="addressCountry" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressCountry" className="text-sm font-medium text-foreground">
                         Country
                       </Label>
                       <Select
@@ -949,7 +1163,7 @@ export default function MyAccount() {
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="addressState" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressState" className="text-sm font-medium text-foreground">
                         State / province
                       </Label>
                       {hasPredefinedAddressStates(profileData.addressCountry) ? (
@@ -979,7 +1193,7 @@ export default function MyAccount() {
                       )}
                     </div>
                     <div>
-                      <Label htmlFor="addressPincode" className="text-xs text-muted-foreground">
+                      <Label htmlFor="addressPincode" className="text-sm font-medium text-foreground">
                         PIN code
                       </Label>
                       <Input
@@ -996,7 +1210,7 @@ export default function MyAccount() {
                       />
                     </div>
                   </div>
-                </div>
+                </AccountFoldSection>
 
                 <Button
                   type="submit"
@@ -1004,52 +1218,65 @@ export default function MyAccount() {
                   data-testid="update-profile-button"
                   className="w-full rounded-full bg-primary py-6 font-bold text-white hover:bg-primary/90"
                 >
-                  {isLoading ? "Saving…" : "Save changes"}
+                  {isLoading ? "Saving…" : isSetupInProgress ? "Save & continue" : "Save changes"}
                 </Button>
               </form>
-            </section>
+            </AccountFoldSection>
 
             {/* HEALTH */}
-            <section id="health" className={sectionCard} data-testid="health-content">
-              {sectionHead(Heart, "Health note", "So we keep your practice safe", { required: true })}
-              <div className="my-5 h-px bg-primary/10" />
+            <AccountFoldSection
+              id="health"
+              icon={Heart}
+              title="Health note"
+              subtitle="So we keep your practice safe"
+              required
+              forceOpen={needsHealthOnboarding}
+              open={isSectionOpen("health")}
+              onOpenChange={(open) => setSectionOpen("health", open)}
+              summary={healthSummary}
+              testId="health-content"
+            >
               <AccountHealthNoteSection
                 currentText={profileData.healthUpdateText}
                 documentUrls={profileData.healthDocumentUrls}
                 mediaLinks={profileData.healthMediaLinks}
                 lastModified={user.healthUpdateLastModified ?? null}
                 history={healthHistory}
-                healthConsentGiven={healthConsentGiven}
-                healthConsentChecked={healthConsentChecked}
-                onHealthConsentCheckedChange={setHealthConsentChecked}
-                consentLang={consentLang}
-                onConsentLangChange={setConsentLang}
                 startInEditMode={needsHealthOnboarding}
+                continueLabel={isSetupInProgress ? "Save & continue" : "Save note"}
                 onSave={async (payload) => {
                   await handleHealthSave(payload);
-                  setProfileData((p) => ({
-                    ...p,
-                    healthUpdateText: payload.text,
-                    healthDocumentUrls: payload.documentUrls,
-                    healthMediaLinks: payload.mediaLinks,
-                  }));
                 }}
                 isLoading={isLoading}
               />
-            </section>
+            </AccountFoldSection>
 
             {/* SESSIONS */}
-            <section id="sessions" className={sectionCard} data-testid="sessions-content">
-              {sectionHead(CalendarClock, "Sessions", "Your bookings & history")}
-              <div className="mt-5">
-                <SessionHistory userId={user.id} />
-              </div>
-            </section>
+            <AccountFoldSection
+              id="sessions"
+              icon={CalendarClock}
+              title="Sessions"
+              subtitle="Your bookings & history"
+              open={isSectionOpen("sessions")}
+              onOpenChange={(open) => setSectionOpen("sessions", open)}
+              summary="Upcoming, completed, and cancelled sessions"
+              testId="sessions-content"
+            >
+              <SessionHistory userId={user.id} />
+            </AccountFoldSection>
 
             {/* PAYMENTS — Methods + History sub-tabs */}
-            <section id="payments" className={sectionCard} data-testid="payments-content">
-              {sectionHead(CreditCard, "Payments", "Methods & transaction history")}
-              <div className="mb-4 mt-5 flex gap-1.5 rounded-[14px] bg-muted p-1.5">
+            <AccountFoldSection
+              id="payments"
+              icon={CreditCard}
+              title="Payments"
+              subtitle="Methods & transaction history"
+              open={isSectionOpen("payments")}
+              onOpenChange={(open) => setSectionOpen("payments", open)}
+              summary="Payment methods and transaction history"
+              testId="payments-content"
+            >
+              <div className="mb-4 flex gap-1.5 rounded-[14px] bg-muted p-1.5">
                 <button
                   type="button"
                   onClick={() => setPayTab("methods")}
@@ -1073,17 +1300,15 @@ export default function MyAccount() {
               ) : (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-dz-secondary/10 px-2.5 py-1 text-[10px] font-bold tracking-wider text-dz-secondary">
-                      SOON
-                    </span>
-                    <span className="text-sm text-muted-foreground">
+                    <AccountComingSoonBadge />
+                    <span className="text-sm font-semibold text-foreground/80">
                       Saved cards for one-tap booking
                     </span>
                   </div>
                   <div className="flex items-center gap-3.5 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.02] p-6">
                     <CreditCard className="h-7 w-7 text-primary/40" />
                     <div>
-                      <p className="text-sm font-semibold">No cards yet</p>
+                      <p className="text-sm font-semibold text-foreground">No cards yet</p>
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         Secure card payments arrive soon. For now, pay at the studio.
                       </p>
@@ -1091,12 +1316,20 @@ export default function MyAccount() {
                   </div>
                 </div>
               )}
-            </section>
+            </AccountFoldSection>
 
             {/* CREDITS (placeholder) */}
-            <section id="credits" className={sectionCard} data-testid="credits-content">
-              {sectionHead(Coins, "Credits", "Session credits for future bookings", { soon: true })}
-              <div className="my-5 h-px bg-primary/10" />
+            <AccountFoldSection
+              id="credits"
+              icon={Coins}
+              title="Credits"
+              subtitle="Session credits for future bookings"
+              soon
+              open={isSectionOpen("credits")}
+              onOpenChange={(open) => setSectionOpen("credits", open)}
+              summary="View and apply session credits"
+              testId="credits-content"
+            >
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.02] px-6 py-10 text-center">
                 <Coins className="h-10 w-10 text-primary/35" />
                 <p className="font-display text-lg font-semibold text-primary">Credits coming soon</p>
@@ -1105,12 +1338,20 @@ export default function MyAccount() {
                   you&apos;ll be able to view your balance and apply them to any booking here.
                 </p>
               </div>
-            </section>
+            </AccountFoldSection>
 
             {/* PREFERENCES (placeholder) */}
-            <section id="preferences" className={sectionCard} data-testid="preferences-content">
-              {sectionHead(SlidersHorizontal, "Preferences", "How we reach you", { soon: true })}
-              <div className="my-4 h-px bg-primary/10" />
+            <AccountFoldSection
+              id="preferences"
+              icon={SlidersHorizontal}
+              title="Preferences"
+              subtitle="How we reach you"
+              soon
+              open={isSectionOpen("preferences")}
+              onOpenChange={(open) => setSectionOpen("preferences", open)}
+              summary="Reminders, updates, and offers"
+              testId="preferences-content"
+            >
               {(
                 [
                   { key: "reminders", label: "Session reminders", desc: "A nudge before each booking" },
@@ -1123,7 +1364,7 @@ export default function MyAccount() {
                   className="flex items-center gap-3.5 border-b border-primary/5 py-3.5 last:border-0"
                 >
                   <div className="flex-1">
-                    <p className="text-sm font-medium">{p.label}</p>
+                    <p className="text-sm font-medium text-foreground">{p.label}</p>
                     <p className="mt-0.5 text-[13px] text-muted-foreground">{p.desc}</p>
                   </div>
                   <Switch
@@ -1132,18 +1373,25 @@ export default function MyAccount() {
                   />
                 </div>
               ))}
-            </section>
+            </AccountFoldSection>
 
             {/* SECURITY */}
-            <section id="security" className={sectionCard} data-testid="security-content">
-              {sectionHead(ShieldCheck, "Account & security", "Verification and access")}
-              <div className="my-5 h-px bg-primary/10" />
+            <AccountFoldSection
+              id="security"
+              icon={ShieldCheck}
+              title="Account & security"
+              subtitle="Verification and access"
+              open={isSectionOpen("security")}
+              onOpenChange={(open) => setSectionOpen("security", open)}
+              summary={user.emailVerified ? "Email verified" : "Email verification pending"}
+              testId="security-content"
+            >
               <div className="mb-3.5 flex items-center gap-3 rounded-2xl border border-primary/10 p-4">
                 <ShieldCheck
                   className={`h-5 w-5 ${user.emailVerified ? "text-emerald-600" : "text-amber-500"}`}
                 />
                 <div className="flex-1">
-                  <p className="text-sm font-medium">
+                  <p className="text-sm font-medium text-foreground">
                     {user.emailVerified ? "Email verified" : "Email not verified"}
                   </p>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{user.email}</p>
@@ -1167,17 +1415,37 @@ export default function MyAccount() {
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </Button>
-            </section>
+            </AccountFoldSection>
 
             {/* PRIVACY & CONSENT */}
-            <section id="privacy" className={sectionCard} data-testid="privacy-content">
+            <AccountFoldSection
+              id="privacy"
+              icon={Shield}
+              title="Privacy & consent"
+              subtitle="Your data choices and legal rights"
+              required={needsPrivacyOnboarding}
+              forceOpen={needsPrivacyOnboarding}
+              open={isSectionOpen("privacy")}
+              onOpenChange={(open) => setSectionOpen("privacy", open)}
+              summary={privacySummary}
+              testId="privacy-content"
+            >
               <PrivacyConsentSection
+                hideTitle
+                onboardingActive={showPrivacyOnboardingForm}
+                profileDateOfBirth={profileData.dateOfBirth || user.dateOfBirth || ""}
+                needsHealthConsent={!healthConsentGiven && isHealthDisclosureComplete(profileData.healthUpdateText)}
+                healthConsentChecked={healthConsentChecked}
+                onHealthConsentCheckedChange={setHealthConsentChecked}
+                marketingOptIn={marketingOptIn}
+                onMarketingOptInChange={setMarketingOptIn}
+                onOnboardingComplete={handlePrivacyOnboardingComplete}
                 onHealthWithdrawn={() => {
                   setHealthConsentGiven(false);
                   setHealthConsentChecked(false);
                 }}
               />
-            </section>
+            </AccountFoldSection>
           </div>
         </div>
       </main>

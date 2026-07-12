@@ -330,7 +330,7 @@ export default function Dashboard() {
 
             <ImageHeroContent
               glassOnMobile
-              className="flex w-full max-w-[640px] flex-col justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:justify-center"
+              className="flex w-full max-w-[640px] flex-col items-start justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:max-w-[min(480px,42vw)] lg:justify-center"
             >
               <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
                 {greeting()},{" "}
@@ -426,7 +426,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => (window.location.href = "/#schedule")}
-                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
+                  className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
                 >
                   Browse Schedule
                   <ArrowRight className="h-4 w-4" />

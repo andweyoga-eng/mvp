@@ -431,6 +431,7 @@ export default function Reserve() {
           <div className="flex items-center gap-3">
             <AccountMenuControls
               showHeaderButton
+              alwaysShowFloatingMenu
               showFloatingMenuWhenScrolled
               headerTestId="reserve-account-toggle"
               fabTestId="reserve-account-fab"

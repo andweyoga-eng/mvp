@@ -99,6 +99,19 @@ function flexiBadge(testId: string) {
   );
 }
 
+function formatFlexiGroupScheduleLine(sessions: SessionData[]): string {
+  const seen = new Map<string, string>();
+  for (const session of sessions) {
+    const weekday = formatSessionWeekday(session.date);
+    if (!seen.has(weekday)) {
+      seen.set(weekday, formatSessionTime(session.date));
+    }
+  }
+  return Array.from(seen.entries())
+    .map(([weekday, time]) => `${weekday} ${time}`)
+    .join(" · ");
+}
+
 interface SessionHistoryProps {
   userId: string;
   initialSubTab?: string;
@@ -260,31 +273,12 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     );
   };
 
-  const renderSessionCard = (session: SessionData) => {
+  const renderSessionCardBody = (session: SessionData) => {
     const duration = session.sessionDurationMinutes ?? 60;
     const start = new Date(session.date);
 
     return (
-      <article
-        key={session.id}
-        className="rounded-2xl border border-primary/10 bg-white p-4 shadow-sm"
-        data-testid={`session-card-${session.id}`}
-      >
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3
-                className="font-display text-base font-semibold text-foreground"
-                data-testid={`session-title-${session.id}`}
-              >
-                {session.className}
-              </h3>
-              {session.isFlexi ? flexiBadge(`session-flexi-${session.id}`) : null}
-            </div>
-          </div>
-          {statusBadge(session)}
-        </div>
-
+      <>
         <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
           <User className="h-4 w-4 shrink-0 text-primary/70" />
           <span>{session.instructorName}</span>
@@ -293,12 +287,12 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           <span className="inline-flex items-center gap-1.5">
             <Calendar className="h-4 w-4 shrink-0 text-primary/70" />
-              {new Date(session.date).toLocaleDateString("en-IN", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                timeZone: "Asia/Kolkata",
-              })}
+            {new Date(session.date).toLocaleDateString("en-IN", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              timeZone: "Asia/Kolkata",
+            })}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-4 w-4 shrink-0 text-primary/70" />
@@ -427,71 +421,45 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
             </Button>
           )}
         </div>
+      </>
+    );
+  };
+
+  const renderSessionCard = (session: SessionData) => {
+    return (
+      <article
+        key={session.id}
+        className="rounded-2xl border border-primary/10 bg-white p-4 shadow-sm"
+        data-testid={`session-card-${session.id}`}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3
+                className="font-display text-base font-semibold text-foreground"
+                data-testid={`session-title-${session.id}`}
+              >
+                {session.className}
+              </h3>
+              {session.isFlexi ? flexiBadge(`session-flexi-${session.id}`) : null}
+            </div>
+          </div>
+          {statusBadge(session)}
+        </div>
+        {renderSessionCardBody(session)}
       </article>
     );
   };
 
-  const renderCompactUpcomingRow = (session: SessionData) => {
-    const duration = session.sessionDurationMinutes ?? 60;
-    const start = new Date(session.date);
-
-    return (
-      <div
-        key={session.id}
-        className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
-        data-testid={`compact-session-row-${session.id}`}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="text-sm font-semibold text-foreground">
-              {formatSessionShortDate(session.date)}
-            </p>
-            <p className="text-sm font-medium text-foreground">{formatSessionTime(session.date)}</p>
-            {statusBadge(session)}
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            With {session.instructorName} · {duration} min · {sessionLocation(session)}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {session.paymentStatus === "pending" && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              Payment pending
-            </span>
-          )}
-          {session.verificationStatus === "pending" && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-              Awaiting verification
-            </span>
-          )}
-          {session.paymentStatus === "paid" &&
-            session.googleMeetLink &&
-            session.meetJoinState !== "hidden" && (
-              <MeetLinkJoinControl
-                size="sm"
-                googleMeetLink={session.googleMeetLink}
-                sessionStart={start}
-                sessionDurationMinutes={duration}
-                isPaid
-              />
-            )}
-          {canRetrySessionPayment(session) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleRetryPayment(session)}
-              className="h-8 border-amber-200 px-3 text-amber-700 hover:bg-amber-50"
-              data-testid={`retry-payment-${session.id}`}
-            >
-              <RefreshCw className="mr-1 h-3.5 w-3.5" />
-              Retry
-            </Button>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const renderNestedFlexiSession = (session: SessionData) => (
+    <div
+      key={session.id}
+      className="border-t border-primary/10 py-4 first:border-t-0 first:pt-0"
+      data-testid={`compact-session-row-${session.id}`}
+    >
+      {renderSessionCardBody(session)}
+    </div>
+  );
 
   const toggleFlexiGroup = (flexiBookingId: string) => {
     setOpenFlexiGroups((current) => ({ ...current, [flexiBookingId]: !current[flexiBookingId] }));
@@ -537,10 +505,7 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     if (!primary) return null;
 
     const isOpen = !!openFlexiGroups[item.flexiBookingId];
-    const uniqueWeekdays = Array.from(
-      new Set(item.sessions.map((s) => formatSessionWeekday(s.date))),
-    );
-    const timeLabel = formatSessionTime(primary.date);
+    const scheduleLine = formatFlexiGroupScheduleLine(item.sessions);
     const weekStart = startOfWeek(new Date(primary.date), { weekStartsOn: 1 });
     const weekEnd = endOfWeek(new Date(primary.date), { weekStartsOn: 1 });
     const visibleSessions = item.sessions.filter((session) => {
@@ -567,32 +532,26 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
               </h3>
               {flexiBadge(`session-flexi-group-${item.flexiBookingId}`)}
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {uniqueWeekdays.join(" · ")} · {timeLabel}
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{scheduleLine}</p>
             <p className="mt-1 text-xs text-muted-foreground">
               {item.sessions.length} upcoming session{item.sessions.length === 1 ? "" : "s"} · Next{" "}
               {formatSessionShortDate(primary.date)}
             </p>
           </div>
-          <ChevronDown
-            className={cn(
-              "mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
-              isOpen && "rotate-180",
-            )}
-          />
+          <div className="flex shrink-0 items-start gap-2">
+            {statusBadge(primary)}
+            <ChevronDown
+              className={cn(
+                "mt-1 h-5 w-5 text-primary transition-transform duration-200",
+                isOpen && "rotate-180",
+              )}
+            />
+          </div>
         </button>
 
         {isOpen ? (
-          <div className="mt-3 rounded-xl bg-primary/[0.03] px-3 py-3">
-            {visibleSessions.map((session, index) => (
-              <div
-                key={session.id}
-                className={cn(index > 0 && "border-t border-primary/10")}
-              >
-                {renderCompactUpcomingRow(session)}
-              </div>
-            ))}
+          <div className="mt-3 rounded-xl border border-primary/10 bg-primary/[0.02] p-4">
+            {visibleSessions.map((session) => renderNestedFlexiSession(session))}
           </div>
         ) : null}
       </article>

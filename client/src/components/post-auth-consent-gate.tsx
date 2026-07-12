@@ -10,7 +10,7 @@ import {
 } from "@/lib/consent-api";
 import { OnboardingConsentPanel } from "@/components/onboarding-consent-modal";
 import { LEGAL_CONFIG } from "@shared/legal-config";
-import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { myAccountHref } from "@/lib/account-routes";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFER_LOGIN_TOAST_KEY = "awy_defer_login_toast";
@@ -33,8 +33,12 @@ function showDeferredLoginToastIfNeeded(toast: ReturnType<typeof useToast>["toas
 
 const PUBLIC_PATHS = new Set(["/", "/privacy", "/terms", "/grievance", "/reset-password"]);
 
+/** Members finish first-time consent inside My Account — do not block that route. */
+const CONSENT_ONBOARDING_EXEMPT_PATHS = new Set(["/my-account", "/privacy", "/terms"]);
+
 function memberPathRequiresConsent(pathname: string): boolean {
   const path = pathname.split("?")[0] ?? pathname;
+  if (CONSENT_ONBOARDING_EXEMPT_PATHS.has(path)) return false;
   return !path.startsWith("/admin") && !PUBLIC_PATHS.has(path);
 }
 
@@ -148,13 +152,6 @@ export function PostAuthConsentGate({ children }: { children: ReactNode }) {
               });
               return { ok: false };
             }
-            const isNewUser =
-              sessionStorage.getItem(OAUTH_NEW_USER_KEY) === "1" ||
-              requirement.flow === "first_time";
-            if (isNewUser) {
-              sessionStorage.removeItem(OAUTH_NEW_USER_KEY);
-              setLocation(MY_ACCOUNT_PROFILE_URL);
-            }
             showDeferredLoginToastIfNeeded(toast);
             return result;
           }}
@@ -163,6 +160,16 @@ export function PostAuthConsentGate({ children }: { children: ReactNode }) {
           requireDateOfBirth={requirement.requireDateOfBirth}
           initialLanguage={initialLanguage}
         />
+        <p className="mt-4 text-center text-sm text-dz-muted">
+          New here?{" "}
+          <button
+            type="button"
+            className="font-semibold text-primary underline"
+            onClick={() => setLocation(myAccountHref("privacy"))}
+          >
+            Finish setup in My Account
+          </button>
+        </p>
       </div>
     </ConsentBlockingScreen>
   );

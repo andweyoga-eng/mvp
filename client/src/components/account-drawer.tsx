@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { myAccountHref } from "@/lib/account-routes";
+import { AccountComingSoonBadge } from "@/components/account-fold-section";
 
 /**
  * The single account drawer used on every signed-in surface (top Navigation and
@@ -64,7 +65,7 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
       <div
         onClick={() => onOpenChange(false)}
         className={cn(
-          "fixed inset-0 z-[55] bg-foreground/30 backdrop-blur-[3px] transition-opacity duration-300",
+          "fixed inset-0 z-[55] bg-foreground/40 backdrop-blur-[4px] transition-opacity duration-300",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         data-testid="account-drawer-overlay"
@@ -72,7 +73,7 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
 
       <aside
         className={cn(
-          "fixed right-0 top-0 z-[60] flex h-screen w-[min(360px,88vw)] flex-col justify-between overflow-y-auto border-l border-dz-glass-border bg-white/60 p-4 shadow-2xl backdrop-blur-[24px] transition-transform duration-300 ease-out",
+          "fixed right-0 top-0 z-[60] flex h-screen w-[min(360px,88vw)] flex-col justify-between overflow-y-auto border-l border-dz-glass-border bg-white p-4 shadow-2xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
         data-testid="account-drawer"
@@ -86,7 +87,7 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
               </div>
               <div className="min-w-0">
                 <h3 className="font-display text-lg font-bold text-primary">My Account</h3>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                <p className="mt-0.5 truncate text-sm font-medium text-foreground/80">
                   {user?.name ?? "Manage your wellness journey"}
                 </p>
               </div>
@@ -110,20 +111,16 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
                   type="button"
                   onClick={() => go(item.href)}
                   className={cn(
-                    "flex items-center gap-3.5 rounded-xl px-3.5 py-3 text-left text-[15px] transition-colors",
+                    "flex items-center gap-3.5 rounded-xl px-3.5 py-3 text-left text-[15px] font-medium transition-colors",
                     item.primary
                       ? "bg-primary font-semibold text-primary-foreground"
-                      : "text-muted-foreground hover:bg-primary/[0.06] hover:text-primary",
+                      : "text-foreground/85 hover:bg-primary/[0.06] hover:text-primary",
                   )}
                   data-testid={`account-drawer-link-${idx}`}
                 >
                   <Icon className="h-[21px] w-[21px]" />
                   <span className="flex-1">{item.label}</span>
-                  {item.soon ? (
-                    <span className="rounded-full bg-dz-secondary/10 px-2 py-0.5 text-[10px] font-bold tracking-wider text-dz-secondary">
-                      SOON
-                    </span>
-                  ) : null}
+                  {item.soon ? <AccountComingSoonBadge /> : null}
                 </button>
               );
             })}

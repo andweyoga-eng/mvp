@@ -11,6 +11,7 @@ import {
 import {
   isProfileFieldsSectionComplete,
   isHealthSectionComplete,
+  getFirstIncompleteAccountAnchor,
 } from "../shared/profileCompleteness.ts";
 import { HEALTH_NO_CONCERNS_TEXT } from "../shared/health-disclosure.ts";
 
@@ -60,6 +61,24 @@ describe("account section completeness", () => {
     assert.equal(isHealthSectionComplete(base), true);
     assert.equal(isProfileFieldsSectionComplete({ ...base, name: "" }), false);
     assert.equal(isHealthSectionComplete({ ...base, healthUpdateText: "" }), false);
+  });
+
+  it("routes to privacy when profile and health are done but consent is pending", () => {
+    assert.equal(
+      getFirstIncompleteAccountAnchor(
+        {
+          emailVerified: true,
+          name: "Test User",
+          primaryMobile: "9988776655",
+          primaryMobileCountryCode: "+91",
+          emergencyMobile: "8877665544",
+          emergencyMobileCountryCode: "+91",
+          healthUpdateText: HEALTH_NO_CONCERNS_TEXT,
+        },
+        { requiresConsent: true },
+      ),
+      "privacy",
+    );
   });
 });
 

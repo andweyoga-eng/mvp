@@ -18,6 +18,8 @@ interface AccountMenuControlsProps {
    * Bottom-right hamburger — only appears after scrolling past the first fold
    * so account stays reachable without duplicating the header CTA at the top.
    */
+  /** When true, the floating menu button is always visible (not only after scroll). */
+  alwaysShowFloatingMenu?: boolean;
   showFloatingMenuWhenScrolled?: boolean;
   scrollThreshold?: number;
   headerButtonClassName?: string;
@@ -27,6 +29,7 @@ interface AccountMenuControlsProps {
 
 export function AccountMenuControls({
   showHeaderButton = true,
+  alwaysShowFloatingMenu = false,
   showFloatingMenuWhenScrolled = false,
   scrollThreshold = 120,
   headerButtonClassName,
@@ -56,7 +59,7 @@ export function AccountMenuControls({
 
   if (authLoading || !user) return null;
 
-  const showFab = showFloatingMenuWhenScrolled && scrolledPastFold;
+  const showFab = alwaysShowFloatingMenu || (showFloatingMenuWhenScrolled && scrolledPastFold);
 
   return (
     <>

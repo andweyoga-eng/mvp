@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Baby, Loader2 } from "lucide-react";
@@ -33,7 +33,18 @@ interface OnboardingConsentPanelProps {
   mode?: "first_time" | "reconsent";
   requiredTypes?: ConsentType[];
   requireDateOfBirth?: boolean;
+  prefilledDateOfBirth?: string;
   initialLanguage?: ConsentLanguage;
+  /** Controlled language — when provided, the parent owns the EN/KN toggle. */
+  language?: ConsentLanguage;
+  onLanguageChange?: (lang: ConsentLanguage) => void;
+  /** Hide the panel's own EN/KN toggle (parent renders one). */
+  hideLanguageToggle?: boolean;
+  /** In-page My Account variant — hides back/cancel chrome. */
+  embedded?: boolean;
+  submitLabel?: string;
+  /** Extra consent controls rendered just before the submit button. */
+  beforeSubmit?: ReactNode;
 }
 
 export function OnboardingConsentPanel({
@@ -45,11 +56,23 @@ export function OnboardingConsentPanel({
   mode = "first_time",
   requiredTypes = [...REQUIRED_ACCOUNT_CONSENTS],
   requireDateOfBirth = true,
+  prefilledDateOfBirth = "",
   initialLanguage = detectConsentLanguage(),
+  language,
+  onLanguageChange,
+  hideLanguageToggle = false,
+  embedded = false,
+  submitLabel,
+  beforeSubmit,
 }: OnboardingConsentPanelProps) {
-  const [lang, setLang] = useState<ConsentLanguage>(initialLanguage);
+  const [internalLang, setInternalLang] = useState<ConsentLanguage>(initialLanguage);
+  const lang = language ?? internalLang;
+  const setLang = (next: ConsentLanguage) => {
+    if (onLanguageChange) onLanguageChange(next);
+    else setInternalLang(next);
+  };
   const copy = CONSENT_COPY[lang];
-  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState(prefilledDateOfBirth);
   const [cbProfile, setCbProfile] = useState(false);
   const [cbTerms, setCbTerms] = useState(false);
   const [cbAge, setCbAge] = useState(false);
@@ -60,13 +83,22 @@ export function OnboardingConsentPanel({
   const requireProfile = requiredTypes.includes("profile_booking");
   const requireTerms = requiredTypes.includes("terms");
   const requireAge = requiredTypes.includes("age_declaration");
-  const title = mode === "reconsent" ? copy.reconsentTitle : copy.modalTitle;
-  const subtitle = mode === "reconsent" ? copy.reconsentSubtitle : copy.modalSubtitle;
+  const title = embedded
+    ? copy.accountConsentTitle
+    : mode === "reconsent"
+      ? copy.reconsentTitle
+      : copy.modalTitle;
+  const subtitle = embedded
+    ? copy.accountConsentSubtitle
+    : mode === "reconsent"
+      ? copy.reconsentSubtitle
+      : copy.modalSubtitle;
+  const resolvedDob = requireDateOfBirth ? dateOfBirth : prefilledDateOfBirth || dateOfBirth;
   const canSubmit =
     (!requireProfile || cbProfile) &&
     (!requireTerms || cbTerms) &&
     (!requireAge || cbAge) &&
-    (!requireDateOfBirth || dateOfBirth.length > 0) &&
+    (requireDateOfBirth ? dateOfBirth.length > 0 : Boolean(resolvedDob)) &&
     !loading;
 
   const handleAgree = async () => {
@@ -81,11 +113,16 @@ export function OnboardingConsentPanel({
         onStepChange("minor");
         return;
       }
+    } else if (resolvedDob) {
+      if (!isValidDateOfBirth(resolvedDob) || !isAdult(resolvedDob)) {
+        onStepChange("minor");
+        return;
+      }
     }
     setLoading(true);
     try {
       const result = await onConsentComplete({
-        dateOfBirth: requireDateOfBirth ? dateOfBirth : undefined,
+        dateOfBirth: resolvedDob || undefined,
         consentProfile: requireProfile ? true : undefined,
         consentTerms: requireTerms ? true : undefined,
         consentAge: requireAge ? true : undefined,
@@ -141,32 +178,38 @@ export function OnboardingConsentPanel({
 
   return (
     <div className="space-y-4 pt-1" data-testid="onboarding-consent-panel">
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1 text-sm font-medium text-dz-muted hover:text-primary"
-          data-testid="consent-back-button"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {copy.back}
-        </button>
-        <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
-          {(["en", "kn"] as const).map((code) => (
+      {embedded && hideLanguageToggle ? null : (
+        <div className={cn("flex items-center gap-2", embedded ? "justify-end" : "justify-between")}>
+          {embedded ? null : (
             <button
-              key={code}
               type="button"
-              onClick={() => setLang(code)}
-              className={cn(
-                "rounded-md px-2.5 py-1 uppercase",
-                lang === code ? "bg-primary text-white" : "text-dz-muted",
-              )}
+              onClick={onBack}
+              className="inline-flex items-center gap-1 text-sm font-medium text-dz-muted hover:text-primary"
+              data-testid="consent-back-button"
             >
-              {code === "en" ? "EN" : "ಕನ್ನಡ"}
+              <ArrowLeft className="h-4 w-4" />
+              {copy.back}
             </button>
-          ))}
+          )}
+          {hideLanguageToggle ? null : (
+            <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
+              {(["en", "kn"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setLang(code)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 uppercase",
+                    lang === code ? "bg-primary text-white" : "text-dz-muted",
+                  )}
+                >
+                  {code === "en" ? "EN" : "ಕನ್ನಡ"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <div>
         <h3 className="font-display text-xl font-bold text-primary">{title}</h3>
@@ -228,6 +271,8 @@ export function OnboardingConsentPanel({
         {copy.trustSignal}
       </p>
 
+      {beforeSubmit}
+
       {submitError ? (
         <p className="text-sm text-destructive" role="alert" data-testid="consent-submit-error">
           {submitError}
@@ -249,17 +294,21 @@ export function OnboardingConsentPanel({
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : mode === "reconsent" ? (
           copy.agreeUpdates
+        ) : embedded ? (
+          submitLabel ?? copy.agreeFinishSetup
         ) : (
           copy.agreeContinue
         )}
       </Button>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="w-full text-center text-sm text-dz-muted underline"
-      >
-        {copy.cancel}
-      </button>
+      {embedded ? null : (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full text-center text-sm text-dz-muted underline"
+        >
+          {copy.cancel}
+        </button>
+      )}
     </div>
   );
 }

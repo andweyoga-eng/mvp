@@ -107,7 +107,7 @@ export function setupGoogleAuth(app: Express) {
       res.cookie(AUTH_COOKIE_NAME, token, buildAuthCookieOptions(keepSignedIn));
 
       res.redirect(
-        `/dashboard?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`,
+        `/my-account?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`,
       );
     }
   );

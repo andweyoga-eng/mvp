@@ -384,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.clearCookie(OAUTH_KEEP_COOKIE_NAME);
       setAuthCookie(res, token, keepSignedIn);
       await storage.linkGuestBookingsToUser(user.id, user.email);
-      res.redirect(`/dashboard?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`);
+      res.redirect(`/my-account?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`);
     } catch (error) {
       console.error('Google OAuth callback error:', error);
       res.redirect('/?error=google_auth_failed');

@@ -3794,6 +3794,7 @@ export class DatabaseStorage implements IStorage {
       "Hatha Yoga": "/attached_assets/hatha_yoga_1756809174781.png",
       Meditation: "/attached_assets/meditation_1756809174781.png",
       "Sound Therapy": "/attached_assets/soundtherapy_1756809174781.png",
+      "Shakti+": "/attached_assets/shakti-plus.png",
     };
     for (const [name, imageUrl] of Object.entries(imageByName)) {
       await db.update(classTypes).set({ imageUrl }).where(eq(classTypes.name, name));

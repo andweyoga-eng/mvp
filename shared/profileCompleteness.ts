@@ -44,15 +44,28 @@ function optionalSecondaryOk(
   return validateMobileNumber(digits, cc(countryCode)).isValid;
 }
 
+export type AccountOnboardingAnchor = "profile" | "health" | "privacy";
+
 export function getFirstIncompleteAccountAnchor(
   u: AccountProfileCheckInput,
-): "profile" | "health" | null {
-  const primaryDigits = (u.primaryMobile ?? "").trim();
-  if (!primaryDigits || !requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) {
+  options?: { requiresConsent?: boolean },
+): AccountOnboardingAnchor | null {
+  if (!u.emailVerified) return "profile";
+  if (!(u.name ?? "").trim()) return "profile";
+  if (!requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) {
+    return "profile";
+  }
+  if (!requiredMobileOk(u.emergencyMobile, u.emergencyMobileCountryCode)) {
+    return "profile";
+  }
+  if (!optionalSecondaryOk(u.secondaryMobile, u.secondaryMobileCountryCode)) {
     return "profile";
   }
   if (!isHealthDisclosureComplete(u.healthUpdateText)) {
     return "health";
+  }
+  if (options?.requiresConsent) {
+    return "privacy";
   }
   return null;
 }

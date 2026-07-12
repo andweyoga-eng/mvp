@@ -87,7 +87,7 @@ export function parseMyAccountTabFromSearch(search: string): {
   };
 }
 
-/** Resolve post-login landing: Dashboard when complete, otherwise My Account onboarding. */
+/** After sign-in, incomplete members finish setup on My Account; complete members use the dashboard. */
 export function resolveMemberLandingPath(
   user?: Pick<
     User,
@@ -100,24 +100,31 @@ export function resolveMemberLandingPath(
     | "emergencyMobileCountryCode"
     | "healthUpdateText"
   > | null,
+  options?: { requiresConsent?: boolean },
 ): string {
+  const anchor = getFirstIncompleteAccountAnchor(
+    {
+      emailVerified: Boolean(user?.emailVerified),
+      name: user?.name,
+      primaryMobile: user?.primaryMobile,
+      primaryMobileCountryCode: user?.primaryMobileCountryCode,
+      emergencyMobile: user?.emergencyMobile,
+      emergencyMobileCountryCode: user?.emergencyMobileCountryCode,
+      healthUpdateText: user?.healthUpdateText,
+    },
+    { requiresConsent: options?.requiresConsent },
+  );
+  if (anchor) {
+    return myAccountHref(anchor);
+  }
   if (user?.profileCompletionStatus === "incomplete") {
-    const anchor = getFirstIncompleteAccountAnchor({
-      emailVerified: Boolean(user.emailVerified),
-      name: user.name,
-      primaryMobile: user.primaryMobile,
-      primaryMobileCountryCode: user.primaryMobileCountryCode,
-      emergencyMobile: user.emergencyMobile,
-      emergencyMobileCountryCode: user.emergencyMobileCountryCode,
-      healthUpdateText: user.healthUpdateText,
-    });
-    return anchor ? myAccountHref(anchor) : MY_ACCOUNT_PROFILE_URL;
+    return MY_ACCOUNT_PROFILE_URL;
   }
   return MEMBER_DASHBOARD_URL;
 }
 
 /** Routes that represent "just signed in" and may be auto-redirected once. */
-const POST_LOGIN_LANDING_PATHS = new Set(["/", "/dashboard"]);
+const POST_LOGIN_LANDING_PATHS = new Set(["/", "/dashboard", "/my-account"]);
 
 /**
  * Redirect once per browser session after login. A pending session/class booking

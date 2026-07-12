@@ -25,7 +25,8 @@ import {
   resolveMemberLandingPath,
 } from "@/lib/member-landing";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import { isAuthUserProfileComplete, getIncompleteAccountHref } from "@/lib/account-profile-complete";
+import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { setGuestCheckoutToken } from "@/lib/guest-checkout";
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
@@ -55,6 +56,8 @@ export default function Home() {
   const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
   const [resumeBookingId, setResumeBookingId] = useState<string | null>(null);
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
+  // null = consent status not yet known; enforced as a first-class Home gate.
+  const [consentPending, setConsentPending] = useState<boolean | null>(null);
   const resumedBookingRef = useRef(false);
 
   const handleBookingOpen = (input?: string | BookingIntent) => {
@@ -80,6 +83,51 @@ export default function Home() {
       clearPendingBooking();
     }
   };
+
+  // Consent is the first gate: no one reaches the marketing home until it's done.
+  // Fetch it for every signed-in member so a completed profile with pending
+  // consent still gets routed to My Account → Privacy.
+  useEffect(() => {
+    if (authLoading || !user) {
+      setConsentPending(null);
+      return;
+    }
+    let cancelled = false;
+    setConsentPending(null);
+    fetchMyConsentStatus()
+      .then((status) => {
+        if (!cancelled) setConsentPending(Boolean(status.requirement?.requiresConsent));
+      })
+      .catch(() => {
+        // Fail open on a transient error so members aren't locked out of Home.
+        if (!cancelled) setConsentPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user?.id]);
+
+  // A signed-in member who never finished onboarding (contact, health, or
+  // consent) shouldn't see the marketing home — send them straight to the exact
+  // My Account section they left off at.
+  const incompleteAccountHref =
+    !authLoading && user
+      ? getIncompleteAccountHref(user, { requiresConsent: consentPending === true })
+      : null;
+
+  // Profile is done but we don't yet know consent status — hold the render so we
+  // never flash the carousel to someone who still owes consent.
+  const awaitingConsentGate =
+    !authLoading &&
+    !!user &&
+    consentPending === null &&
+    !getIncompleteAccountHref(user);
+
+  useEffect(() => {
+    if (incompleteAccountHref) {
+      setLocation(incompleteAccountHref);
+    }
+  }, [incompleteAccountHref, setLocation]);
 
   useEffect(() => {
     applyHomeHashScroll();
@@ -165,6 +213,12 @@ export default function Home() {
       );
     }
   }, [user, authLoading, setLocation]);
+
+  // While the redirect above is in flight (or we're still confirming consent),
+  // don't flash the carousel/home content.
+  if (incompleteAccountHref || awaitingConsentGate) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-dz-surface pb-24 md:pb-0">

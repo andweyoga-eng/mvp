@@ -26,8 +26,18 @@ export function profileCheckFromUser(user: User): AccountProfileCheckInput {
   };
 }
 
-export function getIncompleteAccountHref(user: User | null | undefined): string | null {
-  if (!user || user.profileCompletionStatus === "complete") return null;
-  const anchor = getFirstIncompleteAccountAnchor(profileCheckFromUser(user));
+/**
+ * The My Account section a member must still complete before they can browse.
+ * Consent is a first-class gate: pass `requiresConsent` to route them to
+ * `#privacy` even when their contact + health details are already done.
+ */
+export function getIncompleteAccountHref(
+  user: User | null | undefined,
+  options?: { requiresConsent?: boolean },
+): string | null {
+  if (!user) return null;
+  const anchor = getFirstIncompleteAccountAnchor(profileCheckFromUser(user), {
+    requiresConsent: options?.requiresConsent,
+  });
   return anchor ? myAccountHref(anchor) : null;
 }

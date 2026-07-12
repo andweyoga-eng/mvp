@@ -1,5 +1,5 @@
-/** Saved text when the member selects “No health concerns”. */
-export const HEALTH_NO_CONCERNS_TEXT = 'No health concerns.';
+/** Saved text when the member selects “No Health issues now”. */
+export const HEALTH_NO_CONCERNS_TEXT = 'No Health issues now';
 
 /** Maximum characters for the “Yes, specify” free-text disclosure. */
 export const MAX_HEALTH_CONCERNS_CHARS = 500;
@@ -15,6 +15,7 @@ export type HealthDisclosureChoice = 'none' | 'concerns' | '';
 const LEGACY_NO_CONCERNS_PHRASES = new Set([
   'no current concerns',
   'no health concerns',
+  'no health issues now',
   'none',
 ]);
 
