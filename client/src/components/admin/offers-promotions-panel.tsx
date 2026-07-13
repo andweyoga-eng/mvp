@@ -308,7 +308,7 @@ export function OffersPromotionsPanel() {
     if (!form.discountValue || Number.isNaN(value) || value <= 0) {
       errors.discountValue = "Enter a valid discount";
     } else if (form.discountType === "percent" && (value < 1 || value > 100)) {
-      errors.discountValue = "Percent must be 1–100";
+      errors.discountValue = "Percent must be 1-100";
     }
     if (!form.expiresAt) {
       errors.expiresAt = "Deadline is required";
@@ -382,7 +382,7 @@ export function OffersPromotionsPanel() {
                   {otpHint?.devOtp ? ` Dev OTP: ${otpHint.devOtp}` : ""}
                 </p>
                 <div>
-                  <Label>Coupon code (optional — auto-generated if blank)</Label>
+                  <Label>Coupon code (optional, auto-generated if blank)</Label>
                   <Input
                     value={form.code}
                     onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
@@ -407,7 +407,7 @@ export function OffersPromotionsPanel() {
                     </select>
                   </div>
                   <div>
-                    <Label>{form.discountType === "percent" ? "Percent (1–100)" : "Amount (₹)"}</Label>
+                    <Label>{form.discountType === "percent" ? "Percent (1-100)" : "Amount (₹)"}</Label>
                     <Input
                       type="number"
                       min={form.discountType === "percent" ? 1 : 1}
@@ -448,7 +448,7 @@ export function OffersPromotionsPanel() {
                     className={formErrors.expiresAt ? "border-red-500" : ""}
                   />
                   <p className="text-xs text-muted-foreground mt-1">
-                    Coupon stops working at this exact second — not one moment later.
+                    Coupon stops working at this exact second, not one moment later.
                   </p>
                   {formErrors.expiresAt && (
                     <p className="text-xs text-red-500 mt-1">{formErrors.expiresAt}</p>
@@ -631,11 +631,11 @@ export function OffersPromotionsPanel() {
                   <tr key={r.id} className="border-b">
                     <td className="py-2 px-3 font-mono">{r.couponCode}</td>
                     <td className="py-2 px-3">
-                      <p className="font-medium">{r.userName ?? "—"}</p>
+                      <p className="font-medium">{r.userName ?? "None"}</p>
                       <p className="text-xs text-muted-foreground">{r.userEmail}</p>
                     </td>
                     <td className="py-2 px-3 text-xs">
-                      {r.classTypeName ?? "—"}
+                      {r.classTypeName ?? "None"}
                       {r.sessionDate && (
                         <p className="text-muted-foreground">
                           {new Date(r.sessionDate).toLocaleString("en-IN")}

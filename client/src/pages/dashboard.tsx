@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,22 +21,17 @@ import { getMeetJoinMessage } from "@shared/session-meet-access";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { formatSessionPrice } from "@/lib/booking-payment";
-import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
-import {
-  collapseBookableForCarousel,
-  formatHubCarouselSchedule,
-} from "@/lib/hub-carousel-sessions";
-import { getSessionBadgeLabel } from "@/lib/session-badges";
 import {
   fetchMemberSessions,
   memberSessionsQueryKey,
   type MemberSession,
 } from "@/lib/member-sessions";
 import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { consumeSpotReleasedFlag } from "@/lib/spot-release-navigation";
 import { ReleaseSpotToast } from "@/components/release-spot-toast";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
-import type { Class, ClassType, Instructor } from "@shared/schema";
+import type { ClassType, Instructor } from "@shared/schema";
 import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
 import expressImage from "@assets/express_1756460037530.jpg";
@@ -52,12 +47,6 @@ const HERO_IMAGES = [
   elevateImage,
   becomeImage,
 ];
-
-interface EnrichedClass extends Class {
-  classType: ClassType;
-  instructor: { id: string; name: string };
-  hasPaymentConfigured?: boolean;
-}
 
 type PublicInstructor = Pick<Instructor, "id" | "name" | "bio" | "imageUrl" | "specialties">;
 
@@ -85,87 +74,6 @@ function formatDayTime(date: string | Date): string {
 function scrollCarouselEl(el: HTMLDivElement | null, dir: number) {
   if (!el) return;
   el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.85, 306), behavior: "smooth" });
-}
-
-function SessionCard({
-  cls,
-  onReserve,
-}: {
-  cls: EnrichedClass;
-  onReserve: (cls: EnrichedClass) => void;
-}) {
-  const price = formatSessionPrice(cls.classType.price);
-  const badge = getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode);
-  const schedule = formatHubCarouselSchedule(cls);
-  const imageChipClass =
-    "rounded-lg border border-black/[0.08] bg-white px-2.5 py-1 text-[11px] font-semibold text-foreground shadow-[0_2px_10px_rgba(0,0,0,0.18)]";
-
-  return (
-    <article
-      className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
-      aria-label={`${cls.classType.name}, ${schedule.label}`}
-      data-testid={`hub-session-card-${cls.id}`}
-    >
-      <div className="relative flex h-[160px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]">
-        {cls.classType.imageUrl ? (
-          <img
-            src={cls.classType.imageUrl}
-            alt=""
-            aria-hidden
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <Flower2 className="h-16 w-16 text-primary/25" aria-hidden />
-        )}
-        {badge ? (
-          <span className={cn("absolute left-3 top-3", imageChipClass)}>{badge}</span>
-        ) : null}
-        <span className={cn("absolute right-3 top-3", imageChipClass)}>
-          {cls.currentBookings}/{cls.maxCapacity} spots
-        </span>
-        {schedule.label ? (
-          <div
-            className="absolute inset-x-0 bottom-0 flex items-center gap-2 border-t border-black/[0.08] bg-white px-3.5 py-2.5 text-[12px] font-semibold leading-snug text-foreground shadow-[0_-6px_16px_rgba(0,0,0,0.12)]"
-            data-testid={`hub-session-schedule-${cls.id}`}
-          >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10">
-              <CalendarDays className="h-3.5 w-3.5 text-primary" aria-hidden />
-            </span>
-            <span className="truncate">{schedule.label}</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-2.5 flex items-start justify-between gap-2">
-          <h3 className="font-display text-[19px] font-semibold text-primary">
-            {cls.classType.name}
-          </h3>
-          {price ? (
-            <span className="whitespace-nowrap text-base font-bold text-primary">{price}</span>
-          ) : null}
-        </div>
-        <div className="mb-[18px] flex gap-4 text-[13px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <Timer className="h-[17px] w-[17px]" />
-            {cls.classType.duration} min
-          </span>
-          <span className="flex items-center gap-1.5">
-            <UserIcon className="h-[17px] w-[17px]" />
-            {cls.instructor.name}
-          </span>
-        </div>
-        <StrictNoToBlock strictNoTo={cls.classType.strictNoTo} compact className="mb-3 border-none pt-0" />
-        <button
-          type="button"
-          onClick={() => onReserve(cls)}
-          className="mt-auto w-full rounded-xl border-[1.5px] border-primary/25 py-2.5 text-sm font-bold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
-          data-testid={`reserve-${cls.id}`}
-        >
-          Reserve Spot
-        </button>
-      </div>
-    </article>
-  );
 }
 
 function ClassTypeCard({
@@ -225,7 +133,7 @@ function ClassTypeCard({
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
-  const carouselRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
   const workoutCarouselRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
   const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
@@ -261,11 +169,6 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  const { data: allClasses = [] } = useQuery<EnrichedClass[]>({
-    queryKey: ["/api/classes"],
-    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
-  });
-
   const { data: classTypes = [] } = useQuery<ClassType[]>({
     queryKey: ["/api/class-types"],
   });
@@ -273,8 +176,6 @@ export default function Dashboard() {
   const { data: instructors = [] } = useQuery<PublicInstructor[]>({
     queryKey: ["/api/instructors"],
   });
-
-  const bookable = useMemo(() => collapseBookableForCarousel(allClasses, 12), [allClasses]);
 
   const upcomingBooked = useMemo(
     () =>
@@ -295,12 +196,10 @@ export default function Dashboard() {
     return upcomingBooked.find((s) => new Date(s.date).toDateString() === today);
   }, [upcomingBooked]);
 
-  const reserve = (cls: EnrichedClass) => {
-    setLocation(`/reserve?sessionId=${encodeURIComponent(cls.id)}&from=dashboard`);
-  };
-
   const bookClassType = (classTypeId: string) => {
-    setLocation(`/reserve?classTypeId=${encodeURIComponent(classTypeId)}&from=dashboard`);
+    // classTypeId-only: anchor session is unknown until reserve resolves the
+    // pool, so this falls back to reserve's on-mount fetch by design.
+    navigateToMemberReserve(setLocation, queryClient, { classTypeId }, "dashboard");
   };
 
   const isLive = todaySession?.meetJoinState === "active" && !!todaySession.googleMeetLink;
@@ -346,7 +245,7 @@ export default function Dashboard() {
               <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
                 {todaySession
                   ? `Your ${todaySession.className} session is scheduled today at ${formatTime(todaySession.date)}.`
-                  : "No sessions scheduled for today. Explore upcoming sessions below and reserve your spot."}
+                  : "No sessions scheduled for today. Explore our sessions below and reserve your spot."}
               </p>
 
               {todaySession ? (
@@ -484,9 +383,24 @@ export default function Dashboard() {
 
         {/* ===== YOUR SCHEDULE ===== */}
         <section className="mb-14">
-          <h2 className="mb-5 font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-            Your Schedule
-          </h2>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
+            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+              Your Schedule
+            </h2>
+            <button
+              type="button"
+              onClick={() => setLocation("/my-account#sessions")}
+              disabled={upcomingBooked.length === 0}
+              aria-disabled={upcomingBooked.length === 0}
+              className={cn(
+                "flex items-center gap-1.5 text-sm font-semibold text-primary transition-colors hover:underline",
+                upcomingBooked.length === 0 && "pointer-events-none opacity-50",
+              )}
+            >
+              <CalendarCheck className="h-[18px] w-[18px]" />
+              View All bookings
+            </button>
+          </div>
           <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
             <div className="relative z-[1]">
               <p className="mb-5 text-sm leading-relaxed text-white/80">
@@ -525,61 +439,6 @@ export default function Dashboard() {
             </div>
             <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
           </div>
-        </section>
-
-        {/* ===== UPCOMING SESSIONS CAROUSEL ===== */}
-        <section className="mb-14">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3.5">
-            <div>
-              <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-                Upcoming Sessions
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Reserve your spot in our open sessions
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setLocation("/my-account#sessions")}
-              className="flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
-            >
-              <CalendarCheck className="h-[18px] w-[18px]" />
-              View Booked
-            </button>
-          </div>
-
-          {bookable.length === 0 ? (
-            <GlassCard className="p-10 text-center text-muted-foreground">
-              No open sessions right now. Please check back soon.
-            </GlassCard>
-          ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => scrollCarouselEl(carouselRef.current, -1)}
-                aria-label="Previous sessions"
-                className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollCarouselEl(carouselRef.current, 1)}
-                aria-label="Next sessions"
-                className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-              <div
-                ref={carouselRef}
-                className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {bookable.map((cls) => (
-                  <SessionCard key={cls.id} cls={cls} onReserve={reserve} />
-                ))}
-              </div>
-            </div>
-          )}
         </section>
 
         {/* ===== YOUR MENTORS ===== */}

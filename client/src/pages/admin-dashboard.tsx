@@ -1149,7 +1149,7 @@ export default function AdminDashboard() {
                                 </Badge>
                               </td>
                               <td className="py-2 px-3">{row.email}</td>
-                              <td className="py-2 px-3">{row.whatsapp ?? "—"}</td>
+                              <td className="py-2 px-3">{row.whatsapp ?? "None"}</td>
                               <td className="py-2 px-3">
                                 {new Date(row.createdAt).toLocaleString("en-IN")}
                               </td>

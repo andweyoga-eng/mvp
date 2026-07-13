@@ -78,7 +78,7 @@ export function HealthDocumentUploadField({
           title: result.status === 404 ? "Upload unavailable" : "Upload failed",
           description:
             result.status === 404
-              ? "Direct upload isn't available right now — try a Google Drive link below instead."
+              ? "Direct upload isn't available right now. Try a Google Drive link below instead."
               : result.message,
           variant: "destructive",
         });
@@ -115,7 +115,7 @@ export function HealthDocumentUploadField({
           </Label>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          PDF or image, up to {HEALTH_DOCUMENT_MAX_MB} MB. Prefer Google Drive links below for large videos — we store
+          PDF or image, up to {HEALTH_DOCUMENT_MAX_MB} MB. Prefer Google Drive links below for large videos. We store
           uploads securely and only your care team can view them.
         </p>
       </div>

@@ -222,7 +222,7 @@ export function PlatformControlsPanel() {
                     </Label>
                     <p className="text-sm text-muted-foreground">
                       {maintenanceEnabled
-                        ? "The public site shows a frosted overlay — the carousel stays visible but booking and navigation are blocked. Active members are notified on channels they opted into (email and WhatsApp)."
+                        ? "The public site shows a frosted overlay. The carousel stays visible but booking and navigation are blocked. Active members are notified on channels they opted into (email and WhatsApp)."
                         : "Visitors can use the public site normally. Turn on before planned downtime."}
                     </p>
                   </div>

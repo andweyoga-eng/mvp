@@ -107,6 +107,7 @@ import {
   validateFlexiBeforeCheckout,
   type FlexiOptionsData,
 } from "@/components/flexi-checkout-section";
+import { flexiOptionsQueryOptions } from "@/lib/flexi-options";
 import type { FlexiSelection } from "@/components/flexi-selection-builder";
 import {
   formatFixedSlotScheduleLine,
@@ -372,34 +373,15 @@ export default function BookingModal({
       : [];
   const fixedTimeLabel = selectedSession ? formatSessionTime(selectedSession.date) : "";
 
+  const flexiAnchorId = selectedSession?.id ?? displayClass?.id ?? "";
   const {
     data: flexiOptions,
     isLoading: flexiOptionsLoading,
     isError: flexiOptionsError,
     refetch: refetchFlexiOptions,
   } = useQuery<FlexiOptionsData>({
-    queryKey: ["/api/flexi/options", selectedSession?.id ?? displayClass?.id ?? ""],
-    enabled:
-      !!user &&
-      !!(selectedSession?.id ?? displayClass?.id) &&
-      !!flexiEligibleSession,
-    retry: false,
-    queryFn: async () => {
-      const anchorId = selectedSession?.id ?? displayClass?.id;
-      const res = await fetch(`/api/flexi/options/${anchorId}`, {
-        credentials: "include",
-        headers: getAuthHeaders(),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof body.message === "string"
-            ? body.message
-            : "Failed to load Flexi options",
-        );
-      }
-      return res.json();
-    },
+    ...flexiOptionsQueryOptions(flexiAnchorId),
+    enabled: !!user && !!flexiAnchorId && !!flexiEligibleSession,
   });
 
   const checkoutAuthHeaders = () =>
@@ -1865,7 +1847,7 @@ export default function BookingModal({
                   {couponError && <p className="text-xs text-red-500">{couponError}</p>}
                   {appliedCoupon && (
                     <p className="text-xs text-green-700">
-                      {appliedCoupon.code} applied — pay ₹
+                      {appliedCoupon.code} applied. Pay ₹
                       {(appliedCoupon.finalAmountPaise / 100).toLocaleString("en-IN")} (was ₹
                       {(appliedCoupon.originalAmountPaise / 100).toLocaleString("en-IN")})
                     </p>

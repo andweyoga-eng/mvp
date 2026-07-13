@@ -93,7 +93,7 @@ function MediaPreviewCard({ link }: { link: HealthMediaLink }) {
         />
       ) : (
         <div className="px-4 py-6 text-sm text-gray-500">
-          Preview unavailable for this link. Use &ldquo;Open in Google&rdquo; — the member may need to set sharing to
+          Preview unavailable for this link. Use &ldquo;Open in Google&rdquo;. The member may need to set sharing to
           &ldquo;Anyone with the link can view.&rdquo;
         </div>
       )}
@@ -117,7 +117,7 @@ export function AdminHealthMaterialsPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Health note — {userName}</DialogTitle>
+          <DialogTitle>Health note: {userName}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">

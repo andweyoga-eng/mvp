@@ -8,9 +8,9 @@ export const CUSTOMER_SUPPORT = {
   telHref: "tel:+919513022331",
   smsHref: "sms:+919513022331",
   /** Mon–Sat office windows (IST). */
-  hours: "Mon–Sat, 9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
-  hoursShort: "9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
-  daysLabel: "Mon–Sat",
+  hours: "Mon-Sat, 9:30 AM-1:30 PM & 3:30 PM-5:30 PM IST",
+  hoursShort: "9:30 AM-1:30 PM & 3:30 PM-5:30 PM IST",
+  daysLabel: "Mon-Sat",
 } as const;
 
 export const ACCOUNT_DEACTIVATED_MESSAGE =

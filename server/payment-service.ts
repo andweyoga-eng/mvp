@@ -176,7 +176,7 @@ export async function markPaymentPaid(params: {
     const amountLabel = formatSessionPrice(classType.price);
     await sendEmail({
       to: recipientEmail,
-      subject: `You're booked — ${classType.name} · andWeYoga`,
+      subject: `You're booked: ${classType.name} · andWeYoga`,
       html: createSessionConfirmationEmailHTML({
         name: recipientName,
         className: classType.name,
@@ -204,7 +204,7 @@ async function sendBookingConfirmationEmail(bookingId: string): Promise<void> {
   const amountLabel = formatSessionPrice(classType.price);
   await sendEmail({
     to: recipientEmail,
-    subject: `Payment confirmed — ${classType.name} · andWeYoga`,
+    subject: `Payment confirmed: ${classType.name} · andWeYoga`,
     html: createSessionConfirmationEmailHTML({
       name: recipientName,
       className: classType.name,

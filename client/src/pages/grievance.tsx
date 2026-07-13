@@ -107,8 +107,8 @@ export default function GrievancePage() {
             <p>
               {lang === "kn" ? (
                 <>
-                  ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಸಂಸ್ಕರಿಸುವ ಉಪಪ್ರಕ್ರಿಯೆದಾರರು — Railway Corp. (ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್), Razorpay,
-                  ಮತ್ತು Google ಸೇರಿದಂತೆ — ನಮ್ಮ{" "}
+                  ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಸಂಸ್ಕರಿಸುವ ಉಪಪ್ರಕ್ರಿಯೆದಾರರು, Railway Corp. (ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್), Razorpay,
+                  ಮತ್ತು Google ಸೇರಿದಂತೆ, ನಮ್ಮ{" "}
                   <Link href="/privacy#subprocessors" className="text-primary underline">
                     ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿ
                   </Link>{" "}
@@ -120,8 +120,8 @@ export default function GrievancePage() {
                 </>
               ) : (
                 <>
-                  Subprocessors that process personal data on our instructions — including Railway Corp. (interim
-                  hosting), Razorpay, and Google — are listed in our{" "}
+                  Subprocessors that process personal data on our instructions, including Railway Corp. (interim
+                  hosting), Razorpay, and Google, are listed in our{" "}
                   <Link href="/privacy#subprocessors" className="text-primary underline">
                     Privacy Notice
                   </Link>

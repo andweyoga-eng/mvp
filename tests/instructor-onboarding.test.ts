@@ -44,7 +44,7 @@ describe("adminCreateInstructorSchema", () => {
     const result = adminCreateInstructorSchema.safeParse({
       name: "Arjun",
       email: "arjun@example.com",
-      phone: "+91 98765 43210",
+      phone: "9876543210",
       onboardingQrImageUrl: "data:image/jpeg;base64,/9j/4AAQ",
       ycbRegistrationNumber: "YCB-123",
       ycbLicenseStatus: "pending",
@@ -58,7 +58,7 @@ describe("adminCreateInstructorSchema", () => {
     const result = adminCreateInstructorSchema.safeParse({
       name: "Arjun",
       email: "arjun@example.com",
-      phone: "+91 98765 43210",
+      phone: "9876543210",
       ycbRegistrationNumber: "YCB-123",
       yogaAllianceRegistrationNumber: "RYT-456",
     });

@@ -128,8 +128,8 @@ export default function TermsOfServicePage() {
                 <>
                   {LEGAL_CONFIG.brandName} processes your personal data under the DPDP Act, 2023. During an interim
                   period, the application and primary database may be hosted on Railway Corp.&apos;s cloud
-                  infrastructure in the United States. For the full subprocessor schedule — including Railway Corp.,
-                  Razorpay, and Google — and our data localisation commitments, see the{" "}
+                  infrastructure in the United States. For the full subprocessor schedule, including Railway Corp.,
+                  Razorpay, and Google, and our data localisation commitments, see the{" "}
                   <Link href="/privacy#subprocessors" className="text-primary underline">
                     Subprocessors
                   </Link>{" "}

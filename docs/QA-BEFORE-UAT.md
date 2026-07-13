@@ -27,12 +27,23 @@ No feature is **done** until automated checks pass and you sign off in the brows
 | **Session validation** | `tests/admin-session-validation.test.ts` | All required fields, empty date, QR phone/email, publish later, client `validateSessionForm` |
 | Admin auth | `tests/admin-auth.test.ts` | Bootstrap, bcrypt, credential normalization |
 | Admin login integration | `tests/admin-login.integration.test.ts` | DB login (skips if no `DATABASE_URL`) |
-| Booking flow | `tests/booking-flow.test.ts` | Member booking body, dropdown filters, pending booking |
+| Booking flow | `tests/booking-flow.test.ts` | Member booking body, dropdown filters (incl. published visibility), pending booking |
+| Flexi discovery | `tests/flexi-discovery.test.ts` | Eligibility summaries, flexibility sort, batch cap |
 | Booking payment | `tests/booking-payment.test.ts` | Price format, payment URL validation |
 | **Payment hold (A-01)** | `tests/booking-payment-hold.test.ts` | `initialBookingHeldUntil`, capacity, resume rules |
 | **Epic smoke (A-01 + E-01)** | `scripts/qa/smoke-a01-e01.ts` | Live API: `heldUntil`, cancel-checkout, `strictNoTo`; auto cleanup |
 
-**Last run:** `npm test` — **74 passed**, 0 failed.
+**Last run:** `npm test` — see CI / local run for current count.
+
+### Test fixture notes (keep suites green)
+
+- **`filterBookableSessions`** — fixtures must include `status: "published"` (or live `scheduled` + `publishedAt` in the past). Draft, paused, and cancelled rows are excluded via `isClassVisibleForBooking` (`shared/class-visibility.ts`). See `tests/booking-flow.test.ts` `session()` helper.
+- **Admin QR contact phone** — `adminPaymentQrCodeSchema` expects a **10-digit India number** (no `+91` prefix), e.g. `9876543210`. Same rule applies to `adminCreateInstructorSchema.phone` and session QR contact fields.
+- **Booking flow time anchor** — `tests/booking-flow.test.ts` uses fixed `NOW = 2026-05-19`; `tests/sanity-regression.test.ts` uses `2026-06-01` for its date filter case. Do not replace these with `new Date()` or they will drift and fail.
+- **Rolling week label** — `getRollingWeekDateRange` uses plain `"to"` between dates (no en/em dashes). See `tests/schedule-display.test.ts`.
+- **Erasure 30-day copy** — pinned in `shared/consent.ts` and member-facing `client/src/pages/grievance.tsx` (not only Privacy Notice).
+- **Admin session cancel** — `DeleteSessionDialog` + `handleDeleteSessionWithNotify` in `admin-dashboard.tsx` (legacy `performCancelSession` / `handleCancelSessionWithBookings` removed).
+- **Test runner** — all suites use `node:test` + `node:assert/strict` (not Vitest). See `tests/session-terms.test.ts`.
 
 ## User acceptance — Create Session + QR (your turn)
 

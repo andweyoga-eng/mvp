@@ -133,6 +133,6 @@ export function couponUsageInstructions(code: string, expiresAt: Date | string):
     `Your andWeYoga coupon code is ${code}.`,
     "Apply it at checkout before paying for your session.",
     "Enter the code in the coupon field on the payment screen.",
-    `This code expires at ${deadline} — it will not work after that moment.`,
+    `This code expires at ${deadline}. It will not work after that moment.`,
   ].join(" ");
 }

@@ -1,17 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   DEFAULT_SESSION_TERMS_AND_CONDITIONS,
   resolveSessionTermsAndConditions,
-} from "@shared/session-terms";
+} from "../shared/session-terms.ts";
 
 describe("resolveSessionTermsAndConditions", () => {
   it("returns trimmed custom terms when set", () => {
-    expect(resolveSessionTermsAndConditions("  Custom policy.  ")).toBe("Custom policy.");
+    assert.equal(resolveSessionTermsAndConditions("  Custom policy.  "), "Custom policy.");
   });
 
   it("falls back to platform default when empty", () => {
-    expect(resolveSessionTermsAndConditions("")).toBe(DEFAULT_SESSION_TERMS_AND_CONDITIONS);
-    expect(resolveSessionTermsAndConditions(null)).toBe(DEFAULT_SESSION_TERMS_AND_CONDITIONS);
-    expect(resolveSessionTermsAndConditions(undefined)).toBe(DEFAULT_SESSION_TERMS_AND_CONDITIONS);
+    assert.equal(resolveSessionTermsAndConditions(""), DEFAULT_SESSION_TERMS_AND_CONDITIONS);
+    assert.equal(resolveSessionTermsAndConditions(null), DEFAULT_SESSION_TERMS_AND_CONDITIONS);
+    assert.equal(resolveSessionTermsAndConditions(undefined), DEFAULT_SESSION_TERMS_AND_CONDITIONS);
   });
 });

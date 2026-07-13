@@ -24,11 +24,13 @@ import {
   reserveHrefFromIntent,
   resolveMemberLandingPath,
 } from "@/lib/member-landing";
+import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
 import { isAuthUserProfileComplete, getIncompleteAccountHref } from "@/lib/account-profile-complete";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { setGuestCheckoutToken } from "@/lib/guest-checkout";
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 function parseMoodCaptureFromUrl(): { phase: MoodPhase; classId: string } | null {
@@ -52,6 +54,7 @@ function clearMoodCaptureUrl() {
 export default function Home() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
   const [resumeBookingId, setResumeBookingId] = useState<string | null>(null);
@@ -63,9 +66,9 @@ export default function Home() {
   const handleBookingOpen = (input?: string | BookingIntent) => {
     const intent = normalizeBookingIntent(input);
     // Signed-in members go straight to the full-page Reserve checkout.
-    const href = reserveHrefFromIntent(intent, "home");
-    if (user && href) {
-      setLocation(href);
+    // navigateToMemberReserve prefetches Flexi options (when a session id is
+    // known and eligible) before routing, so checkout paints instantly.
+    if (user && navigateToMemberReserve(setLocation, queryClient, intent, "home")) {
       return;
     }
     setPendingBooking(intent);

@@ -14,7 +14,7 @@ export function normalizeDeliveryMode(mode: DeliveryMode): "online" | "offline" 
 export function deliveryModeLabel(mode: DeliveryMode): string {
   switch (normalizeDeliveryMode(mode)) {
     case "hybrid":
-      return "Hybrid — Online";
+      return "Hybrid (Online)";
     case "offline":
       return "In studio";
     default:
@@ -80,7 +80,7 @@ export function formatSessionDeliverySummary(session: SessionVenueFields): strin
     return deliveryModeLabel(mode);
   }
   if (mode === "hybrid") {
-    return venue ? `Hybrid — Online · ${venue}` : deliveryModeLabel(mode);
+    return venue ? `Hybrid (Online) · ${venue}` : deliveryModeLabel(mode);
   }
   return venue ?? deliveryModeLabel(mode);
 }

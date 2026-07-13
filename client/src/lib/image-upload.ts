@@ -11,7 +11,7 @@ export function validateAdminImageFile(file: File): string | null {
   if (file.size > ADMIN_IMAGE_MAX_FILE_BYTES) {
     const maxMb = ADMIN_IMAGE_MAX_FILE_BYTES / (1024 * 1024);
     const actualMb = (file.size / (1024 * 1024)).toFixed(1);
-    return `This file is ${actualMb} MB. The maximum allowed size is ${maxMb} MB — choose a smaller image or resize it before uploading.`;
+    return `This file is ${actualMb} MB. The maximum allowed size is ${maxMb} MB. Choose a smaller image or resize it before uploading.`;
   }
   return null;
 }

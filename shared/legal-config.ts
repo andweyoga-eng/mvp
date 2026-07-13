@@ -39,7 +39,7 @@ export const LEGAL_CONFIG = {
   customerCare: {
     email: "mudit@andweyoga.com",
     phone: "+91 9513022331",
-    hours: "Mon–Sat, 9:30 AM–1:30 PM & 3:30 PM–5:30 PM IST",
+    hours: "Mon-Sat, 9:30 AM-1:30 PM & 3:30 PM-5:30 PM IST",
   },
 } as const;
 
@@ -101,9 +101,9 @@ export const DATA_PROCESSING_DISCLOSURE = {
     noMarketingShare:
       "We do not share, sell, rent, license, or trade your personal data, booking history, health data, or wellness preferences with third-party marketing networks, analytics providers, or advertisers.",
     subprocessorShare:
-      "Where personal data is shared with subprocessors acting on our instructions — including Railway Corp. (interim hosting), Razorpay (payments), and Google (sign-in and email) — that sharing is limited to what is necessary for each subprocessor to perform its function. See the subprocessor schedule in our Privacy Notice.",
+      "Where personal data is shared with subprocessors acting on our instructions, including Railway Corp. (interim hosting), Razorpay (payments), and Google (sign-in and email), that sharing is limited to what is necessary for each subprocessor to perform its function. See the subprocessor schedule in our Privacy Notice.",
     consentProfileProcessing: `I consent to ${LEGAL_CONFIG.brandName} collecting and processing my name, email address, contact number, date of birth, and booking history to create and manage my account, arrange sessions I book, and provide related support and communications. Data is processed by ${LEGAL_CONFIG.companyLegalName} under the DPDP Act, 2023. During an interim period, hosting is provided by subprocessors listed in our Privacy Notice (including Railway Corp. in the United States) until we complete a planned migration to India-located infrastructure.`,
-    consentTrustSignal: `${LEGAL_CONFIG.brandName} does not sell or share your personal data with third parties for marketing. Our Privacy Notice lists subprocessors — including Railway Corp., Razorpay, and Google — that help us operate the platform.`,
+    consentTrustSignal: `${LEGAL_CONFIG.brandName} does not sell or share your personal data with third parties for marketing. Our Privacy Notice lists subprocessors, including Railway Corp., Razorpay, and Google, that help us operate the platform.`,
   },
   kn: {
     localisationInterim: `${LEGAL_CONFIG.companyLegalName} ಡಿಜಿಟಲ್ ಪರ್ಸನಲ್ ಡೇಟಾ ಪ್ರೊಟೆಕ್ಷನ್ ಕಾಯಿದೆ, 2023 ಅಡಿಯಲ್ಲಿ ಭಾರತೀಯ ಕಂಪನಿಯಾಗಿ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಸಂಸ್ಕರಿಸುತ್ತದೆ. ಇಂಟರಿಮ್ ಅವಧಿಯಲ್ಲಿ, ${LEGAL_CONFIG.brandName} ಅಪ್ಲಿಕೇಶನ್ ಮತ್ತು ಅದರ ಪ್ರಾಥಮಿಕ ಡೇಟಾಬೇಸ್ ಅನ್ನು Railway Corp. ಅಮೆರಿಕಾ ಸಂಯುಕ್ತ ಸಂಸ್ಥಾನದಲ್ಲಿರುವ ಕ್ಲೌಡ್ ಮೂಲಸೌಕರ್ಯದಲ್ಲಿ ಹೋಸ್ಟ್ ಮಾಡುತ್ತದೆ. ಆದ್ದರಿಂದ ಖಾತೆ, ಬುಕ್ಕಿಂಗ್, ಆರೋಗ್ಯ ಮತ್ತು ಸಂಬಂಧಿತ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಭಾರತದ ಹೊರಗೆ ಸಂಗ್ರಹಿಸಲಾಗಬಹುದು ಮತ್ತು ಸಂಸ್ಕರಿಸಲಾಗಬಹುದು, ನಾವು ಭಾರತ ಗಣರಾಜ್ಯದಲ್ಲಿರುವ ಮೂಲಸೌಕರ್ಯಕ್ಕೆ ಯೋಜಿತ ಸ್ಥಳಾಂತರವನ್ನು ಪೂರ್ಣಗೊಳಿಸುವವರೆಗೆ. ನಾವು ಉಪಪ್ರಕ್ರಿಯೆದಾರರೊಂದಿಗೆ ಒಪ್ಪಂದ ಮತ್ತು ತಾಂತ್ರಿಕ ರಕ್ಷಣೆಗಳನ್ನು ಬಳಸುತ್ತೇವೆ ಮತ್ತು ವೇದಿಕೆಯನ್ನು ನಡೆಸಲು ಅಗತ್ಯವಿರುವ ಮಟ್ಟಿಗೆ ಮಾತ್ರ ಪ್ರವೇಶವನ್ನು ಮಿತಿಗೊಳಿಸುತ್ತೇವೆ.`,
@@ -114,7 +114,7 @@ export const DATA_PROCESSING_DISCLOSURE = {
     noMarketingShare:
       "ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ, ಬುಕ್ಕಿಂಗ್ ಇತಿಹಾಸ, ಆರೋಗ್ಯ ಮಾಹಿತಿ ಅಥವಾ ಕ್ಷೇಮಾಭಿರುಚಿಗಳನ್ನು ಜಾಹೀರಾತುದಾರರು, ವಿಶ್ಲೇಷಣಾ ಪೂರೈಕೆದಾರರು ಅಥವಾ ಮೂರನೇ ವ್ಯಕ್ತಿಯ ಮಾರುಕಟ್ಟೆ ಜಾಲಗಳೊಂದಿಗೆ ನಾವು ಹಂಚುವುದಿಲ್ಲ, ಮಾರುವುದಿಲ್ಲ, ಬಾಡಿಗೆಗೆ ನೀಡುವುದಿಲ್ಲ, ಪರವಾನಗಿ ನೀಡುವುದಿಲ್ಲ ಅಥವಾ ವ್ಯಾಪಾರ ಮಾಡುವುದಿಲ್ಲ.",
     subprocessorShare:
-      "ನಮ್ಮ ಸೂಚನೆಗಳ ಮೇರೆಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುವ ಉಪಪ್ರಕ್ರಿಯೆದಾರರೊಂದಿಗೆ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ ಹಂಚಿದರೆ — Railway Corp. (ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್), Razorpay (ಪಾವತಿಗಳು), ಮತ್ತು Google (ಸೈನ್-ಇನ್ ಮತ್ತು ಇಮೇಲ್) ಸೇರಿದಂತೆ — ಪ್ರತಿ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ತನ್ನ ಕಾರ್ಯವನ್ನು ನಿರ್ವಹಿಸಲು ಅಗತ್ಯವಿರುವ ಮಟ್ಟಿಗೆ ಮಾತ್ರ ಹಂಚಿಕೆ ಸೀಮಿತವಾಗಿರುತ್ತದೆ. ನಮ್ಮ ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿನ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ಪಟ್ಟಿಯನ್ನು ನೋಡಿ.",
+      "ನಮ್ಮ ಸೂಚನೆಗಳ ಮೇರೆಗೆ ಕಾರ್ಯನಿರ್ವಹಿಸುವ ಉಪಪ್ರಕ್ರಿಯೆದಾರರೊಂದಿಗೆ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿ ಹಂಚಿದರೆ, Railway Corp. (ಇಂಟರಿಮ್ ಹೋಸ್ಟಿಂಗ್), Razorpay (ಪಾವತಿಗಳು), ಮತ್ತು Google (ಸೈನ್-ಇನ್ ಮತ್ತು ಇಮೇಲ್) ಸೇರಿದಂತೆ, ಪ್ರತಿ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ತನ್ನ ಕಾರ್ಯವನ್ನು ನಿರ್ವಹಿಸಲು ಅಗತ್ಯವಿರುವ ಮಟ್ಟಿಗೆ ಮಾತ್ರ ಹಂಚಿಕೆ ಸೀಮಿತವಾಗಿರುತ್ತದೆ. ನಮ್ಮ ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿನ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ಪಟ್ಟಿಯನ್ನು ನೋಡಿ.",
     consentProfileProcessing: `ನನ್ನ ಹೆಸರು, ಇಮೇಲ್ ವಿಳಾಸ, ಸಂಪರ್ಕ ಸಂಖ್ಯೆ, ಜನ್ಮ ದಿನಾಂಕ ಮತ್ತು ಬುಕ್ಕಿಂಗ್ ಇತಿಹಾಸವನ್ನು ಖಾತೆ ರಚನೆ, ಬುಕ್ಕಿಂಗ್ ನಿರ್ವಹಣೆ, ಸಂಬಂಧಿತ ನೆರವು ಮತ್ತು ಸಂವಹನಗಳಿಗಾಗಿ ಸಂಗ್ರಹಿಸಿ ಸಂಸ್ಕರಿಸಲು ನಾನು ${LEGAL_CONFIG.brandName} ಗೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ಈ ಮಾಹಿತಿಯನ್ನು ${LEGAL_CONFIG.companyLegalName} ಡಿಪಿಡಿಪಿ ಕಾಯಿದೆ, 2023 ಅಡಿಯಲ್ಲಿ ಸಂಸ್ಕರಿಸುತ್ತದೆ. ಇಂಟರಿಮ್ ಅವಧಿಯಲ್ಲಿ, ಭಾರತದಲ್ಲಿರುವ ಮೂಲಸೌಕರ್ಯಕ್ಕೆ ಯೋಜಿತ ಸ್ಥಳಾಂತರ ಪೂರ್ಣಗೊಳ್ಳುವವರೆಗೆ ನಮ್ಮ ಗೌಪ್ಯತಾ ಸೂಚನೆಯಲ್ಲಿ ಪಟ್ಟಿ ಮಾಡಲಾದ ಉಪಪ್ರಕ್ರಿಯೆದಾರರು (ಅಮೆರಿಕಾದ Railway Corp. ಸೇರಿದಂತೆ) ಹೋಸ್ಟಿಂಗ್ ಒದಗಿಸುತ್ತಾರೆ.`,
     consentTrustSignal: `${LEGAL_CONFIG.brandName} ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಜಾಹೀರಾತು ಅಥವಾ ಮಾರುಕಟ್ಟೆ ಉದ್ದೇಶಗಳಿಗಾಗಿ ಮೂರನೇ ವ್ಯಕ್ತಿಗಳಿಗೆ ಮಾರುವುದಿಲ್ಲ ಅಥವಾ ಹಂಚುವುದಿಲ್ಲ. ವೇದಿಕೆಯನ್ನು ನಡೆಸಲು ಸಹಾಯ ಮಾಡುವ Railway Corp., Razorpay ಮತ್ತು Google ಸೇರಿದಂತೆ ಉಪಪ್ರಕ್ರಿಯೆದಾರರನ್ನು ನಮ್ಮ ಗೌಪ್ಯತಾ ಸೂಚನೆ ಪಟ್ಟಿ ಮಾಡುತ್ತದೆ.`,
   },

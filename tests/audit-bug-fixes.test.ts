@@ -492,10 +492,10 @@ describe("UX-01 — statusNotes on suspend / blacklist / reactivate", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DEAD-01 — performCancelSession removed (source scan)
+// DEAD-01 — performCancelSession removed; cancel path lives in DeleteSessionDialog
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("DEAD-01 — performCancelSession dead function removed", async () => {
+describe("DEAD-01 — legacy performCancelSession removed", async () => {
   const fs = await import("node:fs/promises");
   const source = await fs.readFile(
     new URL("../client/src/pages/admin-dashboard.tsx", import.meta.url), "utf8",
@@ -508,10 +508,18 @@ describe("DEAD-01 — performCancelSession dead function removed", async () => {
     );
   });
 
-  it("handleCancelSessionWithBookings (active cancel path) still exists", () => {
+  it("handleCancelSessionWithBookings legacy name is gone", () => {
     assert.ok(
-      source.includes("async function handleCancelSessionWithBookings"),
-      "active cancel function must still exist",
+      !source.includes("async function handleCancelSessionWithBookings"),
+      "legacy cancel handler renamed or removed (DEAD-01)",
+    );
+  });
+
+  it("active admin cancel path uses DeleteSessionDialog + handleDeleteSessionWithNotify", () => {
+    assert.ok(source.includes("DeleteSessionDialog"), "DeleteSessionDialog must be wired");
+    assert.ok(
+      source.includes("async function handleDeleteSessionWithNotify"),
+      "handleDeleteSessionWithNotify is the active cancel-with-notify path",
     );
   });
 });

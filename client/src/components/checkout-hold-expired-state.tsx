@@ -15,7 +15,7 @@ export function CheckoutHoldExpiredState({ onTryAgain }: CheckoutHoldExpiredStat
         Your held spot expired
       </h2>
       <p className="mx-auto mb-7 max-w-[300px] text-[15px] leading-relaxed text-muted-foreground">
-        Your spot was released and is back in the pool. Pick a time and try again — it only takes a
+        Your spot was released and is back in the pool. Pick a time and try again, it only takes a
         moment.
       </p>
       <Button

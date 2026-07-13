@@ -52,7 +52,9 @@ export function filterUpcomingScheduleDays<
     .filter((day) => day.classes.length > 0);
 }
 
-/** Sessions open for booking with capacity, sorted soonest first. */
+/** Sessions open for booking with capacity, sorted soonest first.
+ *  Also requires published (or live-scheduled) visibility — see
+ *  isClassVisibleForBooking in shared/class-visibility.ts. */
 export function filterBookableSessions<T extends BookableSession>(
   sessions: T[],
   now: Date = new Date(),

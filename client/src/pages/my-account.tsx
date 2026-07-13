@@ -1099,7 +1099,7 @@ export default function MyAccount() {
                 <AccountFoldSection
                   nested
                   title="Mailing address"
-                  subtitle="Optional — so we can send you session materials and local updates"
+                  subtitle="Optional, so we can send you session materials and local updates"
                   defaultOpen={false}
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1334,7 +1334,7 @@ export default function MyAccount() {
                 <Coins className="h-10 w-10 text-primary/35" />
                 <p className="font-display text-lg font-semibold text-primary">Credits coming soon</p>
                 <p className="max-w-md text-sm text-muted-foreground">
-                  When sessions are converted into credits — for example after an instructor no-show —
+                  When sessions are converted into credits, for example after an instructor no-show,
                   you&apos;ll be able to view your balance and apply them to any booking here.
                 </p>
               </div>

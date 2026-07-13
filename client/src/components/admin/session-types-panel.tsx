@@ -149,7 +149,7 @@ function ClassTypeFormFields({
           Terms &amp; conditions <span className="text-red-500">*</span>
         </Label>
         <p className="mb-2 text-xs text-muted-foreground">
-          Shown at checkout when members book this session type. Pre-filled with the platform default — edit as needed.
+          Shown at checkout when members book this session type. Pre-filled with the platform default, edit as needed.
         </p>
         <Textarea
           value={form.termsAndConditions}
@@ -234,7 +234,7 @@ function StrictNoToAdminField({
         </Badge>
       </div>
       <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-        Enter conditions separated by commas — e.g. <em>Pregnant women, Asthmatic, Low BP</em>. For
+        Enter conditions separated by commas, e.g. <em>Pregnant women, Asthmatic, Low BP</em>. For
         edge cases not covered here, the contact-team link on the booking page handles the rest.
       </p>
       <Textarea
@@ -247,7 +247,7 @@ function StrictNoToAdminField({
       <div className="mt-2 flex items-center justify-between gap-3">
         <div className="text-xs">
           {isOverLimit ? (
-            <span className="font-semibold text-red-700">Exceeds limit — trim to save</span>
+            <span className="font-semibold text-red-700">Exceeds limit, trim to save</span>
           ) : isNearLimit ? (
             <span className="font-medium text-amber-700">Approaching limit</span>
           ) : (
@@ -264,7 +264,7 @@ function StrictNoToAdminField({
       {tags.length > 0 && (
         <div className="mt-3 border-t border-primary/10 pt-3">
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Preview — member view
+            Preview: member view
           </p>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (

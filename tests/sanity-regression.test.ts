@@ -47,8 +47,22 @@ describe("sanity: booking flow", async () => {
   it("filters past sessions from dropdown", () => {
     const list = filterBookableSessions(
       [
-        { date: "2026-06-02T10:00:00Z", currentBookings: 0, maxCapacity: 10 },
-        { date: "2026-05-01T10:00:00Z", currentBookings: 0, maxCapacity: 10 },
+        {
+          date: "2026-06-02T10:00:00Z",
+          currentBookings: 0,
+          maxCapacity: 10,
+          status: "published",
+          pausedAt: null,
+          cancelledAt: null,
+        },
+        {
+          date: "2026-05-01T10:00:00Z",
+          currentBookings: 0,
+          maxCapacity: 10,
+          status: "published",
+          pausedAt: null,
+          cancelledAt: null,
+        },
       ],
       now,
     );
@@ -97,7 +111,7 @@ describe("sanity: payment QR validation", async () => {
     const result = adminPaymentQrCodeSchema.safeParse({
       name: "UPI",
       imageUrl: "data:image/png;base64,iVBORw0KGgo=",
-      contactPhone: "+919876543210",
+      contactPhone: "9876543210",
       contactEmail: "pay@andweyoga.com",
     });
     assert.equal(result.success, true);
@@ -106,7 +120,7 @@ describe("sanity: payment QR validation", async () => {
     const result = adminPaymentQrCodeSchema.safeParse({
       name: "UPI",
       imageUrl: "",
-      contactPhone: "+919876543210",
+      contactPhone: "9876543210",
       contactEmail: "pay@andweyoga.com",
     });
     assert.equal(result.success, false);

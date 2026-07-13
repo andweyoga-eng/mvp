@@ -96,6 +96,19 @@ export function isFlexiCheckoutReady(params: {
   }).ok;
 }
 
+function FlexiLoadingNotice({ label }: { label: string }) {
+  return (
+    <div
+      className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 px-3.5 py-3"
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+      <p className="text-sm font-semibold text-primary">{label}</p>
+    </div>
+  );
+}
+
 export function FlexiCheckoutSection({
   bookingMode,
   onBookingModeChange,
@@ -175,7 +188,7 @@ export function FlexiCheckoutSection({
                   type="button"
                   variant={bookingMode === "flexi" ? "default" : "outline"}
                   className="flex-1 w-full"
-                  disabled={noAlternatives || isLoading}
+                  disabled={noAlternatives}
                   onClick={() => onBookingModeChange("flexi")}
                 >
                   Customise with Flexi
@@ -191,21 +204,12 @@ export function FlexiCheckoutSection({
       {fixedSlotsLabel ? (
         <p className="text-xs font-medium text-foreground">{fixedSlotsLabel}</p>
       ) : null}
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-          Checking Flexi options…
-        </div>
-      ) : null}
       {noAlternatives ? (
         <p className="text-xs text-muted-foreground">{noFlexiSwapsMessage(fixedSlotsLabel)}</p>
       ) : null}
       {bookingMode === "flexi" && !noAlternatives ? (
         isLoading ? (
-          <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-            Loading Flexi options…
-          </div>
+          <FlexiLoadingNotice label="Loading Flexi options…" />
         ) : isError || !flexiOptions ? (
           <Alert variant="destructive">
             <AlertDescription className="text-sm">

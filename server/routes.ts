@@ -16,6 +16,7 @@ import {
   isFlexiEnabledSchedule,
   resolveFlexiSelectionCount,
 } from "@shared/flexi-mode";
+import { FLEXI_ELIGIBILITY_BATCH_MAX } from "@shared/flexi-discovery";
 import {
   GUEST_CHECKOUT_SETTING_KEY,
   MAINTENANCE_WINDOW_SETTING_KEY,
@@ -973,7 +974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.status(201).json({
         id: request.id,
-        message: "Thanks! You're on the waitlist — we'll keep you posted when sessions open.",
+        message: "Thanks! You're on the waitlist. We'll keep you posted when sessions open.",
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1832,6 +1833,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Batch eligibility summaries — groundwork for a future search/filter/sort
+  // surface ("has flexi swaps" / "most flexible"). Returns lightweight summaries
+  // only (no full option payload). Capped server-side by the batch max.
+  app.post("/api/flexi/eligibility/batch", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const bodySchema = z.object({
+        anchorClassIds: z
+          .array(z.string().min(1))
+          .min(1)
+          .max(FLEXI_ELIGIBILITY_BATCH_MAX),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          message:
+            formatZodErrorsForDisplay(parsed.error.errors)[0] || "Invalid request",
+        });
+      }
+      const summaries = await storage.getFlexiEligibilitySummaries(
+        parsed.data.anchorClassIds,
+      );
+      res.json({ summaries });
+    } catch {
+      res.status(500).json({ message: "Failed to fetch Flexi eligibility." });
+    }
+  });
+
   // ─── Payment QR codes (admin) ─────────────────────────────────────────────
   app.get("/api/admin/payment-qr-codes", requireAdminAuth, async (_req, res) => {
     try {
@@ -2512,7 +2540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         await sendEmail({
           to: guestEmail,
-          subject: `Booking reserved — ${classType?.name ?? "Session"}`,
+          subject: `Booking reserved: ${classType?.name ?? "Session"}`,
           html: `<p>Hi ${guestName},</p>
 <p>Your ${cls.sessionFrequency === "trial" ? "trial" : "drop-in"} session has been reserved.</p>
 <p><strong>${classType?.name ?? "Session"}</strong> with ${instructor?.name ?? "Instructor"} on ${new Date(cls.date).toLocaleString("en-IN")}.</p>
@@ -2977,7 +3005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isGuestBooking && user.email) {
         await sendEmail({
           to: user.email,
-          subject: `Booking reserved — ${classType?.name ?? "Session"}`,
+          subject: `Booking reserved: ${classType?.name ?? "Session"}`,
           html: `<p>Hi ${user.name},</p>
 <p>Your ${cls.sessionFrequency === "trial" ? "trial" : "drop-in"} session has been reserved.</p>
 <p><strong>${classType?.name ?? "Session"}</strong> with ${instructor?.name ?? "Instructor"} on ${new Date(cls.date).toLocaleString("en-IN")}.</p>
@@ -3779,7 +3807,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (await storage.countBookingsForClass(existing.id)) > 0
       ) {
         return res.status(400).json({
-          message: "Cannot change date/time — this session already has bookings.",
+          message: "Cannot change date/time. This session already has bookings.",
         });
       }
 
@@ -4046,7 +4074,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/classes/:id/mood-summary", requireAdminAuth, async (_req, res) => {
     res.status(501).json({
       message:
-        "Instructor mood aggregate (per-user + rolled-up) requires session_mood_checkins queries and Meet add-on integration — schema ready after db:patch.",
+        "Instructor mood aggregate (per-user + rolled-up) requires session_mood_checkins queries and Meet add-on integration. Schema ready after db:patch.",
       code: "instructor_mood_aggregate_not_implemented",
     });
   });

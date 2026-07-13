@@ -30,7 +30,7 @@ export function RecurringSeriesScheduleCard({
     <GlassCard className="rounded-[22px] p-6">
       <h3 className="mb-1 font-display text-lg font-semibold">Your weekly schedule</h3>
       <p className="mb-5 text-sm text-muted-foreground">
-        This is a recurring batch — your spot covers the full series on the days below.
+        This is a recurring batch. Your spot covers the full series on the days below.
       </p>
       <dl className="space-y-4">
         {dayLine ? (

@@ -76,9 +76,9 @@ function buildMessage(notice: SessionCancellationNotice): { subject: string; tex
     "",
     notice.kind === "session_deleted"
       ? "We are sorry for the inconvenience. If you had a booking, our team will follow up on the compensation above."
-      : "We are sorry for the inconvenience. If you had a booking, you do not need to take further action — your session will show as cancelled in your profile.",
+      : "We are sorry for the inconvenience. If you had a booking, you do not need to take further action. Your session will show as cancelled in your profile.",
     "",
-    "— andWeYoga",
+    "andWeYoga",
   );
 
   const body = bodyParts.join("\n");
@@ -106,7 +106,7 @@ function buildMessage(notice: SessionCancellationNotice): { subject: string; tex
           ? "If you had a booking, our team will follow up on the compensation above."
           : "If you had a booking, it will appear as cancelled in your andWeYoga profile."
       }</p>
-      <p style="margin-top:24px">— andWeYoga</p>
+      <p style="margin-top:24px">andWeYoga</p>
     </div>
   `;
 

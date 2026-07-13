@@ -46,6 +46,12 @@ function session(
   classTypeId = "type-hatha",
   duration = 60,
   sessionFrequency: string | null = "recurring",
+  visibility?: {
+    status?: string | null;
+    publishedAt?: string | Date | null;
+    pausedAt?: string | Date | null;
+    cancelledAt?: string | Date | null;
+  },
 ) {
   return {
     id,
@@ -55,6 +61,12 @@ function session(
     classTypeId,
     sessionFrequency,
     classType: { id: classTypeId, name: "Hatha", duration },
+    // filterBookableSessions also requires published visibility — see
+    // isClassVisibleForBooking in shared/class-visibility.ts.
+    status: visibility?.status ?? "published",
+    publishedAt: visibility?.publishedAt ?? "2026-01-01T00:00:00.000Z",
+    pausedAt: visibility?.pausedAt ?? null,
+    cancelledAt: visibility?.cancelledAt ?? null,
   };
 }
 
@@ -159,6 +171,20 @@ describe("isSessionUpcoming & filterBookableSessions (dropdown)", () => {
     ];
     const bookable = filterBookableSessions(all, NOW);
     assert.deepEqual(bookable.map((c) => c.id), ["recurring-live"]);
+  });
+
+  it("drops draft and paused sessions from dropdown", () => {
+    const all = [
+      session("published", "2026-05-20T10:00:00.000Z"),
+      session("draft", "2026-05-21T10:00:00.000Z", 0, 10, "type-hatha", 60, "recurring", {
+        status: "draft",
+      }),
+      session("paused", "2026-05-22T10:00:00.000Z", 0, 10, "type-hatha", 60, "recurring", {
+        status: "paused",
+      }),
+    ];
+    const bookable = filterBookableSessions(all, NOW);
+    assert.deepEqual(bookable.map((c) => c.id), ["published"]);
   });
 });
 

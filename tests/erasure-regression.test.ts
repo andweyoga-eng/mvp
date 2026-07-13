@@ -37,12 +37,12 @@ describe("erasure regression contracts", () => {
   it("pins the 30-day erasure timeline across code and legal copy", () => {
     const routeSource = readFileSync(join(root, "server/consent-routes.ts"), "utf8");
     const sharedCopy = readFileSync(join(root, "shared/consent.ts"), "utf8");
-    const privacyNotice = readFileSync(join(root, "client/src/pages/privacy-notice.tsx"), "utf8");
+    const grievancePage = readFileSync(join(root, "client/src/pages/grievance.tsx"), "utf8");
 
     assert.equal(ERASURE_GRACE_DAYS, 30);
     assert.match(routeSource, /timelineDays: ERASURE_GRACE_DAYS/);
     assert.match(sharedCopy, /within 30 days/);
-    assert.match(privacyNotice, /within 30 days/);
+    assert.match(grievancePage, /within 30 days/);
   });
 
   it("wires the due-erasure executor into startup scheduling", () => {

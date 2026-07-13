@@ -15,7 +15,7 @@ describe("session delivery display", () => {
   });
 
   it("deliveryModeLabel for hybrid", () => {
-    assert.equal(deliveryModeLabel("hybrid"), "Hybrid — Online");
+    assert.equal(deliveryModeLabel("hybrid"), "Hybrid (Online)");
   });
 
   it("hasPhysicalVenue for hybrid with address", () => {

@@ -55,7 +55,7 @@ export function createInstructorOtpEmailHTML(params: {
   return `
     <!DOCTYPE html>
     <html lang="en">
-    <head><meta charset="UTF-8"><title>Verify your email — andWeYoga</title></head>
+    <head><meta charset="UTF-8"><title>Verify your email · andWeYoga</title></head>
     <body style="font-family:Arial,sans-serif;background:#f8f9fa;margin:0;padding:20px;">
       <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(64,30,156,0.12);">
         <div style="background:linear-gradient(135deg,#401e9c,#e36b16);padding:28px 20px;color:#fff;text-align:center;">
@@ -78,7 +78,7 @@ export function createInstructorEmailVerifiedHTML(name: string): string {
   return `
     <!DOCTYPE html>
     <html lang="en">
-    <head><meta charset="UTF-8"><title>Email verified — andWeYoga</title></head>
+    <head><meta charset="UTF-8"><title>Email verified · andWeYoga</title></head>
     <body style="font-family:Arial,sans-serif;background:#f8f9fa;margin:0;padding:40px 20px;text-align:center;">
       <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;box-shadow:0 8px 24px rgba(64,30,156,0.12);">
         <h1 style="color:#401e9c;margin:0 0 12px;font-size:22px;">Email verified</h1>

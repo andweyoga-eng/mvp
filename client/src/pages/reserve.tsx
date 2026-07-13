@@ -76,6 +76,7 @@ import {
   type FlexiOptionsData,
 } from "@/components/flexi-checkout-section";
 import type { FlexiSelection } from "@/components/flexi-selection-builder";
+import { flexiOptionsQueryOptions } from "@/lib/flexi-options";
 import { Separator } from "@/components/ui/separator";
 
 interface EnrichedClass extends Class {
@@ -303,23 +304,11 @@ export default function Reserve() {
     isError: flexiOptionsError,
     refetch: refetchFlexiOptions,
   } = useQuery<FlexiOptionsData>({
-    queryKey: ["/api/flexi/options", selected?.id],
+    ...flexiOptionsQueryOptions(selected?.id),
     enabled: !!user && !!selected?.id && flexiEligible,
-    retry: false,
-    queryFn: async () => {
-      const res = await fetch(`/api/flexi/options/${selected!.id}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          typeof body.message === "string"
-            ? body.message
-            : "Failed to load Flexi options",
-        );
-      }
-      return res.json();
-    },
+    // Show any prefetched cache instantly, then revalidate capacity in the
+    // background (surfaces as isFetching, not isLoading — no default spinner).
+    refetchOnMount: "always",
   });
 
   const handleConfirm = () => {
@@ -458,7 +447,7 @@ export default function Reserve() {
               Reserve your <span className="font-accent text-[1.1em] italic">spot</span>
             </h1>
             <p className="mt-2 text-[15px] text-muted-foreground">
-              Seat held for {PAYMENT_HOLD_MINUTES} minutes once you confirm — complete payment to
+              Seat held for {PAYMENT_HOLD_MINUTES} minutes once you confirm. Complete payment to
               lock it in.
             </p>
           </div>

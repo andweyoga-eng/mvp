@@ -77,7 +77,7 @@ export async function openRazorpayCheckout(params: RazorpayCheckoutParams): Prom
     throw new Error("Payment gateway is not configured. Please contact support.");
   }
   if (!params.orderId?.trim()) {
-    throw new Error("Could not start payment — order reference is missing.");
+    throw new Error("Could not start payment. Order reference is missing.");
   }
 
   await loadRazorpayScript();

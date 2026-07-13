@@ -99,7 +99,7 @@ export async function applyPaymentFailureHold(bookingId: string): Promise<Bookin
 
     await sendEmail({
       to: guestEmail,
-      subject: `Payment failed — your spot is held until ${holdUntilIst} (IST)`,
+      subject: `Payment failed. Your spot is held until ${holdUntilIst} (IST)`,
       html: createPaymentHoldEmailHtml({
         guestName,
         className: classType?.name ?? "Yoga session",

@@ -8,8 +8,8 @@ export type ConsentChecker = (userId: string, consentType: ConsentType) => Promi
 /** Member-facing maintenance copy (overlay + notifications). */
 export const MAINTENANCE_OVERLAY_HEADLINE = "We're on a short savasana";
 export const MAINTENANCE_OVERLAY_BODY =
-  "The studio's getting a little tune-up. We'll be back on the mat shortly — breathe easy.";
-export const MAINTENANCE_EMAIL_SUBJECT = "andWeYoga — quick pause, back soon";
+  "The studio's getting a little tune-up. We'll be back on the mat shortly. Breathe easy.";
+export const MAINTENANCE_EMAIL_SUBJECT = "andWeYoga: quick pause, back soon";
 export const MAINTENANCE_SMS_TEXT =
   "andWeYoga: We're doing a quick studio tune-up. We'll be back on the mat shortly. Namaste.";
 
@@ -26,7 +26,7 @@ export function buildMaintenanceEmailHtml(memberName: string): string {
         <div style="padding:28px;">
           <p style="color:#333;">Hi ${memberName},</p>
           <p style="color:#333;line-height:1.6;">${MAINTENANCE_OVERLAY_BODY}</p>
-          <p style="color:#666;font-size:14px;margin-top:24px;">— andWeYoga</p>
+          <p style="color:#666;font-size:14px;margin-top:24px;">andWeYoga</p>
         </div>
       </div>
     </body>

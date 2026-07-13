@@ -78,6 +78,12 @@ import {
   type FlexiSelectionCandidate,
 } from "@shared/flexi-mode";
 import { parseRecurrenceWeekdays, WEEKDAY_LABELS } from "@shared/session-schedule";
+import {
+  summarizeFlexiOptions,
+  emptyFlexiEligibilitySummary,
+  FLEXI_ELIGIBILITY_BATCH_MAX,
+  type FlexiEligibilitySummary,
+} from "@shared/flexi-discovery";
 import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
 import { db } from "./db";
@@ -608,6 +614,7 @@ export interface IStorage {
   getFlexiOptionsForBooking(
     flexiBookingId: string,
   ): Promise<(FlexiOptionRow & { flexiBookingId: string; editCount: number }) | undefined>;
+  getFlexiEligibilitySummaries(anchorClassIds: string[]): Promise<FlexiEligibilitySummary[]>;
   listFlexiBookingsForAdmin(): Promise<FlexiAdminSummaryRow[]>;
   createFlexiBooking(data: InsertFlexiBooking): Promise<FlexiBooking>;
   createFlexiBookingSelections(rows: InsertFlexiBookingSelection[]): Promise<FlexiBookingSelection[]>;
@@ -772,7 +779,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       console.log(
-        '[DB] Empty database — no demo seed data inserted. Create session types and sessions via the admin panel.',
+        "[DB] Empty database. No demo seed data inserted. Create session types and sessions via the admin panel.",
       );
       await this.syncAdminFromEnv();
     } catch (error) {
@@ -1913,6 +1920,49 @@ export class DatabaseStorage implements IStorage {
       flexiBookingId,
       editCount: flexi.editCount ?? 0,
     };
+  }
+
+  /**
+   * Discovery-oriented batch summary for a set of anchor classes. Groundwork for
+   * a future search/filter/sort surface ("has flexi swaps" / "most flexible").
+   * Returns a summary per requested id (ineligible ids get an empty summary),
+   * capped at FLEXI_ELIGIBILITY_BATCH_MAX to protect the DB from large result
+   * sets. Reuses getFlexiOptions today; can be optimized when search ships.
+   */
+  async getFlexiEligibilitySummaries(
+    anchorClassIds: string[],
+  ): Promise<FlexiEligibilitySummary[]> {
+    const uniqueIds = Array.from(new Set(anchorClassIds)).slice(
+      0,
+      FLEXI_ELIGIBILITY_BATCH_MAX,
+    );
+    const summaries: FlexiEligibilitySummary[] = [];
+    for (const anchorClassId of uniqueIds) {
+      const anchor = await this.getClass(anchorClassId);
+      if (!anchor || !isFlexiEnabledSchedule(anchor)) {
+        summaries.push(emptyFlexiEligibilitySummary(anchorClassId));
+        continue;
+      }
+      const options = await this.getFlexiOptions(anchorClassId);
+      if (!options) {
+        summaries.push(emptyFlexiEligibilitySummary(anchorClassId));
+        continue;
+      }
+      summaries.push(
+        summarizeFlexiOptions({
+          anchorClassId,
+          selectionCount: options.selectionCount,
+          options: options.options.map((option) => ({
+            weekday: option.weekday,
+            timeLabel: option.timeLabel,
+            capacityAvailable: option.capacityAvailable,
+          })),
+          fixedWeekdays: parseRecurrenceWeekdays(anchor.recurrenceWeekdays),
+          fixedTimeLabel: formatFlexiTimeLabel(anchor.date),
+        }),
+      );
+    }
+    return summaries;
   }
 
   async listFlexiBookingsForAdmin(): Promise<FlexiAdminSummaryRow[]> {
@@ -3809,7 +3859,7 @@ export class DatabaseStorage implements IStorage {
     const config = getAdminBootstrapConfig();
     if (!config) {
       console.warn(
-        "[DB] ADMIN_INITIAL_PASSWORD not set or shorter than 8 chars — admin bootstrap skipped.",
+        "[DB] ADMIN_INITIAL_PASSWORD not set or shorter than 8 chars. Admin bootstrap skipped.",
       );
       return;
     }

@@ -48,7 +48,7 @@ function formatHorizon(startAt: string, endAt: string) {
       year: "numeric",
       timeZone: "Asia/Kolkata",
     });
-  return `${fmt(startAt)} – ${fmt(endAt)}`;
+  return `${fmt(startAt)} - ${fmt(endAt)}`;
 }
 
 export function FlexiRematchPanel() {

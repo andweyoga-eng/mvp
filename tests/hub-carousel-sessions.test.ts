@@ -17,6 +17,9 @@ function makeSession(
     recurrenceWeekdays: string | null;
     currentBookings: number;
     maxCapacity: number;
+    status: string | null;
+    pausedAt: string | null;
+    cancelledAt: string | null;
   }> = {},
 ) {
   return {
@@ -29,6 +32,10 @@ function makeSession(
     seriesId: overrides.seriesId ?? null,
     recurrenceWeekdays: overrides.recurrenceWeekdays ?? null,
     classType: { duration: 60 },
+    status: overrides.status ?? "published",
+    publishedAt: "2026-01-01T00:00:00.000Z",
+    pausedAt: overrides.pausedAt ?? null,
+    cancelledAt: overrides.cancelledAt ?? null,
   };
 }
 

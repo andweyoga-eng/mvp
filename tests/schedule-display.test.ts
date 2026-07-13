@@ -16,7 +16,8 @@ describe("schedule display helpers", () => {
   it("builds rolling week label with range", () => {
     const w = getRollingWeekDateRange(new Date("2026-05-19T12:00:00.000Z"));
     assert.ok(w.weekNumber >= 1);
-    assert.match(w.label, /–/);
+    // Plain "to" separator — no en/em dashes in member-facing copy.
+    assert.match(w.label, /\bto\b/);
   });
 
   it("computes session end from duration", () => {

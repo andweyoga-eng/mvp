@@ -40,7 +40,7 @@ const optionalImageUrl = z
 const requiredSessionTypeImageUrl = z
   .string()
   .trim()
-  .min(1, "Session image is required — upload a file or paste an https:// image URL")
+  .min(1, "Session image is required. Upload a file or paste an https:// image URL")
   .refine(
     (v) =>
       /^https:\/\/.+/i.test(v) ||

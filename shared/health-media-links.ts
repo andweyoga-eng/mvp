@@ -19,8 +19,8 @@ const ALLOWED_HOSTS = new Set([
 ]);
 
 export const HEALTH_MEDIA_LINK_HELP = {
-  headline: "Have a doctor's note, scan, or video to share? We'd love to see it — safely.",
-  body: "Upload to your Google Drive, set sharing to Anyone with the link can view, then paste the link below. We never download or store your files — only the link so your team can review before class.",
+  headline: "Have a doctor's note, scan, or video to share? We'd love to see it, safely.",
+  body: "Upload to your Google Drive, set sharing to Anyone with the link can view, then paste the link below. We never download or store your files, only the link so your team can review before class.",
   trust: "Stored as a link only · never uploaded to our servers",
   steps: [
     "Upload your file to Google Drive (or create a Google Doc).",

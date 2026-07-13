@@ -190,13 +190,13 @@ export function createVerificationEmailHTML(
           </div>
           
           <div class="message">
-            Taking this first step towards embracing yoga is truly beautiful. You're not just signing up for classes – you're embarking on a path of self-discovery, growth, and inner transformation.
+            Taking this first step towards embracing yoga is truly beautiful. You're not just signing up for classes, you're embarking on a path of self-discovery, growth, and inner transformation.
           </div>
           
           <div class="inspiration">
             "We meet, we greet, we do what we like, and we yoga too." 
             <br><br>
-            Our philosophy embraces the journey of finding your best self through yoga, mindfulness, and community. We believe that yoga isn't just about poses – it's about evolving into the most authentic version of yourself, one breath at a time.
+            Our philosophy embraces the journey of finding your best self through yoga, mindfulness, and community. We believe that yoga isn't just about poses, it's about evolving into the most authentic version of yourself, one breath at a time.
           </div>
           
           <div class="message">
@@ -377,11 +377,11 @@ export function createSessionConfirmationEmailHTML(params: {
   return `
     <!DOCTYPE html>
     <html lang="en">
-    <head><meta charset="UTF-8"><title>Session confirmed — andWeYoga</title></head>
+    <head><meta charset="UTF-8"><title>Session confirmed · andWeYoga</title></head>
     <body style="font-family:Arial,sans-serif;background:#f8f9fa;margin:0;padding:20px;">
       <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:15px;overflow:hidden;box-shadow:0 10px 30px rgba(64,30,156,0.1);">
         <div style="background:linear-gradient(135deg,#401e9c,#e36b16);padding:36px 20px;text-align:center;color:#fff;">
-          <h1 style="margin:0;font-size:26px;">You're in — see you on the mat</h1>
+          <h1 style="margin:0;font-size:26px;">You're in, see you on the mat</h1>
           <p style="margin:8px 0 0;opacity:0.95;">Payment received · Session confirmed</p>
         </div>
         <div style="padding:32px 28px;">

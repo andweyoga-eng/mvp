@@ -27,7 +27,6 @@ export function FlexiSelectionBuilder({
   selections: FlexiSelection[];
   onChange: (next: FlexiSelection[]) => void;
 }) {
-  const selectedWeekdays = new Set(selections.map((item) => item.weekday));
   const grouped = options.reduce<Record<string, FlexiOption[]>>((acc, option) => {
     const key = option.sourceSeriesId;
     acc[key] = [...(acc[key] ?? []), option].sort((a, b) => a.weekday - b.weekday);
@@ -85,13 +84,7 @@ export function FlexiSelectionBuilder({
                     item.weekday === option.weekday && item.sourceClassId === option.sourceClassId,
                 );
                 const disabled =
-                  !option.capacityAvailable ||
-                  (!selected &&
-                    selectedWeekdays.has(option.weekday) &&
-                    !selections.some((item) => item.weekday === option.weekday)) ||
-                  (!selected &&
-                    selections.length >= selectionCount &&
-                    !selections.some((item) => item.weekday === option.weekday));
+                  !option.capacityAvailable || (!selected && selections.length >= selectionCount);
                 return (
                   <Button
                     key={`${option.weekday}-${option.sourceClassId}`}
@@ -99,6 +92,7 @@ export function FlexiSelectionBuilder({
                     variant="outline"
                     disabled={disabled}
                     onClick={() => toggle(option)}
+                    aria-pressed={selected}
                     className={cn(
                       "justify-start",
                       selected && "border-primary bg-primary text-primary-foreground hover:bg-primary",

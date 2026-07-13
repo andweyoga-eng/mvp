@@ -176,12 +176,12 @@ export const CONSENT_COPY = {
     healthConsent:
       "I consent to andWeYoga collecting and processing the health information I share here to ensure my practice is adapted safely. I understand this is sensitive personal data and will only be shared with instructors and staff directly involved in delivering my sessions.",
     whatsappConsent:
-      "Optional — I consent to andWeYoga contacting me on WhatsApp at the mobile number above for session updates, booking support, and wellness communications related to my account. I understand I can withdraw this consent at any time from My Account.",
+      "Optional. I consent to andWeYoga contacting me on WhatsApp at the mobile number above for session updates, booking support, and wellness communications related to my account. I understand I can withdraw this consent at any time from My Account.",
     accountConsentTitle: "Privacy & consent (DPDPA)",
     accountConsentSubtitle:
       "Review and accept how we use your data. Required before you can book sessions.",
     marketingConsent:
-      "I'd like to receive class updates, wellness tips, and occasional offers by email. (Optional — change anytime in Preferences.)",
+      "I'd like to receive class updates, wellness tips, and occasional offers by email. (Optional, change anytime in Preferences.)",
     guestAccountRequiredTitle: "A free account is needed for this session",
     guestAccountRequiredBody:
       "Some sessions require a health note so instructors can adapt your practice safely. Please create a quick free account to continue. It takes under two minutes.",
@@ -226,12 +226,12 @@ export const CONSENT_COPY = {
     healthConsent:
       "ನನ್ನ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ನಾನು ಇಲ್ಲಿ ಹಂಚಿಕೊಳ್ಳುವ ಆರೋಗ್ಯ ಮಾಹಿತಿ ಮತ್ತು ದಾಖಲೆಗಳನ್ನು ಸಂಗ್ರಹಿಸಿ ಸಂಸ್ಕರಿಸಲು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ಈ ಸೂಕ್ಷ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ನನ್ನ ಸೆಷನ್‌ಗಳನ್ನು ನಡೆಸುವ ಸಂಬಂಧಿತ ಶಿಕ್ಷಕರು ಮತ್ತು ಸಿಬ್ಬಂದಿಯವರೊಂದಿಗೆ ಮಾತ್ರ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆ ಎಂಬುದು ನನಗೆ ತಿಳಿದಿದೆ.",
     whatsappConsent:
-      "ಐಚ್ಛಿಕ — ನನ್ನ ಖಾತೆಗೆ ಸಂಬಂಧಿಸಿದ ಸೆಷನ್ ನವೀಕರಣಗಳು, ಬುಕ್ಕಿಂಗ್ ನೆರವು ಮತ್ತು ಕ್ಷೇಮ ಸಂವಹನಗಳಿಗಾಗಿ ಮೇಲಿನ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯಲ್ಲಿ ವಾಟ್ಸಾಪ್ ಮೂಲಕ ನನ್ನನ್ನು ಸಂಪರ್ಕಿಸಲು ನಾನು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ನಾನು ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ನನ್ನ ಖಾತೆಯಿಂದ ಈ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು ಎಂದು ನನಗೆ ತಿಳಿದಿದೆ.",
+      "ಐಚ್ಛಿಕ. ನನ್ನ ಖಾತೆಗೆ ಸಂಬಂಧಿಸಿದ ಸೆಷನ್ ನವೀಕರಣಗಳು, ಬುಕ್ಕಿಂಗ್ ನೆರವು ಮತ್ತು ಕ್ಷೇಮ ಸಂವಹನಗಳಿಗಾಗಿ ಮೇಲಿನ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯಲ್ಲಿ ವಾಟ್ಸಾಪ್ ಮೂಲಕ ನನ್ನನ್ನು ಸಂಪರ್ಕಿಸಲು ನಾನು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ನಾನು ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ನನ್ನ ಖಾತೆಯಿಂದ ಈ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು ಎಂದು ನನಗೆ ತಿಳಿದಿದೆ.",
     accountConsentTitle: "ಗೌಪ್ಯತೆ ಮತ್ತು ಸಮ್ಮತಿ (DPDPA)",
     accountConsentSubtitle:
       "ನಾವು ನಿಮ್ಮ ಮಾಹಿತಿಯನ್ನು ಹೇಗೆ ಬಳಸುತ್ತೇವೆ ಎಂಬುದನ್ನು ಓದಿ ಒಪ್ಪಿಕೊಳ್ಳಿ. ಸೆಷನ್‌ಗಳನ್ನು ಬುಕ್ ಮಾಡಲು ಇದು ಅಗತ್ಯ.",
     marketingConsent:
-      "ತರಗತಿ ನವೀಕರಣಗಳು, ಕ್ಷೇಮ ಸಲಹೆಗಳು ಮತ್ತು ಅವಕಾಶದ ಕೊಡುಗೆಗಳನ್ನು ಇಮೇಲ್ ಮೂಲಕ ಪಡೆಯಲು ನಾನು ಬಯಸುತ್ತೇನೆ. (ಐಚ್ಛಿಕ — ಆದ್ಯತೆಗಳಲ್ಲಿ ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ಬದಲಾಯಿಸಬಹುದು.)",
+      "ತರಗತಿ ನವೀಕರಣಗಳು, ಕ್ಷೇಮ ಸಲಹೆಗಳು ಮತ್ತು ಅವಕಾಶದ ಕೊಡುಗೆಗಳನ್ನು ಇಮೇಲ್ ಮೂಲಕ ಪಡೆಯಲು ನಾನು ಬಯಸುತ್ತೇನೆ. (ಐಚ್ಛಿಕ, ಆದ್ಯತೆಗಳಲ್ಲಿ ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ಬದಲಾಯಿಸಬಹುದು.)",
     guestAccountRequiredTitle: "ಈ ಸೆಷನ್‌ಗೆ ಉಚಿತ ಖಾತೆ ಅಗತ್ಯ",
     guestAccountRequiredBody:
       "ಕೆಲವು ಸೆಷನ್‌ಗಳಿಗೆ ಶಿಕ್ಷಕರು ನಿಮ್ಮ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ಆರೋಗ್ಯ ಟಿಪ್ಪಣಿ ಅಗತ್ಯವಿರುತ್ತದೆ. ಮುಂದುವರಿಯಲು ದಯವಿಟ್ಟು ಉಚಿತ ಖಾತೆ ರಚಿಸಿ.",

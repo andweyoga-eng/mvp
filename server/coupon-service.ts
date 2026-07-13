@@ -53,7 +53,7 @@ export function buildCouponShareEmailHtml(params: {
           <p style="text-align:center;color:#e36b16;font-weight:bold;">${params.discountLabel}</p>
           <p style="color:#333;line-height:1.6;"><strong>How to use:</strong> Book your session on andweyoga.com, proceed to checkout, and enter this code in the coupon field before paying.</p>
           <p style="color:#333;line-height:1.6;"><strong>Applicable session:</strong> ${params.sessionLabel}</p>
-          <p style="color:#b45309;line-height:1.6;"><strong>Expires:</strong> ${deadline} — the code stops working at this exact moment.</p>
+          <p style="color:#b45309;line-height:1.6;"><strong>Expires:</strong> ${deadline}. The code stops working at this exact moment.</p>
           <p style="color:#666;font-size:13px;">${params.instructions}</p>
         </div>
       </div>

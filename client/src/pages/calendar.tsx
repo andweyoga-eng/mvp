@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Clock, Sparkles } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -14,6 +14,7 @@ import { AvailableTodaySessionCard } from "@/components/available-today-session-
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { filterUpcomingScheduleDays } from "@/lib/booking-flow";
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
+import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
 import { formatScheduleDayHeader, getRollingWeekDateRange } from "@shared/schedule-display";
 import { CLASS_INTENSITIES, type ClassIntensity } from "@shared/schema";
@@ -102,6 +103,7 @@ function sessionIntensity(s: CalSession): ClassIntensity {
 export default function Calendar() {
   const { user, isLoading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
 
   const [view, setView] = useState<ViewMode>("grid");
   const [intensity, setIntensity] = useState<IntensityFilter>("All");
@@ -228,8 +230,10 @@ export default function Calendar() {
     timeZone: "Asia/Kolkata",
   });
 
+  // Prefetch runs on this Book click; when the session is flexi-eligible the
+  // reserve checkout paints options instantly, otherwise the 404 is swallowed.
   const reserve = (sessionId: string) =>
-    setLocation(`/reserve?sessionId=${encodeURIComponent(sessionId)}&from=calendar`);
+    navigateToMemberReserve(setLocation, queryClient, { sessionId }, "calendar");
 
   const scrollCarousel = (dir: "left" | "right") => {
     const el = availCarouselRef.current;

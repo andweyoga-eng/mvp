@@ -29,7 +29,7 @@ export function PaymentHoldCountdownChip({
           style={{ color: "#b45309" }}
         />
         <p className="flex-1 text-[13px] font-medium leading-snug" style={{ color: "#92400e" }}>
-          Hurry — spot held for{" "}
+          Hurry, spot held for{" "}
           <strong className="font-semibold tabular-nums">{timeDisplay}</strong>, complete payment
           to keep it.
         </p>
@@ -51,7 +51,7 @@ export function PaymentHoldCountdownChip({
       <Clock className="h-5 w-5 shrink-0 text-primary opacity-75" />
       <p className="flex-1 text-[13px] leading-snug text-primary">
         Spot held for{" "}
-        <strong className="font-semibold tabular-nums">{timeDisplay}</strong> — complete payment
+        <strong className="font-semibold tabular-nums">{timeDisplay}</strong>. Complete payment
         to keep it.
       </p>
     </div>
