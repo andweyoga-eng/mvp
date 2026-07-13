@@ -30,7 +30,7 @@ const slides = [
   {
     image: expressImage,
     word: "Express",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Express" }, { lead: "To feel safe and", accent: "Smile" }],
+    trail: [BRAND_PHRASE, { lead: "To", accent: "Express" }, { lead: "To Feel", accent: "Safe" }],
   },
   {
     image: evolveImage,

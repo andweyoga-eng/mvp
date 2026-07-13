@@ -8,16 +8,20 @@ import {
   User as UserIcon,
   Flower2,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   ArrowRight,
-  Video,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getMeetJoinMessage } from "@shared/session-meet-access";
+import {
+  getMeetJoinMessage,
+  getMeetJoinState,
+  getSessionEndTime,
+} from "@shared/session-meet-access";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { formatSessionPrice } from "@/lib/booking-payment";
@@ -46,6 +50,44 @@ const HERO_IMAGES = [
   evolveImage,
   elevateImage,
   becomeImage,
+];
+
+/** Rotates once a day so the greeting stays fresh but stable within a session. */
+const YOGA_QUOTES: { text: string; author: string }[] = [
+  {
+    text: "Yoga is the journey of the self, through the self, to the self.",
+    author: "The Bhagavad Gita",
+  },
+  {
+    text: "Yoga does not just change the way we see things, it transforms the person who sees.",
+    author: "B.K.S. Iyengar",
+  },
+  { text: "Practice and all is coming.", author: "Sri K. Pattabhi Jois" },
+  {
+    text: "Yoga is not about touching your toes. It is about what you learn on the way down.",
+    author: "Jigar Gor",
+  },
+  {
+    text: "The body benefits from movement, and the mind benefits from stillness.",
+    author: "Sakyong Mipham",
+  },
+  {
+    text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
+    author: "Will Durant",
+  },
+  {
+    text: "Discipline is the bridge between goals and accomplishment.",
+    author: "Jim Rohn",
+  },
+  { text: "Inhale the future, exhale the past.", author: "Yoga proverb" },
+  {
+    text: "A little progress each day adds up to big results.",
+    author: "Satya Nani",
+  },
+  {
+    text: "When you own your breath, nobody can steal your peace.",
+    author: "Yoga proverb",
+  },
 ];
 
 type PublicInstructor = Pick<Instructor, "id" | "name" | "bio" | "imageUrl" | "specialties">;
@@ -137,6 +179,12 @@ export default function Dashboard() {
   const workoutCarouselRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
   const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
+  const [now, setNow] = useState(() => new Date());
+
+  const dailyQuote = useMemo(() => {
+    const dayIndex = Math.floor(Date.now() / 86_400_000);
+    return YOGA_QUOTES[dayIndex % YOGA_QUOTES.length];
+  }, []);
 
   useEffect(() => {
     if (!showReleaseToast) return;
@@ -160,6 +208,13 @@ export default function Dashboard() {
       () => setHeroImageIdx((i) => (i + 1) % HERO_IMAGES.length),
       4500,
     );
+    return () => window.clearInterval(id);
+  }, []);
+
+  // Re-evaluate join windows on a live clock so a session that ends while the
+  // page is open stops showing the "Enter Session" LIVE control.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -189,12 +244,28 @@ export default function Dashboard() {
     [memberSessions],
   );
 
-  const todaySession = useMemo(() => {
-    const today = new Date().toDateString();
-    const live = upcomingBooked.find((s) => s.meetJoinState === "active");
+  const heroSession = useMemo(() => {
+    const isActiveNow = (s: MemberSession) =>
+      getMeetJoinState({
+        sessionStart: new Date(s.date),
+        sessionDurationMinutes: s.sessionDurationMinutes ?? 60,
+        isPaid: s.paymentStatus === "paid" || s.paymentStatus === "waived",
+        hasMeetLink: !!s.googleMeetLink,
+        now,
+      }) === "active";
+
+    // A session that is live right now takes priority.
+    const live = upcomingBooked.find(isActiveNow);
     if (live) return live;
-    return upcomingBooked.find((s) => new Date(s.date).toDateString() === today);
-  }, [upcomingBooked]);
+
+    // Otherwise show the soonest booked session that has not ended yet, so an
+    // ended session never lingers in the hero as if it were still joinable.
+    return upcomingBooked.find(
+      (s) =>
+        getSessionEndTime(new Date(s.date), s.sessionDurationMinutes ?? 60).getTime() >
+        now.getTime(),
+    );
+  }, [upcomingBooked, now]);
 
   const bookClassType = (classTypeId: string) => {
     // classTypeId-only: anchor session is unknown until reserve resolves the
@@ -202,7 +273,16 @@ export default function Dashboard() {
     navigateToMemberReserve(setLocation, queryClient, { classTypeId }, "dashboard");
   };
 
-  const isLive = todaySession?.meetJoinState === "active" && !!todaySession.googleMeetLink;
+  const isLive =
+    !!heroSession &&
+    getMeetJoinState({
+      sessionStart: new Date(heroSession.date),
+      sessionDurationMinutes: heroSession.sessionDurationMinutes ?? 60,
+      isPaid:
+        heroSession.paymentStatus === "paid" || heroSession.paymentStatus === "waived",
+      hasMeetLink: !!heroSession.googleMeetLink,
+      now,
+    }) === "active";
 
   return (
     <DashboardShell active="sessions">
@@ -238,17 +318,22 @@ export default function Dashboard() {
                 </span>
               </span>
               <h1 className="mb-3.5 font-display text-[clamp(30px,5.4vw,46px)] font-bold leading-[1.12] tracking-tight text-primary">
-                Your sanctuary for
-                <br />
-                <span className="font-accent text-[1.06em] font-normal italic">mindful</span> movement.
+                {dailyQuote.text}
               </h1>
+              <p className="mb-4 text-[clamp(13px,1.3vw,15px)] font-semibold text-muted-foreground">
+                <span className="font-accent text-[1.2em] italic">{dailyQuote.author}</span>
+              </p>
               <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
-                {todaySession
-                  ? `Your ${todaySession.className} session is scheduled today at ${formatTime(todaySession.date)}.`
+                {heroSession
+                  ? isLive
+                    ? `Your ${heroSession.className} session is live now. Tap Enter Session to join.`
+                    : new Date(heroSession.date).toDateString() === now.toDateString()
+                      ? `Your ${heroSession.className} session is scheduled today at ${formatTime(heroSession.date)}.`
+                      : `Your next ${heroSession.className} session is ${formatDayTime(heroSession.date)}.`
                   : "No sessions scheduled for today. Explore our sessions below and reserve your spot."}
               </p>
 
-              {todaySession ? (
+              {heroSession ? (
                 <div className="grid max-w-[440px] grid-cols-2 gap-3 rounded-[18px] border border-dz-glass-border bg-dz-surface/70 p-4 shadow-dz-ambient backdrop-blur-[16px]">
                   <div className="flex items-center gap-2.5 px-1 py-1.5">
                     <Timer className="h-5 w-5 text-primary" />
@@ -257,7 +342,7 @@ export default function Dashboard() {
                         TIME
                       </span>
                       <span className="text-sm font-semibold text-foreground">
-                        {formatTime(todaySession.date)}
+                        {formatTime(heroSession.date)}
                       </span>
                     </div>
                   </div>
@@ -268,7 +353,7 @@ export default function Dashboard() {
                         INSTRUCTOR
                       </span>
                       <span className="text-sm font-semibold text-foreground">
-                        {todaySession.instructorName}
+                        {heroSession.instructorName}
                       </span>
                     </div>
                   </div>
@@ -276,7 +361,7 @@ export default function Dashboard() {
                     <TooltipTrigger asChild>
                       {isLive ? (
                         <a
-                          href={todaySession.googleMeetLink ?? "#"}
+                          href={heroSession.googleMeetLink ?? "#"}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
@@ -289,23 +374,25 @@ export default function Dashboard() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setLocation("/my-account#sessions")}
-                          className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
-                          data-testid="view-session"
+                          aria-disabled="true"
+                          onClick={(e) => e.preventDefault()}
+                          className="flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm font-bold text-muted-foreground opacity-70"
+                          data-testid="upcoming-session"
                         >
-                          <Video className="h-4 w-4" />
-                          <span>View Session</span>
+                          <CalendarClock className="h-4 w-4" />
+                          <span>Upcoming Session</span>
                         </button>
                       )}
                     </TooltipTrigger>
                     <TooltipContent className="max-w-[260px] text-center">
                       {getMeetJoinMessage({
-                        sessionStart: new Date(todaySession.date),
-                        sessionDurationMinutes: todaySession.sessionDurationMinutes ?? 60,
+                        sessionStart: new Date(heroSession.date),
+                        sessionDurationMinutes: heroSession.sessionDurationMinutes ?? 60,
                         isPaid:
-                          todaySession.paymentStatus === "paid" ||
-                          todaySession.paymentStatus === "waived",
-                        hasMeetLink: !!todaySession.googleMeetLink,
+                          heroSession.paymentStatus === "paid" ||
+                          heroSession.paymentStatus === "waived",
+                        hasMeetLink: !!heroSession.googleMeetLink,
+                        now,
                       })}
                     </TooltipContent>
                   </Tooltip>
@@ -316,7 +403,7 @@ export default function Dashboard() {
                         TYPE
                       </span>
                       <span className="text-sm font-semibold text-foreground">
-                        {todaySession.className}
+                        {heroSession.className}
                       </span>
                     </div>
                   </div>
