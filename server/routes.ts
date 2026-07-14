@@ -3253,8 +3253,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!payment) {
         return res.status(404).json({ message: "Payment not found" });
       }
+      const bookingId = payment.bookingId;
+      if (!bookingId) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
 
-      const booking = await storage.getBooking(payment.bookingId);
+      const booking = await storage.getBooking(bookingId);
       if (!booking || !canAccessBooking(req, booking)) {
         return res.status(404).json({ message: "Payment not found" });
       }
@@ -3285,7 +3289,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const body = req.body as { paymentId?: string };
         if (body.paymentId) {
           const payment = await storage.getPaymentById(body.paymentId);
-          const booking = payment ? await storage.getBooking(payment.bookingId) : undefined;
+          const recoveredBookingId = payment?.bookingId;
+          const booking =
+            recoveredBookingId != null
+              ? await storage.getBooking(recoveredBookingId)
+              : undefined;
           if (
             payment &&
             booking &&
@@ -3320,7 +3328,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!payment) {
         return res.status(404).json({ message: "Payment not found" });
       }
-      const booking = await storage.getBooking(payment.bookingId);
+      const bookingId = payment.bookingId;
+      if (!bookingId) {
+        return res.status(404).json({ message: "Payment not found" });
+      }
+      const booking = await storage.getBooking(bookingId);
       if (!booking || !canAccessBooking(req, booking)) {
         return res.status(404).json({ message: "Payment not found" });
       }

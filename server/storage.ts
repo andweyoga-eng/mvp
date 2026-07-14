@@ -189,7 +189,7 @@ export interface PendingQrBookingRow {
 
 export interface PaymentHistoryRow {
   id: string;
-  bookingId: string;
+  bookingId: string | null;
   userId: string | null;
   userName: string;
   userEmail: string;
@@ -2170,9 +2170,25 @@ export class DatabaseStorage implements IStorage {
       .where(eq(bookings.classId, classId));
     const bookingIds = classBookings.map((row) => row.id);
 
+    // Retain payment rows as books of account (Companies Act s.128 — 8 years).
+    // Detach FKs so bookings/classes can be removed without CASCADE-deleting ledger evidence.
+    if (bookingIds.length) {
+      await db
+        .update(payments)
+        .set({
+          bookingId: null,
+          classId: null,
+          updatedAt: new Date(),
+        })
+        .where(inArray(payments.bookingId, bookingIds));
+    }
+    await db
+      .update(payments)
+      .set({ classId: null, updatedAt: new Date() })
+      .where(eq(payments.classId, classId));
+
     if (bookingIds.length) {
       await db.delete(consentAuditLogs).where(inArray(consentAuditLogs.bookingId, bookingIds));
-      await db.delete(payments).where(inArray(payments.bookingId, bookingIds));
       await db.delete(bookings).where(inArray(bookings.id, bookingIds));
     }
 
@@ -2308,12 +2324,25 @@ export class DatabaseStorage implements IStorage {
         const bookingIds = userBookings.map((row) => row.id);
 
         if (bookingIds.length > 0) {
-          await tx.delete(payments).where(inArray(payments.bookingId, bookingIds));
+          // Keep payment ledger rows; only detach PII-bearing user/booking links.
+          await tx
+            .update(payments)
+            .set({
+              userId: null,
+              bookingId: null,
+              updatedAt: completedAt,
+            })
+            .where(inArray(payments.bookingId, bookingIds));
           await tx
             .update(consentAuditLogs)
             .set({ bookingId: null })
             .where(inArray(consentAuditLogs.bookingId, bookingIds));
         }
+
+        await tx
+          .update(payments)
+          .set({ userId: null, updatedAt: completedAt })
+          .where(eq(payments.userId, id));
 
         await tx
           .update(consentAuditLogs)
@@ -3310,12 +3339,12 @@ export class DatabaseStorage implements IStorage {
   private mapPaymentHistoryRows(
     rows: Array<{
       id: string;
-      bookingId: string;
+      bookingId: string | null;
       userId: string | null;
       userName: string | null;
       userEmail: string | null;
-      className: string;
-      sessionDate: Date;
+      className: string | null;
+      sessionDate: Date | null;
       amountPaise: number | null;
       currency: string;
       paymentMethod: string | null;
@@ -3342,8 +3371,8 @@ export class DatabaseStorage implements IStorage {
       userId: r.userId,
       userName: r.userName ?? r.payerName ?? "Guest",
       userEmail: r.userEmail ?? r.payerEmail ?? "",
-      className: r.className,
-      sessionDate: r.sessionDate.toISOString(),
+      className: r.className ?? "Removed session",
+      sessionDate: (r.sessionDate ?? r.createdAt).toISOString(),
       amountPaise: r.amountPaise,
       currency: r.currency,
       paymentMethod: r.paymentMethod,
@@ -3399,10 +3428,10 @@ export class DatabaseStorage implements IStorage {
           createdAt: payments.createdAt,
         })
         .from(payments)
-        .innerJoin(bookings, eq(payments.bookingId, bookings.id))
+        .leftJoin(bookings, eq(payments.bookingId, bookings.id))
         .leftJoin(users, eq(payments.userId, users.id))
-        .innerJoin(classes, eq(payments.classId, classes.id))
-        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .leftJoin(classes, eq(payments.classId, classes.id))
+        .leftJoin(classTypes, eq(classes.classTypeId, classTypes.id))
         .orderBy(desc(payments.createdAt));
       return this.mapPaymentHistoryRows(
         rows.map((r) => ({

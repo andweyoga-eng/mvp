@@ -57,9 +57,12 @@ export async function markPaymentPaid(params: {
 }): Promise<PaymentSuccessPayload | null> {
   const payment = await storage.getPaymentById(params.paymentId);
   if (!payment) return null;
+  const bookingId = payment.bookingId;
+  const classId = payment.classId;
+  if (!bookingId || !classId) return null;
 
   if (payment.status === "paid") {
-    await syncFlexiPaymentStatusForBooking(payment.bookingId, "paid");
+    await syncFlexiPaymentStatusForBooking(bookingId, "paid");
     return buildPayloadFromPayment(payment);
   }
 
@@ -132,20 +135,20 @@ export async function markPaymentPaid(params: {
     invoiceUrl: invoiceUrl ?? payment.invoiceUrl,
     receiptUrl: `https://razorpay.com/payment/${params.razorpayPaymentId}`,
   });
-  await storage.updateBookingPaymentHold(payment.bookingId, {
+  await storage.updateBookingPaymentHold(bookingId, {
     paymentStatus: "paid",
     heldUntil: null,
   });
-  await syncFlexiPaymentStatusForBooking(payment.bookingId, "paid");
+  await syncFlexiPaymentStatusForBooking(bookingId, "paid");
 
   if (payment.couponId && (payment.discountAmountPaise ?? 0) > 0) {
-    const bookingForCoupon = await storage.getBooking(payment.bookingId);
-    const clsForCoupon = await storage.getClass(payment.classId);
+    const bookingForCoupon = await storage.getBooking(bookingId);
+    const clsForCoupon = await storage.getClass(classId);
     if (bookingForCoupon && clsForCoupon) {
       await storage.finalizeCouponRedemption({
         couponId: payment.couponId,
         userId: bookingForCoupon.userId ?? null,
-        bookingId: payment.bookingId,
+        bookingId,
         paymentId: payment.id,
         classTypeId: clsForCoupon.classTypeId,
         classId: clsForCoupon.id,
@@ -159,11 +162,11 @@ export async function markPaymentPaid(params: {
   const updated = await storage.getPaymentById(payment.id);
   if (!updated) return null;
 
-  const booking = await storage.getBooking(payment.bookingId);
+  const booking = await storage.getBooking(bookingId);
   const user = booking?.userId
     ? await storage.getUser(booking.userId)
     : undefined;
-  const cls = await storage.getClass(payment.classId);
+  const cls = await storage.getClass(classId);
   const classType = cls ? await storage.getClassType(cls.classTypeId) : undefined;
   const instructor = cls ? await storage.getInstructor(cls.instructorId) : undefined;
 
@@ -230,6 +233,7 @@ export async function verifyManualPayment(
 ): Promise<PaymentSuccessPayload> {
   const payment = await storage.getPaymentById(paymentId);
   if (!payment) throw new Error("Payment not found");
+  if (!payment.bookingId) throw new Error("Payment is retained without a live booking");
 
   const booking = await storage.getBooking(payment.bookingId);
   if (!booking) throw new Error("Booking not found");
@@ -337,15 +341,18 @@ async function buildPayloadFromPayment(
   instructor?: Awaited<ReturnType<typeof storage.getInstructor>>,
 ): Promise<PaymentSuccessPayload | null> {
   if (!payment) return null;
-  const booking = await storage.getBooking(payment.bookingId);
+  const bookingId = payment.bookingId;
+  const classId = payment.classId;
+  if (!bookingId || !classId) return null;
+  const booking = await storage.getBooking(bookingId);
   if (!booking) return null;
-  const session = cls ?? (await storage.getClass(payment.classId));
+  const session = cls ?? (await storage.getClass(classId));
   const type = classType ?? (session ? await storage.getClassType(session.classTypeId) : undefined);
   const teach = instructor ?? (session ? await storage.getInstructor(session.instructorId) : undefined);
 
   return {
-    bookingId: payment.bookingId,
-    classId: payment.classId,
+    bookingId,
+    classId,
     className: type?.name ?? "Yoga Session",
     instructorName: teach?.name ?? "",
     sessionDate: session?.date.toISOString() ?? new Date().toISOString(),

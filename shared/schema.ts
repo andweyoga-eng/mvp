@@ -229,9 +229,10 @@ export const erasureRequests = pgTable("erasure_requests", {
 
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  bookingId: varchar("booking_id").notNull().references(() => bookings.id),
-  userId: varchar("user_id").references(() => users.id),
-  classId: varchar("class_id").notNull().references(() => classes.id),
+  /** Nullable so class/booking hard-delete can detach rows (Companies Act s.128 retention). */
+  bookingId: varchar("booking_id").references(() => bookings.id, { onDelete: "set null" }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  classId: varchar("class_id").references(() => classes.id, { onDelete: "set null" }),
   amountPaise: integer("amount_paise").notNull(),
   currency: varchar("currency", { length: 3 }).notNull().default("INR"),
   razorpayOrderId: text("razorpay_order_id"),

@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export interface AdminPaymentHistoryRow {
   id: string;
-  bookingId: string;
+  bookingId: string | null;
   userName: string;
   userEmail: string;
   className: string;
