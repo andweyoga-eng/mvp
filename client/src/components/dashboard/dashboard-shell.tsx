@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import {
   Search,
   Bell,
-  CalendarDays,
   Smile,
   GraduationCap,
   Mountain,
@@ -12,6 +11,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { focusSessionsSearch } from "@/lib/practice-schedule";
 import { AccountMenuControls } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { useProfileCompletionGuard } from "@/hooks/use-profile-completion-guard";
@@ -19,7 +19,6 @@ import { BrandLogo } from "@/components/brand-logo";
 
 export type DashboardSection =
   | "sessions"
-  | "calendar"
   | "emojou"
   | "workshops"
   | "trips"
@@ -28,14 +27,13 @@ export type DashboardSection =
 interface LauncherItem {
   id: DashboardSection;
   label: string;
-  icon: typeof CalendarDays;
+  icon: typeof Sparkles;
   /** Internal route or hash this tab opens; omit for not-yet-built sections. */
   href?: string;
 }
 
 const LAUNCHER_ITEMS: LauncherItem[] = [
   { id: "sessions", label: "Sessions", icon: Sparkles, href: "/dashboard" },
-  { id: "calendar", label: "Calendar", icon: CalendarDays, href: "/calendar" },
   { id: "emojou", label: "Emojou", icon: Smile, href: "/emojou" },
   { id: "workshops", label: "we learn", icon: GraduationCap, href: "/workshops" },
   { id: "trips", label: "Trips", icon: Mountain, href: "/trips" },
@@ -84,9 +82,16 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => toast({ title: "Search", description: "Search is coming soon." })}
+              onClick={() => {
+                if (active === "sessions") {
+                  focusSessionsSearch();
+                  return;
+                }
+                setLocation("/dashboard");
+                window.setTimeout(() => focusSessionsSearch(), 120);
+              }}
               className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/[0.06] hover:text-primary"
-              aria-label="Search"
+              aria-label="Search sessions"
             >
               <Search className="h-5 w-5" />
             </button>
@@ -111,7 +116,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
         {/* ===== SECTION LAUNCHER ===== */}
         <div className="border-t border-dz-glass-border/60 bg-dz-surface/55">
           <PageContainer>
-            <nav className="grid grid-cols-6 gap-1 py-2 sm:gap-2 sm:py-3">
+            <nav className="grid grid-cols-5 gap-1 py-2 sm:gap-2 sm:py-3">
               {LAUNCHER_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = item.id === active;

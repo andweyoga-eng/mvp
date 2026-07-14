@@ -86,7 +86,7 @@ interface EnrichedClass extends Class {
 }
 
 const MY_SESSIONS_URL = "/my-account#sessions";
-const CALENDAR_URL = "/calendar";
+const CALENDAR_URL = "/dashboard";
 
 function persistReserveIntent(sessionId: string | null, classTypeId: string | null) {
   setPendingBooking({

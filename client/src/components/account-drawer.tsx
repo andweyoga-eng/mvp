@@ -31,7 +31,7 @@ interface DrawerItem {
 }
 
 const DRAWER_ITEMS: DrawerItem[] = [
-  { label: "Book Sessions", icon: CalendarPlus, href: "/calendar", primary: true },
+  { label: "Book Sessions", icon: CalendarPlus, href: "/dashboard", primary: true },
   { label: "Contact Info", icon: User, href: myAccountHref("profile") },
   { label: "Health Updates", icon: HeartPulse, href: myAccountHref("health") },
   { label: "Session History", icon: History, href: myAccountHref("sessions") },

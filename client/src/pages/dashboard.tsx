@@ -35,6 +35,19 @@ import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { consumeSpotReleasedFlag } from "@/lib/spot-release-navigation";
 import { ReleaseSpotToast } from "@/components/release-spot-toast";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { SessionsSearchBar } from "@/components/sessions/sessions-search-bar";
+import { WeeklySchedulePanel } from "@/components/sessions/weekly-schedule-panel";
+import { PracticeCalendarPanel } from "@/components/sessions/practice-calendar-panel";
+import { YourMentorsSection } from "@/components/sessions/your-mentors-section";
+import { filterUpcomingScheduleDays, type ScheduleDayLike } from "@/lib/booking-flow";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
+import {
+  practiceClassImage,
+  samePracticeCalendarDay,
+  type PracticeScheduleDay,
+  type PracticeSession,
+} from "@/lib/practice-schedule";
+import type { SessionsSearchCatalog } from "@/lib/sessions-search/types";
 import type { ClassType, Instructor } from "@shared/schema";
 import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
@@ -177,9 +190,16 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const workoutCarouselRef = useRef<HTMLDivElement>(null);
+  const weeklyHeaderRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const mentorsSectionRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
   const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
   const [now, setNow] = useState(() => new Date());
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
 
   const dailyQuote = useMemo(() => {
     const dayIndex = Math.floor(Date.now() / 86_400_000);
@@ -232,6 +252,22 @@ export default function Dashboard() {
     queryKey: ["/api/instructors"],
   });
 
+  const { data: weeklySchedule = [], isLoading: scheduleLoading } = useQuery<
+    ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]
+  >({
+    queryKey: ["/api/schedule/week"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+
+  const { data: promotions } = useQuery<
+    Array<{ promotionId: string; position: number; session: PracticeSession }>
+  >({
+    queryKey: ["/api/carousel/promotions"],
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
   const upcomingBooked = useMemo(
     () =>
       memberSessions
@@ -271,6 +307,170 @@ export default function Dashboard() {
     // classTypeId-only: anchor session is unknown until reserve resolves the
     // pool, so this falls back to reserve's on-mount fetch by design.
     navigateToMemberReserve(setLocation, queryClient, { classTypeId }, "dashboard");
+  };
+
+  const reserveSession = (sessionId: string) => {
+    navigateToMemberReserve(setLocation, queryClient, { sessionId }, "dashboard");
+  };
+
+  const upcomingSchedule = useMemo(
+    () => (weeklySchedule ? filterUpcomingScheduleDays(weeklySchedule) : []),
+    [weeklySchedule],
+  );
+
+  const todaySessions = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = upcomingSchedule.find((d) => {
+      const first = d.classes[0];
+      return first ? samePracticeCalendarDay(new Date(first.date), today) : false;
+    });
+    return day?.classes ?? [];
+  }, [upcomingSchedule]);
+
+  const carouselSessions = useMemo(() => {
+    const active = promotions ?? [];
+    if (active.length === 0) return todaySessions;
+    const sorted = [...active].sort((a, b) => a.position - b.position);
+    const promotedIds = new Set(sorted.map((p) => p.session.id));
+    const base = todaySessions.filter((s) => !promotedIds.has(s.id));
+    for (const p of sorted) {
+      const idx = Math.min(Math.max(p.position, 0), base.length);
+      base.splice(idx, 0, p.session);
+    }
+    return base;
+  }, [promotions, todaySessions]);
+
+  const scheduleDays = useMemo(
+    () => upcomingSchedule.filter((d) => d.classes.length > 0),
+    [upcomingSchedule],
+  );
+
+  const sessionsByDateKey = useMemo(() => {
+    const map = new Map<string, PracticeSession[]>();
+    for (const day of upcomingSchedule) {
+      const first = day.classes[0];
+      if (!first) continue;
+      map.set(new Date(first.date).toDateString(), day.classes);
+    }
+    return map;
+  }, [upcomingSchedule]);
+
+  const calendarCells = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const startPad = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{
+      day: number | null;
+      dateKey?: string;
+      hasSessions?: boolean;
+      soldOut?: boolean;
+      isToday?: boolean;
+      thumbnailUrl?: string;
+    }> = [];
+    for (let i = 0; i < startPad; i++) cells.push({ day: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const key = date.toDateString();
+      const sessions = sessionsByDateKey.get(key) ?? [];
+      const hasSessions = sessions.length > 0;
+      cells.push({
+        day: d,
+        dateKey: key,
+        hasSessions,
+        soldOut: hasSessions && sessions.every((s) => s.currentBookings >= s.maxCapacity),
+        isToday: samePracticeCalendarDay(date, new Date()),
+        thumbnailUrl: hasSessions ? practiceClassImage(sessions[0].classType) : undefined,
+      });
+    }
+    return cells;
+  }, [calendarMonth, sessionsByDateKey]);
+
+  const monthLabel = calendarMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+
+  const bookingMentors = useMemo(() => {
+    const names = new Set<string>();
+    const ordered: string[] = [];
+    for (const s of memberSessions) {
+      if (!s.instructorName || names.has(s.instructorName)) continue;
+      names.add(s.instructorName);
+      ordered.push(s.instructorName);
+    }
+    const instructorByName = new Map(instructors.map((i) => [i.name, i]));
+    return ordered.map((name) => {
+      const profile = instructorByName.get(name);
+      return {
+        name,
+        specialty: profile?.specialties?.[0] ?? profile?.bio ?? undefined,
+        imageUrl: profile?.imageUrl,
+      };
+    });
+  }, [memberSessions, instructors]);
+
+  const searchCatalog = useMemo((): SessionsSearchCatalog => {
+    const classTypeById = new Map(classTypes.map((ct) => [ct.id, ct]));
+    const scheduleSessions = upcomingSchedule.flatMap((d) =>
+      d.classes.map((cls) => ({
+        id: cls.id,
+        className: cls.classType.name,
+        classDescription: cls.classType.description ?? classTypeById.get(cls.classType.id)?.description,
+        instructorName: cls.instructor.name,
+        date: cls.date,
+        soldOut: cls.currentBookings >= cls.maxCapacity,
+      })),
+    );
+    return {
+      bookedSessions: memberSessions.map((s) => ({
+        bookingId: s.bookingId,
+        className: s.className,
+        instructorName: s.instructorName,
+        date: s.date,
+        status: s.status,
+      })),
+      scheduleSessions,
+      todaySessions: carouselSessions.map((cls) => ({
+        id: cls.id,
+        className: cls.classType.name,
+        classDescription: cls.classType.description ?? classTypeById.get(cls.classType.id)?.description,
+        instructorName: cls.instructor.name,
+        date: cls.date,
+        soldOut: cls.currentBookings >= cls.maxCapacity,
+      })),
+      classTypes: classTypes.map((ct) => ({
+        id: ct.id,
+        name: ct.name,
+        description: ct.description,
+        intensity: ct.intensity,
+        duration: ct.duration,
+        strictNoTo: ct.strictNoTo,
+      })),
+      mentors: bookingMentors.map((m) => ({
+        name: m.name,
+        specialty: m.specialty,
+        bio: instructors.find((i) => i.name === m.name)?.bio ?? undefined,
+      })),
+      publicCoaches: instructors.map((i) => ({
+        id: i.id,
+        name: i.name,
+        bio: i.bio,
+        specialties: i.specialties,
+      })),
+    };
+  }, [memberSessions, upcomingSchedule, carouselSessions, classTypes, bookingMentors, instructors]);
+
+  const jumpToWeeklyDay = (dateKey: string) => {
+    window.setTimeout(() => {
+      const header = weeklyHeaderRefs.current.get(dateKey);
+      if (!header) return;
+      header.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlightedDayKey(dateKey);
+      window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
+    }, 60);
+  };
+
+  const scrollToMentors = () => {
+    mentorsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const isLive =
@@ -422,51 +622,12 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* ===== AND WE WORKOUT CAROUSEL ===== */}
-        <section className="mb-14">
-          <div className="mb-5">
-            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-              and We{" "}
-              <span className="font-accent italic font-normal text-dz-secondary">Workout</span>
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Discover the perfect class for your practice level and goals
-            </p>
-          </div>
-
-          {classTypes.length === 0 ? (
-            <GlassCard className="p-10 text-center text-muted-foreground">
-              Class offerings are on the way. Please check back soon.
-            </GlassCard>
-          ) : (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => scrollCarouselEl(workoutCarouselRef.current, -1)}
-                aria-label="Previous workout classes"
-                className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollCarouselEl(workoutCarouselRef.current, 1)}
-                aria-label="Next workout classes"
-                className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-              <div
-                ref={workoutCarouselRef}
-                className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              >
-                {classTypes.map((classType) => (
-                  <ClassTypeCard key={classType.id} classType={classType} onBook={bookClassType} />
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
+        <SessionsSearchBar
+          catalog={searchCatalog}
+          onReserveSession={reserveSession}
+          onBookClassType={bookClassType}
+          onScrollToMentors={scrollToMentors}
+        />
 
         {/* ===== YOUR SCHEDULE ===== */}
         <section className="mb-14">
@@ -515,7 +676,7 @@ export default function Dashboard() {
                 {!sessionsLoading && upcomingBooked.length === 0 && (
                   <button
                     type="button"
-                    onClick={() => (window.location.href = "/#schedule")}
+                    onClick={() => document.getElementById("weekly-schedule")?.scrollIntoView({ behavior: "smooth" })}
                     className="flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
                   >
                     Find a session
@@ -528,50 +689,74 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* ===== YOUR MENTORS ===== */}
+        {/* ===== AND WE WORKOUT CAROUSEL ===== */}
         <section className="mb-14">
-          <h2 className="mb-5 font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-            Your Mentors
-          </h2>
-          <div className="flex flex-col gap-3.5">
-            {instructors.slice(0, 4).map((mentor) => (
-              <GlassCard
-                key={mentor.id}
-                className="flex items-center gap-3.5 rounded-2xl p-3.5 transition-transform hover:translate-x-1.5"
-              >
-                <div className="flex h-[54px] w-[54px] flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary via-[#4b3282] to-dz-secondary font-display text-lg font-bold text-white">
-                  {mentor.imageUrl ? (
-                    <img
-                      src={mentor.imageUrl}
-                      alt={mentor.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    mentor.name
-                      .split(" ")
-                      .map((p) => p[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-display text-base font-semibold text-primary">
-                    {mentor.name}
-                  </h4>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {mentor.specialties?.[0] ?? mentor.bio ?? "andWeYoga Instructor"}
-                  </p>
-                </div>
-              </GlassCard>
-            ))}
-            {instructors.length === 0 && (
-              <GlassCard className="p-6 text-center text-sm text-muted-foreground">
-                Mentor profiles are on the way.
-              </GlassCard>
-            )}
+          <div className="mb-5">
+            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+              and We{" "}
+              <span className="font-accent italic font-normal text-dz-secondary">Workout</span>
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Discover the perfect class for your practice level and goals
+            </p>
           </div>
+
+          {classTypes.length === 0 ? (
+            <GlassCard className="p-10 text-center text-muted-foreground">
+              Class offerings are on the way. Please check back soon.
+            </GlassCard>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, -1)}
+                aria-label="Previous workout classes"
+                className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, 1)}
+                aria-label="Next workout classes"
+                className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+              <div
+                ref={workoutCarouselRef}
+                className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {classTypes.map((classType) => (
+                  <ClassTypeCard key={classType.id} classType={classType} onBook={bookClassType} />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
+
+        {/* ===== WEEKLY SCHEDULE + CALENDAR ===== */}
+        <section className="mb-14 flex flex-col gap-6">
+          <WeeklySchedulePanel
+            days={scheduleDays}
+            isLoading={scheduleLoading}
+            highlightedDayKey={highlightedDayKey}
+            onHighlightDayKey={setHighlightedDayKey}
+            onReserve={reserveSession}
+            weeklyHeaderRefs={weeklyHeaderRefs}
+          />
+          <PracticeCalendarPanel
+            monthLabel={monthLabel}
+            cells={calendarCells}
+            calendarMonth={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            onJumpToDay={jumpToWeeklyDay}
+          />
+        </section>
+
+        <div ref={mentorsSectionRef}>
+          <YourMentorsSection mentors={bookingMentors} />
+        </div>
       </PageContainer>
       <ReleaseSpotToast visible={showReleaseToast} />
     </DashboardShell>
