@@ -40,4 +40,16 @@ describe("classifyMemberSessionStatus", () => {
     assert.equal(out.status, "cancelled");
     assert.equal(out.isLive, false);
   });
+
+  it("honors mapping completed even before session end", () => {
+    const out = classifyMemberSessionStatus({
+      mappingStatus: "completed",
+      classCancelledAt: null,
+      sessionStart: "2026-05-20T10:00:00.000Z",
+      durationMinutes: 60,
+      now: NOW,
+    });
+    assert.equal(out.status, "completed");
+    assert.equal(out.isLive, false);
+  });
 });

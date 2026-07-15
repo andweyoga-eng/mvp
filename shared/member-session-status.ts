@@ -16,6 +16,9 @@ export function classifyMemberSessionStatus(params: {
   if (params.mappingStatus === "cancelled" || params.classCancelledAt) {
     return { status: "cancelled", isLive: false };
   }
+  if (params.mappingStatus === "completed") {
+    return { status: "completed", isLive: false };
+  }
 
   const duration = resolveSessionDurationMinutes(params.durationMinutes);
   const startMs = new Date(params.sessionStart).getTime();
@@ -27,9 +30,6 @@ export function classifyMemberSessionStatus(params: {
   }
   if (startMs <= nowMs) {
     return { status: "upcoming", isLive: true };
-  }
-  if (params.mappingStatus === "completed") {
-    return { status: "upcoming", isLive: false };
   }
   return { status: "upcoming", isLive: false };
 }

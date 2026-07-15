@@ -2935,6 +2935,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!hasPrice) {
         await storage.updateBookingPaymentStatus(booking.id, "waived");
+        if (cls.sessionFrequency === "recurring" && cls.seriesId && user.id) {
+          try {
+            const totalSessions = await storage.countClassesInSeriesFrom(cls.seriesId, cls.date);
+            await storage.createSubscription({
+              userId: user.id,
+              classTypeId: cls.classTypeId,
+              bookingId: booking.id,
+              subscriptionType: cls.sessionFrequency ?? "recurring",
+              totalSessions,
+              totalAmountPaise: 0,
+              status: "active",
+            });
+          } catch (subErr) {
+            console.error("[bookings] waived subscription row (non-fatal):", subErr);
+          }
+          try {
+            await storage.enrollUserInPaidRecurringSeries({
+              userId: user.id,
+              anchorClassId: cls.id,
+              paymentStatus: "waived",
+            });
+          } catch (enrollErr) {
+            console.error("[bookings] waived series enrollment (non-fatal):", enrollErr);
+          }
+        }
       }
 
       if (hasPrice) {
@@ -2955,7 +2980,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let totalSessions = 1;
           if (cls.sessionFrequency === "recurring") {
             if (cls.seriesId) {
-              totalSessions = await storage.countClassesInSeries(cls.seriesId);
+              totalSessions = await storage.countClassesInSeriesFrom(cls.seriesId, cls.date);
             } else if (cls.seriesWeekCount != null && cls.seriesWeekCount > 0) {
               totalSessions = cls.seriesWeekCount;
             } else {

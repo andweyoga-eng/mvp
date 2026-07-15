@@ -3,6 +3,7 @@ import hyyocrossImg from "@assets/Hyyocross_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import { CLASS_INTENSITIES, type ClassIntensity } from "@shared/schema";
+import { formatIstTime } from "@shared/ist-datetime";
 
 export interface PracticeClassType {
   id: string;
@@ -58,12 +59,7 @@ export function samePracticeCalendarDay(a: Date, b: Date): boolean {
 }
 
 export function formatPracticeTimeIST(date: string | Date): string {
-  return new Date(date).toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  });
+  return formatIstTime(date);
 }
 
 export function practiceSessionIntensity(s: PracticeSession): ClassIntensity {

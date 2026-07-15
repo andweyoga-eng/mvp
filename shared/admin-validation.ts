@@ -3,6 +3,7 @@ import { INSTRUCTOR_LICENSE_STATUSES } from "./instructor-compliance";
 import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "./schema";
 import { MAX_WEEKLY_OCCURRENCES } from "./session-schedule";
 import { SESSION_TERMS_MAX_LENGTH } from "./session-terms";
+import { parseIstDatetimeLocal } from "./ist-datetime";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -84,13 +85,16 @@ const razorpayLinkField = z
     message: "Payment link must start with https://",
   });
 
-/** Admin datetime-local or ISO string → Date */
+/** Admin datetime-local (IST) or ISO string → Date */
 const requiredDateTime = z
   .union([z.string(), z.date()])
   .transform((v) => {
     if (v instanceof Date) return v;
     const s = String(v).trim();
     if (!s) return new Date(NaN);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(s)) {
+      return parseIstDatetimeLocal(s);
+    }
     return new Date(s);
   })
   .refine((d) => !Number.isNaN(d.getTime()), {
@@ -106,6 +110,9 @@ const optionalDateTime = z
     if (v instanceof Date) return v;
     const s = String(v).trim();
     if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(s)) {
+      return parseIstDatetimeLocal(s);
+    }
     return new Date(s);
   });
 

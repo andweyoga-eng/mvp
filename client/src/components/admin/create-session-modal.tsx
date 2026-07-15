@@ -24,6 +24,7 @@ import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/adm
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
 import { FieldError, FormErrorSummary } from "@/components/admin/field-error";
 import { SessionDateTimePicker } from "@/components/admin/session-datetime-picker";
+import { formatIstDatetimeLocal } from "@shared/ist-datetime";
 import type { PaymentQrCode } from "@/components/admin/payment-qr-codes-panel";
 
 export interface SessionFormClassType {
@@ -169,9 +170,7 @@ export interface AdminClassSessionForEdit {
 }
 
 function toDatetimeLocalValue(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return formatIstDatetimeLocal(iso);
 }
 
 function meetLinkForForm(value: string | null | undefined): string {

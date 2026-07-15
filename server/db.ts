@@ -1,7 +1,12 @@
 import pkg from 'pg';
-const { Pool } = pkg;
+const { Pool, types } = pkg;
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '../shared/schema';
+import { parsePgTimestampAsUtc } from '@shared/ist-datetime';
+
+/** `timestamp without time zone` — session times are stored as UTC wall components. */
+const PG_TIMESTAMP = 1114;
+types.setTypeParser(PG_TIMESTAMP, (value: string) => parsePgTimestampAsUtc(value));
 
 /**
  * Railway (and similar) often set DATABASE_URL to a private *.railway.internal host.

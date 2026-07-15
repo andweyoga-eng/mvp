@@ -49,6 +49,23 @@ async function syncFlexiPaymentStatusForBooking(
   });
 }
 
+async function enrollRecurringSeriesAfterPaid(params: {
+  userId: string | null | undefined;
+  classId: string;
+  paymentStatus?: "paid" | "waived";
+}): Promise<void> {
+  if (!params.userId) return;
+  try {
+    await storage.enrollUserInPaidRecurringSeries({
+      userId: params.userId,
+      anchorClassId: params.classId,
+      paymentStatus: params.paymentStatus ?? "paid",
+    });
+  } catch (enrollErr) {
+    console.error("[Payment] Recurring series enrollment failed (non-fatal):", enrollErr);
+  }
+}
+
 export async function markPaymentPaid(params: {
   paymentId: string;
   razorpayPaymentId: string;
@@ -63,6 +80,11 @@ export async function markPaymentPaid(params: {
 
   if (payment.status === "paid") {
     await syncFlexiPaymentStatusForBooking(bookingId, "paid");
+    const existingBooking = await storage.getBooking(bookingId);
+    await enrollRecurringSeriesAfterPaid({
+      userId: existingBooking?.userId,
+      classId,
+    });
     return buildPayloadFromPayment(payment);
   }
 
@@ -140,6 +162,12 @@ export async function markPaymentPaid(params: {
     heldUntil: null,
   });
   await syncFlexiPaymentStatusForBooking(bookingId, "paid");
+
+  const bookingForSeries = await storage.getBooking(bookingId);
+  await enrollRecurringSeriesAfterPaid({
+    userId: bookingForSeries?.userId,
+    classId,
+  });
 
   if (payment.couponId && (payment.discountAmountPaise ?? 0) > 0) {
     const bookingForCoupon = await storage.getBooking(bookingId);
@@ -254,6 +282,10 @@ export async function verifyManualPayment(
   if (usesQrManualVerification(method) && disposition === "received") {
     const updated = await storage.confirmQrBooking(booking.id);
     if (!updated) throw new Error("Could not confirm booking payment");
+    await enrollRecurringSeriesAfterPaid({
+      userId: booking.userId,
+      classId: booking.classId,
+    });
     await sendBookingConfirmationEmail(booking.id);
     const refreshed = await storage.getPaymentById(payment.id);
     const payload = await buildPayloadFromPayment(refreshed, cls ?? undefined);
@@ -275,6 +307,13 @@ export async function verifyManualPayment(
     adminDisposition: disposition,
     paidAt: disposition === "received" ? new Date() : payment.paidAt,
   });
+
+  if (disposition === "received") {
+    await enrollRecurringSeriesAfterPaid({
+      userId: booking.userId,
+      classId: booking.classId,
+    });
+  }
 
   if (disposition === "received" && usesExternalPaymentLink(method)) {
     await sendBookingConfirmationEmail(booking.id);
@@ -309,6 +348,11 @@ export async function confirmQrBookingPayment(bookingId: string): Promise<Paymen
       status: "paid",
     });
   }
+
+  await enrollRecurringSeriesAfterPaid({
+    userId: booking.userId,
+    classId: booking.classId,
+  });
 
   await sendBookingConfirmationEmail(booking.id);
 

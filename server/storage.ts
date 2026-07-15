@@ -105,6 +105,11 @@ import {
 import type { HealthHistoryEntry } from "@shared/health-disclosure";
 import { classifyMemberSessionStatus } from "@shared/member-session-status";
 import {
+  countCompletedAmongEnrollment,
+  filterSeriesClassesFromAnchor,
+  recurringEnrollmentMappingStatus,
+} from "@shared/recurring-series-enrollment";
+import {
   bookingIsResumableCheckout,
   existingBookingBlocksNewBooking,
 } from "@shared/member-booking-duplicate";
@@ -435,6 +440,27 @@ export interface IStorage {
     seriesId: string,
   ): Promise<{ startAt: Date; endAt: Date } | undefined>;
   countClassesInSeries(seriesId: string): Promise<number>;
+  listClassesInSeries(seriesId: string): Promise<Class[]>;
+  countClassesInSeriesFrom(seriesId: string, fromDateInclusive: Date): Promise<number>;
+  /**
+   * After a paid recurring checkout, enroll the member in every remaining
+   * published series occurrence from the anchor class onward (idempotent).
+   */
+  enrollUserInPaidRecurringSeries(params: {
+    userId: string;
+    anchorClassId: string;
+    paymentStatus?: "paid" | "waived";
+    /** When set, forces subscription total (e.g. keep original package size on repair). */
+    totalSessionsOverride?: number;
+    /** When set, forces subscription utilized count (e.g. admin repair). */
+    utilizedSessionsOverride?: number;
+    /**
+     * Force the first N package sessions (by date) to mapping status completed.
+     * Useful when ledger utilized should include sessions marked done manually.
+     */
+    forceCompletedCount?: number;
+    now?: Date;
+  }): Promise<{ enrolledClassIds: string[]; totalSessions: number; utilizedSessions: number }>;
   findNextRecurringClassAfter(
     classTypeId: string,
     afterDate: Date,
@@ -579,6 +605,11 @@ export interface IStorage {
   ): Promise<Booking | undefined>;
   findBookingsWithExpiredPaymentHold(): Promise<Booking[]>;
   ensureUserSessionMapping(userId: string, classId: string): Promise<void>;
+  setUserSessionMappingStatus(
+    userId: string,
+    classId: string,
+    status: "upcoming" | "completed" | "cancelled",
+  ): Promise<void>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   getPaymentById(id: string): Promise<Payment | undefined>;
   getPaymentByBookingId(bookingId: string): Promise<Payment | undefined>;
@@ -1340,6 +1371,122 @@ export class DatabaseStorage implements IStorage {
       .from(classes)
       .where(eq(classes.seriesId, seriesId));
     return Math.max(1, Number(total));
+  }
+
+  async listClassesInSeries(seriesId: string): Promise<Class[]> {
+    return db
+      .select()
+      .from(classes)
+      .where(eq(classes.seriesId, seriesId))
+      .orderBy(classes.date);
+  }
+
+  async countClassesInSeriesFrom(seriesId: string, fromDateInclusive: Date): Promise<number> {
+    const rows = await this.listClassesInSeries(seriesId);
+    return filterSeriesClassesFromAnchor(rows, fromDateInclusive).length || 1;
+  }
+
+  async enrollUserInPaidRecurringSeries(params: {
+    userId: string;
+    anchorClassId: string;
+    paymentStatus?: "paid" | "waived";
+    totalSessionsOverride?: number;
+    utilizedSessionsOverride?: number;
+    forceCompletedCount?: number;
+    now?: Date;
+  }): Promise<{ enrolledClassIds: string[]; totalSessions: number; utilizedSessions: number }> {
+    const now = params.now ?? new Date();
+    const paymentStatus = params.paymentStatus ?? "paid";
+    const empty = { enrolledClassIds: [] as string[], totalSessions: 0, utilizedSessions: 0 };
+
+    const anchor = await this.getClass(params.anchorClassId);
+    if (!anchor || anchor.sessionFrequency !== "recurring" || !anchor.seriesId) {
+      return empty;
+    }
+
+    const classType = await this.getClassType(anchor.classTypeId);
+    const duration = classType?.duration ?? 60;
+    const seriesClasses = await this.listClassesInSeries(anchor.seriesId);
+    const packageClasses = filterSeriesClassesFromAnchor(seriesClasses, anchor.date);
+    if (packageClasses.length === 0) return empty;
+
+    const existingBookings = await db
+      .select({ id: bookings.id, classId: bookings.classId })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.userId, params.userId),
+          inArray(
+            bookings.classId,
+            packageClasses.map((c) => c.id),
+          ),
+        ),
+      );
+    const bookedClassIds = new Set(existingBookings.map((b) => b.classId));
+    const bookingIdByClass = new Map(existingBookings.map((b) => [b.classId, b.id]));
+
+    const enrolledClassIds: string[] = [];
+    const forceCompleted = Math.max(0, params.forceCompletedCount ?? 0);
+
+    for (let i = 0; i < packageClasses.length; i++) {
+      const cls = packageClasses[i]!;
+      if (!bookedClassIds.has(cls.id)) {
+        const created = await this.createBooking({
+          userId: params.userId,
+          classId: cls.id,
+          paymentStatus,
+          paymentMethod: anchor.paymentMethod ?? undefined,
+        });
+        bookedClassIds.add(cls.id);
+        bookingIdByClass.set(cls.id, created.id);
+      } else if (paymentStatus === "paid" || paymentStatus === "waived") {
+        const existingId = bookingIdByClass.get(cls.id);
+        if (existingId) {
+          await this.updateBookingPaymentStatus(existingId, paymentStatus);
+        }
+      }
+      enrolledClassIds.push(cls.id);
+
+      let mappingStatus = recurringEnrollmentMappingStatus(cls.date, duration, now);
+      if (i < forceCompleted) {
+        mappingStatus = "completed";
+      }
+      await this.ensureUserSessionMapping(params.userId, cls.id);
+      await this.setUserSessionMappingStatus(params.userId, cls.id, mappingStatus);
+    }
+
+    const utilizedSessions =
+      params.utilizedSessionsOverride ??
+      (forceCompleted > 0
+        ? forceCompleted
+        : countCompletedAmongEnrollment(packageClasses, duration, now));
+    const totalSessions = params.totalSessionsOverride ?? packageClasses.length;
+
+    const [activeSub] = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.userId, params.userId),
+          eq(subscriptions.classTypeId, anchor.classTypeId),
+          eq(subscriptions.status, "active"),
+        ),
+      )
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+
+    if (activeSub) {
+      await db
+        .update(subscriptions)
+        .set({
+          totalSessions,
+          utilizedSessions,
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.id, activeSub.id));
+    }
+
+    return { enrolledClassIds, totalSessions, utilizedSessions };
   }
 
   async findNextRecurringClassAfter(
@@ -3263,6 +3410,23 @@ export class DatabaseStorage implements IStorage {
       });
     } catch (error) {
       console.error("[DB] Error ensuring session mapping:", error);
+    }
+  }
+
+  async setUserSessionMappingStatus(
+    userId: string,
+    classId: string,
+    status: "upcoming" | "completed" | "cancelled",
+  ): Promise<void> {
+    try {
+      await db
+        .update(userSessionMappings)
+        .set({ status, updatedAt: new Date() })
+        .where(
+          and(eq(userSessionMappings.userId, userId), eq(userSessionMappings.classId, classId)),
+        );
+    } catch (error) {
+      console.error("[DB] Error updating session mapping status:", error);
     }
   }
 

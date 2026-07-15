@@ -6,6 +6,7 @@ import {
   parseRecurrenceWeekdays,
   serializeRecurrenceWeekdays,
 } from "../shared/session-schedule.ts";
+import { getIstWallParts } from "../shared/ist-datetime.ts";
 
 describe("recurrence weekday serialization", () => {
   it("round-trips weekday lists", () => {
@@ -34,11 +35,12 @@ describe("expandSessionOccurrences", () => {
       occurrenceCount: 4,
     });
     assert.equal(dates.length, 4);
-    assert.equal(dates[1].getDate(), 8);
-    assert.equal(dates[3].getDate(), 22);
+    assert.equal(getIstWallParts(dates[1]!).day, 8);
+    assert.equal(getIstWallParts(dates[3]!).day, 22);
+    assert.equal(getIstWallParts(dates[0]!).hour, 10);
   });
 
-  it("expands weekly on selected weekdays", () => {
+  it("expands weekly on selected weekdays in IST", () => {
     const start = new Date("2026-06-03T10:00:00+05:30"); // Wed
     const dates = expandSessionOccurrences({
       startAt: start,
@@ -47,10 +49,10 @@ describe("expandSessionOccurrences", () => {
       recurrenceWeekdays: [1, 3], // Mon + Wed
     });
     assert.equal(dates.length, 4);
-    assert.equal(dates[0].getDay(), 3);
-    assert.equal(dates[1].getDay(), 1);
-    assert.equal(dates[2].getDay(), 3);
-    assert.equal(dates[3].getDay(), 1);
+    assert.equal(getIstWallParts(dates[0]!).weekday, 3);
+    assert.equal(getIstWallParts(dates[1]!).weekday, 1);
+    assert.equal(getIstWallParts(dates[2]!).weekday, 3);
+    assert.equal(getIstWallParts(dates[3]!).weekday, 1);
   });
 
   it("caps weekly at MAX_WEEKLY_OCCURRENCES", () => {
@@ -61,5 +63,28 @@ describe("expandSessionOccurrences", () => {
       occurrenceCount: 99,
     });
     assert.equal(dates.length, MAX_WEEKLY_OCCURRENCES);
+  });
+
+  it("keeps 7:30 AM IST across Mon/Wed/Fri expansion under TZ=UTC", () => {
+    const previousTz = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      const start = new Date("2026-07-17T02:00:00.000Z"); // Fri 7:30 AM IST
+      const dates = expandSessionOccurrences({
+        startAt: start,
+        recurrenceKind: "weekly",
+        occurrenceCount: 2,
+        recurrenceWeekdays: [1, 3, 5],
+      });
+      assert.ok(dates.length >= 3);
+      for (const d of dates) {
+        const p = getIstWallParts(d);
+        assert.equal(p.hour, 7);
+        assert.equal(p.minute, 30);
+      }
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
   });
 });

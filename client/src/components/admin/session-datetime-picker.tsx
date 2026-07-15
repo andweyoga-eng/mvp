@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { parseIstDatetimeLocal } from "@shared/ist-datetime";
 
 const MINUTE_OPTIONS = ["00", "15", "30", "45"] as const;
 const HOUR_12_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
@@ -58,18 +59,25 @@ function to24Hour(hour12: number, ampm: "AM" | "PM"): number {
 }
 
 export function formatSessionDatetimeDisplay(value: string): string {
-  const parsed = parseSessionDatetimeLocal(value);
-  if (!parsed) return "";
-  const { date, hour24, minute } = parsed;
-  const { hour12, ampm } = to12Hour(hour24);
-  const datePart = date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
-  return `${datePart} · ${hour12}:${pad2(minute)} ${ampm} IST`;
+  const instant = parseIstDatetimeLocal(value);
+  if (Number.isNaN(instant.getTime())) return "";
+  return (
+    instant.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    }) +
+    " · " +
+    instant.toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "Asia/Kolkata",
+    }) +
+    " IST"
+  );
 }
 
 function defaultDraft(): {

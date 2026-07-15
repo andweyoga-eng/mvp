@@ -1,9 +1,7 @@
-/**
- * Session scheduling abstraction — manual admin entry today; external calendars later.
- * Maps cleanly to Google Calendar / Calendly-style one-time vs recurring events.
- */
+import { getIstWallParts, dateFromIstWall } from "./ist-datetime";
 
 export const SCHEDULE_SOURCES = ["manual", "google_calendar", "zoom", "zoho", "calendly"] as const;
+
 export type ScheduleSource = (typeof SCHEDULE_SOURCES)[number];
 
 export const RECURRENCE_KINDS = ["once", "weekly"] as const;
@@ -65,19 +63,29 @@ function occurrenceOnWeekday(
   weekOffset: number,
   targetWeekday: number,
 ): Date {
-  const anchor = new Date(startAt);
-  anchor.setDate(anchor.getDate() + weekOffset * 7);
-  let delta = targetWeekday - anchor.getDay();
+  const start = getIstWallParts(startAt);
+  const anchorDay = start.day + weekOffset * 7;
+  const anchor = dateFromIstWall({
+    year: start.year,
+    month: start.month,
+    day: anchorDay,
+    hour: start.hour,
+    minute: start.minute,
+    second: start.second,
+    ms: start.ms,
+  });
+  const anchorParts = getIstWallParts(anchor);
+  let delta = targetWeekday - anchorParts.weekday;
   if (delta < 0) delta += 7;
-  const result = new Date(anchor);
-  result.setDate(anchor.getDate() + delta);
-  result.setHours(
-    startAt.getHours(),
-    startAt.getMinutes(),
-    startAt.getSeconds(),
-    startAt.getMilliseconds(),
-  );
-  return result;
+  return dateFromIstWall({
+    year: anchorParts.year,
+    month: anchorParts.month,
+    day: anchorParts.day + delta,
+    hour: start.hour,
+    minute: start.minute,
+    second: start.second,
+    ms: start.ms,
+  });
 }
 
 export function expandSessionOccurrences(input: RecurringScheduleInput): Date[] {
@@ -90,7 +98,7 @@ export function expandSessionOccurrences(input: RecurringScheduleInput): Date[] 
   const weekdays =
     rawDays.length > 0
       ? [...new Set(rawDays)].sort((a, b) => a - b)
-      : [input.startAt.getDay()];
+      : [getIstWallParts(input.startAt).weekday];
 
   const startMs = input.startAt.getTime();
   const seen = new Set<number>();

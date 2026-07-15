@@ -1,5 +1,6 @@
 import type { Class, ClassType } from "./schema";
 import { parseRecurrenceWeekdays } from "./session-schedule";
+import { formatIstTime } from "./ist-datetime";
 
 export interface FlexiEligibleScheduleLike {
   id: string;
@@ -37,12 +38,7 @@ export function resolveFlexiSelectionCount(
 }
 
 export function formatFlexiTimeLabel(date: Date | string): string {
-  return new Date(date).toLocaleTimeString("en-IN", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZone: "Asia/Kolkata",
-  });
+  return formatIstTime(date);
 }
 
 export function buildFlexiCandidate(
