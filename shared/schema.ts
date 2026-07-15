@@ -206,7 +206,7 @@ export const bookings = pgTable("bookings", {
 export const consentAuditLogs = pgTable("consent_audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
-  bookingId: varchar("booking_id").references(() => bookings.id),
+  bookingId: varchar("booking_id").references(() => bookings.id, { onDelete: "set null" }),
   consentType: varchar("consent_type", { length: 32 }).notNull(),
   action: varchar("action", { length: 16 }).notNull(),
   consentVersion: varchar("consent_version", { length: 64 }).notNull(),

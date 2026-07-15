@@ -2311,39 +2311,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   private async deleteClassDependents(classId: string): Promise<void> {
-    const classBookings = await db
-      .select({ id: bookings.id })
-      .from(bookings)
-      .where(eq(bookings.classId, classId));
-    const bookingIds = classBookings.map((row) => row.id);
+    await db.transaction(async (tx) => {
+      const classBookings = await tx
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(eq(bookings.classId, classId));
+      const bookingIds = classBookings.map((row) => row.id);
 
-    // Retain payment rows as books of account (Companies Act s.128 — 8 years).
-    // Detach FKs so bookings/classes can be removed without CASCADE-deleting ledger evidence.
-    if (bookingIds.length) {
-      await db
+      // Retain payment rows as books of account (Companies Act s.128 — 8 years).
+      // Detach FKs so bookings/classes can be removed without CASCADE-deleting ledger evidence.
+      if (bookingIds.length) {
+        await tx
+          .update(payments)
+          .set({
+            bookingId: null,
+            classId: null,
+            updatedAt: new Date(),
+          })
+          .where(inArray(payments.bookingId, bookingIds));
+      }
+      await tx
         .update(payments)
-        .set({
-          bookingId: null,
-          classId: null,
-          updatedAt: new Date(),
-        })
-        .where(inArray(payments.bookingId, bookingIds));
-    }
-    await db
-      .update(payments)
-      .set({ classId: null, updatedAt: new Date() })
-      .where(eq(payments.classId, classId));
+        .set({ classId: null, updatedAt: new Date() })
+        .where(eq(payments.classId, classId));
 
-    if (bookingIds.length) {
-      await db.delete(consentAuditLogs).where(inArray(consentAuditLogs.bookingId, bookingIds));
-      await db.delete(bookings).where(inArray(bookings.id, bookingIds));
-    }
+      // Retain consent audit logs as DPDP burden of proof (DPDP Act 2023).
+      // The record carries userId, consentType, consentVersion and timestampUtc
+      // independently of the booking. Detach the booking link; never delete the row.
+      if (bookingIds.length) {
+        await tx
+          .update(consentAuditLogs)
+          .set({ bookingId: null })
+          .where(inArray(consentAuditLogs.bookingId, bookingIds));
+        await tx.delete(bookings).where(inArray(bookings.id, bookingIds));
+      }
 
-    await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, classId));
-    await db.delete(sessionMoodCheckins).where(eq(sessionMoodCheckins.classId, classId));
-    await db.delete(sessionJoinEvents).where(eq(sessionJoinEvents.classId, classId));
-    await db.delete(userSessionMappings).where(eq(userSessionMappings.classId, classId));
-    await db.delete(classes).where(eq(classes.id, classId));
+      await tx.delete(carouselPromotions).where(eq(carouselPromotions.classId, classId));
+      await tx.delete(sessionMoodCheckins).where(eq(sessionMoodCheckins.classId, classId));
+      await tx.delete(sessionJoinEvents).where(eq(sessionJoinEvents.classId, classId));
+      await tx.delete(userSessionMappings).where(eq(userSessionMappings.classId, classId));
+      await tx.delete(classes).where(eq(classes.id, classId));
+    });
   }
 
   async hardDeleteClassSession(id: string, reason: string) {
