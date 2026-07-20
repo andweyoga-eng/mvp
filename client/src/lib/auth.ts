@@ -14,8 +14,19 @@ export interface User {
   // Health Update fields - mandatory for booking sessions
   healthUpdateText?: string | null;
   healthDocumentUrls?: string[] | null;
+  healthMediaLinks?: import("@shared/health-media-links").HealthMediaLink[] | null;
+  healthUpdateHistory?: import("@shared/health-disclosure").HealthHistoryEntry[] | null;
+  dateOfBirth?: string | null;
   profileCompletionStatus: 'incomplete' | 'complete';
   healthUpdateLastModified?: string | null;
+  whatsappConsent?: boolean;
+  whatsappConsentAt?: string | null;
+  addressStreet?: string | null;
+  addressLine2?: string | null;
+  addressCity?: string | null;
+  addressCountry?: string | null;
+  addressState?: string | null;
+  addressPincode?: string | null;
 }
 
 export interface AuthContextType {
@@ -24,9 +35,12 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (userData: RegisterData) => Promise<void>;
-  updateProfile: (userData: ProfileData) => Promise<void>;
+  updateProfile: (
+    userData: Partial<ProfileData>,
+    options?: { successTitle?: string; silent?: boolean },
+  ) => Promise<User | null>;
   /** Re-fetch /api/auth/me (cookie or Bearer), e.g. after health save */
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }
 
 export interface RegisterData {
@@ -50,9 +64,18 @@ export interface ProfileData {
   secondaryMobileCountryCode?: string;
   emergencyMobile: string;
   emergencyMobileCountryCode: string;
-  // Health Update fields
+  dateOfBirth?: string;
   healthUpdateText?: string;
   healthDocumentUrls?: string[];
+  healthMediaLinks?: import("@shared/health-media-links").HealthMediaLink[];
+  whatsappConsent?: boolean;
+  whatsappConsentSource?: string;
+  addressStreet?: string;
+  addressLine2?: string;
+  addressCity?: string;
+  addressCountry?: string;
+  addressState?: string;
+  addressPincode?: string;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
@@ -66,18 +89,14 @@ export function useAuth() {
 }
 
 export function getAuthToken(): string | null {
-  return localStorage.getItem('authToken');
+  return null;
 }
 
 export function setAuthToken(token: string | null): void {
-  if (token) {
-    localStorage.setItem('authToken', token);
-  } else {
-    localStorage.removeItem('authToken');
-  }
+  // Member auth is cookie-backed; clear any legacy localStorage token.
+  localStorage.removeItem('authToken');
 }
 
 export function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {};
 }

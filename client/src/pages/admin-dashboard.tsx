@@ -1,420 +1,435 @@
-import { useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
-  CheckCircle, Clock, FileText, Plus, BookOpen, GraduationCap,
-  Calendar, RefreshCw, X, Settings
+  CheckCircle, Clock, FileText, Plus, GraduationCap,
+  Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
+  GalleryHorizontalEnd
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
+import { waitlistMarketingLabel } from "@shared/waitlist";
 import { useToast } from "@/hooks/use-toast";
+import { adminHeaders } from "@/lib/admin-api";
+import {
+  CreateSessionModal,
+  type AdminClassSessionForEdit,
+} from "@/components/admin/create-session-modal";
+import {
+  adminNavTabTrigger,
+  adminSectionTabTrigger,
+  adminActionTabTrigger,
+} from "@/lib/admin-tab-styles";
+import { WeekScheduleGrid, startOfWeek } from "@/components/admin/week-schedule-grid";
+import { PUBLIC_SESSION_CATALOG_QUERY_KEYS } from "@/lib/public-session-catalog";
+import { DeleteSessionDialog } from "@/components/admin/delete-session-dialog";
+import { SessionHistoryList } from "@/components/admin/session-history-list";
+import { getSessionEndMs } from "@shared/schedule-display";
+import { SessionTypesPanel } from "@/components/admin/session-types-panel";
+import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
+import { OffersPromotionsPanel } from "@/components/admin/offers-promotions-panel";
+import { FlexiRematchPanel } from "@/components/admin/flexi-rematch-panel";
+import { PlatformControlsPanel } from "@/components/admin/platform-controls-panel";
+import { ConsentLogPanel } from "@/components/admin/consent-log-panel";
+import {
+  PaymentQrCodesPanel,
+  QrCodesCreateToolbar,
+  type PaymentQrCode,
+} from "@/components/admin/payment-qr-codes-panel";
+import {
+  PaymentHistoryPanel,
+  adminPaymentHistoryQueryOptions,
+  countPendingPaymentVerifications,
+  type AdminPaymentHistoryRow,
+} from "@/components/admin/payment-history-panel";
+import { AdminDataInsightsPanel } from "@/components/admin/admin-data-insights-panel";
+import {
+  CreateInstructorModal,
+  EditInstructorModal,
+  InstructorStatusActions,
+} from "@/components/admin/create-instructor-modal";
+import type { Instructor } from "@shared/schema";
+import type { PaginatedResponse } from "@shared/admin-pagination";
+import { AdminPagination } from "@/components/admin/admin-pagination";
+import { AdminHealthMaterialsPanel } from "@/components/admin/health-materials-panel";
+import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
+import {
+  getInstructorStatusLabel,
+  getInstructorEmailVerificationLabel,
+  isInstructorFullyOnboarded,
+  showManuallyVerifiedBadge,
+  canInstructorTakeSessions,
+} from "@shared/instructor-compliance";
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
 interface User {
   id: string; email: string; name: string; emailVerified: boolean;
+  isActive?: boolean; sessionAttendanceCount?: number;
   healthUpdateText: string | null; healthDocumentUrls: string[] | null;
+  healthMediaLinks?: HealthMediaLink[] | null;
   completeness: {
     isComplete: boolean; healthUpdateComplete: boolean; documentsComplete: boolean;
     emailVerified: boolean; completionPercentage: number; flags: string[];
   };
 }
-interface AdminUsersResponse {
-  users: User[]; totalUsers: number; completeProfiles: number; incompleteProfiles: number;
+interface AdminUsersResponse extends PaginatedResponse<User> {
+  stats?: { completeProfiles: number; incompleteProfiles: number };
 }
 interface ClassType {
-  id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null;
-}
-interface Instructor {
-  id: string; name: string; bio: string | null; imageUrl: string | null; specialties: string[] | null;
+  id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null; intensity: string;
 }
 interface ClassSession {
-  id: string; classTypeId: string; instructorId: string; date: string;
-  maxCapacity: number; currentBookings: number;
-  googleMeetLink?: string | null; razorpayLink?: string | null;
+  id: string;
+  classTypeId: string;
+  instructorId: string;
+  date: string;
+  maxCapacity: number;
+  currentBookings: number;
+  googleMeetLink?: string | null;
+  razorpayLink?: string | null;
+  paymentMethod?: string | null;
+  paymentQrCodeId?: string | null;
+  qrContactPhone?: string | null;
+  qrContactEmail?: string | null;
+  status?: string;
+  publishedAt?: string | null;
+  recurrenceKind?: string | null;
+  recurrenceWeekdays?: string | null;
+  seriesId?: string | null;
+  seriesWeekCount?: number | null;
+  flexiEnabled?: boolean | null;
+  flexiSelectionCount?: number | null;
+  classType?: { name: string };
+  instructor?: { name: string };
+}
+interface AdminProfile {
+  id: string;
+  email: string;
+  phone: string;
+  governmentIdImageUrl: string | null;
+  verificationStatus: string;
+}
+interface SubscriptionSummary {
+  id: string;
+  userName: string;
+  userEmail: string;
+  classTypeName: string;
+  subscriptionType: string;
+  totalAmountPaise: number;
+  totalSessions: number;
+  utilizedSessions: number;
+  refundedSessions: number;
+  disputedSessions: number;
+  disputesResolved: number;
+  waivedSessions: number;
+  status: string;
+}
+interface AdminWaitlistUser {
+  id: string;
+  classTypeName: string;
+  userId: string | null;
+  userName: string | null;
+  email: string;
+  whatsapp: string | null;
+  source: string;
+  emailSendStatus: string | null;
+  emailSendError: string | null;
+  emailSendCount: number;
+  lastEmailedAt: string | null;
+  createdAt: string;
 }
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const ADMIN_MAIN_TAB_KEY = "awy-admin-main-tab";
+const ADMIN_SESSIONS_SUBTAB_KEY = "awy-admin-sessions-subtab";
 
-function adminHeaders() {
-  const token = localStorage.getItem("adminToken");
-  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+function readStoredTab(key: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  return sessionStorage.getItem(key) ?? fallback;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString("en-IN", {
-    day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata",
-  }) + " IST";
-}
-
-// ─── CREATE CLASS TYPE MODAL ───────────────────────────────────────────────────
-
-function CreateClassTypeModal({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", price: "", duration: "60", imageUrl: "" });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: async (data: typeof form) => {
-      const res = await fetch("/api/class-types", {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({
-          name: data.name.trim(), description: data.description.trim(),
-          price: parseFloat(data.price), duration: parseInt(data.duration),
-          imageUrl: data.imageUrl.trim() || null,
-        }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed"); }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Class type created", description: `${form.name} added.` });
-      setForm({ name: "", description: "", price: "", duration: "60", imageUrl: "" });
-      setErrors({}); setOpen(false); onCreated();
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  function validate() {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Name is required";
-    if (!form.description.trim()) e.description = "Description is required";
-    if (!form.price || isNaN(parseFloat(form.price)) || parseFloat(form.price) <= 0) e.price = "Enter a valid price";
-    if (!form.duration || isNaN(parseInt(form.duration)) || parseInt(form.duration) <= 0) e.duration = "Enter a valid duration";
-    setErrors(e); return Object.keys(e).length === 0;
-  }
-
+function AdminAuthLoadingScreen() {
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-[#3d1b80] hover:bg-[#2d1260] text-white">
-          <Plus className="w-4 h-4 mr-2" /> New Class Type
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Create Class Type</DialogTitle></DialogHeader>
-        <form onSubmit={e => { e.preventDefault(); if (validate()) mutation.mutate(form); }} className="space-y-4 mt-2">
-          <div>
-            <Label>Name <span className="text-red-500">*</span></Label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Hatha Yoga" className={errors.name ? "border-red-500" : ""} />
-            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-          </div>
-          <div>
-            <Label>Description <span className="text-red-500">*</span></Label>
-            <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Brief description of this yoga style..." rows={3}
-              className={errors.description ? "border-red-500" : ""} />
-            {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Price (INR) <span className="text-red-500">*</span></Label>
-              <Input type="number" min="0" step="0.01" value={form.price}
-                onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
-                placeholder="500" className={errors.price ? "border-red-500" : ""} />
-              {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}
-            </div>
-            <div>
-              <Label>Duration (minutes) <span className="text-red-500">*</span></Label>
-              <Input type="number" min="1" value={form.duration}
-                onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
-                placeholder="60" className={errors.duration ? "border-red-500" : ""} />
-              {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
-            </div>
-          </div>
-          <div>
-            <Label>Image URL <span className="text-gray-400 text-xs">(optional)</span></Label>
-            <Input value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-              placeholder="https://..." />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={mutation.isPending} className="bg-[#3d1b80] hover:bg-[#2d1260] text-white">
-              {mutation.isPending ? "Creating..." : "Create Class Type"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── CREATE INSTRUCTOR MODAL ───────────────────────────────────────────────────
-
-function CreateInstructorModal({ onCreated }: { onCreated: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", bio: "", imageUrl: "", specialties: "" });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: async (data: typeof form) => {
-      const specialtiesArr = data.specialties.trim()
-        ? data.specialties.split(",").map(s => s.trim()).filter(Boolean) : [];
-      const res = await fetch("/api/instructors", {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({
-          name: data.name.trim(), bio: data.bio.trim() || null,
-          imageUrl: data.imageUrl.trim() || null,
-          specialties: specialtiesArr.length > 0 ? specialtiesArr : null,
-        }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed"); }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Instructor created", description: `${form.name} added.` });
-      setForm({ name: "", bio: "", imageUrl: "", specialties: "" });
-      setErrors({}); setOpen(false); onCreated();
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  function validate() {
-    const e: Record<string, string> = {};
-    if (!form.name.trim()) e.name = "Name is required";
-    setErrors(e); return Object.keys(e).length === 0;
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-[#3d1b80] hover:bg-[#2d1260] text-white">
-          <Plus className="w-4 h-4 mr-2" /> New Instructor
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Create Instructor</DialogTitle></DialogHeader>
-        <form onSubmit={e => { e.preventDefault(); if (validate()) mutation.mutate(form); }} className="space-y-4 mt-2">
-          <div>
-            <Label>Full Name <span className="text-red-500">*</span></Label>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Arjun Patel" className={errors.name ? "border-red-500" : ""} />
-            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
-          </div>
-          <div>
-            <Label>Bio <span className="text-gray-400 text-xs">(optional)</span></Label>
-            <Textarea value={form.bio} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-              placeholder="Brief bio about the instructor..." rows={3} />
-          </div>
-          <div>
-            <Label>Photo URL <span className="text-gray-400 text-xs">(optional)</span></Label>
-            <Input value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-              placeholder="https://..." />
-          </div>
-          <div>
-            <Label>Specialties <span className="text-gray-400 text-xs">(optional, comma-separated)</span></Label>
-            <Input value={form.specialties} onChange={e => setForm(f => ({ ...f, specialties: e.target.value }))}
-              placeholder="e.g. Hatha Yoga, Meditation, Pranayama" />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={mutation.isPending} className="bg-[#3d1b80] hover:bg-[#2d1260] text-white">
-              {mutation.isPending ? "Creating..." : "Create Instructor"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── CREATE SESSION MODAL ──────────────────────────────────────────────────────
-
-function CreateSessionModal({ classTypes, instructors, onCreated }: {
-  classTypes: ClassType[]; instructors: Instructor[]; onCreated: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    classTypeId: "", instructorId: "", date: "",
-    maxCapacity: "20", googleMeetLink: "", razorpayLink: ""
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const { toast } = useToast();
-
-  const mutation = useMutation({
-    mutationFn: async (data: typeof form) => {
-      const res = await fetch("/api/classes", {
-        method: "POST", headers: adminHeaders(),
-        body: JSON.stringify({
-          classTypeId: data.classTypeId, instructorId: data.instructorId,
-          date: new Date(data.date).toISOString(),
-          maxCapacity: parseInt(data.maxCapacity),
-          googleMeetLink: data.googleMeetLink.trim() || null,
-          razorpayLink: data.razorpayLink.trim() || null,
-        }),
-      });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed"); }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Session scheduled", description: "Session has been created." });
-      setForm({ classTypeId: "", instructorId: "", date: "", maxCapacity: "20", googleMeetLink: "", razorpayLink: "" });
-      setErrors({}); setOpen(false); onCreated();
-    },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
-  });
-
-  function validate() {
-    const e: Record<string, string> = {};
-    if (!form.classTypeId) e.classTypeId = "Select a class type";
-    if (!form.instructorId) e.instructorId = "Select an instructor";
-    if (!form.date) e.date = "Date and time are required";
-    if (!form.maxCapacity || parseInt(form.maxCapacity) < 1) e.maxCapacity = "Enter a valid capacity";
-    setErrors(e); return Object.keys(e).length === 0;
-  }
-
-  const noClassTypes = classTypes.length === 0;
-  const noInstructors = instructors.length === 0;
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-[#bb5309] hover:bg-[#9a4508] text-white">
-          <Plus className="w-4 h-4 mr-2" /> New Session
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Schedule a Session</DialogTitle></DialogHeader>
-        {(noClassTypes || noInstructors) ? (
-          <Alert className="mt-2">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {noClassTypes && "Create at least one Class Type first. "}
-              {noInstructors && "Create at least one Instructor first."}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <form onSubmit={e => { e.preventDefault(); if (validate()) mutation.mutate(form); }} className="space-y-4 mt-2">
-            <div>
-              <Label>Class Type <span className="text-red-500">*</span></Label>
-              <Select value={form.classTypeId} onValueChange={v => setForm(f => ({ ...f, classTypeId: v }))}>
-                <SelectTrigger className={errors.classTypeId ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select class type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {classTypes.map(ct => (
-                    <SelectItem key={ct.id} value={ct.id}>{ct.name} — Rs.{ct.price} / {ct.duration}min</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.classTypeId && <p className="text-xs text-red-500 mt-1">{errors.classTypeId}</p>}
-            </div>
-            <div>
-              <Label>Instructor <span className="text-red-500">*</span></Label>
-              <Select value={form.instructorId} onValueChange={v => setForm(f => ({ ...f, instructorId: v }))}>
-                <SelectTrigger className={errors.instructorId ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select instructor..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {instructors.map(ins => (
-                    <SelectItem key={ins.id} value={ins.id}>{ins.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.instructorId && <p className="text-xs text-red-500 mt-1">{errors.instructorId}</p>}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Date and Time (IST) <span className="text-red-500">*</span></Label>
-                <Input type="datetime-local" value={form.date}
-                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                  className={errors.date ? "border-red-500" : ""} />
-                {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
-              </div>
-              <div>
-                <Label>Max Capacity <span className="text-red-500">*</span></Label>
-                <Input type="number" min="1" max="500" value={form.maxCapacity}
-                  onChange={e => setForm(f => ({ ...f, maxCapacity: e.target.value }))}
-                  className={errors.maxCapacity ? "border-red-500" : ""} />
-                {errors.maxCapacity && <p className="text-xs text-red-500 mt-1">{errors.maxCapacity}</p>}
-              </div>
-            </div>
-            <div>
-              <Label>Google Meet Link <span className="text-gray-400 text-xs">(optional)</span></Label>
-              <Input value={form.googleMeetLink} onChange={e => setForm(f => ({ ...f, googleMeetLink: e.target.value }))}
-                placeholder="https://meet.google.com/..." />
-            </div>
-            <div>
-              <Label>Razorpay Payment Link <span className="text-gray-400 text-xs">(optional)</span></Label>
-              <Input value={form.razorpayLink} onChange={e => setForm(f => ({ ...f, razorpayLink: e.target.value }))}
-                placeholder="https://rzp.io/..." />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={mutation.isPending} className="bg-[#bb5309] hover:bg-[#9a4508] text-white">
-                {mutation.isPending ? "Creating..." : "Schedule Session"}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#3d1b80]" />
+    </div>
   );
 }
 
 // ─── MAIN DASHBOARD ────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
-  const { admin, logout } = useAdminAuth();
+  const { admin, logout, isLoading: authLoading } = useAdminAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  if (!admin) { setLocation("/admin/login"); return null; }
+  useEffect(() => {
+    if (!authLoading && !admin) {
+      setLocation("/admin/login");
+    }
+  }, [authLoading, admin, setLocation]);
+
+  const [mainTab, setMainTab] = useState(() => readStoredTab(ADMIN_MAIN_TAB_KEY, "insights"));
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersPageSize, setUsersPageSize] = useState(20);
+  const [sessionsPage, setSessionsPage] = useState(1);
+  const [sessionsPageSize, setSessionsPageSize] = useState(20);
+  const [instructorsPage, setInstructorsPage] = useState(1);
+  const [instructorsPageSize, setInstructorsPageSize] = useState(20);
+  const [classTypesPage, setClassTypesPage] = useState(1);
+  const [classTypesPageSize, setClassTypesPageSize] = useState(20);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [healthViewUser, setHealthViewUser] = useState<User | null>(null);
+  const [scheduleWeekAnchor, setScheduleWeekAnchor] = useState<Date | undefined>(undefined);
+  const defaultScheduleWeekStart = useMemo(() => startOfWeek(new Date()), []);
+  const visibleScheduleWeekStart = scheduleWeekAnchor ?? defaultScheduleWeekStart;
+  const visibleScheduleWeekEnd = useMemo(() => {
+    const end = new Date(visibleScheduleWeekStart);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  }, [visibleScheduleWeekStart]);
+
+  const isSuperAdmin = admin?.role === "super_admin";
 
   const { data: usersData, isLoading: usersLoading, error: usersError, refetch: refetchUsers } =
     useQuery<AdminUsersResponse>({
-      queryKey: ["/api/admin/users"],
+      queryKey: ["/api/admin/users", usersPage, usersPageSize],
       queryFn: async () => {
-        const res = await fetch("/api/admin/users", { headers: adminHeaders() });
+        const res = await fetch(
+          `/api/admin/users?page=${usersPage}&pageSize=${usersPageSize}`,
+          { headers: adminHeaders() },
+        );
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      },
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
+    });
+
+  const { data: classTypesData, isLoading: ctLoading, refetch: refetchCT } =
+    useQuery<PaginatedResponse<ClassType>>({
+      queryKey: ["/api/admin/class-types", classTypesPage, classTypesPageSize],
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/admin/class-types?page=${classTypesPage}&pageSize=${classTypesPageSize}`,
+          { headers: adminHeaders() },
+        );
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      },
+    });
+  const classTypes = classTypesData?.data ?? [];
+
+  const refreshClassTypes = () => {
+    void refetchCT();
+    qc.invalidateQueries({ queryKey: ["/api/class-types", "all"] });
+  };
+
+  const { data: allClassTypes = [] } = useQuery<ClassType[]>({
+    queryKey: ["/api/class-types", "all"],
+    queryFn: async () => {
+      const res = await fetch("/api/class-types");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const { data: instructorsData, isLoading: insLoading, refetch: refetchIns } =
+    useQuery<PaginatedResponse<Instructor>>({
+      queryKey: ["/api/admin/instructors", instructorsPage, instructorsPageSize],
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/admin/instructors?page=${instructorsPage}&pageSize=${instructorsPageSize}`,
+          { headers: adminHeaders() },
+        );
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      },
+    });
+  const instructors = instructorsData?.data ?? [];
+
+  const sessionInstructorOptions = instructors.map((i) => ({
+    id: i.id,
+    name: i.name,
+    disabled: !canInstructorTakeSessions(i),
+  }));
+  const eligibleInstructorCount = sessionInstructorOptions.filter((i) => !i.disabled).length;
+
+  const { data: sessionsData, isLoading: sessLoading, refetch: refetchSess } =
+    useQuery<PaginatedResponse<ClassSession>>({
+      queryKey: ["/api/admin/classes", sessionsPage, sessionsPageSize],
+      queryFn: async () => {
+        const res = await fetch(
+          `/api/admin/classes?page=${sessionsPage}&pageSize=${sessionsPageSize}`,
+          { headers: adminHeaders() },
+        );
+        if (!res.ok) throw new Error("Failed");
+        return res.json();
+      },
+      refetchInterval: 60_000,
+      refetchOnWindowFocus: true,
+    });
+  const sessions = sessionsData?.data ?? [];
+  const {
+    data: weekSessions = [],
+    isLoading: weekSessionsLoading,
+    refetch: refetchWeekSessions,
+  } = useQuery<ClassSession[]>({
+    queryKey: [
+      "/api/admin/classes/week",
+      visibleScheduleWeekStart.toISOString(),
+      visibleScheduleWeekEnd.toISOString(),
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        start: visibleScheduleWeekStart.toISOString(),
+        end: visibleScheduleWeekEnd.toISOString(),
+      });
+      const res = await fetch(`/api/admin/classes/week?${params.toString()}`, {
+        headers: adminHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: paymentQrCodes = [], isLoading: qrLoading, refetch: refetchQr } =
+    useQuery<PaymentQrCode[]>({
+      queryKey: ["/api/admin/payment-qr-codes"],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/payment-qr-codes", { headers: adminHeaders() });
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
     });
 
-  const { data: classTypes = [], isLoading: ctLoading, refetch: refetchCT } =
-    useQuery<ClassType[]>({
-      queryKey: ["/api/class-types"],
+  const { data: paymentHistory = [] } = useQuery<AdminPaymentHistoryRow[]>(
+    adminPaymentHistoryQueryOptions,
+  );
+
+  const pendingPaymentVerifications = countPendingPaymentVerifications(paymentHistory);
+  const { data: adminProfileData, refetch: refetchAdminProfile } = useQuery<{
+    profile: AdminProfile | null;
+    fallback: { email: string; phone: string };
+  }>({
+    queryKey: ["/api/admin/profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/profile", { headers: adminHeaders() });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+  const { data: subscriptions = [] } = useQuery<SubscriptionSummary[]>({
+    queryKey: ["/api/admin/subscriptions"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/subscriptions", { headers: adminHeaders() });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+  const { data: waitlistUsers = [], refetch: refetchWaitlist } = useQuery<AdminWaitlistUser[]>({
+    queryKey: ["/api/admin/waitlist-users"],
       queryFn: async () => {
-        const res = await fetch("/api/class-types");
+      const res = await fetch("/api/admin/waitlist-users", { headers: adminHeaders() });
         if (!res.ok) throw new Error("Failed");
         return res.json();
       },
     });
 
-  const { data: instructors = [], isLoading: insLoading, refetch: refetchIns } =
-    useQuery<Instructor[]>({
-      queryKey: ["/api/instructors"],
-      queryFn: async () => {
-        const res = await fetch("/api/instructors");
-        if (!res.ok) throw new Error("Failed");
-        return res.json();
-      },
+  async function toggleUserActive(userId: string, isActive: boolean) {
+    const res = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH", headers: adminHeaders(), body: JSON.stringify({ isActive }),
     });
+    if (!res.ok) { toast({ title: "Update failed", variant: "destructive" }); return; }
+    toast({ title: isActive ? "User activated" : "User deactivated" });
+    refetchUsers();
+  }
 
-  const { data: sessions = [], isLoading: sessLoading, refetch: refetchSess } =
-    useQuery<ClassSession[]>({
-      queryKey: ["/api/classes"],
-      queryFn: async () => {
-        const res = await fetch("/api/classes");
-        if (!res.ok) throw new Error("Failed");
-        return res.json();
-      },
+  async function deleteUserPermanently(user: { id: string; email: string }) {
+    if (
+      !confirm(
+        `Permanently delete ${user.email}? This removes bookings, consent logs, and all related records. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch(`/api/admin/users/${user.id}`, {
+      method: "DELETE",
+      headers: adminHeaders(),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast({
+        title: "Delete failed",
+        description: (data as { message?: string }).message ?? "Could not delete user",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "User deleted", description: `${user.email} was permanently removed.` });
+    setSelectedUserIds((prev) => prev.filter((id) => id !== user.id));
+    refetchUsers();
+  }
+
+  async function deleteSelectedUsers() {
+    if (!selectedUserIds.length) return;
+    if (
+      !confirm(
+        `Permanently delete ${selectedUserIds.length} user(s)? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    const res = await fetch("/api/admin/users/bulk-delete", {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: selectedUserIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Bulk delete failed",
+        description: (data as { message?: string }).message ?? "Could not delete users",
+        variant: "destructive",
+      });
+      return;
+    }
+    const payload = data as { deleted?: string[]; failed?: Array<{ id: string; message: string }> };
+    toast({
+      title: "Bulk delete complete",
+      description: `Deleted ${payload.deleted?.length ?? 0} user(s)${
+        payload.failed?.length ? `; ${payload.failed.length} failed` : ""
+      }.`,
+    });
+    setSelectedUserIds([]);
+    refetchUsers();
+  }
+
+  function toggleUserSelected(userId: string, checked: boolean) {
+    setSelectedUserIds((prev) =>
+      checked ? [...new Set([...prev, userId])] : prev.filter((id) => id !== userId),
+    );
+  }
+
+  function toggleSelectAllUsersOnPage(checked: boolean) {
+    const pageIds = usersData?.data.map((user) => user.id) ?? [];
+    if (!checked) {
+      setSelectedUserIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      return;
+    }
+    setSelectedUserIds((prev) => [...new Set([...prev, ...pageIds])]);
+  }
 
   const handleLogout = () => {
     logout();
@@ -422,15 +437,147 @@ export default function AdminDashboard() {
     setLocation("/admin/login");
   };
 
+  const openCreateSession = () => {
+    setSessionToEdit(null);
+    setSessionEditorOpen(true);
+  };
+
+  const openEditSession = (session: AdminClassSessionForEdit) => {
+    setSessionToEdit(session);
+    setSessionEditorOpen(true);
+  };
+
+  function openDeleteSession(session: {
+    id: string;
+    date: string;
+    currentBookings?: number;
+    classType?: { name: string };
+  }) {
+    const bookingCount = session.currentBookings ?? 0;
+    const label = `${session.classType?.name ?? "Session"} · ${new Date(session.date).toLocaleString("en-IN")}`;
+    setSessionToDelete({ id: session.id, label, bookingCount });
+    setDeleteDialogOpen(true);
+  }
+
+  async function refreshSessionViews() {
+    await Promise.all([refetchSess(), refetchWeekSessions()]);
+    for (const key of PUBLIC_SESSION_CATALOG_QUERY_KEYS) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+    qc.invalidateQueries({ queryKey: ["/api/admin/classes"] });
+    qc.invalidateQueries({ queryKey: ["/api/admin/classes/week"] });
+  }
+
+  async function handlePauseSession(sessionId: string) {
+    const res = await fetch(`/api/admin/classes/${sessionId}/pause`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      credentials: "include",
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Could not pause session",
+        description: body.message || "Pause failed",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Session paused", description: "Hidden from booking until resumed." });
+    await refreshSessionViews();
+  }
+
+  async function handleResumeSession(sessionId: string) {
+    const res = await fetch(`/api/admin/classes/${sessionId}/resume`, {
+      method: "PATCH",
+      headers: adminHeaders(),
+      credentials: "include",
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Could not resume session",
+        description: body.message || "Resume failed",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({ title: "Session resumed", description: "Available for booking on the main page." });
+    await refreshSessionViews();
+  }
+
+  async function handleDeleteSessionWithNotify(payload: {
+    reason: string;
+    compensation: string;
+    ownerOtp: string;
+  }) {
+    if (!sessionToDelete) return;
+    const res = await fetch(`/api/admin/classes/${sessionToDelete.id}/delete`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Could not delete session",
+        description: body.message || "Delete failed",
+        variant: "destructive",
+      });
+      throw new Error(body.message || "Delete failed");
+    }
+    toast({ title: "Session deleted", description: body.message });
+    setSessionToDelete(null);
+    await refreshSessionViews();
+  }
+
   const getCompletenessColor = (pct: number) =>
     pct >= 80 ? "bg-green-500" : pct >= 50 ? "bg-yellow-500" : "bg-red-500";
+
+  const now = Date.now();
+  const [sessionsSubTab, setSessionsSubTab] = useState(() => {
+    const stored = readStoredTab(ADMIN_SESSIONS_SUBTAB_KEY, "manage");
+    return stored === "waitlisted-users" ? "waitlist" : stored;
+  });
+  const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
+  const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<{
+    id: string;
+    label: string;
+    bookingCount: number;
+  } | null>(null);
+  const sessionEndMs = (s: { date: string; classType?: { duration?: number; name?: string } }) =>
+    getSessionEndMs(s.date, s.classType?.duration);
+
+  const upcomingSessions = sessions.filter((s) => sessionEndMs(s) >= now);
+  const pastSessions = sessions
+    .filter((s) => sessionEndMs(s) < now)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  useEffect(() => {
+    sessionStorage.setItem(ADMIN_MAIN_TAB_KEY, mainTab);
+  }, [mainTab]);
+
+  useEffect(() => {
+    sessionStorage.setItem(ADMIN_SESSIONS_SUBTAB_KEY, sessionsSubTab);
+  }, [sessionsSubTab]);
+
+  if (authLoading) {
+    return <AdminAuthLoadingScreen />;
+  }
+
+  if (!admin) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-[#3d1b80]">andWeYoga</span>
+            <BrandLogo imgClassName="h-9 w-auto" testId="admin-logo" />
             <span className="text-gray-400 text-sm">Admin</span>
             <Badge variant="secondary" className="text-xs">{admin.role}</Badge>
           </div>
@@ -444,54 +591,86 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: "Total Users", value: usersData?.totalUsers ?? 0, icon: Users, color: "text-[#3d1b80]" },
-            { label: "Complete Profiles", value: usersData?.completeProfiles ?? 0, icon: UserCheck, color: "text-green-600" },
-            { label: "Incomplete Profiles", value: usersData?.incompleteProfiles ?? 0, icon: UserX, color: "text-orange-500" },
-            { label: "Sessions Scheduled", value: sessions.length, icon: Calendar, color: "text-[#bb5309]" },
-          ].map(({ label, value, icon: Icon, color }) => (
-            <Card key={label}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-gray-600">{label}</CardTitle>
-                <Icon className={`h-4 w-4 ${color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${color}`}>{value}</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <Tabs defaultValue="users">
-          <TabsList className="mb-6 bg-white border">
-            <TabsTrigger value="users" className="data-[state=active]:bg-[#3d1b80] data-[state=active]:text-white">
-              <Users className="w-4 h-4 mr-2" /> Users
+        <Tabs value={mainTab} onValueChange={setMainTab}>
+          <TabsList className="mb-6 flex h-auto w-full flex-wrap gap-1 bg-white border p-1">
+            <TabsTrigger
+              value="insights"
+              className="data-[state=active]:bg-[#3d1b80] data-[state=active]:text-white"
+            >
+              <BarChart3 className="w-4 h-4 mr-2 shrink-0" /> Data and Insights
             </TabsTrigger>
-            <TabsTrigger value="class-types" className="data-[state=active]:bg-[#3d1b80] data-[state=active]:text-white">
-              <BookOpen className="w-4 h-4 mr-2" /> Class Types
+            <TabsTrigger value="users" className={adminNavTabTrigger}>
+              <Users className="w-4 h-4 mr-2 shrink-0" /> Users
             </TabsTrigger>
-            <TabsTrigger value="instructors" className="data-[state=active]:bg-[#3d1b80] data-[state=active]:text-white">
-              <GraduationCap className="w-4 h-4 mr-2" /> Instructors
+            {isSuperAdmin ? (
+              <TabsTrigger value="platform-controls" className={adminNavTabTrigger}>
+                <Settings className="w-4 h-4 mr-2 shrink-0" /> Platform Controls
+              </TabsTrigger>
+            ) : null}
+            <TabsTrigger value="instructors" className={adminNavTabTrigger}>
+              <GraduationCap className="w-4 h-4 mr-2 shrink-0" /> Instructors
             </TabsTrigger>
-            <TabsTrigger value="sessions" className="data-[state=active]:bg-[#bb5309] data-[state=active]:text-white">
-              <Calendar className="w-4 h-4 mr-2" /> Sessions
+            <TabsTrigger value="sessions" className={adminNavTabTrigger}>
+              <Calendar className="w-4 h-4 mr-2 shrink-0" /> Sessions
+            </TabsTrigger>
+            <TabsTrigger
+              value="payment-history"
+              className={`${adminNavTabTrigger}${pendingPaymentVerifications > 0 ? " ring-2 ring-[#bb5309] ring-offset-1 animate-pulse" : ""}`}
+            >
+              <CreditCard className="w-4 h-4 mr-2 shrink-0" /> Payment History
+              {pendingPaymentVerifications > 0 && (
+                <Badge className="ml-2 bg-[#bb5309] text-white">
+                  {pendingPaymentVerifications}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="qr-codes" className={adminNavTabTrigger}>
+              <QrCode className="w-4 h-4 mr-2 shrink-0" /> QR Codes
+            </TabsTrigger>
+            <TabsTrigger value="subscriptions" className={adminNavTabTrigger}>
+              <CreditCard className="w-4 h-4 mr-2 shrink-0" /> Subscription Management
+            </TabsTrigger>
+            <TabsTrigger value="consent-logs" className={adminNavTabTrigger}>
+              <Shield className="w-4 h-4 mr-2 shrink-0" /> Consent Log
+            </TabsTrigger>
+            <TabsTrigger value="admin-profile" className={adminNavTabTrigger}>
+              <Shield className="w-4 h-4 mr-2 shrink-0" /> Admin Profile
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="insights">
+            <AdminDataInsightsPanel
+              stats={{
+                totalUsers: usersData?.total ?? 0,
+                completeProfiles: usersData?.stats?.completeProfiles ?? 0,
+                incompleteProfiles: usersData?.stats?.incompleteProfiles ?? 0,
+                upcomingSessions: upcomingSessions.length,
+              }}
+            />
+          </TabsContent>
 
           {/* USERS */}
           <TabsContent value="users">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-[#3d1b80]" /> User Management
                   </CardTitle>
                   <CardDescription>Profile completeness and health data compliance</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => refetchUsers()}>
-                  <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-                </Button>
+                {isSuperAdmin ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={!selectedUserIds.length}
+                      onClick={() => void deleteSelectedUsers()}
+                    >
+                      Delete selected ({selectedUserIds.length})
+                    </Button>
+                  </div>
+                ) : null}
               </CardHeader>
               <CardContent>
                 {usersLoading ? (
@@ -506,8 +685,31 @@ export default function AdminDashboard() {
                   </Alert>
                 ) : (
                   <div className="space-y-3">
-                    {usersData?.users.map(user => (
+                    {isSuperAdmin && usersData?.data.length ? (
+                      <div className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm">
+                        <Checkbox
+                          checked={
+                            usersData.data.length > 0 &&
+                            usersData.data.every((user) => selectedUserIds.includes(user.id))
+                          }
+                          onCheckedChange={(checked) =>
+                            toggleSelectAllUsersOnPage(checked === true)
+                          }
+                        />
+                        <span className="text-muted-foreground">Select all on this page</span>
+                      </div>
+                    ) : null}
+                    {usersData?.data.map(user => (
                       <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg bg-white hover:bg-gray-50 transition-colors">
+                        {isSuperAdmin ? (
+                          <Checkbox
+                            className="mr-3 shrink-0"
+                            checked={selectedUserIds.includes(user.id)}
+                            onCheckedChange={(checked) =>
+                              toggleUserSelected(user.id, checked === true)
+                            }
+                          />
+                        ) : null}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 flex-wrap">
                             <div>
@@ -534,7 +736,12 @@ export default function AdminDashboard() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 ml-4 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-2 ml-4 flex-shrink-0">
+                          {user.sessionAttendanceCount != null && (
+                            <Badge variant="outline" className="text-xs" title="Shadow attendance (Meet link opens)">
+                              Sessions: {user.sessionAttendanceCount}
+                            </Badge>
+                          )}
                           <div className="text-right">
                             <div className="flex items-center gap-2">
                               <div className="w-20 bg-gray-200 rounded-full h-2">
@@ -544,83 +751,78 @@ export default function AdminDashboard() {
                               <span className="text-sm font-semibold w-8 text-right">{user.completeness.completionPercentage}%</span>
                             </div>
                             <div className="flex items-center gap-1 mt-1 justify-end">
-                              {user.completeness.emailVerified && <CheckCircle className="w-3 h-3 text-green-500" title="Email verified" />}
-                              {user.completeness.healthUpdateComplete && <FileText className="w-3 h-3 text-blue-500" title="Health complete" />}
-                              {user.completeness.documentsComplete && <Settings className="w-3 h-3 text-purple-500" title="Docs complete" />}
+                              {user.completeness.emailVerified && (
+                                <span title="Email verified">
+                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                </span>
+                              )}
+                              {user.completeness.healthUpdateComplete && (
+                                <span title="Health complete">
+                                  <FileText className="w-3 h-3 text-blue-500" />
+                                </span>
+                              )}
+                              {user.completeness.documentsComplete && (
+                                <span title="Docs complete">
+                                  <Settings className="w-3 h-3 text-purple-500" />
+                                </span>
+                              )}
                             </div>
+                          </div>
+                          <div className="flex gap-1 flex-wrap justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7"
+                              onClick={() => setHealthViewUser(user)}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Health
+                            </Button>
+                            <Button size="sm" variant="outline" className="text-xs h-7"
+                              onClick={() => toggleUserActive(user.id, !(user.isActive ?? true))}>
+                              {(user.isActive ?? true) ? "Deactivate" : "Activate"}
+                            </Button>
+                            {isSuperAdmin ? (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="text-xs h-7"
+                                onClick={() => void deleteUserPermanently(user)}
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                       </div>
                     ))}
-                    {!usersData?.users.length && (
+                    {!usersData?.data.length && (
                       <div className="text-center py-12 text-gray-400">
                         <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
                         <p>No users registered yet</p>
                       </div>
                     )}
+                    {usersData ? (
+                      <AdminPagination
+                        page={usersData.page}
+                        pageSize={usersData.pageSize}
+                        totalPages={usersData.totalPages}
+                        total={usersData.total}
+                        onPageChange={setUsersPage}
+                        onPageSizeChange={setUsersPageSize}
+                      />
+                    ) : null}
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* CLASS TYPES */}
-          <TabsContent value="class-types">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-[#3d1b80]" /> Class Types
-                  </CardTitle>
-                  <CardDescription>Yoga disciplines offered on the platform ({classTypes.length} total)</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => refetchCT()}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-                  </Button>
-                  <CreateClassTypeModal onCreated={() => refetchCT()} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {ctLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3d1b80]" />
-                  </div>
-                ) : (
-                  <>
-                    {classTypes.length === 0 && (
-                      <div className="text-center py-12 text-gray-400">
-                        <BookOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p className="font-medium">No class types yet</p>
-                        <p className="text-sm mt-1">Create your first class type to populate the and We Teach section</p>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {classTypes.map(ct => (
-                        <div key={ct.id} className="border rounded-lg p-4 bg-white hover:shadow-sm transition-shadow">
-                          <div className="flex items-start gap-3">
-                            {ct.imageUrl && (
-                              <img src={ct.imageUrl} alt={ct.name}
-                                className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-                                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-gray-900">{ct.name}</h3>
-                              <p className="text-sm text-gray-500 mt-1 line-clamp-2">{ct.description}</p>
-                              <div className="flex items-center gap-2 mt-2">
-                                <Badge variant="outline" className="text-[#3d1b80] border-[#3d1b80]">Rs.{ct.price}</Badge>
-                                <Badge variant="outline" className="text-gray-600">{ct.duration} min</Badge>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {isSuperAdmin ? (
+            <TabsContent value="platform-controls">
+              <PlatformControlsPanel />
+            </TabsContent>
+          ) : null}
 
           {/* INSTRUCTORS */}
           <TabsContent value="instructors">
@@ -630,14 +832,9 @@ export default function AdminDashboard() {
                   <CardTitle className="flex items-center gap-2">
                     <GraduationCap className="w-5 h-5 text-[#3d1b80]" /> Instructors
                   </CardTitle>
-                  <CardDescription>Certified practitioners ({instructors.length} total)</CardDescription>
+                  <CardDescription>Certified practitioners ({instructorsData?.total ?? instructors.length} total)</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => refetchIns()}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-                  </Button>
                   <CreateInstructorModal onCreated={() => refetchIns()} />
-                </div>
               </CardHeader>
               <CardContent>
                 {insLoading ? (
@@ -667,7 +864,52 @@ export default function AdminDashboard() {
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-gray-900">{ins.name}</h3>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {isInstructorFullyOnboarded(ins) ? (
+                                  <Badge className="bg-emerald-600 hover:bg-emerald-600 text-xs shrink-0">
+                                    Onboarded
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant={
+                                      ins.status === "pending"
+                                        ? "secondary"
+                                        : ins.status === "active"
+                                          ? "default"
+                                          : "destructive"
+                                    }
+                                    className={
+                                      ins.status === "active"
+                                        ? "bg-green-700 hover:bg-green-700 text-xs shrink-0"
+                                        : "text-xs shrink-0"
+                                    }
+                                    title={ins.statusNotes ?? undefined}
+                                  >
+                                    {getInstructorStatusLabel(ins.status)}
+                                  </Badge>
+                                )}
+                                {showManuallyVerifiedBadge(ins) ? (
+                                  <Badge className="bg-amber-100 text-amber-900 hover:bg-amber-100 border border-amber-300 text-xs shrink-0">
+                                    Manually Verified
+                                  </Badge>
+                                ) : null}
+                                <h3 className="font-semibold text-gray-900">{ins.name}</h3>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">{ins.email} · {ins.phone}</p>
+                              {ins.emailVerified ? (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Email verification:{" "}
+                                  <span
+                                    className={
+                                      ins.verificationMethod === "admin-override"
+                                        ? "text-amber-700 font-medium"
+                                        : "text-green-700 font-medium"
+                                    }
+                                  >
+                                    {getInstructorEmailVerificationLabel(ins.verificationMethod)}
+                                  </span>
+                                </p>
+                              ) : null}
                               {ins.bio && <p className="text-sm text-gray-500 mt-1 line-clamp-2">{ins.bio}</p>}
                               {ins.specialties && ins.specialties.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-2">
@@ -676,11 +918,35 @@ export default function AdminDashboard() {
                                   ))}
                                 </div>
                               )}
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
+                                <EditInstructorModal
+                                  instructor={ins}
+                                  onUpdated={() => {
+                                    void refetchIns();
+                                    qc.invalidateQueries({ queryKey: ["/api/admin/instructors"] });
+                                    qc.invalidateQueries({ queryKey: ["/api/admin/instructors/eligible"] });
+                                  }}
+                                />
+                                <InstructorStatusActions instructor={ins} onUpdated={() => {
+                                  refetchIns();
+                                  qc.invalidateQueries({ queryKey: ["/api/admin/instructors/eligible"] });
+                                }} />
+                              </div>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
+                    {instructorsData ? (
+                      <AdminPagination
+                        page={instructorsData.page}
+                        pageSize={instructorsData.pageSize}
+                        totalPages={instructorsData.totalPages}
+                        total={instructorsData.total}
+                        onPageChange={setInstructorsPage}
+                        onPageSizeChange={setInstructorsPageSize}
+                      />
+                    ) : null}
                   </>
                 )}
               </CardContent>
@@ -690,101 +956,450 @@ export default function AdminDashboard() {
           {/* SESSIONS */}
           <TabsContent value="sessions">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-[#bb5309]" /> Sessions
-                  </CardTitle>
-                  <CardDescription>All scheduled sessions ({sessions.length} total)</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => refetchSess()}>
-                    <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-                  </Button>
-                  <CreateSessionModal classTypes={classTypes} instructors={instructors} onCreated={() => refetchSess()} />
-                </div>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-[#bb5309]" /> Sessions
+                </CardTitle>
+                <CardDescription>
+                  Schedule upcoming sessions, review history, and manage session types
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                {sessLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#bb5309]" />
-                  </div>
-                ) : (
-                  <>
-                    {sessions.length === 0 && (
-                      <div className="text-center py-12 text-gray-400">
-                        <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p className="font-medium">No sessions scheduled yet</p>
-                        <p className="text-sm mt-1">
-                          {classTypes.length === 0 || instructors.length === 0
-                            ? "Create class types and instructors first, then schedule sessions."
-                            : "Use New Session to schedule your first session."}
-                        </p>
-                      </div>
-                    )}
-                    <div className="space-y-3">
-                      {[...sessions]
-                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                        .map(sess => {
-                          const ct = classTypes.find(c => c.id === sess.classTypeId);
-                          const ins = instructors.find(i => i.id === sess.instructorId);
-                          const pct = sess.maxCapacity > 0
-                            ? Math.round((sess.currentBookings / sess.maxCapacity) * 100) : 0;
-                          const isFull = sess.currentBookings >= sess.maxCapacity;
-                          const isPast = new Date(sess.date) < new Date();
+                <Tabs
+                  value={sessionsSubTab}
+                  onValueChange={setSessionsSubTab}
+                  className="w-full"
+                >
+                  <TabsList className="mb-3 grid h-auto w-full grid-cols-2 gap-1 bg-gray-100 p-1 sm:flex sm:flex-wrap sm:justify-start">
+                    <TabsTrigger
+                      value="manage"
+                      className={`col-span-2 sm:col-span-1 ${adminSectionTabTrigger}`}
+                    >
+                      <Calendar className="w-4 h-4 mr-2 shrink-0" /> Manage Session
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className={adminSectionTabTrigger}>
+                      <History className="w-4 h-4 mr-2" /> Session History
+                    </TabsTrigger>
+                    <TabsTrigger value="session-types" className={adminSectionTabTrigger}>
+                      <Layers className="w-4 h-4 mr-2" /> Session Type
+                    </TabsTrigger>
+                    <TabsTrigger value="carousel" className={adminSectionTabTrigger}>
+                      <GalleryHorizontalEnd className="w-4 h-4 mr-2" /> Carousel
+                    </TabsTrigger>
+                    <TabsTrigger value="waitlist" className={adminSectionTabTrigger}>
+                      <Users className="w-4 h-4 mr-2" /> Waitlist
+                    </TabsTrigger>
+                  </TabsList>
 
-                          return (
-                            <div key={sess.id}
-                              className={`border rounded-lg p-4 bg-white hover:shadow-sm transition-shadow ${isPast ? "opacity-60" : ""}`}>
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <h3 className="font-semibold text-gray-900">{ct?.name ?? "Unknown class"}</h3>
-                                    {isPast && <Badge variant="secondary" className="text-xs">Past</Badge>}
-                                    {isFull && !isPast && <Badge className="bg-red-100 text-red-700 text-xs">Full</Badge>}
-                                  </div>
-                                  <p className="text-sm text-gray-500 mt-1">
-                                    {ins?.name ?? "Unknown instructor"} · {formatDate(sess.date)}
-                                  </p>
-                                  <div className="flex items-center gap-2 mt-2">
-                                    <div className="w-24 bg-gray-200 rounded-full h-1.5">
-                                      <div className={`h-1.5 rounded-full ${isFull ? "bg-red-500" : "bg-[#3d1b80]"}`}
-                                        style={{ width: `${pct}%` }} />
-                                    </div>
-                                    <span className="text-xs text-gray-500">
-                                      {sess.currentBookings}/{sess.maxCapacity} booked
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="text-right flex-shrink-0">
-                                  {ct && <Badge variant="outline" className="text-[#3d1b80] border-[#3d1b80]">Rs.{ct.price}</Badge>}
-                                  <div className="flex flex-col gap-1 mt-2">
-                                    {sess.googleMeetLink ? (
-                                      <a href={sess.googleMeetLink} target="_blank" rel="noopener noreferrer"
-                                        className="text-xs text-blue-600 hover:underline">Meet Link</a>
-                                    ) : (
-                                      <span className="text-xs text-gray-400">No Meet link</span>
-                                    )}
-                                    {sess.razorpayLink ? (
-                                      <a href={sess.razorpayLink} target="_blank" rel="noopener noreferrer"
-                                        className="text-xs text-green-600 hover:underline">Payment Link</a>
-                                    ) : (
-                                      <span className="text-xs text-gray-400">No payment link</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                  <TabsContent value="manage">
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-start">
+                      <Button
+                        size="sm"
+                        className="w-full bg-[#bb5309] hover:bg-[#9a4508] text-white sm:w-auto"
+                        onClick={openCreateSession}
+                        data-testid="open-create-session-flow"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> New session
+                        </Button>
                     </div>
-                  </>
-                )}
+
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Sessions in this week ({weekSessions.length}). Edit, pause, or resume from the week view.
+                      {isSuperAdmin ? " Super admins can permanently delete sessions." : ""}
+                    </p>
+                    {weekSessionsLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#bb5309]" />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mb-8">
+                          <WeekScheduleGrid
+                            sessions={weekSessions}
+                            weekStart={scheduleWeekAnchor}
+                            onWeekStartChange={setScheduleWeekAnchor}
+                            onEditSession={openEditSession}
+                            onPauseSession={(s) => void handlePauseSession(s.id)}
+                            onResumeSession={(s) => void handleResumeSession(s.id)}
+                            onDeleteSession={openDeleteSession}
+                            isSuperAdmin={isSuperAdmin}
+                          />
+                        </div>
+                        {weekSessions.length === 0 && (
+                          <div className="text-center py-12 text-gray-400">
+                            <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">No sessions in this week</p>
+                            <p className="text-sm mt-1">
+                              Click New session to schedule a class in the selected week.
+                            </p>
+                          </div>
+                        )}
+                        {sessionsData ? (
+                          <AdminPagination
+                            page={sessionsData.page}
+                            pageSize={sessionsData.pageSize}
+                            totalPages={sessionsData.totalPages}
+                            total={sessionsData.total}
+                            onPageChange={setSessionsPage}
+                            onPageSizeChange={setSessionsPageSize}
+                          />
+                        ) : null}
+                      </>
+                    )}
+
+                    <CreateSessionModal
+                      classTypes={allClassTypes}
+                      instructors={sessionInstructorOptions}
+                      paymentQrCodes={paymentQrCodes}
+                      adminDefaultPhone={adminProfileData?.profile?.phone ?? ""}
+                      open={sessionEditorOpen}
+                      onOpenChange={setSessionEditorOpen}
+                      sessionToEdit={sessionToEdit}
+                      showTrigger={false}
+                      onCreated={(result) => {
+                        void refetchSess();
+                        refreshClassTypes();
+                        setSessionToEdit(null);
+                        const first = result?.sessions?.[0]?.date;
+                        if (first) {
+                          setScheduleWeekAnchor(startOfWeek(new Date(first)));
+                        }
+                        qc.invalidateQueries({ queryKey: ["/api/schedule/week"] });
+                        qc.invalidateQueries({ queryKey: ["/api/admin/classes"] });
+                        qc.invalidateQueries({ queryKey: ["/api/admin/classes/week"] });
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="history">
+                    <p className="text-sm text-muted-foreground mb-4">
+                        Past sessions ({pastSessions.length})
+                      </p>
+                    {sessLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#bb5309]" />
+                      </div>
+                    ) : (
+                      <SessionHistoryList
+                        sessions={pastSessions}
+                        classTypes={allClassTypes}
+                        instructors={sessionInstructorOptions}
+                      />
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="session-types">
+                    <SessionTypesPanel
+                      classTypes={classTypes}
+                      totalCount={classTypesData?.total}
+                      isLoading={ctLoading}
+                      isSuperAdmin={isSuperAdmin}
+                      onDataChange={() => {
+                        refreshClassTypes();
+                      }}
+                    />
+                    {classTypesData ? (
+                      <AdminPagination
+                        page={classTypesData.page}
+                        pageSize={classTypesData.pageSize}
+                        totalPages={classTypesData.totalPages}
+                        total={classTypesData.total}
+                        onPageChange={setClassTypesPage}
+                        onPageSizeChange={setClassTypesPageSize}
+                      />
+                    ) : null}
+                  </TabsContent>
+
+                  <TabsContent value="carousel">
+                    <CarouselPromotionsPanel sessions={upcomingSessions} />
+                  </TabsContent>
+
+                  <TabsContent value="waitlist">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        Waitlist sign-ups for upcoming session types (WL-R = member, WL-G = guest)
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => refetchWaitlist()}>
+                        Refresh
+                      </Button>
+                    </div>
+                    <div className="overflow-x-auto border rounded-md">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="py-2 px-3">Session Type</th>
+                            <th className="py-2 px-3">User</th>
+                            <th className="py-2 px-3">Tag</th>
+                            <th className="py-2 px-3">Email</th>
+                            <th className="py-2 px-3">WhatsApp</th>
+                            <th className="py-2 px-3">Requested</th>
+                            <th className="py-2 px-3">Email status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {waitlistUsers.map((row) => {
+                            const marketingTag = waitlistMarketingLabel(row.source, row.userId);
+                            return (
+                            <tr key={row.id} className="border-b">
+                              <td className="py-2 px-3">{row.classTypeName}</td>
+                              <td className="py-2 px-3">{row.userName ?? "Guest"}</td>
+                              <td className="py-2 px-3">
+                                <Badge variant={marketingTag === "WL-R" ? "default" : "secondary"}>
+                                  {marketingTag}
+                                </Badge>
+                              </td>
+                              <td className="py-2 px-3">{row.email}</td>
+                              <td className="py-2 px-3">{row.whatsapp ?? "None"}</td>
+                              <td className="py-2 px-3">
+                                {new Date(row.createdAt).toLocaleString("en-IN")}
+                              </td>
+                              <td className="py-2 px-3">
+                                <Badge
+                                  variant={row.emailSendStatus === "sent" ? "default" : "secondary"}
+                                >
+                                  {row.emailSendStatus ?? "pending"}
+                                </Badge>
+                                {row.lastEmailedAt && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    Last sent: {new Date(row.lastEmailedAt).toLocaleString("en-IN")}
+                                  </p>
+                                )}
+                                {row.emailSendError && (
+                                  <p className="text-xs text-destructive mt-1">{row.emailSendError}</p>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                          })}
+                        </tbody>
+                      </table>
+                      {waitlistUsers.length === 0 && (
+                        <div className="p-4 text-sm text-muted-foreground">No waitlist sign-ups yet.</div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                </Tabs>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payment-history">
+            <PaymentHistoryPanel />
+          </TabsContent>
+
+          <TabsContent value="qr-codes">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-[#3d1b80]" /> QR Codes
+                </CardTitle>
+                <CardDescription>
+                  Create and manage reusable payment QR assets. Verify QR payments under Payment
+                  History.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <QrCodesCreateToolbar onCreated={() => refetchQr()} />
+                <PaymentQrCodesPanel
+                  qrCodes={paymentQrCodes}
+                  isLoading={qrLoading}
+                  onDataChange={() => refetchQr()}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="subscriptions">
+            <Tabs defaultValue="subscriptions-list" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="subscriptions-list" className={adminSectionTabTrigger}>
+                  Subscriptions
+                </TabsTrigger>
+                {isSuperAdmin ? (
+                  <TabsTrigger value="flexi-rematch" className={adminSectionTabTrigger}>
+                    Flexi Rematch
+                  </TabsTrigger>
+                ) : null}
+                <TabsTrigger value="offers-promotions" className={adminSectionTabTrigger}>
+                  Offers &amp; Promotions
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="subscriptions-list">
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription Management</CardTitle>
+                <CardDescription>
+                  Track drop-in, trial, and recurring usage, disputes, refunds, and waivers.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="py-2 pr-3">Member</th>
+                        <th className="py-2 pr-3">Type</th>
+                        <th className="py-2 pr-3">Session Type</th>
+                        <th className="py-2 pr-3">Paid</th>
+                        <th className="py-2 pr-3">Used/Total</th>
+                        <th className="py-2 pr-3">Refunded</th>
+                        <th className="py-2 pr-3">Dispute</th>
+                        <th className="py-2 pr-3">Waived</th>
+                        <th className="py-2 pr-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subscriptions.map((s) => (
+                        <tr key={s.id} className="border-b">
+                          <td className="py-2 pr-3">
+                            <p className="font-medium">{s.userName}</p>
+                            <p className="text-xs text-muted-foreground">{s.userEmail}</p>
+                          </td>
+                          <td className="py-2 pr-3 capitalize">{s.subscriptionType.replace("_", " ")}</td>
+                          <td className="py-2 pr-3">{s.classTypeName}</td>
+                          <td className="py-2 pr-3">₹{(s.totalAmountPaise / 100).toLocaleString("en-IN")}</td>
+                          <td className="py-2 pr-3">{s.utilizedSessions}/{s.totalSessions}</td>
+                          <td className="py-2 pr-3">{s.refundedSessions}</td>
+                          <td className="py-2 pr-3">{s.disputedSessions}/{s.disputesResolved}</td>
+                          <td className="py-2 pr-3">{s.waivedSessions}</td>
+                          <td className="py-2 pr-3 capitalize">{s.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+              </TabsContent>
+              {isSuperAdmin ? (
+                <TabsContent value="flexi-rematch">
+                  <FlexiRematchPanel />
+                </TabsContent>
+              ) : null}
+              <TabsContent value="offers-promotions">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Offers &amp; Promotions</CardTitle>
+                    <CardDescription>
+                      Coupon codes, member sharing, and redemption tracking for cash-flow oversight.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <OffersPromotionsPanel />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </TabsContent>
+
+          <TabsContent value="consent-logs">
+            <Card>
+              <CardHeader>
+                <CardTitle>Consent audit log</CardTitle>
+                <CardDescription>
+                  DPDPA append-only consent records for profile, terms, age, and health data events.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ConsentLogPanel />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="admin-profile">
+            <Card>
+              <CardHeader>
+                <CardTitle>Admin Profile & ID Verification</CardTitle>
+                <CardDescription>
+                  Required before creating sessions. DigiLocker/Aadhaar integration placeholder is planned.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm"><strong>Email:</strong> {adminProfileData?.profile?.email ?? adminProfileData?.fallback.email}</p>
+                <p className="text-sm"><strong>Phone:</strong> {adminProfileData?.profile?.phone ?? "Not set"}</p>
+                <p className="text-sm"><strong>ID status:</strong> {adminProfileData?.profile?.verificationStatus ?? "pending"}</p>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      const email = prompt("Admin email", adminProfileData?.profile?.email ?? adminProfileData?.fallback.email ?? "");
+                      const phone = prompt("Admin phone (10 digits)", adminProfileData?.profile?.phone ?? "");
+                      const govId = prompt("Government ID image URL or data URL (<=1MB)", adminProfileData?.profile?.governmentIdImageUrl ?? "");
+                      if (!email || !phone) return;
+                      const phoneDigits = phone.replace(/\D/g, "").slice(0, 10);
+                      if (!/^\d{10}$/.test(phoneDigits)) {
+                        toast({
+                          title: "Invalid phone",
+                          description: "Enter a 10-digit phone number.",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      const res = await fetch("/api/admin/profile", {
+                        method: "PUT",
+                        headers: adminHeaders(),
+                        body: JSON.stringify({ email, phone: phoneDigits, governmentIdImageUrl: govId || null }),
+                      });
+                      if (!res.ok) {
+                        const b = await res.json().catch(() => ({}));
+                        toast({ title: "Could not save profile", description: b.message, variant: "destructive" });
+                        return;
+                      }
+                      toast({ title: "Admin profile saved" });
+                      refetchAdminProfile();
+                    }}
+                  >
+                    Create/Update Admin Profile
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      const res = await fetch("/api/admin/profile/verify-id", {
+                        method: "POST",
+                        headers: adminHeaders(),
+                        body: JSON.stringify({ notes: "Manual verification completed" }),
+                      });
+                      if (!res.ok) {
+                        toast({ title: "Verification failed", variant: "destructive" });
+                        return;
+                      }
+                      toast({ title: "Government ID verified (manual)" });
+                      refetchAdminProfile();
+                    }}
+                  >
+                    Verify Government ID
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </main>
+
+      <DeleteSessionDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        sessionLabel={sessionToDelete?.label ?? "Session"}
+        bookingCount={sessionToDelete?.bookingCount ?? 0}
+        onConfirm={handleDeleteSessionWithNotify}
+      />
+
+      {healthViewUser ? (
+        <AdminHealthMaterialsPanel
+          userId={healthViewUser.id}
+          userName={healthViewUser.name}
+          healthText={healthViewUser.healthUpdateText}
+          documentUrls={healthViewUser.healthDocumentUrls ?? []}
+          mediaLinks={resolveHealthMediaLinks(
+            healthViewUser.healthMediaLinks,
+            healthViewUser.healthDocumentUrls,
+          )}
+          open={Boolean(healthViewUser)}
+          onOpenChange={(open) => {
+            if (!open) setHealthViewUser(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,109 +1,158 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { useState, cloneElement, isValidElement, type ReactElement, type MouseEvent } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Check } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
-interface AuthHoverPopupProps {
-  children: React.ReactNode;
+interface AuthChoiceDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onContinueAsGuest?: () => void;
 }
 
-export function AuthHoverPopup({ children }: AuthHoverPopupProps) {
-  const [showPopup, setShowPopup] = useState(false);
+export function AuthChoiceDialog({
+  open,
+  onOpenChange,
+  onContinueAsGuest,
+}: AuthChoiceDialogProps) {
+  const { guestCheckoutEnabled } = usePlatformConfig();
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
 
-  // Detect mobile devices
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const resetAndClose = (nextOpen: boolean) => {
+    onOpenChange(nextOpen);
+  };
 
-  // Google Sign-In handler
   const handleGoogleSignIn = () => {
     setGoogleLoading(true);
-    // Redirect to Google OAuth
-    window.location.href = '/api/auth/google';
+    try {
+      if (keepSignedIn) {
+        localStorage.setItem("awy_keep_signed_in", "1");
+      } else {
+        localStorage.removeItem("awy_keep_signed_in");
+      }
+    } catch {
+      /* ignore */
+    }
+    window.location.href = `/api/auth/google?keep=${keepSignedIn ? "1" : "0"}`;
   };
 
-  // Handle both hover and click for mobile compatibility
-  const handleInteraction = () => {
-    setShowPopup(true);
-  };
-
-  const handleToggle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setShowPopup(!showPopup);
-  };
-
-  const handleClose = () => {
-    setShowPopup(false);
+  const handleContinueAsGuest = () => {
+    resetAndClose(false);
+    onContinueAsGuest?.();
   };
 
   return (
-    <div 
-      className="relative inline-block"
-      onMouseEnter={handleInteraction}
-      onMouseLeave={() => {}} // Remove auto-close behavior
-      onClick={handleToggle}
-    >
-      {children}
-      
-      {/* Hover Popup */}
-      {showPopup && (
-        <div 
-          className="absolute bottom-full right-0 mb-2 w-72 bg-white border border-gray-200 rounded-lg shadow-xl z-[99999] p-5 max-w-[calc(100vw-20px)]"
-          style={{ 
-            transform: 'translateX(20px)',
-            left: 'auto',
-            right: '0'
-          }}
-        >
-          {/* Close Button */}
-          <button
-            onClick={handleClose}
-            className="absolute top-3 right-3 w-6 h-6 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-sm flex items-center justify-center transition-colors"
-            data-testid="close-google-popup"
-          >
-            <X className="h-3.5 w-3.5 text-black font-bold stroke-2" />
-          </button>
+    <Dialog open={open} onOpenChange={resetAndClose}>
+      <DialogContent
+        className="max-w-md rounded-3xl border-dz-glass-border bg-dz-surface p-8"
+        data-testid="booking-auth-dialog"
+      >
+        <DialogHeader>
+          <DialogTitle className="font-display text-2xl font-bold text-primary">
+            Book a{" "}
+            <span className="font-accent italic font-normal text-dz-secondary">session</span>
+          </DialogTitle>
+          <DialogDescription className="text-sm text-dz-muted">
+            {guestCheckoutEnabled
+              ? "Sign in with Google or continue as a guest for trial and drop-in sessions."
+              : "Sign in with Google to book your session."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
           <Button
             type="button"
             variant="outline"
             onClick={handleGoogleSignIn}
             disabled={googleLoading}
-            className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold flex items-center justify-center gap-3 py-4 px-5 h-12"
+            className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border-dz-glass-border bg-white font-semibold text-foreground hover:bg-white/90"
             data-testid="google-signin-popup-button"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" className="flex-shrink-0">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            <span className="truncate">{googleLoading ? 'Signing in...' : 'Continue with Google'}</span>
+            <span
+              className="inline-flex h-5 w-5 rounded-full"
+              style={{
+                background:
+                  "conic-gradient(from -45deg,#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)",
+              }}
+              aria-hidden
+            />
+            <span className="truncate">Continue with Google</span>
           </Button>
-          
-          <div className="text-center text-[10px] text-gray-400 mt-3 leading-tight px-2">
-            By continuing, you agree to our Terms of Service and Privacy Policy
-          </div>
+
+          <label className="flex cursor-pointer select-none items-center justify-center gap-2.5">
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={keepSignedIn}
+              onClick={() => setKeepSignedIn((v) => !v)}
+              className={cn(
+                "flex h-5 w-5 items-center justify-center rounded-md border transition-colors",
+                keepSignedIn
+                  ? "border-primary bg-primary text-white"
+                  : "border-dz-glass-border bg-white",
+              )}
+              data-testid="keep-signed-in-checkbox"
+            >
+              {keepSignedIn ? <Check className="h-3.5 w-3.5" /> : null}
+            </button>
+            <span
+              className="text-sm font-medium text-dz-muted"
+              onClick={() => setKeepSignedIn((v) => !v)}
+            >
+              Keep me signed in
+            </span>
+          </label>
+
+          {guestCheckoutEnabled ? (
+            <Button
+              type="button"
+              onClick={handleContinueAsGuest}
+              className="h-14 w-full rounded-xl bg-primary text-base font-bold text-primary-foreground shadow-dz-primary hover:bg-primary/90"
+              data-testid="guest-popup-button"
+            >
+              Continue as Guest
+            </Button>
+          ) : null}
         </div>
-      )}
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+interface AuthHoverPopupProps {
+  children: ReactElement;
+  onContinueAsGuest?: () => void;
+}
+
+export function AuthHoverPopup({ children, onContinueAsGuest }: AuthHoverPopupProps) {
+  const [open, setOpen] = useState(false);
+
+  const child = isValidElement(children)
+    ? cloneElement(children as ReactElement<{ onClick?: (e: MouseEvent) => void }>, {
+        onClick: (e: MouseEvent) => {
+          (children.props as { onClick?: (e: MouseEvent) => void }).onClick?.(e);
+          setOpen(true);
+        },
+      })
+    : children;
+
+  return (
+    <>
+      {child}
+      <AuthChoiceDialog
+        open={open}
+        onOpenChange={setOpen}
+        onContinueAsGuest={onContinueAsGuest}
+      />
+    </>
+  );
+}
+
+export { AuthChoiceDialog as BookingAuthDialog };

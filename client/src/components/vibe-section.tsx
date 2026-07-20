@@ -61,29 +61,24 @@ const instagramProfiles: InstagramProfile[] = [
 
 export default function VibeSection() {
   return (
-    <section id="vibe" className="py-20 bg-gradient-to-b from-purple-50 to-white">
-      <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-primary mb-4">and We Vibe</h2>
-          <p className="text-lg text-purple-500 max-w-3xl mx-auto">
-            Connect with our vibrant community of yoga enthusiasts sharing their wellness journeys on social media.
+    <section id="vibe" className="bg-dz-surface py-16 md:py-20">
+      <div className="mx-auto w-full max-w-dz px-[clamp(1rem,4vw,1.5rem)]">
+        <div className="mb-10 text-center md:mb-12">
+          <h2 className="font-display text-[clamp(1.875rem,5vw,3.25rem)] font-bold tracking-tight text-primary">
+            and We <span className="font-accent italic font-normal text-dz-secondary">Vibe</span>
+          </h2>
+          <p className="mx-auto mt-2.5 max-w-2xl text-[clamp(0.9375rem,1.5vw,1.1875rem)] text-dz-muted">
+            Connect with our vibrant community sharing their wellness journeys.
           </p>
         </div>
 
-        {/* 4x5 Instagram Profile Grid - Responsive */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 sm:gap-4 md:gap-6 max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-4">
+        <div className="mx-auto grid max-w-4xl grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 md:gap-6">
           {instagramProfiles.map((profile, index) => (
-            <div key={index} className="text-center group">
-              <div className="relative mb-2">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 mx-auto rounded-full border-2 border-purple-300 overflow-hidden group-hover:border-purple-500 transition-colors duration-300">
-                  <img
-                    src={profile.image}
-                    alt={profile.handle}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+            <div key={index} className="group text-center">
+              <div className="relative mx-auto mb-2 h-14 w-14 overflow-hidden rounded-full border-[3px] border-dz-surface ring-2 ring-primary/20 sm:h-16 sm:w-16 md:h-20 md:w-20">
+                <img src={profile.image} alt={profile.handle} className="h-full w-full object-cover" />
               </div>
-              <p className="text-xs text-purple-600 font-medium truncate">{profile.handle}</p>
+              <p className="truncate text-xs font-medium text-primary">{profile.handle}</p>
             </div>
           ))}
         </div>

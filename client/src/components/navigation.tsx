@@ -1,229 +1,223 @@
 import { useState } from "react";
-import { Menu, X, User, LogOut, Settings, AlertTriangle } from "lucide-react";
-import { useLocation } from "wouter";
+import { AlertTriangle, Sparkles, Menu, X } from "lucide-react";
+import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
-import { AuthHoverPopup } from "@/components/auth-hover-popup";
-import { useToast } from "@/hooks/use-toast";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
-import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
+import { AuthChoiceDialog } from "@/components/auth-hover-popup";
+import { AccountDrawer } from "@/components/account-drawer";
+import {
+  getIncompleteAccountHref,
+  isAuthUserProfileComplete,
+} from "@/lib/account-profile-complete";
+import { navigateToHomeSection } from "@/lib/home-navigation";
+import { BrandLogo } from "@/components/brand-logo";
+import { AccountMenuDrawerButton } from "@/components/account-menu-controls";
+import { PageContainer } from "@/components/digital-zen/page-container";
 
 interface NavigationProps {
   onBookingClick: () => void;
 }
 
+const DRAWER_LINKS = [
+  { id: "care", label: "and We", accent: "Care" },
+  { id: "vibe", label: "and We", accent: "Vibe" },
+  { id: "teach", label: "and We", accent: "Workout" },
+  { id: "story", label: "and Our", accent: "Story" },
+  { id: "believe", label: "and We", accent: "Believe" },
+  { id: "ally", label: "and We Meet", accent: "Coach" },
+] as const;
+
 export default function Navigation({ onBookingClick }: NavigationProps) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, logout } = useAuth();
-  const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
+  const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
+  const { user, isLoading: authLoading } = useAuth();
+  const { celebrationCount, openCelebrationFromMenu } = usePaymentVerifiedCelebrations();
 
   const isProfileComplete = isAuthUserProfileComplete(user);
 
-  const handleBookingClick = () => {
-    if (user && !isProfileComplete) {
-      toast({
-        title: "Profile Incomplete",
-        description: "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
-        variant: "destructive",
-      });
-      setLocation('/my-account');
-      return;
-    }
-    onBookingClick();
-  };
-
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-    setIsMobileMenuOpen(false);
+  const goToHomeSection = (sectionId: string) => {
+    navigateToHomeSection(sectionId);
+    setIsDrawerOpen(false);
   };
 
   return (
     <>
-    {/* Unified Navigation - All Devices */}
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-border">
-      <div className="container mx-auto px-2 sm:px-4">
-        <div className="flex items-center justify-between h-16 relative">
-          {/* Sandwich Menu Button - Leftmost corner */}
-          <div className="flex-shrink-0">
+      <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-white/60 backdrop-blur-[20px]">
+        <PageContainer className="flex h-[76px] items-center justify-between gap-4">
+          <div className="relative flex-shrink-0">
             <Button
-              variant="ghost"
-              size="sm"
-              className="p-1.5 sm:p-2 hover:bg-muted transition-colors"
-              onClick={toggleMobileMenu}
+              className="h-9 w-9 rounded-full bg-primary p-0 text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:h-10 sm:w-10"
+              onClick={() => setIsDrawerOpen(true)}
               data-testid="mobile-menu-toggle"
+              aria-label="Open menu"
             >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-              ) : (
-                <Menu className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
-              )}
+              <Menu className="h-4 w-4" />
+            </Button>
+            {user && celebrationCount > 0 && (
+              <button
+                type="button"
+                className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 animate-pulse items-center justify-center rounded-full bg-gradient-to-br from-dz-secondary to-primary px-1 text-[10px] font-bold text-white ring-2 ring-white"
+                aria-label="Session starting soon. Open join prompt."
+                data-testid="payment-verified-menu-bubble"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openCelebrationFromMenu();
+                }}
+              >
+                {celebrationCount > 1 ? celebrationCount : <Sparkles className="h-3 w-3" />}
+              </button>
+            )}
+          </div>
+
+          <BrandLogo
+            className="absolute left-1/2 -translate-x-1/2"
+            imgClassName="h-[clamp(44px,7vw,58px)] w-auto"
+            testId="desktop-logo-link"
+          />
+
+          <div className="relative flex flex-shrink-0 items-center">
+            {authLoading ? (
+              // Hold the slot until auth resolves so we never flash the wrong CTA
+              // (e.g. "Book Session" before "My Account") on a cold load/refresh.
+              <div
+                className="h-9 w-[118px] rounded-full bg-primary/10 sm:w-[136px]"
+                aria-hidden
+                data-testid="nav-auth-loading"
+              />
+            ) : user ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className={`rounded-full px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-3.5 sm:py-2 sm:text-sm ${
+                        !isProfileComplete
+                          ? "bg-orange-600 hover:bg-orange-700"
+                          : "bg-primary hover:bg-primary/90"
+                      }`}
+                      data-testid="nav-my-account"
+                      onClick={() => {
+                        const href = getIncompleteAccountHref(user);
+                        if (href) {
+                          window.location.href = href;
+                          return;
+                        }
+                        setAccountDrawerOpen(true);
+                      }}
+                    >
+                      {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
+                      My Account
+                      <Menu className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  {!isProfileComplete ? (
+                    <TooltipContent side="bottom" className="max-w-xs text-center">
+                      Complete your phone number and health note to book sessions.
+                    </TooltipContent>
+                  ) : null}
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <>
+                <Button
+                  className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
+                  data-testid="nav-book-session"
+                  onClick={() => setBookingAuthOpen(true)}
+                >
+                  Book/Signup
+                </Button>
+                <AuthChoiceDialog
+                  open={bookingAuthOpen}
+                  onOpenChange={setBookingAuthOpen}
+                  onContinueAsGuest={onBookingClick}
+                />
+              </>
+            )}
+          </div>
+        </PageContainer>
+      </header>
+
+      <div
+        className={`fixed inset-0 z-[55] bg-foreground/25 backdrop-blur-[3px] transition-opacity duration-300 ${
+          isDrawerOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setIsDrawerOpen(false)}
+        data-testid="menu-overlay"
+      />
+
+      <aside
+        className={`fixed left-0 top-0 z-[60] flex h-screen w-[min(320px,86vw)] flex-col gap-1.5 overflow-y-auto border-r border-dz-glass-border bg-white/60 p-5 shadow-2xl backdrop-blur-[24px] transition-transform duration-300 ease-out ${
+          isDrawerOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <span className="font-display text-lg font-bold text-primary">Explore</span>
+          <Button
+            size="sm"
+            className="rounded-full bg-primary font-bold text-primary-foreground"
+            onClick={() => setIsDrawerOpen(false)}
+          >
+            <X className="mr-1 h-4 w-4" />
+            Close
+          </Button>
+        </div>
+        {DRAWER_LINKS.map((link) => (
+          <button
+            key={link.id}
+            onClick={() => goToHomeSection(link.id)}
+            className="rounded-xl px-3.5 py-3 text-left font-display text-base font-semibold text-primary transition-colors hover:bg-primary/5"
+            data-testid={`mobile-nav-${link.id}`}
+          >
+            {link.label}{" "}
+            <span className="text-dz-secondary">{link.accent}</span>
+          </button>
+        ))}
+        {user ? (
+          <div className="mt-4 border-t border-dz-glass-border pt-4">
+            <AccountMenuDrawerButton onNavigate={() => setIsDrawerOpen(false)} />
+          </div>
+        ) : (
+          <div className="mt-4 border-t border-dz-glass-border pt-4">
+            <Button
+              className="w-full rounded-full bg-primary font-bold text-primary-foreground"
+              onClick={() => {
+                setBookingAuthOpen(true);
+                setIsDrawerOpen(false);
+              }}
+              data-testid="mobile-nav-book-signup"
+            >
+              Book / Sign up
             </Button>
           </div>
-
-          {/* Logo - Center with responsive sizing */}
-          <div className="absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
-            <button 
-              onClick={() => scrollToSection('teach')}
-              data-testid="desktop-logo-link"
+        )}
+        {user && celebrationCount > 0 && (
+          <div className="mt-4 border-t border-dz-glass-border pt-4">
+            <Button
+              onClick={() => {
+                openCelebrationFromMenu();
+                setIsDrawerOpen(false);
+              }}
+              className="w-full rounded-full bg-gradient-to-r from-primary to-dz-secondary font-bold text-white"
+              data-testid="mobile-nav-payment-verified"
             >
-              <img 
-                src={logoPath} 
-                alt="andWeYoga" 
-                className="h-10 sm:h-12 md:h-14 w-auto max-w-[120px] sm:max-w-none hover:opacity-80 transition-opacity duration-200"
-                data-testid="logo"
-              />
-            </button>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Join your session
+              <Badge className="ml-2 border-0 bg-white/20 text-white">{celebrationCount}</Badge>
+            </Button>
           </div>
+        )}
+      </aside>
 
-          {/* Book Session Button - Right side */}
-          <div className="flex-shrink-0 flex items-center gap-2">
-            {user && (
-              <span className="text-sm text-purple-600 font-medium hidden lg:inline">
-                {user.name}
-              </span>
-            )}
-            
-            <div className="flex items-center gap-1">
-              <Button 
-                onClick={handleBookingClick}
-                className={`${user && !isProfileComplete ? 'bg-orange-600 hover:bg-orange-700' : 'bg-primary hover:bg-primary/90'} !text-white px-3 py-2 sm:px-4 sm:py-2.5 md:px-6 md:py-2.5 rounded-full transition-all duration-200 text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl transform hover:scale-105`}
-                data-testid="nav-book-session"
-              >
-                {user && !isProfileComplete && (
-                  <AlertTriangle className="w-3 h-3 mr-1" />
-                )}
-                <span className="hidden sm:inline">
-                  {user && !isProfileComplete ? 'Complete Profile' : 'Book Session'}
-                </span>
-                <span className="sm:hidden">
-                  {user && !isProfileComplete ? 'Profile' : 'Book'}
-                </span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop Mobile Navigation Menu */}
-      <div 
-        className={`fixed top-16 left-0 z-40 bg-white border-r border-b border-border shadow-2xl transition-all duration-300 ease-in-out mobile-nav-menu ${isMobileMenuOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}`}
-        style={{ width: '220px' }}
-        onMouseLeave={() => setIsMobileMenuOpen(false)}
-      >
-        <div className="px-6 py-6 md:space-y-3 space-y-4 text-center md:text-left">
-          <button 
-            onClick={() => scrollToSection('care')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-care"
-          >
-            and We Care
-          </button>
-          <button 
-            onClick={() => scrollToSection('vibe')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-vibe"
-          >
-            and We Vibe
-          </button>
-          <button 
-            onClick={() => scrollToSection('teach')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-teach"
-          >
-            and We Teach
-          </button>
-          <button 
-            onClick={() => scrollToSection('story')}
-            className="block w-full md:text-left text-center text-base font-bold text-secondary hover:text-primary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-story"
-          >
-            and Our Story
-          </button>
-          <button 
-            onClick={() => scrollToSection('believe')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-believe"
-          >
-            and We Believe
-          </button>
-          <button 
-            onClick={() => scrollToSection('connect')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-connect"
-          >
-            and We Connect
-          </button>
-          <button 
-            onClick={() => scrollToSection('ally')}
-            className="block w-full md:text-left text-center text-base font-bold text-primary hover:text-secondary transition-all duration-200 md:hover:translate-x-1 py-1.5"
-            data-testid="mobile-nav-ally"
-          >
-            and We Meet Yogis
-          </button>
-          <div className="pt-4 border-t border-border/30 space-y-2">
-            {user ? (
-              <>
-                <p className="text-sm text-purple-600 font-bold text-center">
-                  Welcome, {user.name}!
-                </p>
-                <Button 
-                  onClick={() => {
-                    setLocation('/my-account');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  variant="outline"
-                  className="w-full border-primary text-primary hover:bg-primary/10 px-6 py-3 rounded-full text-sm font-bold"
-                  data-testid="mobile-nav-my-account"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  My Account
-                </Button>
-                <Button 
-                  onClick={() => {
-                    logout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  variant="outline"
-                  className="w-full border-red-200 text-red-600 hover:bg-red-50 px-6 py-3 rounded-full text-sm font-bold"
-                  data-testid="mobile-nav-logout"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <AuthHoverPopup>
-                <Button 
-                  className="w-full bg-primary !text-white px-6 py-3 rounded-full text-sm font-bold hover:bg-primary/90"
-                  data-testid="desktop-sidebar-sign-in-up"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Sign In / Sign Up
-                </Button>
-              </AuthHoverPopup>
-            )}
-          </div>
-        </div>
-      </div>
-      
-      {/* Unified Overlay when menu is open */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 top-16 bg-black/20 backdrop-blur-sm z-30 transition-opacity duration-300"
-          onClick={() => setIsMobileMenuOpen(false)}
-          data-testid="menu-overlay"
-        />
+      {user && (
+        <AccountDrawer open={accountDrawerOpen} onOpenChange={setAccountDrawerOpen} />
       )}
-    </nav>
     </>
   );
 }

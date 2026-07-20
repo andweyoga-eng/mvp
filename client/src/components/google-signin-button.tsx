@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,7 +24,6 @@ declare global {
 
 export function GoogleSignInButton({ onSuccess, variant = 'login' }: GoogleSignInButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
   const { toast } = useToast();
 
   const handleGoogleResponse = async (response: any) => {
@@ -37,11 +35,6 @@ export function GoogleSignInButton({ onSuccess, variant = 'login' }: GoogleSignI
       
       if (result.ok) {
         const data = await result.json();
-        // Set the token in localStorage
-        localStorage.setItem('authToken', data.token);
-        
-        // Trigger auth context update by calling login with empty credentials
-        // The auth provider will fetch user data using the stored token
         window.location.reload(); // Force page reload to update auth state
         
         toast({
