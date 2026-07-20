@@ -11,6 +11,19 @@ console.log("✅ Environment validation passed");
 const app = express();
 app.set("trust proxy", 1);
 
+// ============================================================
+// Redirect apex domain to www subdomain
+// ============================================================
+app.use((req, res, next) => {
+  const host = req.get("host") || "";
+  // Match andweyoga.com (without www)
+  if (host === "andweyoga.com") {
+    const redirectUrl = `https://www.${host}${req.originalUrl}`;
+    return res.redirect(301, redirectUrl);
+  }
+  next();
+});
+
 app.use((req, res, next) => {
   const allowedOrigin = getAllowedCorsOrigin();
   const requestOrigin = req.headers.origin;
@@ -116,13 +129,13 @@ app.use((req, res, next) => {
 (async () => {
   const dbHealth = await checkDatabaseHealth();
   if (!dbHealth.ok) {
-    console.error("\n⚠️  Database connection failed at startup.");
+    console.error("\\n⚠️  Database connection failed at startup.");
     console.error(`   ${dbHealth.error}`);
     console.error(
       "   Admin login and most API routes will not work until DATABASE_URL is valid.",
     );
     console.error(
-      "   Fix: In Railway → Postgres → Connect, copy DATABASE_PUBLIC_URL into .env (and webapp vars).\n",
+      "   Fix: In Railway → Postgres → Connect, copy DATABASE_PUBLIC_URL into .env (and webapp vars).\\n",
     );
   } else {
     try {
@@ -164,3 +177,4 @@ app.use((req, res, next) => {
     log(`🔒 Security mode: ${process.env.NODE_ENV || 'development'}`);
   });
 })();
+
