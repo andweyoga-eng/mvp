@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_WEEKLY_OCCURRENCES, WEEKDAY_LABELS } from "@shared/session-schedule";
-import { flexiTooltipCopy } from "@shared/flexi-mode";
+import { FLEXI_BOOKING_ENABLED, flexiTooltipCopy } from "@shared/flexi-mode";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
@@ -508,14 +508,16 @@ export function CreateSessionModal({
                     Series length: <span className="font-medium">{form.occurrenceCount}</span>{" "}
                     week(s)
                   </p>
-                  <p className="text-sm text-muted-foreground">
-                    Flexi Mode:{" "}
-                    <span className="font-medium">
-                      {form.flexiEnabled
-                        ? `On · exactly ${form.flexiSelectionCount} weekly selection(s)`
-                        : "Off"}
-                    </span>
-                  </p>
+                  {FLEXI_BOOKING_ENABLED ? (
+                    <p className="text-sm text-muted-foreground">
+                      Flexi Mode:{" "}
+                      <span className="font-medium">
+                        {form.flexiEnabled
+                          ? `On · exactly ${form.flexiSelectionCount} weekly selection(s)`
+                          : "Off"}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -697,52 +699,58 @@ export function CreateSessionModal({
                         />
                         <FieldError message={errors.occurrenceCount} />
                       </div>
-                      <div className="sm:col-span-2">
-                        <label className="flex items-start gap-3 rounded-md border p-3 bg-background">
-                          <Checkbox
-                            checked={form.flexiEnabled}
-                            onCheckedChange={(on) => {
-                              setForm((f) => ({
-                                ...f,
-                                flexiEnabled: !!on,
-                                flexiSelectionCount: String(
-                                  Math.max(
-                                    1,
-                                    parseInt(f.flexiSelectionCount, 10) || f.recurrenceWeekdays.length || 1,
-                                  ),
-                                ),
-                              }));
-                              clearFieldError("flexiSelectionCount");
-                            }}
-                          />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">Flexi Mode</p>
-                            <p className="text-xs text-muted-foreground">{flexiTooltipCopy()}</p>
+                      {FLEXI_BOOKING_ENABLED ? (
+                        <>
+                          <div className="sm:col-span-2">
+                            <label className="flex items-start gap-3 rounded-md border p-3 bg-background">
+                              <Checkbox
+                                checked={form.flexiEnabled}
+                                onCheckedChange={(on) => {
+                                  setForm((f) => ({
+                                    ...f,
+                                    flexiEnabled: !!on,
+                                    flexiSelectionCount: String(
+                                      Math.max(
+                                        1,
+                                        parseInt(f.flexiSelectionCount, 10) ||
+                                          f.recurrenceWeekdays.length ||
+                                          1,
+                                      ),
+                                    ),
+                                  }));
+                                  clearFieldError("flexiSelectionCount");
+                                }}
+                              />
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">Flexi Mode</p>
+                                <p className="text-xs text-muted-foreground">{flexiTooltipCopy()}</p>
+                              </div>
+                            </label>
                           </div>
-                        </label>
-                      </div>
-                      {form.flexiEnabled ? (
-                        <div>
-                          <Label>
-                            Exact weekly selections <span className="text-red-500">*</span>
-                          </Label>
-                          <Input
-                            type="number"
-                            min={1}
-                            max={7}
-                            value={form.flexiSelectionCount}
-                            onChange={(e) => {
-                              setForm((f) => ({ ...f, flexiSelectionCount: e.target.value }));
-                              clearFieldError("flexiSelectionCount");
-                            }}
-                            className={errors.flexiSelectionCount ? "border-red-500" : ""}
-                          />
-                          <FieldError message={errors.flexiSelectionCount} />
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Registered members must choose exactly this many weekday/time slots when
-                            they start Flexi checkout from this schedule.
-                          </p>
-                        </div>
+                          {form.flexiEnabled ? (
+                            <div>
+                              <Label>
+                                Exact weekly selections <span className="text-red-500">*</span>
+                              </Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={7}
+                                value={form.flexiSelectionCount}
+                                onChange={(e) => {
+                                  setForm((f) => ({ ...f, flexiSelectionCount: e.target.value }));
+                                  clearFieldError("flexiSelectionCount");
+                                }}
+                                className={errors.flexiSelectionCount ? "border-red-500" : ""}
+                              />
+                              <FieldError message={errors.flexiSelectionCount} />
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Registered members must choose exactly this many weekday/time slots when
+                                they start Flexi checkout from this schedule.
+                              </p>
+                            </div>
+                          ) : null}
+                        </>
                       ) : null}
                     </>
                   )}

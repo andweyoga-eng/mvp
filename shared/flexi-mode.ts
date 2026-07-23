@@ -24,8 +24,20 @@ export interface FlexiSelectionCandidate {
 
 export const FLEXI_WEEKDAY_OPTIONS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-export function isFlexiEnabledSchedule(schedule: FlexiEligibleScheduleLike | null | undefined): boolean {
+/**
+ * Temporary kill switch for Flexi booking. While false, members only get Fixed Slots
+ * (badges, checkout toggle, options API, and new Flexi bookings are all gated).
+ * Set to true to re-enable Flexi without changing per-schedule `flexiEnabled` flags.
+ */
+export const FLEXI_BOOKING_ENABLED = false;
+
+/** Per-schedule Flexi config (ignores the site-wide kill switch). */
+export function hasFlexiScheduleConfig(schedule: FlexiEligibleScheduleLike | null | undefined): boolean {
   return !!schedule?.flexiEnabled && schedule.recurrenceKind === "weekly" && !!schedule.seriesId;
+}
+
+export function isFlexiEnabledSchedule(schedule: FlexiEligibleScheduleLike | null | undefined): boolean {
+  return FLEXI_BOOKING_ENABLED && hasFlexiScheduleConfig(schedule);
 }
 
 export function resolveFlexiSelectionCount(

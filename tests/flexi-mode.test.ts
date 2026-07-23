@@ -6,6 +6,8 @@ import {
   flexiOptionsMatchFixedSlots,
   flexiTooltipCopy,
   formatFlexiTimeLabel,
+  FLEXI_BOOKING_ENABLED,
+  hasFlexiScheduleConfig,
   isFlexiEnabledSchedule,
   resolveFlexiSelectionCount,
   sharesFlexiPool,
@@ -13,9 +15,9 @@ import {
 import { resolveSessionTermsItems } from "../shared/session-terms";
 
 describe("flexi-mode helpers", () => {
-  it("marks only weekly flexi schedules as eligible", () => {
+  it("marks only weekly flexi schedules as configured", () => {
     assert.equal(
-      isFlexiEnabledSchedule({
+      hasFlexiScheduleConfig({
         id: "a",
         classTypeId: "ct",
         instructorId: "ins",
@@ -27,7 +29,7 @@ describe("flexi-mode helpers", () => {
       true,
     );
     assert.equal(
-      isFlexiEnabledSchedule({
+      hasFlexiScheduleConfig({
         id: "b",
         classTypeId: "ct",
         instructorId: "ins",
@@ -38,6 +40,22 @@ describe("flexi-mode helpers", () => {
       }),
       false,
     );
+  });
+
+  it("respects the site-wide Flexi kill switch for member eligibility", () => {
+    const weeklyFlexi = {
+      id: "a",
+      classTypeId: "ct",
+      instructorId: "ins",
+      date: new Date(),
+      flexiEnabled: true,
+      recurrenceKind: "weekly" as const,
+      seriesId: "series-1",
+    };
+    assert.equal(isFlexiEnabledSchedule(weeklyFlexi), FLEXI_BOOKING_ENABLED);
+    if (!FLEXI_BOOKING_ENABLED) {
+      assert.equal(isFlexiEnabledSchedule(weeklyFlexi), false);
+    }
   });
 
   it("anchors selection count from explicit schedule value", () => {

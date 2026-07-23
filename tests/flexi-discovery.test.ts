@@ -7,9 +7,10 @@ import {
   summarizeFlexiOptions,
   FLEXI_ELIGIBILITY_BATCH_MAX,
 } from "../shared/flexi-discovery";
+import { FLEXI_BOOKING_ENABLED } from "../shared/flexi-mode";
 
 describe("flexi-discovery helpers", () => {
-  it("derives client-side eligibility from schedule shape", () => {
+  it("derives client-side eligibility from schedule shape (and kill switch)", () => {
     assert.equal(
       isFlexiEligibleSchedule({
         id: "a",
@@ -20,7 +21,7 @@ describe("flexi-discovery helpers", () => {
         seriesId: "s1",
         flexiEnabled: true,
       }),
-      true,
+      FLEXI_BOOKING_ENABLED,
     );
     assert.equal(
       isFlexiEligibleSchedule({
