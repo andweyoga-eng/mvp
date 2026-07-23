@@ -22,6 +22,7 @@ import { AvailableTodaySessionCard } from "@/components/available-today-session-
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { FlexiInfoBadge } from "@/components/flexi-info-badge";
+import { isFlexiEnabledSchedule } from "@shared/flexi-mode";
 
 interface ClassType {
   id: string;
@@ -38,6 +39,8 @@ interface ScheduleDay {
   date: Date;
   classes: Array<{
     id: string;
+    classTypeId: string;
+    instructorId: string;
     date: Date;
     classType: ClassType;
     instructor: { id: string; name: string };
@@ -267,7 +270,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
           title: cls.classType.name,
           meta: `${formatTimeIST(cls.date)} · ${cls.instructor.name}`,
           badge: getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode),
-          flexiEnabled: !!cls.flexiEnabled && cls.recurrenceKind === "weekly" && !!cls.seriesId,
+          flexiEnabled: isFlexiEnabledSchedule(cls),
           initials: instructorInitials(cls.instructor.name),
           soldOut,
           sessionId: cls.id,
@@ -365,7 +368,7 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
                       imageUrl={imageUrl}
                       soldOut={soldOut}
                       strictNoTo={cls.classType.strictNoTo}
-                      flexiEnabled={!!cls.flexiEnabled && cls.recurrenceKind === "weekly" && !!cls.seriesId}
+                      flexiEnabled={isFlexiEnabledSchedule(cls)}
                       onBook={(id) => onBookingClick(id)}
                     />
                   );

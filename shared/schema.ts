@@ -71,6 +71,44 @@ export const classTypes = pgTable("class_types", {
   termsAndConditions: text("terms_and_conditions"),
 });
 
+/**
+ * A Program is the SELLABLE PRODUCT (the SKU). It is what a member buys.
+ * Distinct from a Batch (a `classes` series), which is INVENTORY / supply.
+ *
+ * Scoped to a class type, NOT to an instructor: any batch of this class type
+ * (and the member's chosen instructor) can supply occurrences at composition
+ * time. See SPEC-SESSIONS-01 s.2.4.
+ *
+ * Programs are VERSIONED, never mutated once sold. Editing a program that has
+ * active subscriptions creates version n+1 and archives version n, so a member's
+ * per-session value can never change underneath them. subscriptions.program_id
+ * is the frozen contract. See SPEC-SESSIONS-01 s.3.2.
+ *
+ * Trial and drop_in are Programs with exactly one session (per_week = 1,
+ * duration_weeks = 1). There are no special cases.
+ */
+export const programs = pgTable("programs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
+  version: integer("version").notNull().default(1),
+  /** trial | drop_in | recurring */
+  kind: varchar("kind", { length: 16 }).notNull(),
+  /** 1 for trial and drop_in */
+  sessionsPerWeek: integer("sessions_per_week").notNull().default(1),
+  /** 1 for trial and drop_in */
+  durationWeeks: integer("duration_weeks").notNull().default(1),
+  /** Denormalised = sessions_per_week * duration_weeks. Written by the app, never edited by hand. */
+  totalSessions: integer("total_sessions").notNull().default(1),
+  /** Price of the WHOLE program, in integer paise. Never a decimal, never a float. */
+  pricePaise: integer("price_paise").notNull(),
+  /** Whether this program may be composed via Flexi (mix-and-match slots across batches). */
+  flexiAllowed: boolean("flexi_allowed").notNull().default(false),
+  /** draft | active | archived. Only one active version per (class_type, kind, per_week, duration). */
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 /** Max characters for class_types.strict_no_to (admin + server validation). */
 export const STRICT_NO_TO_MAX_LENGTH = 120;
 
@@ -380,12 +418,39 @@ export const subscriptions = pgTable("subscriptions", {
   bookingId: varchar("booking_id").references(() => bookings.id),
   flexiBookingId: varchar("flexi_booking_id"),
   subscriptionType: varchar("subscription_type", { length: 16 }).notNull(), // drop_in | trial | recurring
+
+  // ---- SPEC-SESSIONS-01 Part A: the frozen contract ----
+  // Nullable for now so existing rows and existing write paths are unaffected.
+  // A3 makes these authoritative and deprecates totalSessions / totalAmountPaise below.
+  /** The program version bought. Immutable once written. The contract. */
+  programId: varchar("program_id").references(() => programs.id),
+  /** Delivering instructor. A composition CONSTRAINT, not a payout source of truth. */
+  instructorId: varchar("instructor_id").references(() => instructors.id),
+  /** Frozen at checkout = program.total_sessions. Never recalculated from batch state. */
+  sessionsPurchased: integer("sessions_purchased"),
+  /** What the member ACTUALLY paid, post-coupon, in integer paise. */
+  totalPaidPaise: integer("total_paid_paise"),
+  /** Member's chosen program window. */
+  horizonStartAt: timestamp("horizon_start_at"),
+  horizonEndAt: timestamp("horizon_end_at"),
+
+  // ---- SPEC-SESSIONS-01 Part B: ledger counters (cache over session_ledger) ----
+  // Invariant: sessions_purchased = consumed + scheduled + unscheduled + credited.
+  // Populated by Part B. Default 0 so they are inert until then.
+  sessionsConsumed: integer("sessions_consumed").notNull().default(0),
+  sessionsScheduled: integer("sessions_scheduled").notNull().default(0),
+  sessionsUnscheduled: integer("sessions_unscheduled").notNull().default(0),
+  sessionsCredited: integer("sessions_credited").notNull().default(0),
+
+  // ---- DEPRECATED by A3. Do not read once the read-path switch lands. ----
+  /** @deprecated was countClassesInSeries() — the entitlement-inflation bug. Use sessionsPurchased. */
   totalSessions: integer("total_sessions").notNull().default(1),
   utilizedSessions: integer("utilized_sessions").notNull().default(0),
   refundedSessions: integer("refunded_sessions").notNull().default(0),
   disputedSessions: integer("disputed_sessions").notNull().default(0),
   disputesResolved: integer("disputes_resolved").notNull().default(0),
   waivedSessions: integer("waived_sessions").notNull().default(0),
+  /** @deprecated was one session's price — the revenue bug. Use totalPaidPaise. */
   totalAmountPaise: integer("total_amount_paise").notNull().default(0),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   expiresAt: timestamp("expires_at"),
@@ -581,6 +646,11 @@ export const insertNotifyRequestSchema = createInsertSchema(classTypeNotifyReque
   id: true,
   createdAt: true,
   unsubscribedAt: true,
+});
+export const insertProgramSchema = createInsertSchema(programs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
   id: true,
@@ -786,6 +856,8 @@ export type AdminProfile = typeof adminProfiles.$inferSelect;
 export type InsertAdminProfile = z.infer<typeof insertAdminProfileSchema>;
 export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect;
 export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
+export type Program = typeof programs.$inferSelect;
+export type InsertProgram = z.infer<typeof insertProgramSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type FlexiBooking = typeof flexiBookings.$inferSelect;
