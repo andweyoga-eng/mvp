@@ -10,6 +10,7 @@ import {
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { GoogleLogo } from "@/components/google-logo";
 
 interface AuthChoiceDialogProps {
   open: boolean;
@@ -75,14 +76,7 @@ export function AuthChoiceDialog({
             className="flex h-14 w-full items-center justify-center gap-3 rounded-xl border-dz-glass-border bg-white font-semibold text-foreground hover:bg-white/90"
             data-testid="google-signin-popup-button"
           >
-            <span
-              className="inline-flex h-5 w-5 rounded-full"
-              style={{
-                background:
-                  "conic-gradient(from -45deg,#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)",
-              }}
-              aria-hidden
-            />
+            <GoogleLogo size={20} />
             <span className="truncate">Continue with Google</span>
           </Button>
 
