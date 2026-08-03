@@ -37,7 +37,17 @@ const CATEGORY_ICONS: Record<ConsentType, typeof User> = {
   age_declaration: Cake,
   health_data: HeartPulse,
   whatsapp_contact: MessageCircle,
+  cancellation_refund: Gavel,
 };
+
+/** DPDP account privacy UI — excludes checkout Cancellation Policy clickwrap. */
+const PRIVACY_SECTION_TYPES: ConsentType[] = [
+  "profile_booking",
+  "terms",
+  "age_declaration",
+  "health_data",
+  "whatsapp_contact",
+];
 
 function StatusBadge({
   status,
@@ -301,7 +311,9 @@ export function PrivacyConsentSection({
         </div>
       ) : (
         <ul className="space-y-3">
-          {(data?.categories ?? []).map((row) => {
+          {(data?.categories ?? [])
+            .filter((row) => PRIVACY_SECTION_TYPES.includes(row.consentType))
+            .map((row) => {
             const Icon = CATEGORY_ICONS[row.consentType];
             return (
               <li

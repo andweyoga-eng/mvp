@@ -81,6 +81,7 @@ export function WeekScheduleGrid({
   onPauseSession,
   onResumeSession,
   onDeleteSession,
+  onCancelSession,
   isSuperAdmin = false,
 }: {
   sessions: SessionRow[];
@@ -91,6 +92,7 @@ export function WeekScheduleGrid({
   onPauseSession?: (session: SessionRow) => void;
   onResumeSession?: (session: SessionRow) => void;
   onDeleteSession?: (session: SessionRow) => void;
+  onCancelSession?: (session: SessionRow) => void;
   isSuperAdmin?: boolean;
 }) {
   const isBelowLg = useIsBelowLg();
@@ -175,7 +177,7 @@ export function WeekScheduleGrid({
   });
 
   const showSessionActions =
-    onEditSession || onPauseSession || onResumeSession || onDeleteSession;
+    onEditSession || onPauseSession || onResumeSession || onDeleteSession || onCancelSession;
 
   return (
     <div className="space-y-4">
@@ -293,6 +295,17 @@ export function WeekScheduleGrid({
                             onClick={() => onResumeSession(s)}
                           >
                             <Play className="h-3 w-3 mr-0.5" /> Resume
+                          </Button>
+                        )}
+                        {isSuperAdmin && onCancelSession && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-amber-800 border-amber-200"
+                            onClick={() => onCancelSession(s)}
+                          >
+                            Cancel
                           </Button>
                         )}
                         {isSuperAdmin && onDeleteSession && (

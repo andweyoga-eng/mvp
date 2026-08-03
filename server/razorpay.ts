@@ -139,6 +139,23 @@ export async function fetchRazorpayPaymentDetails(paymentId: string): Promise<{
   };
 }
 
+export async function createRazorpayRefund(params: {
+  paymentId: string;
+  amountPaise: number;
+  notes?: Record<string, string>;
+}): Promise<{ id: string; status: string; amount: number }> {
+  const rz = getClient();
+  const refund = await rz.payments.refund(params.paymentId, {
+    amount: params.amountPaise,
+    notes: params.notes,
+  });
+  return {
+    id: String(refund.id),
+    status: String(refund.status ?? "pending"),
+    amount: Number(refund.amount ?? params.amountPaise),
+  };
+}
+
 /** Razorpay invoice PDF URL when an invoice_id exists. */
 export function razorpayInvoicePdfUrl(invoiceId: string): string {
   return `https://razorpay.com/invoice/${invoiceId}/pdf`;

@@ -55,6 +55,8 @@ import {
   SessionTermsBlock,
   SessionTermsAcceptanceCopy,
 } from "@/components/session-terms-block";
+import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
+import { CANCELLATION_POLICY_CLICKWRAP_COPY } from "@shared/cancellation-policy";
 import { SessionDeliveryInfo } from "@/components/session-delivery-info";
 import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
 import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
@@ -145,6 +147,7 @@ export default function Reserve() {
     fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [acceptCancellationPolicy, setAcceptCancellationPolicy] = useState(false);
   const [bookingMode, setBookingMode] = useState<"series" | "flexi">("series");
   const [flexiSelections, setFlexiSelections] = useState<FlexiSelection[]>([]);
 
@@ -345,6 +348,14 @@ export default function Reserve() {
       toast({
         title: "Choose a program",
         description: "Select a program package to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!acceptCancellationPolicy) {
+      toast({
+        title: "Policy required",
+        description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
         variant: "destructive",
       });
       return;
@@ -839,6 +850,12 @@ export default function Reserve() {
                         className="mb-3"
                         items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
                       />
+                      <CancellationPolicyClickwrap
+                        checked={acceptCancellationPolicy}
+                        onChange={setAcceptCancellationPolicy}
+                        testId="reserve-accept-cancellation-policy"
+                        className="mb-3"
+                      />
                       <SessionTermsAcceptanceCopy className="mb-3" />
                       <Separator className="mb-3" />
                       <div className="mb-3 space-y-1">
@@ -851,6 +868,7 @@ export default function Reserve() {
                         type="button"
                         onClick={handleConfirm}
                         disabled={
+                          !acceptCancellationPolicy ||
                           checkout.isReserving ||
                           checkout.isPaying ||
                           checkoutPrograms.loading ||

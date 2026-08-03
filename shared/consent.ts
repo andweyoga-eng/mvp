@@ -7,6 +7,8 @@ export const CONSENT_TYPES = [
   "age_declaration",
   "health_data",
   "whatsapp_contact",
+  /** Checkout clickwrap for Cancellation/Refund Policy (FR-A18). Not a DPDP account consent. */
+  "cancellation_refund",
 ] as const;
 
 export type ConsentType = (typeof CONSENT_TYPES)[number];
@@ -55,6 +57,9 @@ export const guestBookingConsentSchema = z.object({
   guestConsentProfile: z.literal(true),
   guestConsentTerms: z.literal(true),
   guestConsentAge: z.literal(true),
+  /** FR-A18 — Cancellation/Refund Policy clickwrap (not pre-ticked). */
+  acceptCancellationPolicy: z.literal(true),
+  cancellationPolicyVersion: z.string().min(1),
   consentVersion: z.string().min(1).default(LEGAL_CONFIG.documentVersion),
 });
 
@@ -260,6 +265,7 @@ export const PRIVACY_UI_COPY = {
       age_declaration: "Age Declaration (18+)",
       health_data: "Health Data",
       whatsapp_contact: "WhatsApp Contact",
+      cancellation_refund: "Cancellation & Refund Policy",
     },
     status: { active: "Active", withdrawn: "Withdrawn", not_given: "Not given" },
     givenOn: "Given",
@@ -297,6 +303,7 @@ export const PRIVACY_UI_COPY = {
       age_declaration: "ವಯಸ್ಸಿನ ದೃಢೀಕರಣ (ಹದಿನೆಂಟು ವರ್ಷ+)",
       health_data: "ಆರೋಗ್ಯ ಮಾಹಿತಿ",
       whatsapp_contact: "ವಾಟ್ಸಾಪ್ ಸಂಪರ್ಕ",
+      cancellation_refund: "ರದ್ದತಿ ಮತ್ತು ಮರುಪಾವತಿ ನೀತಿ",
     },
     status: { active: "ಸಕ್ರಿಯ", withdrawn: "ಹಿಂತೆಗೆದುಕೊಳ್ಳಲಾಗಿದೆ", not_given: "ನೀಡಲಾಗಿಲ್ಲ" },
     givenOn: "ನೀಡಿದ ದಿನಾಂಕ",

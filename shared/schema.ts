@@ -254,6 +254,9 @@ export const bookings = pgTable("bookings", {
   guestConsentTerms: boolean("guest_consent_terms"),
   guestConsentAge: boolean("guest_consent_age"),
   guestConsentAt: timestamp("guest_consent_at"),
+  /** Cancellation/Refund Policy version accepted at checkout (FR-A19). */
+  cancellationPolicyVersion: varchar("cancellation_policy_version", { length: 64 }),
+  cancellationPolicyAcceptedAt: timestamp("cancellation_policy_accepted_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -304,6 +307,12 @@ export const payments = pgTable("payments", {
   adminDisposition: varchar("admin_disposition", { length: 20 }).notNull().default("pending"),
   /** created | pending | paid | failed | refunded */
   status: varchar("status", { length: 20 }).notNull().default("created"),
+  razorpayRefundId: text("razorpay_refund_id"),
+  /** null | initiated | processed | failed | manual_required */
+  refundStatus: varchar("refund_status", { length: 24 }),
+  refundAmountPaise: integer("refund_amount_paise"),
+  refundInitiatedAt: timestamp("refund_initiated_at"),
+  refundProcessedAt: timestamp("refund_processed_at"),
   receiptUrl: text("receipt_url"),
   invoiceUrl: text("invoice_url"),
   failureReason: text("failure_reason"),
@@ -815,6 +824,9 @@ export const createBookingRequestSchema = memberBookingBodySchema.extend({
   guestConsentTerms: z.boolean().optional(),
   guestConsentAge: z.boolean().optional(),
   consentVersion: z.string().optional(),
+  /** FR-A18 clickwrap — required for new paid checkout (server enforces). */
+  acceptCancellationPolicy: z.boolean().optional(),
+  cancellationPolicyVersion: z.string().optional(),
   flexiSelections: z
     .array(
       z.object({

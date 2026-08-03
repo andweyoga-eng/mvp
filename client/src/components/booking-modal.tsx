@@ -44,6 +44,7 @@ import { MAX_TEXT_LENGTH, limitTextInput } from "@shared/input-limits";
 import { AuthHoverPopup, AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
+import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, User, ExternalLink, CreditCard, Sparkles, Video, Download } from "lucide-react";
@@ -92,6 +93,10 @@ import {
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { GuestBookingConfirmedContent } from "@/components/guest-booking-confirmed-dialog";
 import { LEGAL_CONFIG } from "@shared/legal-config";
+import {
+  CANCELLATION_POLICY_VERSION,
+  CANCELLATION_POLICY_CLICKWRAP_COPY,
+} from "@shared/cancellation-policy";
 import { MANUAL_PAYMENT_SUBMITTED_TOAST } from "@shared/manual-payment-ack";
 import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
@@ -196,6 +201,7 @@ export default function BookingModal({
     terms: false,
     age: false,
   });
+  const [acceptCancellationPolicy, setAcceptCancellationPolicy] = useState(false);
   const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
   const guestCopy = CONSENT_COPY[consentLang];
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
@@ -920,6 +926,27 @@ export default function BookingModal({
       payload.guestConsentTerms = true;
       payload.guestConsentAge = true;
       payload.consentVersion = LEGAL_CONFIG.documentVersion;
+      if (!acceptCancellationPolicy) {
+        toast({
+          title: "Policy required",
+          description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.acceptCancellationPolicy = true;
+      payload.cancellationPolicyVersion = CANCELLATION_POLICY_VERSION;
+    } else if (user) {
+      if (!acceptCancellationPolicy) {
+        toast({
+          title: "Policy required",
+          description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.acceptCancellationPolicy = true;
+      payload.cancellationPolicyVersion = CANCELLATION_POLICY_VERSION;
     }
 
     if (user && memberBookingMode === "flexi") {
@@ -2073,6 +2100,12 @@ export default function BookingModal({
                     label={guestCopy.cb3Age}
                     className="border-0 bg-transparent p-0"
                   />
+                  <CancellationPolicyClickwrap
+                    checked={acceptCancellationPolicy}
+                    onChange={setAcceptCancellationPolicy}
+                    testId="guest-accept-cancellation-policy"
+                    className="border-0 bg-transparent p-0"
+                  />
                 </div>
                 <SessionTermsBlock
                   termsAndConditions={checkoutSessionTerms}
@@ -2088,6 +2121,7 @@ export default function BookingModal({
                     disabled={
                       !guestConsent.terms ||
                       !guestConsent.age ||
+                      !acceptCancellationPolicy ||
                       guestBooking.phone.length !== 10 ||
                       bookingMutation.isPending ||
                       isPaying
@@ -2351,6 +2385,12 @@ export default function BookingModal({
                 collapsible={false}
                 items={memberBookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
               />
+              <CancellationPolicyClickwrap
+                checked={acceptCancellationPolicy}
+                onChange={setAcceptCancellationPolicy}
+                testId="member-accept-cancellation-policy"
+                className="mb-2"
+              />
               <SessionTermsAcceptanceCopy />
 
               {flexiEligibleSession ? (
@@ -2391,6 +2431,7 @@ export default function BookingModal({
                   type="submit"
                   className="flex-1 bg-primary !text-white font-bold hover:bg-primary/90"
                   disabled={
+                    !acceptCancellationPolicy ||
                     bookingMutation.isPending ||
                     isPaying ||
                     (hasPreselectedSession && (!preselectedIsBookable || !(formData.classId || sessionId))) ||

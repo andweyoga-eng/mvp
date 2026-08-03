@@ -89,6 +89,7 @@ import {
 } from "@shared/flexi-discovery";
 import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
+import { applyCancelEntitlementsForClass } from "./session-cancel-entitlement";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like, ne } from "drizzle-orm";
 import {
@@ -177,6 +178,7 @@ export interface MemberSessionRow {
   classId: string;
   anchorClassId: string | null;
   className: string;
+  classTypeId: string;
   instructorName: string;
   sessionDate: string;
   googleMeetLink: string | null;
@@ -258,6 +260,8 @@ export interface SubscriptionSummaryRow {
   sessionsScheduled: number;
   sessionsUnscheduled: number;
   sessionsCredited: number;
+  instructorId: string | null;
+  horizonStartAt: string | null;
   horizonEndAt: string | null;
   totalAmountPaise: number;
   totalSessions: number;
@@ -929,6 +933,13 @@ export interface IStorage {
   recordGuestBookingConsents(params: {
     bookingId: string;
     consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    cancellationPolicyVersion?: string | null;
+  }): Promise<void>;
+  recordCancellationPolicyAcceptance(params: {
+    bookingId: string;
+    policyVersion: string;
     ipAddress?: string | null;
     userAgent?: string | null;
   }): Promise<void>;
@@ -2272,6 +2283,13 @@ export class DatabaseStorage implements IStorage {
 
       await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, id));
 
+      const entitlement = await applyCancelEntitlementsForClass({
+        classId: id,
+        actor: "admin",
+        reason: trimmedReason,
+        cancelAt: now,
+      });
+
       const recipients = await this.getCancellationRecipientsForClass(id);
 
       return {
@@ -2280,6 +2298,7 @@ export class DatabaseStorage implements IStorage {
         instructorName: instructor?.name,
         sessionDateIso: cls.date.toISOString(),
         recipients,
+        entitlement,
       };
     } catch (error) {
       console.error("[DB] Error cancelling class session:", error);
@@ -4623,6 +4642,7 @@ export class DatabaseStorage implements IStorage {
           mappingId: userSessionMappings.id,
           bookingId: bookings.id,
           classId: classes.id,
+          classTypeId: classes.classTypeId,
           className: classTypes.name,
           instructorName: instructors.name,
           sessionDate: classes.date,
@@ -4691,6 +4711,7 @@ export class DatabaseStorage implements IStorage {
           id: r.mappingId ?? r.bookingId,
           bookingId: r.bookingId,
           classId: r.classId,
+          classTypeId: r.classTypeId,
           anchorClassId: null,
           className: r.className,
           instructorName: r.instructorName,
@@ -4719,6 +4740,7 @@ export class DatabaseStorage implements IStorage {
           flexiBookingId: flexiBookings.id,
           bookingId: bookings.id,
           classId: classes.id,
+          classTypeId: classes.classTypeId,
           anchorClassId: flexiBookings.anchorClassId,
           className: classTypes.name,
           instructorName: instructors.name,
@@ -4771,6 +4793,7 @@ export class DatabaseStorage implements IStorage {
           id: r.occurrenceId,
           bookingId: r.bookingId ?? r.occurrenceId,
           classId: r.classId,
+          classTypeId: r.classTypeId,
           anchorClassId: r.anchorClassId,
           className: r.className,
           instructorName: r.instructorName,
@@ -5263,6 +5286,8 @@ export class DatabaseStorage implements IStorage {
         sessionsScheduled: subscriptions.sessionsScheduled,
         sessionsUnscheduled: subscriptions.sessionsUnscheduled,
         sessionsCredited: subscriptions.sessionsCredited,
+        instructorId: subscriptions.instructorId,
+        horizonStartAt: subscriptions.horizonStartAt,
         horizonEndAt: subscriptions.horizonEndAt,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
@@ -5282,6 +5307,8 @@ export class DatabaseStorage implements IStorage {
     return rows.map((r) => ({
       ...r,
       perSessionAllocation: r.perSessionAllocation ?? null,
+      instructorId: r.instructorId ?? null,
+      horizonStartAt: r.horizonStartAt?.toISOString() ?? null,
       horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -5307,6 +5334,8 @@ export class DatabaseStorage implements IStorage {
         sessionsScheduled: subscriptions.sessionsScheduled,
         sessionsUnscheduled: subscriptions.sessionsUnscheduled,
         sessionsCredited: subscriptions.sessionsCredited,
+        instructorId: subscriptions.instructorId,
+        horizonStartAt: subscriptions.horizonStartAt,
         horizonEndAt: subscriptions.horizonEndAt,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
@@ -5327,6 +5356,8 @@ export class DatabaseStorage implements IStorage {
     return rows.map((r) => ({
       ...r,
       perSessionAllocation: r.perSessionAllocation ?? null,
+      instructorId: r.instructorId ?? null,
+      horizonStartAt: r.horizonStartAt?.toISOString() ?? null,
       horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -5409,6 +5440,7 @@ export class DatabaseStorage implements IStorage {
     consentVersion: string;
     ipAddress?: string | null;
     userAgent?: string | null;
+    cancellationPolicyVersion?: string | null;
   }): Promise<void> {
     const now = new Date();
     await db
@@ -5418,6 +5450,12 @@ export class DatabaseStorage implements IStorage {
         guestConsentTerms: true,
         guestConsentAge: true,
         guestConsentAt: now,
+        ...(params.cancellationPolicyVersion
+          ? {
+              cancellationPolicyVersion: params.cancellationPolicyVersion,
+              cancellationPolicyAcceptedAt: now,
+            }
+          : {}),
       })
       .where(eq(bookings.id, params.bookingId));
 
@@ -5431,6 +5469,38 @@ export class DatabaseStorage implements IStorage {
     for (const consentType of ["profile_booking", "terms", "age_declaration"] as const) {
       await this.insertConsentLog({ ...base, consentType });
     }
+    if (params.cancellationPolicyVersion) {
+      await this.insertConsentLog({
+        ...base,
+        consentType: "cancellation_refund",
+        consentVersion: params.cancellationPolicyVersion,
+      });
+    }
+  }
+
+  async recordCancellationPolicyAcceptance(params: {
+    bookingId: string;
+    policyVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void> {
+    const now = new Date();
+    await db
+      .update(bookings)
+      .set({
+        cancellationPolicyVersion: params.policyVersion,
+        cancellationPolicyAcceptedAt: now,
+      })
+      .where(eq(bookings.id, params.bookingId));
+
+    await this.insertConsentLog({
+      bookingId: params.bookingId,
+      consentType: "cancellation_refund",
+      action: "opt_in",
+      consentVersion: params.policyVersion,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+    });
   }
 
   async withdrawHealthDataConsent(params: {

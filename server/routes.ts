@@ -86,6 +86,12 @@ import {
   expirePaymentHolds,
 } from "./booking-hold-service";
 import { runSessionLedgerSweep } from "./session-ledger-sweep";
+import { runRefundSweep } from "./refund-service";
+import {
+  CANCELLATION_POLICY_VERSION,
+  isCurrentCancellationPolicyVersion,
+} from "@shared/cancellation-policy";
+import { confirmReschedule, listRescheduleTargets } from "./member-reschedule";
 import { initialBookingHeldUntil } from "@shared/booking-payment-hold";
 import {
   formatTimeCollisionMessage,
@@ -2557,12 +2563,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             guestConsentProfile: payload.guestConsentProfile,
             guestConsentTerms: payload.guestConsentTerms,
             guestConsentAge: payload.guestConsentAge,
+            acceptCancellationPolicy: payload.acceptCancellationPolicy,
+            cancellationPolicyVersion:
+              payload.cancellationPolicyVersion ?? CANCELLATION_POLICY_VERSION,
             consentVersion: payload.consentVersion ?? consentVersion(),
           });
         } catch {
           return res.status(400).json({
-            message: "Guest booking requires profile, terms, and age declaration consent.",
+            message:
+              "Guest booking requires profile, terms, age, and Cancellation Policy consent.",
             code: "guest_consent_required",
+          });
+        }
+        if (
+          !payload.acceptCancellationPolicy ||
+          !isCurrentCancellationPolicyVersion(
+            payload.cancellationPolicyVersion ?? CANCELLATION_POLICY_VERSION,
+          )
+        ) {
+          return res.status(400).json({
+            message: "Please accept the Cancellation and Refund Policy to continue.",
+            code: "cancellation_policy_required",
           });
         }
 
@@ -2704,6 +2725,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.recordGuestBookingConsents({
             bookingId: booking.id,
             consentVersion: payload.consentVersion ?? consentVersion(),
+            cancellationPolicyVersion: CANCELLATION_POLICY_VERSION,
             ...meta,
           });
         }
@@ -3243,6 +3265,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const memberHasPrice = programHasFee(checkoutProgram);
       const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
 
+      if (
+        !resumableBooking &&
+        (!payload.acceptCancellationPolicy ||
+          !isCurrentCancellationPolicyVersion(
+            payload.cancellationPolicyVersion ?? "",
+          ))
+      ) {
+        return res.status(400).json({
+          message: "Please accept the Cancellation and Refund Policy to continue.",
+          code: "cancellation_policy_required",
+        });
+      }
+
       const booking = resumableBooking
         ? resumableBooking
         : await storage.createBooking({
@@ -3250,6 +3285,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             classId,
             ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
           });
+
+      if (!resumableBooking) {
+        const meta = requestMeta(req);
+        await storage.recordCancellationPolicyAcceptance({
+          bookingId: booking.id,
+          policyVersion: CANCELLATION_POLICY_VERSION,
+          ...meta,
+        });
+      }
 
       const classType = await storage.getClassType(cls.classTypeId);
       const instructor = await storage.getInstructor(cls.instructorId);
@@ -4844,6 +4888,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(rows);
   });
 
+  app.get(
+    "/api/subscriptions/:subscriptionId/reschedule-targets",
+    requireAuth,
+    async (req: any, res) => {
+      const result = await listRescheduleTargets({
+        userId: req.user.id,
+        subscriptionId: req.params.subscriptionId,
+      });
+      if (!result.ok) {
+        return res.status(400).json({ code: result.code, message: result.message });
+      }
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/subscriptions/:subscriptionId/reschedule",
+    requireAuth,
+    async (req: any, res) => {
+      const body = z
+        .object({
+          targetClassId: z.string().min(1),
+          sourceBookingId: z.string().min(1).optional(),
+        })
+        .safeParse(req.body);
+      if (!body.success) {
+        return res.status(400).json({ message: "targetClassId is required" });
+      }
+      const result = await confirmReschedule({
+        userId: req.user.id,
+        subscriptionId: req.params.subscriptionId,
+        targetClassId: body.data.targetClassId,
+        sourceBookingId: body.data.sourceBookingId,
+      });
+      if (!result.ok) {
+        const status = result.code === "SLOT_FULL" || result.code === "TARGET_UNAVAILABLE" ? 409 : 400;
+        return res.status(status).json({ code: result.code, message: result.message });
+      }
+      res.status(201).json(result);
+    },
+  );
+
   // ============================================================
   // HEALTH DOCUMENTS — upload + download
   // ============================================================
@@ -4949,6 +5035,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .catch((err) => console.error("[cron] sessionLedgerSweep failed:", err));
   }, 15 * 60 * 1000);
   sessionLedgerInterval.unref?.();
+
+  const refundSweepInterval = setInterval(() => {
+    void runRefundSweep()
+      .then((r) => {
+        if (r.guestInitiated || r.memberLapsed || r.manualRequired || r.errors) {
+          console.log(
+            `[cron] refundSweep guest=${r.guestInitiated} lapsed=${r.memberLapsed} manual=${r.manualRequired} errors=${r.errors}`,
+          );
+        }
+      })
+      .catch((err) => console.error("[cron] refundSweep failed:", err));
+  }, 15 * 60 * 1000);
+  refundSweepInterval.unref?.();
 
   const erasureInterval = setInterval(() => {
     void storage.processDueAccountErasures().catch((err) =>

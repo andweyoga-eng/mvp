@@ -177,7 +177,7 @@ describe("flexi-mode helpers", () => {
   it("keeps compact terms with expandable extras", () => {
     const items = resolveSessionTermsItems(null, defaultFlexiTermsItems().slice(1));
     assert.ok(items.length >= 3);
-    assert.equal(items[0]?.summary.includes("non-refundable"), true);
+    assert.equal(items[0]?.summary.includes("Cancellation and Refund Policy"), true);
     assert.equal(items.some((item) => item.key === "flexi_final_checkout"), true);
     assert.equal(items.some((item) => item.key === "non_transferable"), true);
     assert.ok(flexiTooltipCopy().includes("Pick your weekly slots from any eligible schedule"));

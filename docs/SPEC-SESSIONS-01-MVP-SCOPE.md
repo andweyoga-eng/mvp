@@ -123,6 +123,7 @@ CA (or finance) posts journals in Tally/Zoho/etc. App does **not** own a full GL
 | FR-15 one-transaction composition | Done (`reserveFlexiCompositionAtomic`) |
 | Drop `flexi_selection_count` | Done (patch 040; Program.sessionsPerWeek owns N) |
 | Part B export helpers for CA | Done (`shared/accounting-export` + `/api/admin/accounting/subscriptions-export`) |
-| Part C + clickwrap | Todo next |
+| Part C + clickwrap | Done (cancel→unscheduled, refund sweep, clickwrap v2.0) |
+| Member reschedule UI (FR-50/51) | Done (targets API + dialog on Cancelled tab) |
 
 *Program managers: treat §2 “Deferred” as the backlog for post-MVP accounting and GST work. Do not reopen credit-wallet scope without a new policy amendment.*

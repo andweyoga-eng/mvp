@@ -1332,10 +1332,10 @@ export default function MyAccount() {
             >
               <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.02] px-6 py-10 text-center">
                 <Coins className="h-10 w-10 text-primary/35" />
-                <p className="font-display text-lg font-semibold text-primary">Credits coming soon</p>
+                <p className="font-display text-lg font-semibold text-primary">Credits retired</p>
                 <p className="max-w-md text-sm text-muted-foreground">
-                  When sessions are converted into credits, for example after an instructor no-show,
-                  you&apos;ll be able to view your balance and apply them to any booking here.
+                  Platform cancellations create a reschedulable entitlement, then a proportionate
+                  refund to source if unused by the deadline. There is no credit wallet.
                 </p>
               </div>
             </AccountFoldSection>

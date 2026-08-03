@@ -30,6 +30,7 @@ import {
 import { WeekScheduleGrid, startOfWeek } from "@/components/admin/week-schedule-grid";
 import { PUBLIC_SESSION_CATALOG_QUERY_KEYS } from "@/lib/public-session-catalog";
 import { DeleteSessionDialog } from "@/components/admin/delete-session-dialog";
+import { CancelSessionDialog } from "@/components/admin/cancel-session-dialog";
 import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
@@ -459,6 +460,40 @@ export default function AdminDashboard() {
     setDeleteDialogOpen(true);
   }
 
+  function openCancelSession(session: {
+    id: string;
+    date: string;
+    currentBookings?: number;
+    classType?: { name: string };
+  }) {
+    const bookingCount = session.currentBookings ?? 0;
+    const label = `${session.classType?.name ?? "Session"} · ${new Date(session.date).toLocaleString("en-IN")}`;
+    setSessionToCancel({ id: session.id, label, bookingCount });
+    setCancelDialogOpen(true);
+  }
+
+  async function handleCancelSession(payload: { reason: string; ownerOtp: string }) {
+    if (!sessionToCancel) return;
+    const res = await fetch(`/api/admin/classes/${sessionToCancel.id}/cancel`, {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast({
+        title: "Could not cancel session",
+        description: body.message || "Cancel failed",
+        variant: "destructive",
+      });
+      throw new Error(body.message || "Cancel failed");
+    }
+    toast({ title: "Session cancelled", description: body.message });
+    setSessionToCancel(null);
+    await refreshSessionViews();
+  }
+
   async function refreshSessionViews() {
     await Promise.all([refetchSess(), refetchWeekSessions()]);
     for (const key of PUBLIC_SESSION_CATALOG_QUERY_KEYS) {
@@ -544,6 +579,12 @@ export default function AdminDashboard() {
   const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<{
+    id: string;
+    label: string;
+    bookingCount: number;
+  } | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [sessionToCancel, setSessionToCancel] = useState<{
     id: string;
     label: string;
     bookingCount: number;
@@ -1025,6 +1066,7 @@ export default function AdminDashboard() {
                             onPauseSession={(s) => void handlePauseSession(s.id)}
                             onResumeSession={(s) => void handleResumeSession(s.id)}
                             onDeleteSession={openDeleteSession}
+                            onCancelSession={openCancelSession}
                             isSuperAdmin={isSuperAdmin}
                           />
                         </div>
@@ -1389,6 +1431,13 @@ export default function AdminDashboard() {
         sessionLabel={sessionToDelete?.label ?? "Session"}
         bookingCount={sessionToDelete?.bookingCount ?? 0}
         onConfirm={handleDeleteSessionWithNotify}
+      />
+      <CancelSessionDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        sessionLabel={sessionToCancel?.label ?? "Session"}
+        bookingCount={sessionToCancel?.bookingCount ?? 0}
+        onConfirm={handleCancelSession}
       />
 
       {healthViewUser ? (

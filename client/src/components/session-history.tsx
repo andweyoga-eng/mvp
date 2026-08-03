@@ -23,9 +23,11 @@ import {
   sessionAwaitingPaymentUpdate,
   type MemberSession,
 } from "@/lib/member-sessions";
+import { RescheduleSessionDialog } from "@/components/reschedule-session-dialog";
 import {
   fetchMemberSubscriptions,
   memberSubscriptionsQueryKey,
+  type MemberSubscriptionSummary,
 } from "@/lib/member-subscriptions";
 import { summarizeMemberSessionStatuses } from "@shared/member-session-counts";
 import { PackageUsageCollapsible } from "@/components/session-count-summary";
@@ -121,6 +123,11 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [openFlexiGroups, setOpenFlexiGroups] = useState<Record<string, boolean>>({});
+  const [rescheduleFor, setRescheduleFor] = useState<{
+    subscriptionId: string;
+    sourceBookingId: string;
+    classTypeName: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState(
     initialSubTab === "completed" || initialSubTab === "cancelled"
       ? initialSubTab
@@ -142,6 +149,23 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     },
     retry: 1,
   });
+
+  const { data: subscriptions = [] } = useQuery({
+    queryKey: memberSubscriptionsQueryKey(userId),
+    queryFn: fetchMemberSubscriptions,
+  });
+
+  function findRescheduleSubscription(session: SessionData): MemberSubscriptionSummary | null {
+    const byType = subscriptions.filter(
+      (s) =>
+        s.status === "active" &&
+        (s.sessionsUnscheduled ?? 0) > 0 &&
+        (session.classTypeId
+          ? s.classTypeId === session.classTypeId
+          : s.classTypeName === session.className),
+    );
+    return byType[0] ?? null;
+  }
 
   useEffect(() => {
     if (
@@ -172,12 +196,6 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     () => summarizeMemberSessionStatuses(sessions),
     [sessions],
   );
-
-  const { data: subscriptions = [] } = useQuery({
-    queryKey: memberSubscriptionsQueryKey(userId),
-    queryFn: fetchMemberSubscriptions,
-    retry: 1,
-  });
 
   const tabBtn = (tab: string, label: string, count: number) => (
     <button
@@ -212,11 +230,21 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
     }
   };
 
-  const handleRebookSession = (sessionId: string) => {
-    console.log(`Rebooking session ${sessionId}`);
-    toast({
-      title: "Rebooking",
-      description: "Redirecting to booking page...",
+  const handleRebookSession = (session: SessionData) => {
+    const sub = findRescheduleSubscription(session);
+    if (!sub) {
+      toast({
+        title: "Reschedule unavailable",
+        description:
+          "No open reschedulable entitlement for this session type. If the window closed, a refund will follow.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setRescheduleFor({
+      subscriptionId: sub.id,
+      sourceBookingId: session.bookingId,
+      classTypeName: session.className,
     });
   };
 
@@ -400,12 +428,12 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleRebookSession(session.id)}
+              onClick={() => handleRebookSession(session)}
               className="border-primary/20 text-primary hover:bg-primary/5"
               data-testid={`rebook-session-${session.id}`}
             >
               <RefreshCw className="mr-1 h-4 w-4" />
-              Rebook
+              Reschedule
             </Button>
           )}
 
@@ -620,6 +648,28 @@ export function SessionHistory({ userId, initialSubTab }: SessionHistoryProps) {
             ? lists[activeTab].map(renderSessionCard)
             : emptyState(activeTab)}
       </div>
+
+      {rescheduleFor ? (
+        <RescheduleSessionDialog
+          open={!!rescheduleFor}
+          onOpenChange={(open) => {
+            if (!open) setRescheduleFor(null);
+          }}
+          subscriptionId={rescheduleFor.subscriptionId}
+          sourceBookingId={rescheduleFor.sourceBookingId}
+          classTypeName={rescheduleFor.classTypeName}
+          onCompleted={() => {
+            toast({
+              title: "Session rescheduled",
+              description: "Your new seat is confirmed. The cancelled session stays in history.",
+            });
+            void refetch();
+            queryClient.invalidateQueries({ queryKey: memberSubscriptionsQueryKey(userId) });
+            queryClient.invalidateQueries({ queryKey: memberSessionsQueryKey(userId) });
+            setRescheduleFor(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

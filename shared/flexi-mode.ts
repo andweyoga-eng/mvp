@@ -114,15 +114,15 @@ export function defaultFlexiTermsItems(): FlexiTermItem[] {
   return [
     {
       key: "non_refundable",
-      summary: "Bookings are non-refundable.",
+      summary: "Fees follow the Cancellation and Refund Policy.",
       details:
-        "If there is a no-show by the instructor, an alternative session may be arranged to compensate for the session, or the session may be converted into credits as per the existing policy.",
+        "If a session is cancelled by the instructor or platform, registered members receive a reschedulable entitlement under the Cancellation, Refund and Rescheduling Policy. Guests receive a full refund to source. Member no-shows and voluntary cancellations are forfeited. There is no credit wallet.",
     },
     {
       key: "flexi_final_checkout",
       summary: "You must finalize your Flexi selection at checkout.",
       details:
-        "For eligible Flexi Mode schedules, you must choose your applicable practice days and times during checkout. After booking confirmation, you cannot change these selections yourself. In exceptional circumstances, the studio may review a change request at its discretion. If approved, only one change may be made for the booking or subscription, and all existing pricing, cancellation, communication, discount, offer, promotion, and credit policies will continue to apply.",
+        "For eligible Flexi Mode schedules, you must choose your applicable practice days and times during checkout. After booking confirmation, you cannot change these selections yourself. In exceptional circumstances, the studio may review a change request at its discretion. If approved, only one change may be made for the booking or subscription, and all existing pricing, cancellation, communication, discount, offer, and promotion policies will continue to apply.",
     },
     {
       key: "non_transferable",

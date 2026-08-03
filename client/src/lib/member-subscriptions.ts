@@ -7,16 +7,19 @@ import {
 
 export interface MemberSubscriptionSummary {
   id: string;
+  classTypeId?: string;
   classTypeName: string;
   subscriptionType: string;
   flexiBookingId: string | null;
   programId?: string | null;
+  instructorId?: string | null;
   sessionsPurchased?: number | null;
   totalPaidPaise?: number | null;
   sessionsConsumed?: number;
   sessionsScheduled?: number;
   sessionsUnscheduled?: number;
   sessionsCredited?: number;
+  horizonStartAt?: string | null;
   horizonEndAt?: string | null;
   totalSessions: number;
   utilizedSessions: number;

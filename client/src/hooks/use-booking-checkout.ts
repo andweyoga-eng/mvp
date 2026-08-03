@@ -251,11 +251,16 @@ export function useBookingCheckout({
     { classId: string; programId?: string; flexiSelections?: FlexiSelection[] }
   >({
     mutationFn: async (payload) => {
+      const { CANCELLATION_POLICY_VERSION } = await import("@shared/cancellation-policy");
       const response = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          acceptCancellationPolicy: true,
+          cancellationPolicyVersion: CANCELLATION_POLICY_VERSION,
+        }),
       });
       const result = await readResponseJson<Record<string, unknown>>(response);
 
