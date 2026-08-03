@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { formatClassTypeOptionLabel } from "@shared/class-type-name";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -431,7 +432,7 @@ export function OffersPromotionsPanel() {
                     <option value="">Any session type</option>
                     {classTypes.map((ct) => (
                       <option key={ct.id} value={ct.id}>
-                        {ct.name}
+                        {formatClassTypeOptionLabel(ct)}
                       </option>
                     ))}
                   </select>

@@ -184,13 +184,13 @@ export const CONSENT_COPY = {
       "I'd like to receive class updates, wellness tips, and occasional offers by email. (Optional, change anytime in Preferences.)",
     guestAccountRequiredTitle: "A free account is needed for this session",
     guestAccountRequiredBody:
-      "Some sessions require a health note so instructors can adapt your practice safely. Please create a quick free account to continue. It takes under two minutes.",
+      "Some sessions require Health History so instructors can adapt your practice safely. Please create a quick free account to continue. It takes under two minutes.",
     guestAccountRequiredCta: "Create a free account",
     guestAccountRequiredSecondary: "Choose a different session",
     guestConsentHeading: "Consent before booking",
     healthBannerTitle: "Health data consent",
     healthBannerBody:
-      "Withdraw separately without closing your account. Stored health notes and documents will be deleted.",
+      "Withdraw separately without closing your account. Stored Health History and documents will be deleted.",
     withdrawHealthConsent: "Withdraw health data consent",
     withdrawingHealth: "Withdrawing…",
   },
@@ -234,13 +234,13 @@ export const CONSENT_COPY = {
       "ತರಗತಿ ನವೀಕರಣಗಳು, ಕ್ಷೇಮ ಸಲಹೆಗಳು ಮತ್ತು ಅವಕಾಶದ ಕೊಡುಗೆಗಳನ್ನು ಇಮೇಲ್ ಮೂಲಕ ಪಡೆಯಲು ನಾನು ಬಯಸುತ್ತೇನೆ. (ಐಚ್ಛಿಕ, ಆದ್ಯತೆಗಳಲ್ಲಿ ಯಾವುದೇ ಸಮಯದಲ್ಲಿ ಬದಲಾಯಿಸಬಹುದು.)",
     guestAccountRequiredTitle: "ಈ ಸೆಷನ್‌ಗೆ ಉಚಿತ ಖಾತೆ ಅಗತ್ಯ",
     guestAccountRequiredBody:
-      "ಕೆಲವು ಸೆಷನ್‌ಗಳಿಗೆ ಶಿಕ್ಷಕರು ನಿಮ್ಮ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ಆರೋಗ್ಯ ಟಿಪ್ಪಣಿ ಅಗತ್ಯವಿರುತ್ತದೆ. ಮುಂದುವರಿಯಲು ದಯವಿಟ್ಟು ಉಚಿತ ಖಾತೆ ರಚಿಸಿ.",
+      "ಕೆಲವು ಸೆಷನ್‌ಗಳಿಗೆ ಶಿಕ್ಷಕರು ನಿಮ್ಮ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ಆರೋಗ್ಯ ಇತಿಹಾಸ ಅಗತ್ಯವಿರುತ್ತದೆ. ಮುಂದುವರಿಯಲು ದಯವಿಟ್ಟು ಉಚಿತ ಖಾತೆ ರಚಿಸಿ.",
     guestAccountRequiredCta: "ಉಚಿತ ಖಾತೆಯನ್ನು ರಚಿಸಿ",
     guestAccountRequiredSecondary: "ಬೇರೆ ಸೆಷನ್ ಆಯ್ಕೆಮಾಡಿ",
     guestConsentHeading: "ಬುಕ್ಕಿಂಗ್ ಮೊದಲು ಸಮ್ಮತಿ",
     healthBannerTitle: "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿ",
     healthBannerBody:
-      "ಖಾತೆಯನ್ನು ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ಸಂಗ್ರಹಿಸಿದ ಆರೋಗ್ಯ ಟಿಪ್ಪಣಿಗಳು ಮತ್ತು ದಾಖಲೆಗಳನ್ನು ಅಳಿಸಲಾಗುತ್ತದೆ.",
+      "ಖಾತೆಯನ್ನು ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ಸಂಗ್ರಹಿಸಿದ ಆರೋಗ್ಯ ಇತಿಹಾಸ ಮತ್ತು ದಾಖಲೆಗಳನ್ನು ಅಳಿಸಲಾಗುತ್ತದೆ.",
     withdrawHealthConsent: "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಿ",
     withdrawingHealth: "ಹಿಂತೆಗೆದುಕೊಳ್ಳಲಾಗುತ್ತಿದೆ…",
   },

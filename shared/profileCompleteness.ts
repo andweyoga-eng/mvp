@@ -131,7 +131,7 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
 
   if (!isHealthDisclosureComplete(u.healthUpdateText)) {
     reasons.push(
-      'Health disclosure required. Select an option on the Health Update tab.',
+      'Health History required. Add your latest update on the Health History tab.',
     );
   }
 

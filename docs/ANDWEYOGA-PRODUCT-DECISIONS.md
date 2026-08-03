@@ -31,7 +31,8 @@
 9. [Admin and Operations](#8-admin-and-operations)
 10. [On Hold or Not Built](#9-explicitly-on-hold-or-not-built)
 11. [AI/Engineering Decisions](#10-decisions-made-by-aiengineering-without-explicit-product-request)
-12. [Open Questions](#11-open-questions-for-product-owner)
+12. [SPEC-SESSIONS-01 MVP (Aug 2026)](#12-spec-sessions-01-mvp-aug-2026)
+13. [Open Questions](#11-open-questions-for-product-owner)
 
 ---
 
@@ -654,6 +655,21 @@ Approved by testing and shipping.
 | Session join event logging on Meet click | Attendance shadow data | Future analytics |
 | Email verification token 24h expiry | Security | Forces timely verify |
 | bcrypt 12 rounds for passwords | Industry standard | Secure credential storage |
+
+---
+
+## 12. SPEC-SESSIONS-01 MVP (Aug 2026)
+
+Full tracker: [`docs/SPEC-SESSIONS-01-MVP-SCOPE.md`](./SPEC-SESSIONS-01-MVP-SCOPE.md) (also mirrored under `session managemet /` for PM).
+
+| | |
+|---|---|
+| **Feature** | Programs, ledger, refunds (SPEC-SESSIONS-01 v2.0) |
+| **Type** | New / Enhancement |
+| **Decided by** | You (3 Aug 2026) |
+| **Decision** | See MVP scope note. Highlights: composition/reschedule = any instructor same class type; **A1.1 now**; revenue **Option B (CA export)** for MVP; keep `credited` for refund/lapse only; Cancellation Policy v2.0 **effective 3 Aug 2026** + checkout clickwrap; purge by QA **prefix** not live names; FR-15 one transaction; **FR-20** Sessions by Program must |
+| **Deferred** | In-app GL (Option A), GST credit-note split, voluntary member reschedule, drop `class_types.price` column |
+| **Shapes product** | No credit wallet. Money recognition follows CA math via export until GL-A is scheduled |
 
 ---
 

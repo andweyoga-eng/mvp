@@ -12,7 +12,7 @@ import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
   Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
-  GalleryHorizontalEnd
+  GalleryHorizontalEnd, Package
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { waitlistMarketingLabel } from "@shared/waitlist";
@@ -33,6 +33,7 @@ import { DeleteSessionDialog } from "@/components/admin/delete-session-dialog";
 import { SessionHistoryList } from "@/components/admin/session-history-list";
 import { getSessionEndMs } from "@shared/schedule-display";
 import { SessionTypesPanel } from "@/components/admin/session-types-panel";
+import { ProgramsPanel } from "@/components/admin/programs-panel";
 import { CarouselPromotionsPanel } from "@/components/admin/carousel-promotions-panel";
 import { OffersPromotionsPanel } from "@/components/admin/offers-promotions-panel";
 import { FlexiRematchPanel } from "@/components/admin/flexi-rematch-panel";
@@ -961,7 +962,7 @@ export default function AdminDashboard() {
                   <Calendar className="w-5 h-5 text-[#bb5309]" /> Sessions
                 </CardTitle>
                 <CardDescription>
-                  Schedule upcoming sessions, review history, and manage session types
+                  Schedule sessions, manage session types and Programs (sellable SKUs)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -982,6 +983,9 @@ export default function AdminDashboard() {
                     </TabsTrigger>
                     <TabsTrigger value="session-types" className={adminSectionTabTrigger}>
                       <Layers className="w-4 h-4 mr-2" /> Session Type
+                    </TabsTrigger>
+                    <TabsTrigger value="programs" className={adminSectionTabTrigger}>
+                      <Package className="w-4 h-4 mr-2" /> Programs
                     </TabsTrigger>
                     <TabsTrigger value="carousel" className={adminSectionTabTrigger}>
                       <GalleryHorizontalEnd className="w-4 h-4 mr-2" /> Carousel
@@ -1108,6 +1112,10 @@ export default function AdminDashboard() {
                         onPageSizeChange={setClassTypesPageSize}
                       />
                     ) : null}
+                  </TabsContent>
+
+                  <TabsContent value="programs">
+                    <ProgramsPanel classTypes={allClassTypes} />
                   </TabsContent>
 
                   <TabsContent value="carousel">

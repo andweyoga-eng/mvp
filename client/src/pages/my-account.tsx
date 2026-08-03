@@ -106,7 +106,7 @@ const scrollToSchedule = () => {
 
 const NAV: { id: AccountAnchor; label: string; icon: typeof User; soon?: boolean }[] = [
   { id: "profile", label: "Contact Info", icon: User },
-  { id: "health", label: "Health note", icon: Heart },
+  { id: "health", label: "Health History", icon: Heart },
   { id: "sessions", label: "Sessions", icon: CalendarClock },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "credits", label: "Credits", icon: Coins, soon: true },
@@ -130,7 +130,7 @@ function scrollToAccountSection(id: AccountAnchor) {
 
 function healthSectionSummary(text: string, lastModified: string | null | undefined): string {
   if (!isHealthDisclosureComplete(text)) {
-    return "Add your health note to book sessions";
+    return "Add your Health History to book sessions";
   }
   const preview = text.length > 72 ? `${text.slice(0, 72)}…` : text;
   if (lastModified) {
@@ -632,8 +632,8 @@ export default function MyAccount() {
     if (!user?.id) return;
     if (!isHealthDisclosureComplete(payload.text)) {
       toast({
-        title: "Health update required",
-        description: `Add your health note or tap "${HEALTH_NO_CONCERNS_TEXT}".`,
+        title: "Health History required",
+        description: `Add your latest update or tap "${HEALTH_NO_CONCERNS_TEXT}".`,
         variant: "destructive",
       });
       return;
@@ -650,7 +650,7 @@ export default function MyAccount() {
       setPendingHealthSave(payload);
       toast({
         title: "Almost there",
-        description: "Review privacy & consent to save your health note and finish setup.",
+        description: "Review privacy & consent to save your Health History and finish setup.",
       });
       advanceToPrivacyStep();
       return;
@@ -669,7 +669,7 @@ export default function MyAccount() {
         return;
       }
       await refreshUser();
-      toast({ title: "Health note saved" });
+      toast({ title: "Health History saved" });
     } catch (err) {
       toast({
         title: "Error",
@@ -684,7 +684,7 @@ export default function MyAccount() {
   const handlePrivacyOnboardingComplete = async () => {
     setIsLoading(true);
     try {
-      // 1) Save the deferred health note (if any) so health + consent land together.
+      // 1) Save the deferred Health History (if any) so health + consent land together.
       if (pendingHealthSave) {
         await persistHealthUpdate(pendingHealthSave);
         setPendingHealthSave(null);
@@ -767,7 +767,7 @@ export default function MyAccount() {
     },
     {
       ok: isHealthDisclosureComplete(profileData.healthUpdateText),
-      hint: "add a health note",
+      hint: "add your Health History",
     },
     {
       ok: !consentRequirement?.requiresConsent,
@@ -1227,7 +1227,7 @@ export default function MyAccount() {
             <AccountFoldSection
               id="health"
               icon={Heart}
-              title="Health note"
+              title="Health History"
               subtitle="So we keep your practice safe"
               required
               forceOpen={needsHealthOnboarding}
@@ -1243,7 +1243,7 @@ export default function MyAccount() {
                 lastModified={user.healthUpdateLastModified ?? null}
                 history={healthHistory}
                 startInEditMode={needsHealthOnboarding}
-                continueLabel={isSetupInProgress ? "Save & continue" : "Save note"}
+                continueLabel={isSetupInProgress ? "Save & continue" : "Save update"}
                 onSave={async (payload) => {
                   await handleHealthSave(payload);
                 }}

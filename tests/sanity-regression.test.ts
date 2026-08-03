@@ -136,7 +136,6 @@ describe("sanity: admin validation", async () => {
     const missing = adminCreateClassTypeSchema.safeParse({
       name: "Vinyasa Flow",
       description: "A dynamic flowing practice for all levels.",
-      price: "500",
       duration: 60,
       imageUrl: "",
       intensity: "Moderate",
@@ -146,12 +145,12 @@ describe("sanity: admin validation", async () => {
     const ok = adminCreateClassTypeSchema.safeParse({
       name: "Vinyasa Flow",
       description: "A dynamic flowing practice for all levels.",
-      price: "500",
       duration: 60,
       imageUrl: "https://cdn.example.com/vinyasa.jpg",
       intensity: "Moderate",
     });
     assert.equal(ok.success, true);
+    assert.ok(ok.data && !("price" in ok.data), "session-type schema must not validate price");
   });
 
   it("accepts session create with required meet link and razorpay payment", () => {

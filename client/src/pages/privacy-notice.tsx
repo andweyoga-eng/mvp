@@ -65,7 +65,7 @@ export default function PrivacyNoticePage() {
               <strong>{lang === "kn" ? "ಆರೋಗ್ಯ ಮಾಹಿತಿ" : "Health Data"}</strong>
               {lang === "kn"
                 ? ": ನೀವು ನೀಡುವ ಆರೋಗ್ಯ ವಿವರಗಳು ಮತ್ತು ಅಪ್‌ಲೋಡ್ ಮಾಡುವ ದಾಖಲೆಗಳು. ಅಗತ್ಯವಿರುವ ಸೆಷನ್ ಬುಕ್ ಮಾಡಿದಾಗ ಮಾತ್ರ ಮತ್ತು ಪ್ರತ್ಯೇಕ, ಸ್ಪಷ್ಟ ಸಮ್ಮತಿಯೊಂದಿಗೆ ಮಾತ್ರ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ."
-                : ": health update text and documents you upload. Collected only when you book a session that requires it, and only with your separate, specific consent at the point of collection."}
+                : ": Health History text and documents you upload. Collected only when you book a session that requires it, and only with your separate, specific consent at the point of collection."}
             </SensitiveDataCallout>
           </li>
           <li>

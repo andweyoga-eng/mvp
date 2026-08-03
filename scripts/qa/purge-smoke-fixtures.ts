@@ -22,6 +22,7 @@ import {
   sessionMoodCheckins,
   subscriptions,
   userSessionMappings,
+  programs,
 } from "../../shared/schema.ts";
 
 async function deleteClassesAndDependents(classIds: string[]) {
@@ -34,10 +35,25 @@ async function deleteClassesAndDependents(classIds: string[]) {
   const bookingIds = seedBookings.map((r) => r.id);
 
   if (bookingIds.length) {
-    await db.delete(consentAuditLogs).where(inArray(consentAuditLogs.bookingId, bookingIds));
-    await db.delete(payments).where(inArray(payments.bookingId, bookingIds));
+    await db
+      .update(payments)
+      .set({
+        bookingId: null,
+        classId: null,
+        updatedAt: new Date(),
+      })
+      .where(inArray(payments.bookingId, bookingIds));
+    await db
+      .update(consentAuditLogs)
+      .set({ bookingId: null })
+      .where(inArray(consentAuditLogs.bookingId, bookingIds));
     await db.delete(bookings).where(inArray(bookings.id, bookingIds));
   }
+
+  await db
+    .update(payments)
+    .set({ classId: null, updatedAt: new Date() })
+    .where(inArray(payments.classId, classIds));
 
   await db.delete(carouselPromotions).where(inArray(carouselPromotions.classId, classIds));
   await db.delete(sessionMoodCheckins).where(inArray(sessionMoodCheckins.classId, classIds));
@@ -81,6 +97,11 @@ export async function purgeSmokeFixtures(): Promise<void> {
   }
 
   if (fixtureTypeIds.length) {
+    await db
+      .update(subscriptions)
+      .set({ programId: null, updatedAt: new Date() })
+      .where(inArray(subscriptions.classTypeId, fixtureTypeIds));
+    await db.delete(programs).where(inArray(programs.classTypeId, fixtureTypeIds));
     await db.delete(subscriptions).where(inArray(subscriptions.classTypeId, fixtureTypeIds));
     await db
       .delete(classTypeNotifyRequests)

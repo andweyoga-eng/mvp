@@ -41,7 +41,6 @@ export interface ClassType {
 type ClassTypeForm = {
   name: string;
   description: string;
-  price: string;
   duration: string;
   imageUrl: string;
   intensity: string;
@@ -52,7 +51,6 @@ type ClassTypeForm = {
 const EMPTY_CLASS_TYPE_FORM: ClassTypeForm = {
   name: "",
   description: "",
-  price: "",
   duration: "60",
   imageUrl: "",
   intensity: DEFAULT_CLASS_INTENSITY,
@@ -64,13 +62,33 @@ function classTypeToForm(ct: ClassType): ClassTypeForm {
   return {
     name: ct.name,
     description: ct.description,
-    price: String(ct.price),
     duration: String(ct.duration),
     imageUrl: ct.imageUrl ?? "",
     intensity: ct.intensity ?? DEFAULT_CLASS_INTENSITY,
     strictNoTo: ct.strictNoTo ?? "",
     termsAndConditions: ct.termsAndConditions?.trim() || DEFAULT_SESSION_TERMS_AND_CONDITIONS,
   };
+}
+
+/** Price was removed from session-type admin UI — never surface legacy price field errors. */
+function withoutPriceFieldErrors(errors: Record<string, string>): Record<string, string> {
+  const { price: _ignored, ...rest } = errors;
+  return rest;
+}
+
+function classTypeErrorToastDescription(
+  message: string,
+  fieldErrors?: Record<string, string>,
+): string {
+  const cleaned = fieldErrors ? withoutPriceFieldErrors(fieldErrors) : {};
+  const onlyLegacyPrice =
+    fieldErrors?.price &&
+    Object.keys(cleaned).length === 0 &&
+    /price/i.test(message);
+  if (onlyLegacyPrice) {
+    return "Pricing is set on Programs. Restart the server if this keeps happening.";
+  }
+  return message.replace(/\bprice:\s*[^\n]+/gi, "").trim() || message;
 }
 
 function ClassTypeFormFields({
@@ -110,34 +128,21 @@ function ClassTypeFormFields({
         />
         {errors.description && <p className="text-xs text-red-500 mt-1">{errors.description}</p>}
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label>
-            Price (INR) <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.price}
-            onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
-            className={errors.price ? "border-red-500" : ""}
-          />
-          {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}
-        </div>
-        <div>
-          <Label>
-            Duration (minutes) <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            type="number"
-            min="1"
-            value={form.duration}
-            onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
-            className={errors.duration ? "border-red-500" : ""}
-          />
-          {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
-        </div>
+      <div>
+        <Label>
+          Duration (minutes) <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          type="number"
+          min="1"
+          value={form.duration}
+          onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
+          className={errors.duration ? "border-red-500" : ""}
+        />
+        {errors.duration && <p className="text-xs text-red-500 mt-1">{errors.duration}</p>}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Pricing is set on Programs, not on session types.
+        </p>
       </div>
       <StrictNoToAdminField
         value={form.strictNoTo}
@@ -463,15 +468,19 @@ function CreateClassTypeButton({ onCreated }: { onCreated: () => void }) {
       onCreated();
     },
     onError: (e: Error & { fieldErrors?: Record<string, string> }) => {
-      if (e.fieldErrors) setErrors(e.fieldErrors);
-      toast({ title: "Could not create", description: e.message, variant: "destructive" });
+      if (e.fieldErrors) setErrors(withoutPriceFieldErrors(e.fieldErrors));
+      toast({
+        title: "Could not create",
+        description: classTypeErrorToastDescription(e.message, e.fieldErrors),
+        variant: "destructive",
+      });
     },
   });
 
   function submit() {
     const v = validateClassTypeForm(form);
     if (!v.ok) {
-      setErrors(v.errors);
+      setErrors(withoutPriceFieldErrors(v.errors));
       return;
     }
     setErrors({});
@@ -524,7 +533,7 @@ function EditClassTypeDialog({
   const { toast } = useToast();
 
   const mutation = useMutation({
-    mutationFn: async (payload: ReturnType<typeof validateClassTypeForm>["data"]) => {
+    mutationFn: async (payload: NonNullable<ReturnType<typeof validateClassTypeForm>["data"]>) => {
       const res = await fetch(`/api/class-types/${classType.id}`, {
         method: "PATCH",
         headers: adminHeaders(),
@@ -542,15 +551,19 @@ function EditClassTypeDialog({
       onUpdated();
     },
     onError: (e: Error & { fieldErrors?: Record<string, string> }) => {
-      if (e.fieldErrors) setErrors(e.fieldErrors);
-      toast({ title: "Update failed", description: e.message, variant: "destructive" });
+      if (e.fieldErrors) setErrors(withoutPriceFieldErrors(e.fieldErrors));
+      toast({
+        title: "Update failed",
+        description: classTypeErrorToastDescription(e.message, e.fieldErrors),
+        variant: "destructive",
+      });
     },
   });
 
   function submit() {
     const v = validateClassTypeForm(form);
     if (!v.ok) {
-      setErrors(v.errors);
+      setErrors(withoutPriceFieldErrors(v.errors));
       return;
     }
     setErrors({});
@@ -807,11 +820,9 @@ export function SessionTypesPanel({
                 )}
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-900">{ct.name}</h3>
+                  <p className="text-xs text-gray-400">#{ct.id.slice(0, 8)}</p>
                   <p className="text-sm text-gray-500 mt-1 line-clamp-2">{ct.description}</p>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline" className="text-[#3d1b80] border-[#3d1b80]">
-                      Rs.{ct.price}
-                    </Badge>
                     <Badge variant="outline" className="text-gray-600">
                       {ct.duration} min
                     </Badge>

@@ -4,6 +4,8 @@ import { CLASS_INTENSITIES, DEFAULT_CLASS_INTENSITY } from "./schema";
 import { MAX_WEEKLY_OCCURRENCES } from "./session-schedule";
 import { SESSION_TERMS_MAX_LENGTH } from "./session-terms";
 import { parseIstDatetimeLocal } from "./ist-datetime";
+import { normalizeClassTypeName } from "./class-type-name";
+import { PROGRAM_KINDS, PROGRAM_STATUSES, validateProgramShape } from "./programs";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -130,26 +132,21 @@ const qrEmailField = z
   .min(1, "Contact email is required")
   .email("Enter a valid email address");
 
-const priceField = z
-  .union([z.string(), z.number()])
-  .transform((v) => (typeof v === "number" ? v.toFixed(2) : v.trim()))
-  .pipe(
-    z
-      .string()
-      .min(1, "Price is required")
-      .refine((s) => !Number.isNaN(parseFloat(s)) && parseFloat(s) > 0, {
-        message: "Enter a valid price greater than 0",
-      }),
-  );
+/** Legacy class_types.price is notNull — Programs own real pricing; write this placeholder only. */
+export const LEGACY_CLASS_TYPE_PRICE_PLACEHOLDER = "0.00";
 
 export const adminCreateClassTypeSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(120, "Name is too long"),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required")
+    .max(120, "Name is too long")
+    .transform((v) => normalizeClassTypeName(v)),
   description: z
     .string()
     .trim()
     .min(10, "Description must be at least 10 characters")
     .max(5000, "Description is too long"),
-  price: priceField,
   duration: z.coerce
     .number({ invalid_type_error: "Duration must be a number" })
     .int("Duration must be a whole number of minutes")
@@ -538,9 +535,43 @@ export const adminCreateClassSessionSchema = z
 /** Full session update (admin) — same fields as create; date may change if no bookings. */
 export const adminUpdateClassSessionSchema = adminCreateClassSessionSchema;
 
+/** Admin Program create — price in whole rupees; stored as paise server-side. */
+export const adminCreateProgramSchema = z
+  .object({
+    classTypeId: z.string().min(1, "Class type is required"),
+    kind: z.enum(PROGRAM_KINDS),
+    sessionsPerWeek: z.coerce
+      .number({ invalid_type_error: "Sessions per week must be a number" })
+      .int("Sessions per week must be a whole number")
+      .min(1)
+      .max(14),
+    durationWeeks: z.coerce
+      .number({ invalid_type_error: "Duration weeks must be a number" })
+      .int("Duration weeks must be a whole number")
+      .min(1)
+      .max(52),
+    /** Whole-program price in INR (rupees). Converted to paise on write. */
+    priceRupees: z.coerce
+      .number({ invalid_type_error: "Price must be a number" })
+      .min(0, "Price cannot be negative")
+      .max(1_000_000, "Price is too large"),
+    flexiAllowed: z.boolean().optional().default(false),
+    status: z.enum(PROGRAM_STATUSES).optional().default("active"),
+  })
+  .superRefine((data, ctx) => {
+    const shapeError = validateProgramShape(data);
+    if (shapeError) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: shapeError, path: ["kind"] });
+    }
+  });
+
+export const adminUpdateProgramSchema = adminCreateProgramSchema;
+
 export type AdminCreateClassTypeInput = z.input<typeof adminCreateClassTypeSchema>;
 export type AdminCreateInstructorInput = z.input<typeof adminCreateInstructorSchema>;
 export type AdminCreateClassSessionInput = z.input<typeof adminCreateClassSessionSchema>;
+export type AdminCreateProgramInput = z.input<typeof adminCreateProgramSchema>;
+export type AdminUpdateProgramInput = z.input<typeof adminUpdateProgramSchema>;
 
 export function zodErrorsToFieldMap(
   issues: z.ZodIssue[],

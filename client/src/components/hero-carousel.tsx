@@ -1,109 +1,61 @@
 import { useState, useEffect } from "react";
-import embraceImage from "@assets/embrace-carousel.png";
-import experienceImage from "@assets/experience_1756460037530.jpg";
-import expressImage from "@assets/express_1756460037530.jpg";
-import evolveImage from "@assets/evolve-carousel.png";
-import elevateImage from "@assets/elevate-carousel.png"; // To Elevate — image behind gradient
-import becomeImage from "@assets/become-carousel.png"; // To Become — full color, image behind gradient
-import { navigateToHomeSection } from "@/lib/home-navigation";
+// Carousel slides temporarily replaced by Treat a Retreat hero creative.
+// import embraceImage from "@assets/embrace-carousel.png";
+// import experienceImage from "@assets/experience_1756460037530.jpg";
+// import expressImage from "@assets/express_1756460037530.jpg";
+// import evolveImage from "@assets/evolve-carousel.png";
+// import elevateImage from "@assets/elevate-carousel.png";
+// import becomeImage from "@assets/become-carousel.png";
+import treatRetreatImage from "@assets/treat-retreat-hero.png";
 import { cn } from "@/lib/utils";
 
 /**
- * Each slide plays a 3-phrase word-trail. The first phrase is always
- * "and We Yoga", the second is the slide's word, and the third is its
- * closing line. Each phrase is split into lead text (display font) + an
- * accented word/phrase rendered in the italic accent font.
+ * Single hero creative with a timed word-trail.
+ * Each phrase is lead text (display font) + an accented word in the italic accent font.
  */
-const BRAND_PHRASE = { lead: "and We", accent: "Yoga" };
-
-const slides = [
-  {
-    image: embraceImage,
-    word: "Embrace",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Embrace" }, { lead: "Journey of Self", accent: "Discovery" }],
-  },
-  {
-    image: experienceImage,
-    word: "Experience",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Experience" }, { lead: "Our Body", accent: "inside out, Outside in." }],
-  },
-  {
-    image: expressImage,
-    word: "Express",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Express" }, { lead: "To Feel", accent: "Safe" }],
-  },
-  {
-    image: evolveImage,
-    word: "Evolve",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Evolve" }, { lead: "To Learn and", accent: "Grow" }],
-  },
-  {
-    image: elevateImage, // Slide: To Elevate — photo behind gradient overlay
-    word: "Elevate",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Elevate" }, { lead: "To push beyond", accent: "our limits" }],
-  },
-  {
-    image: becomeImage, // Slide: To Become — full-color photo behind gradient overlay
-    word: "Become",
-    trail: [BRAND_PHRASE, { lead: "To", accent: "Become" }, { lead: "Who we are", accent: "meant to be" }],
-  },
+const phrases = [
+  { lead: "We", accent: "Run" },
+  { lead: "We", accent: "Lift" },
+  { lead: "We", accent: "chat" },
+  { lead: "We", accent: "fuel" },
+  { lead: "and We", accent: "Yoga" },
 ];
 
 const PHRASE_DURATION_MS = 2200;
 const TRAIL_HOLD_MS = 1000;
-const PHRASES_PER_SLIDE = 3;
 
 export default function HeroCarousel() {
-  const [currentSlide, setCurrentSlide] = useState(0);
   const [phraseStep, setPhraseStep] = useState(0);
 
-  // Auto-advance — each slide stays long enough to play its full word-trail.
+  // Loop the word-trail with a short hold on the last phrase.
   useEffect(() => {
-    const duration = PHRASE_DURATION_MS * PHRASES_PER_SLIDE + TRAIL_HOLD_MS;
+    const isLast = phraseStep === phrases.length - 1;
+    const delay = isLast ? PHRASE_DURATION_MS + TRAIL_HOLD_MS : PHRASE_DURATION_MS;
     const timeout = setTimeout(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, duration);
+      setPhraseStep((prev) => (prev + 1) % phrases.length);
+    }, delay);
     return () => clearTimeout(timeout);
-  }, [currentSlide]);
-
-  // Step through the active slide's word-trail.
-  useEffect(() => {
-    setPhraseStep(0);
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    for (let i = 1; i < PHRASES_PER_SLIDE; i++) {
-      timers.push(setTimeout(() => setPhraseStep(i), PHRASE_DURATION_MS * i));
-    }
-    return () => timers.forEach(clearTimeout);
-  }, [currentSlide]);
-
-  const slide = slides[currentSlide];
+  }, [phraseStep]);
 
   return (
-    <section id="home" className="relative h-[clamp(520px,82vh,760px)] overflow-hidden">
-      {slides.map((s, index) => (
-        <div
-          key={s.word}
-          className={`absolute inset-0 transition-opacity duration-700 ${
-            index === currentSlide ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <img
-            src={s.image}
-            alt=""
-            role="presentation"
-            className="h-full w-full object-cover"
-            data-testid={`carousel-image-${index}`}
-          />
-          <div className="absolute inset-0 gradient-overlay" />
-        </div>
-      ))}
+    <section id="home" className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#f5f0e8]">
+      <div className="absolute inset-0">
+        <img
+          src={treatRetreatImage}
+          alt=""
+          role="presentation"
+          className="h-full w-full object-cover object-center"
+          data-testid="carousel-image-0"
+        />
+        <div className="absolute inset-0 gradient-overlay" />
+      </div>
 
-      <div className="relative z-10 flex h-full flex-col items-center justify-end px-6 pb-[72px] text-center">
+      <div className="relative z-10 flex h-full flex-col items-center justify-end px-6 pb-6 text-center">
         <h1
           className="relative mb-5 flex min-h-[clamp(6rem,16vw,11rem)] w-full items-center justify-center font-display text-[clamp(2.75rem,7.5vw,5.25rem)] font-bold leading-[1.04] tracking-tight text-white drop-shadow-lg"
-          aria-label={slide.trail.map((p) => `${p.lead} ${p.accent}`).join(". ")}
+          aria-label={phrases.map((p) => `${p.lead} ${p.accent}`).join(". ")}
         >
-          {slide.trail.map((phrase, index) => (
+          {phrases.map((phrase, index) => (
             <span
               key={phrase.accent}
               aria-hidden={index !== phraseStep}
@@ -123,28 +75,14 @@ export default function HeroCarousel() {
         </h1>
         <button
           type="button"
-          onClick={() => navigateToHomeSection("teach")}
+          // TBD: wire to Treat a Retreat program booking once the program is created
+          onClick={() => {}}
           className="inline-flex items-center gap-2.5 rounded-full px-9 py-4 text-[clamp(1rem,1.6vw,1.1875rem)] font-bold text-white shadow-dz-hero transition hover:-translate-y-0.5"
           style={{ background: "var(--gradient-cta)" }}
           data-testid="hero-cta-schedule"
         >
-          Find Your Flow
+          Treat a Retreat here
         </button>
-
-        <div className="mt-8 flex gap-2.5">
-          {slides.map((_, index) => (
-            <button
-              key={index}
-              type="button"
-              onClick={() => setCurrentSlide(index)}
-              className={`h-2.5 w-2.5 rounded-full transition-colors ${
-                index === currentSlide ? "bg-white" : "bg-white/50 hover:bg-white/75"
-              }`}
-              aria-label={`Go to slide ${index + 1}`}
-              data-testid={`carousel-dot-${index}`}
-            />
-          ))}
-        </div>
       </div>
     </section>
   );

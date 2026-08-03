@@ -41,7 +41,6 @@ export async function parseAdminApiError(res: Response): Promise<{
 export function validateClassTypeForm(form: {
   name: string;
   description: string;
-  price: string;
   duration: string;
   imageUrl: string;
   intensity: string;
@@ -51,7 +50,6 @@ export function validateClassTypeForm(form: {
   const result = adminCreateClassTypeSchema.safeParse({
     name: form.name,
     description: form.description,
-    price: form.price,
     duration: form.duration,
     imageUrl: form.imageUrl.trim(),
     intensity: form.intensity,

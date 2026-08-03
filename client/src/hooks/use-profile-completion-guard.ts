@@ -42,7 +42,7 @@ export function useProfileCompletionGuard() {
       description:
         anchor === "profile"
           ? "Add your mobile number and contact details so we can reach you."
-          : "Add a health note so we can keep your practice safe.",
+          : "Add your Health History so we can keep your practice safe.",
     });
     setLocation(myAccountHref(anchor));
   }, [user, location, setLocation, toast]);

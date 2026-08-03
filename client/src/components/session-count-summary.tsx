@@ -236,11 +236,20 @@ export function PackageUsageCollapsible({
               {activeSubs.map((sub) => {
                 const balance = subscriptionSessionBalance(sub);
                 const packageSessions = byClass.get(sub.classTypeName) ?? [];
+                const purchased = sub.sessionsPurchased ?? sub.totalSessions;
+                const programSubtitle =
+                  sub.sessionsPurchased != null || sub.sessionsConsumed != null
+                    ? `${purchased} purchased · ${sub.sessionsConsumed ?? 0} consumed · ${(sub.sessionsScheduled ?? 0) + (sub.sessionsUnscheduled ?? 0)} remaining · ${sub.subscriptionType.replace("_", " ")}`
+                    : `${formatSubscriptionUsage(balance)} · ${sub.subscriptionType.replace("_", " ")} batch`;
+                const horizon =
+                  sub.horizonEndAt != null
+                    ? ` · horizon ${new Date(sub.horizonEndAt).toLocaleDateString("en-IN")}`
+                    : "";
                 return (
                   <PackageNest
                     key={sub.id}
                     title={sub.classTypeName}
-                    subtitle={`${formatSubscriptionUsage(balance)} · ${sub.subscriptionType.replace("_", " ")} batch`}
+                    subtitle={`${programSubtitle}${horizon}`}
                     sessions={packageSessions}
                     isFlexi={!!sub.flexiBookingId}
                   />

@@ -86,7 +86,7 @@ export function AccountMenuControls({
             </TooltipTrigger>
             {incompleteHref ? (
               <TooltipContent side="bottom" className="max-w-xs text-center">
-                Complete your phone number and health note to book sessions.
+                Complete your phone number and Health History to book sessions.
               </TooltipContent>
             ) : null}
           </Tooltip>

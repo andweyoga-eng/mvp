@@ -18,7 +18,7 @@ export const SESSIONS_HELP_INDEX: HelpSearchEntry[] = [
   {
     id: "help-profile",
     title: "Complete your profile",
-    summary: "Add mobile, emergency contact, and health notes in My Account.",
+    summary: "Add mobile, emergency contact, and Health History in My Account.",
     keywords: ["profile", "mobile", "phone", "health", "emergency", "complete"],
     href: "/my-account#profile",
   },

@@ -117,14 +117,14 @@ export function AdminHealthMaterialsPanel({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Health note: {userName}</DialogTitle>
+          <DialogTitle>Health History: {userName}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Health note</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Health History</p>
             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-900">
-              {healthText?.trim() ? healthText : "No health note on file."}
+              {healthText?.trim() ? healthText : "No Health History on file."}
             </p>
           </div>
 

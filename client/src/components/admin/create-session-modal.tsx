@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MAX_WEEKLY_OCCURRENCES, WEEKDAY_LABELS } from "@shared/session-schedule";
 import { FLEXI_BOOKING_ENABLED, flexiTooltipCopy } from "@shared/flexi-mode";
+import { formatClassTypeOptionLabel } from "@shared/class-type-name";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
@@ -436,7 +437,7 @@ export function CreateSessionModal({
                     <SelectContent>
                       {classTypes.map((ct) => (
                         <SelectItem key={ct.id} value={ct.id}>
-                          {ct.name} · Rs.{ct.price} / {ct.duration}min
+                          {formatClassTypeOptionLabel(ct)}
                         </SelectItem>
                       ))}
                     </SelectContent>

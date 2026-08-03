@@ -225,7 +225,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-dz-surface pb-24 md:pb-0">
-      <Navigation onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })} />
+      <Navigation
+        overlayHero
+        onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })}
+      />
       <HeroCarousel />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
       <ClassesSection onBookingClick={(intent) => handleBookingOpen(intent)} />

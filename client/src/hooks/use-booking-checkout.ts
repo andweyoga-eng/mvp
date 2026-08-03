@@ -248,7 +248,7 @@ export function useBookingCheckout({
   const bookingMutation = useMutation<
     MemberBookingResult,
     BookingError,
-    { classId: string; flexiSelections?: FlexiSelection[] }
+    { classId: string; programId?: string; flexiSelections?: FlexiSelection[] }
   >({
     mutationFn: async (payload) => {
       const response = await fetch("/api/bookings", {
@@ -281,6 +281,18 @@ export function useBookingCheckout({
             status: 409,
             code: "already_booked",
             message: (result.message as string) || "You have already booked this session.",
+          };
+        }
+        if (
+          response.status === 409 &&
+          (result.code === "NO_ACTIVE_PROGRAM" ||
+            result.code === "PROGRAM_REQUIRED" ||
+            result.code === "TRIAL_ALREADY_USED")
+        ) {
+          throw {
+            status: 409,
+            code: typeof result.code === "string" ? result.code : "PROGRAM_REQUIRED",
+            message: (result.message as string) || "Choose a program to continue.",
           };
         }
         const zodErrors = result.errors as Array<{ message?: string }> | undefined;
@@ -344,7 +356,7 @@ export function useBookingCheckout({
         toast({
           title: "Profile incomplete",
           description:
-            "Please complete your profile (name, mobiles, verified email, and health update) to book sessions.",
+            "Please complete your profile (name, mobiles, verified email, and Health History) to book sessions.",
           variant: "destructive",
         });
         onProfileRequired?.(error.redirectTo || "/my-account#profile");
@@ -376,10 +388,14 @@ export function useBookingCheckout({
   });
 
   const startBooking = useCallback(
-    (classId: string, options?: { flexiSelections?: FlexiSelection[] }) => {
+    (
+      classId: string,
+      options?: { flexiSelections?: FlexiSelection[]; programId?: string },
+    ) => {
       if (bookingMutation.isPending || isPaying) return;
       bookingMutation.mutate({
         classId,
+        ...(options?.programId ? { programId: options.programId } : {}),
         ...(options?.flexiSelections?.length ? { flexiSelections: options.flexiSelections } : {}),
       });
     },
