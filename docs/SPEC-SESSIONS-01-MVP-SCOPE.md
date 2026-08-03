@@ -108,7 +108,7 @@ CA (or finance) posts journals in Tally/Zoho/etc. App does **not** own a full GL
 | Date | Change |
 |------|--------|
 | 2026-08-03 | Initial MVP scope note: GL-B, policy live, composition any instructor, FR-20 must, purge prefix-only, build sequence locked |
-| 2026-08-03 | Branch `feature/spec-sessions-01-a2-c`: Programs stash restored; A1.1 schema+freeze+patch 039; purge drops live-name matching; FR-15 atomic composition + `flexi_selection_count` drop still **next on this branch** |
+| 2026-08-03 | Branch `feature/spec-sessions-01-a2-c`: A2–A5+FR-17+A1.1 committed; FR-15 atomic composition + drop `flexi_selection_count`; Option B CA export helpers |
 
 ---
 
@@ -120,9 +120,9 @@ CA (or finance) posts journals in Tally/Zoho/etc. App does **not** own a full GL
 | A1.1 column + freeze + SQL 039 | Done |
 | Purge prefix-only (no Hatha name match) | Done |
 | FR-20 Sessions by Program | Package nests by subscription (present); refine if needed |
-| FR-15 one-transaction composition | **Todo next** |
-| Drop `flexi_selection_count` | **Todo next** (same cleanup as FR-15) |
-| Part B export helpers for CA | Todo after FR-15 |
-| Part C + clickwrap | Todo after B |
+| FR-15 one-transaction composition | Done (`reserveFlexiCompositionAtomic`) |
+| Drop `flexi_selection_count` | Done (patch 040; Program.sessionsPerWeek owns N) |
+| Part B export helpers for CA | Done (`shared/accounting-export` + `/api/admin/accounting/subscriptions-export`) |
+| Part C + clickwrap | Todo next |
 
 *Program managers: treat §2 “Deferred” as the backlog for post-MVP accounting and GST work. Do not reopen credit-wallet scope without a new policy amendment.*

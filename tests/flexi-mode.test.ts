@@ -58,16 +58,18 @@ describe("flexi-mode helpers", () => {
     }
   });
 
-  it("anchors selection count from explicit schedule value", () => {
+  it("anchors selection count from Program sessions/week, else weekdays", () => {
     assert.equal(
-      resolveFlexiSelectionCount({
-        id: "a",
-        classTypeId: "ct",
-        instructorId: "ins",
-        date: new Date(),
-        recurrenceWeekdays: "1,2,3",
-        flexiSelectionCount: 2,
-      }),
+      resolveFlexiSelectionCount(
+        {
+          id: "a",
+          classTypeId: "ct",
+          instructorId: "ins",
+          date: new Date(),
+          recurrenceWeekdays: "1,2,3",
+        },
+        2,
+      ),
       2,
     );
     assert.equal(
@@ -82,7 +84,7 @@ describe("flexi-mode helpers", () => {
     );
   });
 
-  it("pools by class type and instructor only", () => {
+  it("pools by class type across instructors", () => {
     assert.equal(
       sharesFlexiPool(
         { classTypeId: "ct", instructorId: "ins" },
@@ -94,6 +96,13 @@ describe("flexi-mode helpers", () => {
       sharesFlexiPool(
         { classTypeId: "ct", instructorId: "ins" },
         { classTypeId: "ct", instructorId: "other" },
+      ),
+      true,
+    );
+    assert.equal(
+      sharesFlexiPool(
+        { classTypeId: "ct", instructorId: "ins" },
+        { classTypeId: "other", instructorId: "ins" },
       ),
       false,
     );
@@ -171,6 +180,7 @@ describe("flexi-mode helpers", () => {
     assert.equal(items[0]?.summary.includes("non-refundable"), true);
     assert.equal(items.some((item) => item.key === "flexi_final_checkout"), true);
     assert.equal(items.some((item) => item.key === "non_transferable"), true);
-    assert.ok(flexiTooltipCopy().includes("Pick your weekly slots from any of the eligible schedule sets"));
+    assert.ok(flexiTooltipCopy().includes("Pick your weekly slots from any eligible schedule"));
+    assert.ok(flexiTooltipCopy().includes("Program"));
   });
 });

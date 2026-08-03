@@ -107,7 +107,6 @@ interface ClassSession {
   seriesId?: string | null;
   seriesWeekCount?: number | null;
   flexiEnabled?: boolean | null;
-  flexiSelectionCount?: number | null;
   classType?: { name: string };
   instructor?: { name: string };
 }

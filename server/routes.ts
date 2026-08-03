@@ -1997,7 +1997,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!cls || !isFlexiEnabledSchedule(cls)) {
         return res.status(404).json({ message: "Flexi options not available for this schedule." });
       }
-      const options = await storage.getFlexiOptions(req.params.anchorClassId);
+      let selectionCount: number | undefined;
+      const programId =
+        typeof req.query.programId === "string" ? req.query.programId.trim() : "";
+      if (programId) {
+        const program = await storage.getProgram(programId);
+        if (program && program.classTypeId === cls.classTypeId && program.status === "active") {
+          selectionCount = program.sessionsPerWeek;
+        }
+      }
+      const options = await storage.getFlexiOptions(req.params.anchorClassId, {
+        ...(selectionCount != null ? { selectionCount } : {}),
+      });
       if (!options) {
         return res.status(404).json({ message: "Flexi options not available for this schedule." });
       }
@@ -2163,8 +2174,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             validatedData.recurrenceKind === "weekly" ? validatedData.occurrenceCount : null,
           flexiEnabled:
             validatedData.recurrenceKind === "weekly" ? validatedData.flexiEnabled : false,
-          flexiSelectionCount:
-            validatedData.recurrenceKind === "weekly" ? validatedData.flexiSelectionCount : null,
           seriesId,
         });
         created.push(cls);
@@ -3046,54 +3055,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const memberHasPrice = programHasFee(checkoutProgram);
         const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
-        const booking = resumableBooking
-          ? resumableBooking
-          : await storage.createBooking({
+        const hasPrice = memberHasPrice;
+        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+        let booking: Awaited<ReturnType<typeof storage.createBooking>>;
+        let flexiBooking: Awaited<ReturnType<typeof storage.createFlexiBooking>>;
+        try {
+          const reserved = await storage.reserveFlexiCompositionAtomic({
+            existingBooking: resumableBooking ?? null,
+            bookingInsert: resumableBooking
+              ? undefined
+              : {
+                  userId: user.id,
+                  classId,
+                  ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
+                },
+            flexi: {
               userId: user.id,
-              classId,
-              ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
+              anchorClassId: cls.id,
+              classTypeId: cls.classTypeId,
+              instructorId: cls.instructorId,
+              selectionCount,
+              horizonStartAt: horizonStart,
+              horizonEndAt: horizonEnd,
+              holdExpiresAt: memberHoldUntil,
+              paymentStatus: hasPrice ? "pending" : "waived",
+              paymentMethod: sessionPaymentMethod,
+              status: "pending",
+            },
+            selections: requestedFlexiSelections.map((selection) => ({
+              weekday: selection.weekday,
+              sourceSeriesId: selection.sourceSeriesId,
+              sourceClassId: selection.sourceClassId,
+              sourceTimeLabel: selection.timeLabel,
+            })),
+            occurrences: occurrencesToReserve.map((occurrence) => ({
+              classId: occurrence.classId,
+              weekday: occurrence.weekday,
+              occurrenceDate: occurrence.occurrenceDate,
+              status: hasPrice ? "reserved" : "paid",
+              holdExpiresAt: memberHoldUntil,
+            })),
+          });
+          booking = reserved.booking;
+          flexiBooking = reserved.flexiBooking;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.startsWith("FLEXI_SLOT_FULL:")) {
+            return res.status(400).json({
+              message: "One of your selected Flexi slots is full. Please choose another time.",
+              code: "FLEXI_SLOT_FULL",
             });
+          }
+          console.error("[bookings] FR-15 flexi composition failed:", err);
+          return res.status(500).json({ message: "Could not reserve Flexi composition." });
+        }
         const classType = await storage.getClassType(cls.classTypeId);
         const instructor = await storage.getInstructor(cls.instructorId);
         const price = programPriceRupeesDisplay(checkoutProgram);
-        const hasPrice = memberHasPrice;
-        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
         const checkoutGateway = getConfiguredCheckoutGateway();
         const checkoutEnabled =
           hasPrice && usesHostedCheckout(sessionPaymentMethod) && !!checkoutGateway;
-        const flexiBooking = await storage.createFlexiBooking({
-          userId: user.id,
-          anchorClassId: cls.id,
-          classTypeId: cls.classTypeId,
-          instructorId: cls.instructorId,
-          bookingId: booking.id,
-          selectionCount,
-          horizonStartAt: horizonStart,
-          horizonEndAt: horizonEnd,
-          holdExpiresAt: memberHoldUntil,
-          paymentStatus: hasPrice ? "pending" : "waived",
-          paymentMethod: sessionPaymentMethod,
-          status: "pending",
-        });
-        await storage.createFlexiBookingSelections(
-          requestedFlexiSelections.map((selection) => ({
-            flexiBookingId: flexiBooking.id,
-            weekday: selection.weekday,
-            sourceSeriesId: selection.sourceSeriesId,
-            sourceClassId: selection.sourceClassId,
-            sourceTimeLabel: selection.timeLabel,
-          })),
-        );
-        await storage.createFlexiBookingOccurrences(
-          occurrencesToReserve.map((occurrence) => ({
-            flexiBookingId: flexiBooking.id,
-            classId: occurrence.classId,
-            weekday: occurrence.weekday,
-            occurrenceDate: occurrence.occurrenceDate,
-            status: hasPrice ? "reserved" : "paid",
-            holdExpiresAt: memberHoldUntil,
-          })),
-        );
         if (!hasPrice) {
           await storage.updateBookingPaymentStatus(booking.id, "waived");
         } else {
@@ -4205,8 +4226,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           validated.recurrenceKind === "weekly" ? validated.occurrenceCount : null,
         flexiEnabled:
           validated.recurrenceKind === "weekly" ? validated.flexiEnabled : false,
-        flexiSelectionCount:
-          validated.recurrenceKind === "weekly" ? validated.flexiSelectionCount : null,
       });
       if (!updated) return res.status(404).json({ message: "Session not found" });
       res.json(updated);
@@ -4490,6 +4509,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/subscriptions", requireAdminAuth, async (_req, res) => {
     const rows = await storage.getSubscriptionSummariesForAdmin();
     res.json(rows);
+  });
+
+  /**
+   * Option B CA export — suggested accrual amounts from entitlement counters.
+   * ?format=csv for spreadsheet download; default JSON.
+   */
+  app.get("/api/admin/accounting/subscriptions-export", requireAdminAuth, async (req, res) => {
+    try {
+      const {
+        buildSubscriptionAccrualExportRow,
+        formatSubscriptionAccrualCsv,
+      } = await import("@shared/accounting-export");
+      const summaries = await storage.getSubscriptionSummariesForAdmin();
+      const rows = summaries
+        .map((s) =>
+          buildSubscriptionAccrualExportRow({
+            subscriptionId: s.id,
+            userId: s.userId,
+            userEmail: s.userEmail,
+            userName: s.userName,
+            programId: s.programId,
+            classTypeId: s.classTypeId,
+            classTypeName: s.classTypeName,
+            status: s.status,
+            totalPaidPaise: s.totalPaidPaise,
+            totalAmountPaise: s.totalAmountPaise,
+            sessionsPurchased: s.sessionsPurchased,
+            totalSessions: s.totalSessions,
+            perSessionAllocation: s.perSessionAllocation,
+            sessionsConsumed: s.sessionsConsumed,
+            sessionsScheduled: s.sessionsScheduled,
+            sessionsUnscheduled: s.sessionsUnscheduled,
+            sessionsCredited: s.sessionsCredited,
+            horizonEndAt: s.horizonEndAt,
+            createdAt: s.createdAt,
+          }),
+        )
+        .filter((r): r is NonNullable<typeof r> => r != null);
+
+      const format = typeof req.query.format === "string" ? req.query.format.toLowerCase() : "json";
+      if (format === "csv") {
+        const csv = formatSubscriptionAccrualCsv(rows);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="subscription-accrual-export.csv"`,
+        );
+        return res.send(csv);
+      }
+      res.json({
+        policy: "Option B - export for CA posting (no in-app GL)",
+        generatedAt: new Date().toISOString(),
+        rowCount: rows.length,
+        rows,
+      });
+    } catch (error) {
+      console.error("[admin/accounting/subscriptions-export]", error);
+      res.status(500).json({ message: "Failed to build accounting export" });
+    }
   });
 
   app.get("/api/admin/coupons/otp-hint", requireAdminAuth, async (_req, res) => {

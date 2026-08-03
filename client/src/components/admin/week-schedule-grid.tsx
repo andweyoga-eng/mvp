@@ -33,7 +33,6 @@ interface SessionRow {
   seriesId?: string | null;
   seriesWeekCount?: number | null;
   flexiEnabled?: boolean | null;
-  flexiSelectionCount?: number | null;
   classType?: { name: string };
   instructor?: { name: string };
 }
@@ -173,7 +172,6 @@ export function WeekScheduleGrid({
     seriesId: s.seriesId,
     seriesWeekCount: s.seriesWeekCount,
     flexiEnabled: !!s.flexiEnabled,
-    flexiSelectionCount: s.flexiSelectionCount ?? null,
   });
 
   const showSessionActions =

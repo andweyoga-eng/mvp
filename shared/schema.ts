@@ -205,8 +205,6 @@ export const classes = pgTable("classes", {
   venueContactPhone: text("venue_contact_phone"),
   /** Flexi Mode lets registered members mix eligible recurring schedule days/times. */
   flexiEnabled: boolean("flexi_enabled").notNull().default(false),
-  /** Exact number of weekly selections required when starting checkout from this schedule. */
-  flexiSelectionCount: integer("flexi_selection_count"),
   seriesId: varchar("series_id"),
   externalProvider: varchar("external_provider", { length: 32 }),
   externalEventId: text("external_event_id"),

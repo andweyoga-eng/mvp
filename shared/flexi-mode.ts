@@ -42,9 +42,11 @@ export function isFlexiEnabledSchedule(schedule: FlexiEligibleScheduleLike | nul
 
 export function resolveFlexiSelectionCount(
   schedule: FlexiEligibleScheduleLike | null | undefined,
+  programSessionsPerWeek?: number | null,
 ): number {
-  if (schedule?.flexiSelectionCount && schedule.flexiSelectionCount > 0) {
-    return schedule.flexiSelectionCount;
+  // Program owns N (SPEC A4). Schedule weekdays are only a legacy fallback for options UI.
+  if (programSessionsPerWeek != null && programSessionsPerWeek > 0) {
+    return programSessionsPerWeek;
   }
   return parseRecurrenceWeekdays(schedule?.recurrenceWeekdays).length;
 }
@@ -65,15 +67,16 @@ export function buildFlexiCandidate(
   };
 }
 
+/** Pool by class type (any instructor) — product decision 3 Aug 2026. */
 export function sharesFlexiPool(
   anchor: Pick<FlexiEligibleScheduleLike, "classTypeId" | "instructorId">,
   candidate: Pick<FlexiEligibleScheduleLike, "classTypeId" | "instructorId">,
 ): boolean {
-  return anchor.classTypeId === candidate.classTypeId && anchor.instructorId === candidate.instructorId;
+  return anchor.classTypeId === candidate.classTypeId;
 }
 
 export function flexiTooltipCopy(): string {
-  return "Pick your weekly slots from any of the eligible schedule sets with the same session type and instructor. The number of slots you need to choose depends on how many practice days are in your package. Your package price stays the same, and you must finalize your selection at checkout.";
+  return "Pick your weekly slots from any eligible schedule of this session type (any instructor). How many slots you pick comes from your Program. Price stays the same; finalize at checkout.";
 }
 
 export interface FlexiOptionSlotLike {

@@ -253,6 +253,7 @@ export interface SubscriptionSummaryRow {
   programId: string | null;
   sessionsPurchased: number | null;
   totalPaidPaise: number | null;
+  perSessionAllocation: string | null;
   sessionsConsumed: number;
   sessionsScheduled: number;
   sessionsUnscheduled: number;
@@ -782,6 +783,28 @@ export interface IStorage {
   createFlexiBooking(data: InsertFlexiBooking): Promise<FlexiBooking>;
   createFlexiBookingSelections(rows: InsertFlexiBookingSelection[]): Promise<FlexiBookingSelection[]>;
   createFlexiBookingOccurrences(rows: InsertFlexiBookingOccurrence[]): Promise<FlexiBookingOccurrence[]>;
+  /**
+   * SPEC FR-15 — reserve the full Flexi composition in one transaction.
+   * Locks occurrence class rows in sorted id order; fails entirely if any seat is unavailable.
+   */
+  reserveFlexiCompositionAtomic(params: {
+    existingBooking?: Booking | null;
+    bookingInsert?: InsertBooking;
+    flexi: Omit<InsertFlexiBooking, "bookingId">;
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      sourceTimeLabel?: string | null;
+    }>;
+    occurrences: Array<{
+      classId: string;
+      weekday: number;
+      occurrenceDate: Date;
+      status: string;
+      holdExpiresAt?: Date | null;
+    }>;
+  }): Promise<{ booking: Booking; flexiBooking: FlexiBooking }>;
   getFlexiBooking(id: string): Promise<FlexiBooking | undefined>;
   getFlexiBookingByBookingId(bookingId: string): Promise<FlexiBooking | undefined>;
   getFlexiBookingSelections(flexiBookingId: string): Promise<FlexiBookingSelection[]>;
@@ -3336,6 +3359,129 @@ export class DatabaseStorage implements IStorage {
     return inserted;
   }
 
+  async reserveFlexiCompositionAtomic(params: {
+    existingBooking?: Booking | null;
+    bookingInsert?: InsertBooking;
+    flexi: Omit<InsertFlexiBooking, "bookingId">;
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      sourceTimeLabel?: string | null;
+    }>;
+    occurrences: Array<{
+      classId: string;
+      weekday: number;
+      occurrenceDate: Date;
+      status: string;
+      holdExpiresAt?: Date | null;
+    }>;
+  }): Promise<{ booking: Booking; flexiBooking: FlexiBooking }> {
+    if (!params.occurrences.length) {
+      throw new Error("FLEXI_COMPOSITION_EMPTY");
+    }
+    const neededByClass = new Map<string, number>();
+    for (const occ of params.occurrences) {
+      neededByClass.set(occ.classId, (neededByClass.get(occ.classId) ?? 0) + 1);
+    }
+    const sortedClassIds = [...neededByClass.keys()].sort();
+
+    return db.transaction(async (tx) => {
+      // Deterministic lock order avoids deadlocks under concurrent composition (FR-15 / §7.1).
+      const activeBefore = new Map<string, number>();
+      for (const classId of sortedClassIds) {
+        const [locked] = await tx
+          .select({ id: classes.id, maxCapacity: classes.maxCapacity })
+          .from(classes)
+          .where(eq(classes.id, classId))
+          .for("update");
+        if (!locked) {
+          throw new Error(`FLEXI_CLASS_MISSING:${classId}`);
+        }
+        const counts = await this.getActiveBookingCountsForClasses([classId]);
+        const active = counts.get(classId) ?? 0;
+        const need = neededByClass.get(classId) ?? 0;
+        if (active + need > locked.maxCapacity) {
+          throw new Error(`FLEXI_SLOT_FULL:${classId}`);
+        }
+        activeBefore.set(classId, active);
+      }
+
+      let booking = params.existingBooking ?? null;
+      if (!booking) {
+        if (!params.bookingInsert) {
+          throw new Error("FLEXI_BOOKING_INSERT_REQUIRED");
+        }
+        const cls = await this.getClass(params.bookingInsert.classId);
+        const paymentMethod =
+          params.bookingInsert.paymentMethod ?? cls?.paymentMethod ?? "razorpay_link";
+        const [created] = await tx
+          .insert(bookings)
+          .values({ ...params.bookingInsert, paymentMethod })
+          .returning();
+        booking = created;
+        if (params.bookingInsert.userId) {
+          const [existingMap] = await tx
+            .select({ id: userSessionMappings.id })
+            .from(userSessionMappings)
+            .where(
+              and(
+                eq(userSessionMappings.userId, params.bookingInsert.userId),
+                eq(userSessionMappings.classId, params.bookingInsert.classId),
+              ),
+            )
+            .limit(1);
+          if (!existingMap) {
+            await tx.insert(userSessionMappings).values({
+              userId: params.bookingInsert.userId,
+              classId: params.bookingInsert.classId,
+              status: "upcoming",
+            });
+          }
+        }
+      }
+
+      const [flexiBooking] = await tx
+        .insert(flexiBookings)
+        .values({ ...params.flexi, bookingId: booking.id })
+        .returning();
+
+      if (params.selections.length) {
+        await tx.insert(flexiBookingSelections).values(
+          params.selections.map((selection) => ({
+            flexiBookingId: flexiBooking.id,
+            weekday: selection.weekday,
+            sourceSeriesId: selection.sourceSeriesId,
+            sourceClassId: selection.sourceClassId,
+            sourceTimeLabel: selection.sourceTimeLabel ?? null,
+          })),
+        );
+      }
+
+      await tx.insert(flexiBookingOccurrences).values(
+        params.occurrences.map((occurrence) => ({
+          flexiBookingId: flexiBooking.id,
+          classId: occurrence.classId,
+          weekday: occurrence.weekday,
+          occurrenceDate: occurrence.occurrenceDate,
+          status: occurrence.status,
+          holdExpiresAt: occurrence.holdExpiresAt ?? null,
+        })),
+      );
+
+      for (const classId of sortedClassIds) {
+        const need = neededByClass.get(classId) ?? 0;
+        const next = (activeBefore.get(classId) ?? 0) + need;
+        await tx
+          .update(classes)
+          .set({ currentBookings: next })
+          .where(eq(classes.id, classId));
+      }
+
+      return { booking, flexiBooking };
+    });
+  }
+
   async getFlexiBooking(id: string): Promise<FlexiBooking | undefined> {
     const [row] = await db.select().from(flexiBookings).where(eq(flexiBookings.id, id));
     return row ?? undefined;
@@ -5112,6 +5258,7 @@ export class DatabaseStorage implements IStorage {
         programId: subscriptions.programId,
         sessionsPurchased: subscriptions.sessionsPurchased,
         totalPaidPaise: subscriptions.totalPaidPaise,
+        perSessionAllocation: subscriptions.perSessionAllocation,
         sessionsConsumed: subscriptions.sessionsConsumed,
         sessionsScheduled: subscriptions.sessionsScheduled,
         sessionsUnscheduled: subscriptions.sessionsUnscheduled,
@@ -5134,6 +5281,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(subscriptions.createdAt));
     return rows.map((r) => ({
       ...r,
+      perSessionAllocation: r.perSessionAllocation ?? null,
       horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -5154,6 +5302,7 @@ export class DatabaseStorage implements IStorage {
         programId: subscriptions.programId,
         sessionsPurchased: subscriptions.sessionsPurchased,
         totalPaidPaise: subscriptions.totalPaidPaise,
+        perSessionAllocation: subscriptions.perSessionAllocation,
         sessionsConsumed: subscriptions.sessionsConsumed,
         sessionsScheduled: subscriptions.sessionsScheduled,
         sessionsUnscheduled: subscriptions.sessionsUnscheduled,
@@ -5177,6 +5326,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(subscriptions.createdAt));
     return rows.map((r) => ({
       ...r,
+      perSessionAllocation: r.perSessionAllocation ?? null,
       horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
