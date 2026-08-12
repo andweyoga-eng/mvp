@@ -174,7 +174,7 @@ export const CONSENT_COPY = {
     invalidDob: "Please enter a valid date of birth.",
     genericError: "Something went wrong. Please try again.",
     healthConsent:
-      "I consent to andWeYoga collecting and processing the health information I share here to ensure my practice is adapted safely. I understand this is sensitive personal data and will only be shared with instructors and staff directly involved in delivering my sessions.",
+      "I consent to andWeYoga collecting and processing the health information I share here, including health notes, documents, and optional WeFuel calorie logs, to ensure my practice and wellbeing tools are adapted safely. I understand this is sensitive personal data and will only be shared with instructors and staff directly involved in delivering my sessions.",
     whatsappConsent:
       "Optional. I consent to andWeYoga contacting me on WhatsApp at the mobile number above for session updates, booking support, and wellness communications related to my account. I understand I can withdraw this consent at any time from My Account.",
     accountConsentTitle: "Privacy & consent (DPDPA)",
@@ -190,7 +190,7 @@ export const CONSENT_COPY = {
     guestConsentHeading: "Consent before booking",
     healthBannerTitle: "Health data consent",
     healthBannerBody:
-      "Withdraw separately without closing your account. Stored health notes and documents will be deleted.",
+      "Withdraw separately without closing your account. Stored health notes, documents, and andWeFuel calorie logs will be deleted or logging disabled.",
     withdrawHealthConsent: "Withdraw health data consent",
     withdrawingHealth: "Withdrawing…",
   },

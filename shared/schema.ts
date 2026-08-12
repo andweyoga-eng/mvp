@@ -44,8 +44,59 @@ export const users = pgTable("users", {
   addressCountry: text("address_country").default("IN"),
   addressState: text("address_state"),
   addressPincode: text("address_pincode"),
+  /** andWeFuel: admin-set daily calorie target. Null = Fuel not configured. */
+  dailyCalorieTargetCal: integer("daily_calorie_target_cal"),
+  /** andWeFuel: admin-set deficit tolerance. On-track band = [target − deficit, target]. */
+  dailyDeficitCal: integer("daily_deficit_cal"),
+  /** andWeFuel: ordered meal slots with local time bands. */
+  fuelMealPlan: jsonb("fuel_meal_plan").$type<import("./fuel").FuelMealPlan>(),
+  calorieTargetSetBy: varchar("calorie_target_set_by"),
+  calorieTargetSetAt: timestamp("calorie_target_set_at"),
+  /** Optional admin override reason when effective floor is below the safety rail. */
+  fuelFloorOverrideReason: text("fuel_floor_override_reason"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/** andWeFuel meal ledger — photo bytes are never stored. */
+export const fuelMeals = pgTable("fuel_meals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  loggedDate: text("logged_date").notNull(),
+  loggedAt: timestamp("logged_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  name: text("name").notNull(),
+  calories: integer("calories").notNull(),
+  targetAtLogCal: integer("target_at_log_cal").notNull(),
+  mealSlotIndex: integer("meal_slot_index"),
+  clientLocalTime: text("client_local_time"),
+  clientTimeZone: text("client_time_zone"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const fuelRecipes = pgTable("fuel_recipes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  forDate: text("for_date").notNull().unique(),
+  title: text("title").notNull(),
+  teaser: text("teaser").notNull(),
+  ingredients: text("ingredients").notNull(),
+  method: text("method").notNull(),
+  imageUrl: text("image_url"),
+  approxKcal: integer("approx_kcal"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const fuelDailyMedia = pgTable("fuel_daily_media", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  forDate: text("for_date").notNull().unique(),
+  provider: varchar("provider", { length: 16 }).notNull(),
+  embedId: text("embed_id").notNull(),
+  title: text("title").notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 /** Practice intensity used for filtering on the member Calendar. */
@@ -557,6 +608,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
   healthUpdateLastModified: true,
   healthUpdateHistory: true,
   healthMediaLinks: true,
+  dailyCalorieTargetCal: true,
+  dailyDeficitCal: true,
+  fuelMealPlan: true,
+  calorieTargetSetBy: true,
+  calorieTargetSetAt: true,
+  fuelFloorOverrideReason: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -872,3 +929,6 @@ export type CouponRedemption = typeof couponRedemptions.$inferSelect;
 export type CouponShareLog = typeof couponShareLogs.$inferSelect;
 export type ConsentAuditLog = typeof consentAuditLogs.$inferSelect;
 export type ErasureRequest = typeof erasureRequests.$inferSelect;
+export type FuelMeal = typeof fuelMeals.$inferSelect;
+export type FuelRecipe = typeof fuelRecipes.$inferSelect;
+export type FuelDailyMedia = typeof fuelDailyMedia.$inferSelect;

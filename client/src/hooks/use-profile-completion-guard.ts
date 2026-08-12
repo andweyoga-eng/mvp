@@ -12,6 +12,7 @@ const GUARDED_PREFIXES = [
   "/workshops",
   "/trips",
   "/explore",
+  "/fuel",
   "/reserve",
 ];
 

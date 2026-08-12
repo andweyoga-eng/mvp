@@ -40,6 +40,9 @@ import {
   type UpdateCarouselPromotion,
   type PlatformSetting,
   type InsertAuditLog,
+  type FuelMeal,
+  type FuelRecipe,
+  type FuelDailyMedia,
   users,
   classTypes,
   instructors,
@@ -67,6 +70,9 @@ import {
   consentAuditLogs,
   erasureRequests,
   userDocuments,
+  fuelMeals,
+  fuelRecipes,
+  fuelDailyMedia,
   DEFAULT_CLASS_INTENSITY,
 } from "@shared/schema";
 import {
@@ -783,6 +789,54 @@ export interface IStorage {
     ipAddress?: string | null;
     userAgent?: string | null;
   }): Promise<User | undefined>;
+
+  // andWeFuel
+  setUserFuelConfig(
+    userId: string,
+    config: {
+      dailyCalorieTargetCal: number | null;
+      dailyDeficitCal: number | null;
+      fuelMealPlan: import("@shared/fuel").FuelMealPlan | null;
+      calorieTargetSetBy: string | null;
+      calorieTargetSetAt: Date | null;
+      fuelFloorOverrideReason: string | null;
+    },
+  ): Promise<User | undefined>;
+  listFuelMealsForUser(
+    userId: string,
+    opts?: { fromDate?: string; toDate?: string; limit?: number },
+  ): Promise<FuelMeal[]>;
+  createFuelMeal(input: {
+    userId: string;
+    loggedDate: string;
+    name: string;
+    calories: number;
+    targetAtLogCal: number;
+    mealSlotIndex: number | null;
+    clientLocalTime: string | null;
+    clientTimeZone: string | null;
+  }): Promise<FuelMeal>;
+  deleteFuelMeal(id: string, userId: string): Promise<boolean>;
+  getFuelRecipeForDate(forDate: string): Promise<FuelRecipe | undefined>;
+  upsertFuelRecipe(input: {
+    forDate: string;
+    title: string;
+    teaser: string;
+    ingredients: string;
+    method: string;
+    imageUrl?: string | null;
+    approxKcal?: number | null;
+    createdBy: string;
+  }): Promise<FuelRecipe>;
+  getFuelDailyMediaForDate(forDate: string): Promise<FuelDailyMedia | undefined>;
+  upsertFuelDailyMedia(input: {
+    forDate: string;
+    provider: "youtube" | "instagram";
+    embedId: string;
+    title: string;
+    createdBy: string;
+  }): Promise<FuelDailyMedia>;
+
   requestAccountErasure(params: {
     userId: string;
     ipAddress?: string | null;
@@ -2549,6 +2603,7 @@ export class DatabaseStorage implements IStorage {
         }
 
         await tx.delete(userDocuments).where(eq(userDocuments.userId, id));
+        await tx.delete(fuelMeals).where(eq(fuelMeals.userId, id));
         await tx.delete(bookings).where(eq(bookings.userId, id));
         await tx.delete(auditLogs).where(eq(auditLogs.userId, id));
         await tx.delete(users).where(eq(users.id, id));
@@ -5038,6 +5093,183 @@ export class DatabaseStorage implements IStorage {
       .limit(pageSize)
       .offset(offset);
     return { rows, total: Number(total) };
+  }
+
+  async setUserFuelConfig(
+    userId: string,
+    config: {
+      dailyCalorieTargetCal: number | null;
+      dailyDeficitCal: number | null;
+      fuelMealPlan: import("@shared/fuel").FuelMealPlan | null;
+      calorieTargetSetBy: string | null;
+      calorieTargetSetAt: Date | null;
+      fuelFloorOverrideReason: string | null;
+    },
+  ): Promise<User | undefined> {
+    try {
+      const [updated] = await db
+        .update(users)
+        .set({
+          dailyCalorieTargetCal: config.dailyCalorieTargetCal,
+          dailyDeficitCal: config.dailyDeficitCal,
+          fuelMealPlan: config.fuelMealPlan,
+          calorieTargetSetBy: config.calorieTargetSetBy,
+          calorieTargetSetAt: config.calorieTargetSetAt,
+          fuelFloorOverrideReason: config.fuelFloorOverrideReason,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning();
+      return updated || undefined;
+    } catch (error) {
+      console.error("[DB] Error setting fuel config:", error);
+      return undefined;
+    }
+  }
+
+  async listFuelMealsForUser(
+    userId: string,
+    opts: { fromDate?: string; toDate?: string; limit?: number } = {},
+  ): Promise<FuelMeal[]> {
+    try {
+      const conditions = [eq(fuelMeals.userId, userId)];
+      if (opts.fromDate) conditions.push(gte(fuelMeals.loggedDate, opts.fromDate));
+      if (opts.toDate) conditions.push(lte(fuelMeals.loggedDate, opts.toDate));
+      return await db
+        .select()
+        .from(fuelMeals)
+        .where(and(...conditions))
+        .orderBy(desc(fuelMeals.loggedDate), desc(fuelMeals.loggedAt))
+        .limit(opts.limit ?? 500);
+    } catch (error) {
+      console.error("[DB] Error listing fuel meals:", error);
+      return [];
+    }
+  }
+
+  async createFuelMeal(input: {
+    userId: string;
+    loggedDate: string;
+    name: string;
+    calories: number;
+    targetAtLogCal: number;
+    mealSlotIndex: number | null;
+    clientLocalTime: string | null;
+    clientTimeZone: string | null;
+  }): Promise<FuelMeal> {
+    const [row] = await db
+      .insert(fuelMeals)
+      .values({
+        userId: input.userId,
+        loggedDate: input.loggedDate,
+        name: input.name,
+        calories: input.calories,
+        targetAtLogCal: input.targetAtLogCal,
+        mealSlotIndex: input.mealSlotIndex,
+        clientLocalTime: input.clientLocalTime,
+        clientTimeZone: input.clientTimeZone,
+      })
+      .returning();
+    return row;
+  }
+
+  async deleteFuelMeal(id: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(fuelMeals)
+      .where(and(eq(fuelMeals.id, id), eq(fuelMeals.userId, userId)))
+      .returning({ id: fuelMeals.id });
+    return result.length > 0;
+  }
+
+  async getFuelRecipeForDate(forDate: string): Promise<FuelRecipe | undefined> {
+    const [row] = await db.select().from(fuelRecipes).where(eq(fuelRecipes.forDate, forDate)).limit(1);
+    return row || undefined;
+  }
+
+  async upsertFuelRecipe(input: {
+    forDate: string;
+    title: string;
+    teaser: string;
+    ingredients: string;
+    method: string;
+    imageUrl?: string | null;
+    approxKcal?: number | null;
+    createdBy: string;
+  }): Promise<FuelRecipe> {
+    const existing = await this.getFuelRecipeForDate(input.forDate);
+    if (existing) {
+      const [row] = await db
+        .update(fuelRecipes)
+        .set({
+          title: input.title,
+          teaser: input.teaser,
+          ingredients: input.ingredients,
+          method: input.method,
+          imageUrl: input.imageUrl ?? null,
+          approxKcal: input.approxKcal ?? null,
+          createdBy: input.createdBy,
+        })
+        .where(eq(fuelRecipes.id, existing.id))
+        .returning();
+      return row;
+    }
+    const [row] = await db
+      .insert(fuelRecipes)
+      .values({
+        forDate: input.forDate,
+        title: input.title,
+        teaser: input.teaser,
+        ingredients: input.ingredients,
+        method: input.method,
+        imageUrl: input.imageUrl ?? null,
+        approxKcal: input.approxKcal ?? null,
+        createdBy: input.createdBy,
+      })
+      .returning();
+    return row;
+  }
+
+  async getFuelDailyMediaForDate(forDate: string): Promise<FuelDailyMedia | undefined> {
+    const [row] = await db
+      .select()
+      .from(fuelDailyMedia)
+      .where(eq(fuelDailyMedia.forDate, forDate))
+      .limit(1);
+    return row || undefined;
+  }
+
+  async upsertFuelDailyMedia(input: {
+    forDate: string;
+    provider: "youtube" | "instagram";
+    embedId: string;
+    title: string;
+    createdBy: string;
+  }): Promise<FuelDailyMedia> {
+    const existing = await this.getFuelDailyMediaForDate(input.forDate);
+    if (existing) {
+      const [row] = await db
+        .update(fuelDailyMedia)
+        .set({
+          provider: input.provider,
+          embedId: input.embedId,
+          title: input.title,
+          createdBy: input.createdBy,
+        })
+        .where(eq(fuelDailyMedia.id, existing.id))
+        .returning();
+      return row;
+    }
+    const [row] = await db
+      .insert(fuelDailyMedia)
+      .values({
+        forDate: input.forDate,
+        provider: input.provider,
+        embedId: input.embedId,
+        title: input.title,
+        createdBy: input.createdBy,
+      })
+      .returning();
+    return row;
   }
 
   // Profile completeness calculation helper

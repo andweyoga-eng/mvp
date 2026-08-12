@@ -1,13 +1,11 @@
-import { type ReactNode } from "react";
+import { type ComponentType, type ReactNode, type SVGProps } from "react";
 import { useLocation } from "wouter";
 import {
   Search,
   Bell,
   Smile,
-  GraduationCap,
-  Mountain,
-  Compass,
-  Sparkles,
+  Dumbbell,
+  Apple,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -21,23 +19,46 @@ export type DashboardSection =
   | "sessions"
   | "emojou"
   | "workshops"
+  | "fuel"
+  /** Legacy deep-link routes; removed from the launcher. */
   | "trips"
   | "explore";
+
+type LauncherIcon = ComponentType<SVGProps<SVGSVGElement> & { className?: string }>;
+
+/** andWeYOGa mark: O with a caret (^) above — replaces the sparkle/star. */
+function AndWeYogaIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+      {...props}
+    >
+      <path d="M12 3.5 L15 7.25 H9 Z" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="14.5" r="5.25" />
+    </svg>
+  );
+}
 
 interface LauncherItem {
   id: DashboardSection;
   label: string;
-  icon: typeof Sparkles;
+  icon: LauncherIcon;
   /** Internal route or hash this tab opens; omit for not-yet-built sections. */
   href?: string;
 }
 
 const LAUNCHER_ITEMS: LauncherItem[] = [
-  { id: "sessions", label: "Sessions", icon: Sparkles, href: "/dashboard" },
-  { id: "emojou", label: "Emojou", icon: Smile, href: "/emojou" },
-  { id: "workshops", label: "we learn", icon: GraduationCap, href: "/workshops" },
-  { id: "trips", label: "Trips", icon: Mountain, href: "/trips" },
-  { id: "explore", label: "Explore", icon: Compass, href: "/explore" },
+  { id: "fuel", label: "WeFuel", icon: Apple, href: "/fuel" },
+  { id: "workshops", label: "WeBuild", icon: Dumbbell, href: "/workshops" },
+  { id: "emojou", label: "WeEmo", icon: Smile, href: "/emojou" },
+  { id: "sessions", label: "andWeYOGa", icon: AndWeYogaIcon, href: "/dashboard" },
 ];
 
 interface DashboardShellProps {
@@ -116,7 +137,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
         {/* ===== SECTION LAUNCHER ===== */}
         <div className="border-t border-dz-glass-border/60 bg-dz-surface/55">
           <PageContainer>
-            <nav className="grid grid-cols-5 gap-1 py-2 sm:gap-2 sm:py-3">
+            <nav className="grid grid-cols-4 gap-1 py-2 sm:gap-2 sm:py-3">
               {LAUNCHER_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const isActive = item.id === active;

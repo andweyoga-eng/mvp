@@ -200,7 +200,7 @@ export const SITE_CONTENT_INDEX: SiteContentEntry[] = [
     title: "Elevate your practice · Workshops",
     body:
       "Deepen your knowledge with curated masterclasses led by world-class instructors. Transformative experiences for every level.",
-    keywords: ["workshop", "workshops", "we learn", "masterclass", "elevate"],
+    keywords: ["workshop", "workshops", "we learn", "WeBuild", "andWeBuild", "masterclass", "elevate"],
     href: "/workshops",
     section: "Workshops",
   },

@@ -127,7 +127,11 @@ describe("unified Sessions tab", () => {
     const drawer = readFileSync(join(root, "client/src/components/account-drawer.tsx"), "utf8");
 
     assert.doesNotMatch(shell, /id: "calendar"/);
-    assert.match(shell, /grid-cols-5/);
+    assert.match(shell, /grid-cols-4/);
+    assert.match(shell, /label: "WeFuel"/);
+    assert.match(shell, /label: "WeBuild"/);
+    assert.match(shell, /label: "WeEmo"/);
+    assert.match(shell, /label: "andWeYOGa"/);
     assert.match(shell, /focusSessionsSearch/);
     assert.match(calendar, /setLocation\("\/dashboard"/);
     assert.match(drawer, /href: "\/dashboard"/);

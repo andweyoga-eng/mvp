@@ -16,6 +16,7 @@ import Workshops from "@/pages/workshops";
 import Trips from "@/pages/trips";
 import Explore from "@/pages/explore";
 import Emojou from "@/pages/emojou";
+import FuelPage from "@/pages/fuel";
 import Reserve from "@/pages/reserve";
 import MyAccount from "@/pages/my-account";
 import PrivacyNotice from "@/pages/privacy-notice";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/trips" component={Trips} />
       <Route path="/explore" component={Explore} />
       <Route path="/emojou" component={Emojou} />
+      <Route path="/fuel" component={FuelPage} />
       <Route path="/reserve" component={Reserve} />
       <Route path="/my-account" component={MyAccount} />
       <Route path="/privacy" component={PrivacyNotice} />

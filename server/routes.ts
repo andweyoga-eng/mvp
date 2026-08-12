@@ -139,6 +139,7 @@ import {
   type AdminAuthRequest,
   verifyAdminCredentials,
 } from "./adminAuth";
+import { registerFuelRoutes } from "./fuel-routes";
 import {
   sendEmail,
   sendEmailDetailed,
@@ -4508,6 +4509,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   }
+
+  registerFuelRoutes(app);
 
   const httpServer = createServer(app);
 
