@@ -42,9 +42,11 @@ export function isFlexiEnabledSchedule(schedule: FlexiEligibleScheduleLike | nul
 
 export function resolveFlexiSelectionCount(
   schedule: FlexiEligibleScheduleLike | null | undefined,
+  programSessionsPerWeek?: number | null,
 ): number {
-  if (schedule?.flexiSelectionCount && schedule.flexiSelectionCount > 0) {
-    return schedule.flexiSelectionCount;
+  // Program owns N (SPEC A4). Schedule weekdays are only a legacy fallback for options UI.
+  if (programSessionsPerWeek != null && programSessionsPerWeek > 0) {
+    return programSessionsPerWeek;
   }
   return parseRecurrenceWeekdays(schedule?.recurrenceWeekdays).length;
 }
@@ -65,15 +67,16 @@ export function buildFlexiCandidate(
   };
 }
 
+/** Pool by class type (any instructor) — product decision 3 Aug 2026. */
 export function sharesFlexiPool(
   anchor: Pick<FlexiEligibleScheduleLike, "classTypeId" | "instructorId">,
   candidate: Pick<FlexiEligibleScheduleLike, "classTypeId" | "instructorId">,
 ): boolean {
-  return anchor.classTypeId === candidate.classTypeId && anchor.instructorId === candidate.instructorId;
+  return anchor.classTypeId === candidate.classTypeId;
 }
 
 export function flexiTooltipCopy(): string {
-  return "Pick your weekly slots from any of the eligible schedule sets with the same session type and instructor. The number of slots you need to choose depends on how many practice days are in your package. Your package price stays the same, and you must finalize your selection at checkout.";
+  return "Pick your weekly slots from any eligible schedule of this session type (any instructor). How many slots you pick comes from your Program. Price stays the same; finalize at checkout.";
 }
 
 export interface FlexiOptionSlotLike {
@@ -111,15 +114,15 @@ export function defaultFlexiTermsItems(): FlexiTermItem[] {
   return [
     {
       key: "non_refundable",
-      summary: "Bookings are non-refundable.",
+      summary: "Fees follow the Cancellation and Refund Policy.",
       details:
-        "If there is a no-show by the instructor, an alternative session may be arranged to compensate for the session, or the session may be converted into credits as per the existing policy.",
+        "If a session is cancelled by the instructor or platform, registered members receive a reschedulable entitlement under the Cancellation, Refund and Rescheduling Policy. Guests receive a full refund to source. Member no-shows and voluntary cancellations are forfeited. There is no credit wallet.",
     },
     {
       key: "flexi_final_checkout",
       summary: "You must finalize your Flexi selection at checkout.",
       details:
-        "For eligible Flexi Mode schedules, you must choose your applicable practice days and times during checkout. After booking confirmation, you cannot change these selections yourself. In exceptional circumstances, the studio may review a change request at its discretion. If approved, only one change may be made for the booking or subscription, and all existing pricing, cancellation, communication, discount, offer, promotion, and credit policies will continue to apply.",
+        "For eligible Flexi Mode schedules, you must choose your applicable practice days and times during checkout. After booking confirmation, you cannot change these selections yourself. In exceptional circumstances, the studio may review a change request at its discretion. If approved, only one change may be made for the booking or subscription, and all existing pricing, cancellation, communication, discount, offer, and promotion policies will continue to apply.",
     },
     {
       key: "non_transferable",

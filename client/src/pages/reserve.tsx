@@ -40,6 +40,7 @@ import {
 } from "@/lib/member-sessions";
 import { setPendingBooking } from "@/lib/pending-booking";
 import { useBookingCheckout } from "@/hooks/use-booking-checkout";
+import { useCheckoutPrograms } from "@/hooks/use-checkout-programs";
 import {
   ManualPaymentReferenceBlock,
   ManualPaymentSubmittedMessage,
@@ -54,6 +55,8 @@ import {
   SessionTermsBlock,
   SessionTermsAcceptanceCopy,
 } from "@/components/session-terms-block";
+import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
+import { CANCELLATION_POLICY_CLICKWRAP_COPY } from "@shared/cancellation-policy";
 import { SessionDeliveryInfo } from "@/components/session-delivery-info";
 import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
 import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
@@ -144,6 +147,7 @@ export default function Reserve() {
     fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [acceptCancellationPolicy, setAcceptCancellationPolicy] = useState(false);
   const [bookingMode, setBookingMode] = useState<"series" | "flexi">("series");
   const [flexiSelections, setFlexiSelections] = useState<FlexiSelection[]>([]);
 
@@ -298,6 +302,14 @@ export default function Reserve() {
   const price = selected ? formatSessionPrice(selected.classType.price) : null;
   const profileComplete = isAuthUserProfileComplete(user);
   const isTrialDrop = isTrialOrDropIn(selected?.sessionFrequency ?? null);
+  const checkoutPrograms = useCheckoutPrograms({
+    classTypeId: selected?.classType?.id ?? selected?.classTypeId,
+    sessionFrequency: selected?.sessionFrequency,
+    enabled: !!selected,
+  });
+  const displayPrice = checkoutPrograms.selected
+    ? formatSessionPrice(checkoutPrograms.selected.priceRupees)
+    : price;
   const {
     data: flexiOptions,
     isLoading: flexiOptionsLoading,
@@ -317,10 +329,35 @@ export default function Reserve() {
       persistReserveIntent(sessionId, classTypeId);
       toast({
         title: "Profile incomplete",
-        description: "Complete your profile and health update before booking.",
+        description: "Complete your profile and Health History before booking.",
         variant: "destructive",
       });
       setLocation("/my-account#profile");
+      return;
+    }
+    if (checkoutPrograms.empty) {
+      toast({
+        title: "No program available",
+        description:
+          "An active program must be configured for this session type before checkout.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!checkoutPrograms.programId) {
+      toast({
+        title: "Choose a program",
+        description: "Select a program package to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!acceptCancellationPolicy) {
+      toast({
+        title: "Policy required",
+        description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
+        variant: "destructive",
+      });
       return;
     }
     if (bookingMode === "flexi") {
@@ -340,10 +377,13 @@ export default function Reserve() {
         });
         return;
       }
-      checkout.startBooking(selected.id, { flexiSelections });
+      checkout.startBooking(selected.id, {
+        flexiSelections,
+        programId: checkoutPrograms.programId,
+      });
       return;
     }
-    checkout.startBooking(selected.id);
+    checkout.startBooking(selected.id, { programId: checkoutPrograms.programId });
   };
 
   const goToSessions = () => setLocation(MY_SESSIONS_URL);
@@ -745,6 +785,41 @@ export default function Reserve() {
                     </div>
                   ) : (
                     <>
+                      <div className="mb-3 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Program
+                        </p>
+                        {checkoutPrograms.loading ? (
+                          <p className="text-sm text-muted-foreground">Loading programs…</p>
+                        ) : checkoutPrograms.empty ? (
+                          <Alert className="border-amber-200 bg-amber-50">
+                            <AlertDescription className="text-xs text-amber-900">
+                              No active program is configured for this session type. Checkout is
+                              unavailable until a program is set in admin.
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <select
+                            className="w-full rounded-md border bg-white px-3 py-2 text-sm"
+                            value={checkoutPrograms.programId}
+                            onChange={(e) => checkoutPrograms.setProgramId(e.target.value)}
+                          >
+                            {checkoutPrograms.programs.length > 1 ? (
+                              <option value="">Select a program…</option>
+                            ) : null}
+                            {checkoutPrograms.programs.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {displayPrice ? (
+                          <p className="text-sm font-medium text-primary">
+                            Program price: {displayPrice}
+                          </p>
+                        ) : null}
+                      </div>
                       {flexiEligible ? (
                         <div className="mb-3">
                           <FlexiCheckoutSection
@@ -775,6 +850,12 @@ export default function Reserve() {
                         className="mb-3"
                         items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
                       />
+                      <CancellationPolicyClickwrap
+                        checked={acceptCancellationPolicy}
+                        onChange={setAcceptCancellationPolicy}
+                        testId="reserve-accept-cancellation-policy"
+                        className="mb-3"
+                      />
                       <SessionTermsAcceptanceCopy className="mb-3" />
                       <Separator className="mb-3" />
                       <div className="mb-3 space-y-1">
@@ -787,8 +868,12 @@ export default function Reserve() {
                         type="button"
                         onClick={handleConfirm}
                         disabled={
+                          !acceptCancellationPolicy ||
                           checkout.isReserving ||
                           checkout.isPaying ||
+                          checkoutPrograms.loading ||
+                          checkoutPrograms.empty ||
+                          !checkoutPrograms.programId ||
                           selected.hasPaymentConfigured === false ||
                           !isFlexiCheckoutReady({
                             bookingMode,

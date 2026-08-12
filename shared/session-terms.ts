@@ -1,6 +1,6 @@
 /** Default session-type terms shown in admin and at checkout when none are set. */
 export const DEFAULT_SESSION_TERMS_AND_CONDITIONS =
-  "The sessions are non-refundable. If there is a no-show by the instructor, an alternative session will be arranged to compensate for the session. You can also choose to convert that session into credits, which you can use for any other bookings on the platform.";
+  "Fees are non-refundable except where the Cancellation, Refund and Rescheduling Policy provides a reschedule or refund. If a session is cancelled by the instructor or platform, registered members receive a reschedulable entitlement; guests receive a full refund to source. Member no-shows and voluntary cancellations are forfeited.";
 
 export const SESSION_TERMS_MAX_LENGTH = 5000;
 
@@ -26,7 +26,7 @@ export function resolveSessionTermsItems(
   const seed: SessionTermsItem[] = [
     {
       key: "base_terms",
-      summary: "Bookings are non-refundable.",
+      summary: "Fees follow the Cancellation and Refund Policy.",
       details: base,
     },
   ];

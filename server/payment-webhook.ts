@@ -57,6 +57,33 @@ export async function handleRazorpayWebhook(req: Request, res: Response): Promis
       }
     }
 
+    if (eventType === "refund.processed" || eventType === "refund.failed") {
+      const { markRefundProcessed } = await import("./refund-service");
+      const refundEntity = event.payload?.refund?.entity ?? event.payload?.refund;
+      const paymentEntity = event.payload?.payment?.entity ?? event.payload?.payment;
+      if (eventType === "refund.processed") {
+        await markRefundProcessed({
+          razorpayRefundId: refundEntity?.id ? String(refundEntity.id) : null,
+          razorpayPaymentId: paymentEntity?.id
+            ? String(paymentEntity.id)
+            : refundEntity?.payment_id
+              ? String(refundEntity.payment_id)
+              : null,
+        });
+      } else if (refundEntity?.id) {
+        const { payments } = await import("@shared/schema");
+        const { db } = await import("./db");
+        const { eq } = await import("drizzle-orm");
+        await db
+          .update(payments)
+          .set({
+            refundStatus: "manual_required",
+            updatedAt: new Date(),
+          })
+          .where(eq(payments.razorpayRefundId, String(refundEntity.id)));
+      }
+    }
+
     res.json({ received: true });
   } catch (error) {
     console.error("[Razorpay webhook]", error);

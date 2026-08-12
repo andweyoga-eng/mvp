@@ -14,6 +14,7 @@ export interface MemberSession {
   classId: string;
   anchorClassId?: string | null;
   className: string;
+  classTypeId?: string;
   instructorName: string;
   date: string;
   time: string;
@@ -38,6 +39,7 @@ type MemberSessionApiRow = {
   classId: string;
   anchorClassId?: string | null;
   className: string;
+  classTypeId?: string;
   instructorName: string;
   sessionDate: string;
   status: MemberSession["status"];
@@ -62,6 +64,7 @@ export function mapMemberSessions(rows: MemberSessionApiRow[]): MemberSession[] 
       id: r.id,
       bookingId: r.bookingId,
       classId: r.classId,
+      classTypeId: r.classTypeId,
       anchorClassId: r.anchorClassId ?? null,
       className: r.className,
       instructorName: r.instructorName,

@@ -79,13 +79,14 @@ export function CancelSessionDialog({
           <DialogDescription>
             {bookingCount > 0 ? (
               <>
-                {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. Members will
-                see this session as cancelled with your reason.
+                {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. Members keep
+                the entitlement as reschedulable; guests are queued for a full refund to source. There
+                is no free-text compensation field.
               </>
             ) : (
               <>
-                {sessionLabel} will be cancelled. Members will see the reason in their profile if
-                they had a booking.
+                {sessionLabel} will be cancelled and marked paused. No active bookings will be
+                affected.
               </>
             )}
           </DialogDescription>

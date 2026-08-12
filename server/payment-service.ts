@@ -53,13 +53,25 @@ async function enrollRecurringSeriesAfterPaid(params: {
   userId: string | null | undefined;
   classId: string;
   paymentStatus?: "paid" | "waived";
+  bookingId?: string | null;
 }): Promise<void> {
   if (!params.userId) return;
   try {
+    let maxSessionsToEnroll: number | undefined;
+    let totalSessionsOverride: number | undefined;
+    if (params.bookingId) {
+      const sub = await storage.getSubscriptionByBookingId(params.bookingId);
+      if (sub?.sessionsPurchased != null && sub.sessionsPurchased > 0) {
+        maxSessionsToEnroll = sub.sessionsPurchased;
+        totalSessionsOverride = sub.sessionsPurchased;
+      }
+    }
     await storage.enrollUserInPaidRecurringSeries({
       userId: params.userId,
       anchorClassId: params.classId,
       paymentStatus: params.paymentStatus ?? "paid",
+      maxSessionsToEnroll,
+      totalSessionsOverride,
     });
   } catch (enrollErr) {
     console.error("[Payment] Recurring series enrollment failed (non-fatal):", enrollErr);
@@ -84,6 +96,7 @@ export async function markPaymentPaid(params: {
     await enrollRecurringSeriesAfterPaid({
       userId: existingBooking?.userId,
       classId,
+      bookingId,
     });
     return buildPayloadFromPayment(payment);
   }
@@ -167,6 +180,7 @@ export async function markPaymentPaid(params: {
   await enrollRecurringSeriesAfterPaid({
     userId: bookingForSeries?.userId,
     classId,
+    bookingId,
   });
 
   if (payment.couponId && (payment.discountAmountPaise ?? 0) > 0) {
@@ -285,6 +299,7 @@ export async function verifyManualPayment(
     await enrollRecurringSeriesAfterPaid({
       userId: booking.userId,
       classId: booking.classId,
+      bookingId: booking.id,
     });
     await sendBookingConfirmationEmail(booking.id);
     const refreshed = await storage.getPaymentById(payment.id);
@@ -312,6 +327,7 @@ export async function verifyManualPayment(
     await enrollRecurringSeriesAfterPaid({
       userId: booking.userId,
       classId: booking.classId,
+      bookingId: booking.id,
     });
   }
 
@@ -352,6 +368,7 @@ export async function confirmQrBookingPayment(bookingId: string): Promise<Paymen
   await enrollRecurringSeriesAfterPaid({
     userId: booking.userId,
     classId: booking.classId,
+    bookingId: booking.id,
   });
 
   await sendBookingConfirmationEmail(booking.id);

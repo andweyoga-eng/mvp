@@ -1,4 +1,3 @@
-import { isAdminSessionPaused } from "@shared/admin-session-actions";
 import { useState } from "react";
 import {
   Dialog,
@@ -41,13 +40,13 @@ export function DeleteSessionDialog({
   onConfirm,
 }: DeleteSessionDialogProps) {
   const [reason, setReason] = useState("");
-  const [compensation, setCompensation] = useState("");
   const [ownerOtp, setOwnerOtp] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const booked = bookingCount > 0;
+
   const reset = () => {
     setReason("");
-    setCompensation("");
     setOwnerOtp("");
     setSubmitting(false);
   };
@@ -57,15 +56,20 @@ export function DeleteSessionDialog({
     onOpenChange(next);
   };
 
-  const canSubmit = isSessionDeleteFormSubmittable(reason, ownerOtp, bookingCount, compensation);
-  const submitBlocker = sessionDeleteFormBlocker(reason, ownerOtp, bookingCount, compensation);
+  // Hard-delete is blocked when bookings exist (SPEC-SESSIONS-01 A2).
+  const canSubmit =
+    !booked && isSessionDeleteFormSubmittable(reason, ownerOtp, 0, "");
+  const submitBlocker = booked
+    ? "This session has bookings. Use Cancel session instead of hard-delete."
+    : sessionDeleteFormBlocker(reason, ownerOtp, 0, "");
 
   const handleSubmit = async () => {
+    if (booked) return;
     setSubmitting(true);
     try {
       await onConfirm({
         reason: reason.trim(),
-        compensation: compensation.trim(),
+        compensation: "",
         ownerOtp: normalizeOwnerCancelOtpInput(ownerOtp) || ownerOtp.trim(),
       });
       reset();
@@ -80,114 +84,90 @@ export function DeleteSessionDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {bookingCount > 0 ? "Delete session with bookings" : "Delete session permanently"}
+            {booked ? "Cannot hard-delete a booked session" : "Delete session permanently"}
           </DialogTitle>
           <DialogDescription>
-            {bookingCount > 0 ? (
+            {booked ? (
               <>
-                {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. This
-                permanently removes the session and all related records. Booked members will be
-                notified with your reason and compensation details.
+                {sessionLabel} has {bookingCount} booking{bookingCount === 1 ? "" : "s"}. Hard-delete
+                is blocked. Cancel the session instead so members keep their entitlement and can
+                reschedule.
               </>
             ) : (
-              <>
-                {sessionLabel} will be permanently deleted. This cannot be undone.
-              </>
+              <>{sessionLabel} will be permanently deleted. This cannot be undone.</>
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <Alert className="border-blue-200 bg-blue-50">
-          <ShieldAlert className="h-4 w-4 text-blue-800" />
-          <AlertDescription className="text-blue-950 text-sm">
-            Booked members will be notified by <strong>email</strong> (live when configured), plus{" "}
-            <strong>SMS</strong> and <strong>WhatsApp</strong> (where consent allows) when channels
-            are integrated.
-          </AlertDescription>
-        </Alert>
+        {booked ? (
+          <Alert className="border-amber-200 bg-amber-50">
+            <ShieldAlert className="h-4 w-4 text-amber-800" />
+            <AlertDescription className="text-amber-950 text-sm">
+              Close this dialog and use <strong>Cancel session</strong> from the week view.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <Alert className="border-blue-200 bg-blue-50">
+              <ShieldAlert className="h-4 w-4 text-blue-800" />
+              <AlertDescription className="text-blue-950 text-sm">
+                Only empty sessions (no bookings) can be hard-deleted.
+              </AlertDescription>
+            </Alert>
 
-        <Alert className="border-amber-200 bg-amber-50">
-          <ShieldAlert className="h-4 w-4 text-amber-800" />
-          <AlertDescription className="text-amber-950 text-sm">
-            <strong>Super admin only.</strong> Use placeholder OTP <strong>000000</strong> after
-            confirming with the studio owner.
-          </AlertDescription>
-        </Alert>
+            <Alert className="border-amber-200 bg-amber-50">
+              <ShieldAlert className="h-4 w-4 text-amber-800" />
+              <AlertDescription className="text-amber-950 text-sm">
+                <strong>Super admin only.</strong> Use placeholder OTP{" "}
+                <strong>{PLACEHOLDER_OWNER_CANCEL_OTP}</strong> after confirming with the studio
+                owner.
+              </AlertDescription>
+            </Alert>
 
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="delete-reason">Reason for deletion</Label>
-            <Textarea
-              id="delete-reason"
-              value={reason}
-              maxLength={MAX_TEXT_LENGTH.cancelReason}
-              onChange={(e) => setReason(limitTextInput(e.target.value, MAX_TEXT_LENGTH.cancelReason))}
-              placeholder="e.g. Duplicate session created in error"
-              rows={3}
-            />
-          </div>
-          {bookingCount > 0 ? (
-            <div className="space-y-2">
-              <Label htmlFor="delete-compensation">Compensation for booked members</Label>
-              <Textarea
-                id="delete-compensation"
-                value={compensation}
-                maxLength={MAX_TEXT_LENGTH.deleteCompensation}
-                onChange={(e) =>
-                  setCompensation(limitTextInput(e.target.value, MAX_TEXT_LENGTH.deleteCompensation))
-                }
-                placeholder="e.g. Full refund within 3 business days, or credit for any upcoming session"
-                rows={3}
-              />
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="delete-reason">Reason for deletion</Label>
+                <Textarea
+                  id="delete-reason"
+                  value={reason}
+                  onChange={(e) => setReason(limitTextInput(e.target.value, MAX_TEXT_LENGTH.cancelReason))}
+                  rows={3}
+                  placeholder="Why is this empty session being removed?"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delete-otp">Owner OTP</Label>
+                <Input
+                  id="delete-otp"
+                  value={ownerOtp}
+                  onChange={(e) => setOwnerOtp(normalizeOwnerCancelOtpInput(e.target.value))}
+                  placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                />
+              </div>
             </div>
+          </>
+        )}
+
+        <DialogFooter className="flex-col items-stretch gap-2 sm:flex-col">
+          {!booked && submitBlocker ? (
+            <p className="text-xs text-muted-foreground">{submitBlocker}</p>
           ) : null}
-          <div className="space-y-2">
-            <Label htmlFor="delete-owner-otp">Owner OTP (placeholder)</Label>
-            <div className="flex gap-2">
-              <Input
-                id="delete-owner-otp"
-                value={ownerOtp}
-                maxLength={MAX_TEXT_LENGTH.ownerOtp}
-                onChange={(e) =>
-                  setOwnerOtp(
-                    limitTextInput(normalizeOwnerCancelOtpInput(e.target.value), MAX_TEXT_LENGTH.ownerOtp),
-                  )
-                }
-                placeholder={PLACEHOLDER_OWNER_CANCEL_OTP}
-                autoComplete="off"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                className="font-mono tracking-widest"
-              />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => handleClose(false)}>
+              {booked ? "Close" : "Cancel"}
+            </Button>
+            {!booked ? (
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => setOwnerOtp(PLACEHOLDER_OWNER_CANCEL_OTP)}
+                variant="destructive"
+                disabled={!canSubmit || submitting || Boolean(submitBlocker)}
+                onClick={() => void handleSubmit()}
               >
-                Use {PLACEHOLDER_OWNER_CANCEL_OTP}
+                {submitting ? "Deleting…" : "Delete permanently"}
               </Button>
-            </div>
+            ) : null}
           </div>
-        </div>
-
-        {submitBlocker && !submitting ? (
-          <p className="text-xs text-amber-800">{submitBlocker}</p>
-        ) : null}
-
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={() => handleClose(false)} disabled={submitting}>
-            Keep session
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={submitting || !canSubmit}
-            onClick={() => void handleSubmit()}
-          >
-            {submitting ? "Deleting…" : "Delete permanently"}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

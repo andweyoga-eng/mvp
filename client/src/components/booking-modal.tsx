@@ -31,6 +31,7 @@ import {
   validateRequiredGuestPhone,
 } from "@shared/guest-phone";
 import { formatProfileWhatsapp } from "@shared/waitlist";
+import { useCheckoutPrograms } from "@/hooks/use-checkout-programs";
 import { navigateToDashboardAfterSpotRelease } from "@/lib/spot-release-navigation";
 import {
   type GuestFieldKey,
@@ -43,6 +44,7 @@ import { MAX_TEXT_LENGTH, limitTextInput } from "@shared/input-limits";
 import { AuthHoverPopup, AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
+import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
 import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, User, ExternalLink, CreditCard, Sparkles, Video, Download } from "lucide-react";
@@ -91,6 +93,10 @@ import {
 import { PaymentConfirmedContent } from "@/components/payment-confirmed-dialog";
 import { GuestBookingConfirmedContent } from "@/components/guest-booking-confirmed-dialog";
 import { LEGAL_CONFIG } from "@shared/legal-config";
+import {
+  CANCELLATION_POLICY_VERSION,
+  CANCELLATION_POLICY_CLICKWRAP_COPY,
+} from "@shared/cancellation-policy";
 import { MANUAL_PAYMENT_SUBMITTED_TOAST } from "@shared/manual-payment-ack";
 import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
@@ -195,6 +201,7 @@ export default function BookingModal({
     terms: false,
     age: false,
   });
+  const [acceptCancellationPolicy, setAcceptCancellationPolicy] = useState(false);
   const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
   const guestCopy = CONSENT_COPY[consentLang];
   const [nextBatchPrompt, setNextBatchPrompt] = useState<{ id: string; date: string } | null>(null);
@@ -353,6 +360,18 @@ export default function BookingModal({
       (displayClass as { sessionFrequency?: string } | undefined)?.sessionFrequency;
     return isTrialOrDropIn(freq);
   }, [selectedSession, displayClass]);
+
+  const checkoutPrograms = useCheckoutPrograms({
+    classTypeId:
+      selectedSession?.classType?.id ??
+      selectedSession?.classTypeId ??
+      displayClass?.classType?.id ??
+      displayClass?.classTypeId,
+    sessionFrequency:
+      (selectedSession as { sessionFrequency?: string } | undefined)?.sessionFrequency ??
+      (displayClass as { sessionFrequency?: string } | undefined)?.sessionFrequency,
+    enabled: isOpen,
+  });
 
   const checkoutSessionTerms =
     selectedSession?.classType?.termsAndConditions ??
@@ -680,7 +699,7 @@ export default function BookingModal({
         toast({
           title: "Profile Incomplete",
           description:
-            "Please complete your profile (name, mobiles, verified email, and health update) to book sessions.",
+            "Please complete your profile (name, mobiles, verified email, and Health History) to book sessions.",
           variant: "destructive",
         });
 
@@ -820,7 +839,7 @@ export default function BookingModal({
       toast({
         title: "Profile Incomplete",
         description:
-          "Please complete your profile (name, mobiles, verified email, and health update) before booking sessions.",
+          "Please complete your profile (name, mobiles, verified email, and Health History) before booking sessions.",
         variant: "destructive",
       });
 
@@ -878,6 +897,24 @@ export default function BookingModal({
     }
 
     const payload: Record<string, string | boolean | FlexiSelection[]> = { classId };
+    if (checkoutPrograms.programId) {
+      payload.programId = checkoutPrograms.programId;
+    } else if (checkoutPrograms.empty) {
+      toast({
+        title: "No program available",
+        description:
+          "An active program must be configured for this session type before checkout.",
+        variant: "destructive",
+      });
+      return;
+    } else if (checkoutPrograms.needsChoice || checkoutPrograms.programs.length > 1) {
+      toast({
+        title: "Choose a program",
+        description: "Select a program package to continue.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!user && effectiveCanGuestBook) {
       if (!validateGuestCheckoutForm()) return;
       const phoneCheck = validateRequiredGuestPhone(guestBooking.phone);
@@ -889,6 +926,27 @@ export default function BookingModal({
       payload.guestConsentTerms = true;
       payload.guestConsentAge = true;
       payload.consentVersion = LEGAL_CONFIG.documentVersion;
+      if (!acceptCancellationPolicy) {
+        toast({
+          title: "Policy required",
+          description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.acceptCancellationPolicy = true;
+      payload.cancellationPolicyVersion = CANCELLATION_POLICY_VERSION;
+    } else if (user) {
+      if (!acceptCancellationPolicy) {
+        toast({
+          title: "Policy required",
+          description: CANCELLATION_POLICY_CLICKWRAP_COPY.en.requiredError,
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.acceptCancellationPolicy = true;
+      payload.cancellationPolicyVersion = CANCELLATION_POLICY_VERSION;
     }
 
     if (user && memberBookingMode === "flexi") {
@@ -911,6 +969,7 @@ export default function BookingModal({
       payload.flexiSelections = memberFlexiSelections;
     }
 
+    // Program resolved server-side when only one active SKU exists for this kind.
     bookingMutation.mutate(payload as { classId: string });
   };
 
@@ -2041,6 +2100,12 @@ export default function BookingModal({
                     label={guestCopy.cb3Age}
                     className="border-0 bg-transparent p-0"
                   />
+                  <CancellationPolicyClickwrap
+                    checked={acceptCancellationPolicy}
+                    onChange={setAcceptCancellationPolicy}
+                    testId="guest-accept-cancellation-policy"
+                    className="border-0 bg-transparent p-0"
+                  />
                 </div>
                 <SessionTermsBlock
                   termsAndConditions={checkoutSessionTerms}
@@ -2056,6 +2121,7 @@ export default function BookingModal({
                     disabled={
                       !guestConsent.terms ||
                       !guestConsent.age ||
+                      !acceptCancellationPolicy ||
                       guestBooking.phone.length !== 10 ||
                       bookingMutation.isPending ||
                       isPaying
@@ -2319,6 +2385,12 @@ export default function BookingModal({
                 collapsible={false}
                 items={memberBookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
               />
+              <CancellationPolicyClickwrap
+                checked={acceptCancellationPolicy}
+                onChange={setAcceptCancellationPolicy}
+                testId="member-accept-cancellation-policy"
+                className="mb-2"
+              />
               <SessionTermsAcceptanceCopy />
 
               {flexiEligibleSession ? (
@@ -2359,6 +2431,7 @@ export default function BookingModal({
                   type="submit"
                   className="flex-1 bg-primary !text-white font-bold hover:bg-primary/90"
                   disabled={
+                    !acceptCancellationPolicy ||
                     bookingMutation.isPending ||
                     isPaying ||
                     (hasPreselectedSession && (!preselectedIsBookable || !(formData.classId || sessionId))) ||

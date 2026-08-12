@@ -21,6 +21,7 @@ import Reserve from "@/pages/reserve";
 import MyAccount from "@/pages/my-account";
 import PrivacyNotice from "@/pages/privacy-notice";
 import TermsOfService from "@/pages/terms-of-service";
+import CancellationRefundPolicy from "@/pages/cancellation-refund-policy";
 import Grievance from "@/pages/grievance";
 import { mapLegacyAccountUrl } from "@/lib/account-routes";
 import ResetPassword from "@/pages/reset-password";
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/my-account" component={MyAccount} />
       <Route path="/privacy" component={PrivacyNotice} />
       <Route path="/terms" component={TermsOfService} />
+      <Route path="/cancellation-refund" component={CancellationRefundPolicy} />
       <Route path="/grievance" component={Grievance} />
       <Route path="/account/profile" component={LegacyAccountRedirect} />
       <Route path="/account/health" component={LegacyAccountRedirect} />

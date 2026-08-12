@@ -41,7 +41,6 @@ export async function parseAdminApiError(res: Response): Promise<{
 export function validateClassTypeForm(form: {
   name: string;
   description: string;
-  price: string;
   duration: string;
   imageUrl: string;
   intensity: string;
@@ -51,7 +50,6 @@ export function validateClassTypeForm(form: {
   const result = adminCreateClassTypeSchema.safeParse({
     name: form.name,
     description: form.description,
-    price: form.price,
     duration: form.duration,
     imageUrl: form.imageUrl.trim(),
     intensity: form.intensity,
@@ -121,7 +119,6 @@ export function validateSessionForm(form: {
   occurrenceCount: string;
   recurrenceWeekdays: number[];
   flexiEnabled?: boolean;
-  flexiSelectionCount?: string;
 }) {
   const result = adminCreateClassSessionSchema.safeParse({
     classTypeId: form.classTypeId.trim(),
@@ -158,10 +155,6 @@ export function validateSessionForm(form: {
         : [],
     flexiEnabled:
       (form.recurrenceKind ?? "once") === "weekly" ? !!form.flexiEnabled : false,
-    flexiSelectionCount:
-      (form.recurrenceKind ?? "once") === "weekly" && form.flexiEnabled
-        ? form.flexiSelectionCount?.trim() || String(form.recurrenceWeekdays.length || 1)
-        : null,
   });
   if (result.success) return { ok: true as const, data: result.data, errors: {} };
   return { ok: false as const, data: null, errors: zodErrorsToFieldMap(result.error.issues) };

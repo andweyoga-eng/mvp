@@ -6,23 +6,44 @@ import {
   normalizeSessionPaymentMethod,
   usesHostedCheckout,
 } from "@shared/payment-gateway";
+import { programHasFee, programPriceRupeesDisplay } from "./checkout-program";
+import { storage } from "./storage";
 
 /** Shared payload for guest conflict 409 and GET /api/bookings/:id/resume-checkout. */
-export function buildResumeCheckoutPayload(params: {
+export async function buildResumeCheckoutPayload(params: {
   booking: Booking;
   cls: Class;
   classType?: { name?: string | null; price?: string | null } | null;
   instructor?: { name?: string | null } | null;
-}): Record<string, unknown> {
+}): Promise<Record<string, unknown>> {
   const { booking, cls, classType, instructor } = params;
   const resumeMethod = normalizeSessionPaymentMethod(
     booking.paymentMethod ?? cls.paymentMethod,
   );
   const resumeGateway = getConfiguredCheckoutGateway();
-  const resumeHasPrice =
-    classType?.price != null &&
-    classType.price !== "" &&
-    parseFloat(String(classType.price)) > 0;
+
+  let price: string | null = null;
+  let resumeHasPrice = false;
+  const sub = await storage.getSubscriptionByBookingId(booking.id);
+  if (sub?.programId) {
+    const program = await storage.getProgram(sub.programId);
+    if (program) {
+      price = programPriceRupeesDisplay(program);
+      resumeHasPrice = programHasFee(program);
+    }
+  }
+  if (!resumeHasPrice) {
+    const payment = await storage.getPaymentByBookingId(booking.id);
+    if (payment && payment.amountPaise > 0) {
+      price = (payment.amountPaise / 100).toFixed(2);
+      resumeHasPrice = true;
+    }
+  }
+  // Last resort display only — never used for charging (FR-04).
+  if (price == null && classType?.price) {
+    price = String(classType.price);
+  }
+
   const resumeCheckoutEnabled =
     resumeHasPrice && usesHostedCheckout(resumeMethod) && !!resumeGateway;
 
@@ -41,7 +62,8 @@ export function buildResumeCheckoutPayload(params: {
     className: classType?.name ?? "Yoga Session",
     instructorName: instructor?.name ?? "",
     sessionDate: cls.date,
-    price: classType?.price ?? null,
+    price,
+    programId: sub?.programId ?? null,
     useRazorpayCheckout: resumeCheckoutEnabled,
     razorpayKeyId: resumeCheckoutEnabled ? resumeGateway!.getPublicKeyId() : null,
     paymentRequired: resumeHasPrice,

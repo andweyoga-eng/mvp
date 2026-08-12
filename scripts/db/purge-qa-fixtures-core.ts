@@ -1,5 +1,6 @@
 import { inArray, like, or } from "drizzle-orm";
 import { db } from "../../server/db.ts";
+import { assertPurgeAllowed } from "../../shared/purge-safety.ts";
 import {
   QA_AGENT_CLASS_TYPE_PREFIX,
   QA_AGENT_INSTRUCTOR_PREFIX,
@@ -11,8 +12,6 @@ import {
   QA_FIXTURE_USER_EMAIL_PREFIXES,
   QA_SMOKE_CLASS_TYPE_PREFIX,
   QA_SMOKE_INSTRUCTOR_PREFIX,
-  SEED_CLASS_TYPE_NAMES,
-  SEED_INSTRUCTOR_NAMES,
 } from "../../shared/seed-catalog.ts";
 import {
   bookings,
@@ -24,6 +23,7 @@ import {
   instructors,
   paymentQrCodes,
   payments,
+  programs,
   sessionJoinEvents,
   sessionMoodCheckins,
   subscriptions,
@@ -40,16 +40,18 @@ export type PurgeQaFixturesSummary = {
 };
 
 function fixtureClassTypeCondition() {
-  const parts = [inArray(classTypes.name, [...SEED_CLASS_TYPE_NAMES])];
-  parts.push(like(classTypes.name, `${QA_FIXTURE_CLASS_TYPE_PREFIX}%`));
-  parts.push(like(classTypes.name, `${QA_SMOKE_CLASS_TYPE_PREFIX}%`));
-  parts.push(like(classTypes.name, `${QA_AGENT_CLASS_TYPE_PREFIX}%`));
-  return or(...parts);
+  // Safer end state (D10): never match live catalogue names (e.g. Hatha Yoga).
+  // Only QA / smoke / agent prefixes.
+  return or(
+    like(classTypes.name, `${QA_FIXTURE_CLASS_TYPE_PREFIX}%`),
+    like(classTypes.name, `${QA_SMOKE_CLASS_TYPE_PREFIX}%`),
+    like(classTypes.name, `${QA_AGENT_CLASS_TYPE_PREFIX}%`),
+  );
 }
 
 function fixtureInstructorCondition() {
-  const parts: ReturnType<typeof inArray>[] = [
-    inArray(instructors.name, [...SEED_INSTRUCTOR_NAMES, ...QA_FIXTURE_INSTRUCTOR_EXACT]),
+  const parts: Array<ReturnType<typeof like> | ReturnType<typeof inArray>> = [
+    inArray(instructors.name, [...QA_FIXTURE_INSTRUCTOR_EXACT]),
   ];
   for (const prefix of QA_FIXTURE_INSTRUCTOR_PREFIXES) {
     parts.push(like(instructors.name, `${prefix}%`));
@@ -66,6 +68,10 @@ function fixtureUserEmailCondition() {
   return or(...parts);
 }
 
+/**
+ * Detach financial + consent rows (D4 pattern), then remove bookings/class.
+ * Never hard-delete payments or consent audit logs.
+ */
 async function deleteClassesAndDependents(classIds: string[]) {
   if (!classIds.length) return 0;
 
@@ -76,10 +82,25 @@ async function deleteClassesAndDependents(classIds: string[]) {
   const bookingIds = seedBookings.map((r) => r.id);
 
   if (bookingIds.length) {
-    await db.delete(consentAuditLogs).where(inArray(consentAuditLogs.bookingId, bookingIds));
-    await db.delete(payments).where(inArray(payments.bookingId, bookingIds));
+    await db
+      .update(payments)
+      .set({
+        bookingId: null,
+        classId: null,
+        updatedAt: new Date(),
+      })
+      .where(inArray(payments.bookingId, bookingIds));
+    await db
+      .update(consentAuditLogs)
+      .set({ bookingId: null })
+      .where(inArray(consentAuditLogs.bookingId, bookingIds));
     await db.delete(bookings).where(inArray(bookings.id, bookingIds));
   }
+
+  await db
+    .update(payments)
+    .set({ classId: null, updatedAt: new Date() })
+    .where(inArray(payments.classId, classIds));
 
   await db.delete(carouselPromotions).where(inArray(carouselPromotions.classId, classIds));
   await db.delete(sessionMoodCheckins).where(inArray(sessionMoodCheckins.classId, classIds));
@@ -91,6 +112,8 @@ async function deleteClassesAndDependents(classIds: string[]) {
 
 /** Remove demo seed + integration-test fixture rows. Safe to call from tests (does not close the pool). */
 export async function purgeQaFixturesFromDb(): Promise<PurgeQaFixturesSummary> {
+  assertPurgeAllowed(process.env as import("../../shared/purge-safety.ts").PurgeEnv);
+
   const summary: PurgeQaFixturesSummary = {
     sessionTypes: 0,
     instructors: 0,
@@ -129,6 +152,12 @@ export async function purgeQaFixturesFromDb(): Promise<PurgeQaFixturesSummary> {
   summary.sessions = await deleteClassesAndDependents(fixtureClasses.map((r) => r.id));
 
   if (fixtureTypeIds.length) {
+    // Detach program FKs on subscriptions before removing programs / types.
+    await db
+      .update(subscriptions)
+      .set({ programId: null, updatedAt: new Date() })
+      .where(inArray(subscriptions.classTypeId, fixtureTypeIds));
+    await db.delete(programs).where(inArray(programs.classTypeId, fixtureTypeIds));
     await db.delete(subscriptions).where(inArray(subscriptions.classTypeId, fixtureTypeIds));
     await db
       .delete(classTypeNotifyRequests)

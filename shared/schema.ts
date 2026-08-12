@@ -1,5 +1,15 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, decimal, boolean, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  timestamp,
+  decimal,
+  boolean,
+  jsonb,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { createInsertSchema } from "drizzle-zod";
 import type { HealthHistoryEntry } from "./health-disclosure";
@@ -138,27 +148,36 @@ export const classTypes = pgTable("class_types", {
  * Trial and drop_in are Programs with exactly one session (per_week = 1,
  * duration_weeks = 1). There are no special cases.
  */
-export const programs = pgTable("programs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
-  version: integer("version").notNull().default(1),
-  /** trial | drop_in | recurring */
-  kind: varchar("kind", { length: 16 }).notNull(),
-  /** 1 for trial and drop_in */
-  sessionsPerWeek: integer("sessions_per_week").notNull().default(1),
-  /** 1 for trial and drop_in */
-  durationWeeks: integer("duration_weeks").notNull().default(1),
-  /** Denormalised = sessions_per_week * duration_weeks. Written by the app, never edited by hand. */
-  totalSessions: integer("total_sessions").notNull().default(1),
-  /** Price of the WHOLE program, in integer paise. Never a decimal, never a float. */
-  pricePaise: integer("price_paise").notNull(),
-  /** Whether this program may be composed via Flexi (mix-and-match slots across batches). */
-  flexiAllowed: boolean("flexi_allowed").notNull().default(false),
-  /** draft | active | archived. Only one active version per (class_type, kind, per_week, duration). */
-  status: varchar("status", { length: 16 }).notNull().default("draft"),
-  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+export const programs = pgTable(
+  "programs",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
+    version: integer("version").notNull().default(1),
+    /** trial | drop_in | recurring */
+    kind: varchar("kind", { length: 16 }).notNull(),
+    /** 1 for trial and drop_in */
+    sessionsPerWeek: integer("sessions_per_week").notNull().default(1),
+    /** 1 for trial and drop_in */
+    durationWeeks: integer("duration_weeks").notNull().default(1),
+    /** Denormalised = sessions_per_week * duration_weeks. Written by the app, never edited by hand. */
+    totalSessions: integer("total_sessions").notNull().default(1),
+    /** Price of the WHOLE program, in integer paise. Never a decimal, never a float. */
+    pricePaise: integer("price_paise").notNull(),
+    /** Whether this program may be composed via Flexi (mix-and-match slots across batches). */
+    flexiAllowed: boolean("flexi_allowed").notNull().default(false),
+    /** draft | active | archived. Only one active version per (class_type, kind, per_week, duration). */
+    status: varchar("status", { length: 16 }).notNull().default("draft"),
+    createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    /** SPEC-SESSIONS-01 §3.1 / §8.2 — one active Program per shape. */
+    uniqueIndex("programs_active_shape_uidx")
+      .on(table.classTypeId, table.kind, table.sessionsPerWeek, table.durationWeeks)
+      .where(sql`${table.status} = 'active'`),
+  ],
+);
 
 /** Max characters for class_types.strict_no_to (admin + server validation). */
 export const STRICT_NO_TO_MAX_LENGTH = 120;
@@ -237,8 +256,6 @@ export const classes = pgTable("classes", {
   venueContactPhone: text("venue_contact_phone"),
   /** Flexi Mode lets registered members mix eligible recurring schedule days/times. */
   flexiEnabled: boolean("flexi_enabled").notNull().default(false),
-  /** Exact number of weekly selections required when starting checkout from this schedule. */
-  flexiSelectionCount: integer("flexi_selection_count"),
   seriesId: varchar("series_id"),
   externalProvider: varchar("external_provider", { length: 32 }),
   externalEventId: text("external_event_id"),
@@ -288,6 +305,9 @@ export const bookings = pgTable("bookings", {
   guestConsentTerms: boolean("guest_consent_terms"),
   guestConsentAge: boolean("guest_consent_age"),
   guestConsentAt: timestamp("guest_consent_at"),
+  /** Cancellation/Refund Policy version accepted at checkout (FR-A19). */
+  cancellationPolicyVersion: varchar("cancellation_policy_version", { length: 64 }),
+  cancellationPolicyAcceptedAt: timestamp("cancellation_policy_accepted_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -338,6 +358,12 @@ export const payments = pgTable("payments", {
   adminDisposition: varchar("admin_disposition", { length: 20 }).notNull().default("pending"),
   /** created | pending | paid | failed | refunded */
   status: varchar("status", { length: 20 }).notNull().default("created"),
+  razorpayRefundId: text("razorpay_refund_id"),
+  /** null | initiated | processed | failed | manual_required */
+  refundStatus: varchar("refund_status", { length: 24 }),
+  refundAmountPaise: integer("refund_amount_paise"),
+  refundInitiatedAt: timestamp("refund_initiated_at"),
+  refundProcessedAt: timestamp("refund_processed_at"),
   receiptUrl: text("receipt_url"),
   invoiceUrl: text("invoice_url"),
   failureReason: text("failure_reason"),
@@ -481,6 +507,13 @@ export const subscriptions = pgTable("subscriptions", {
   sessionsPurchased: integer("sessions_purchased"),
   /** What the member ACTUALLY paid, post-coupon, in integer paise. */
   totalPaidPaise: integer("total_paid_paise"),
+  /**
+   * Per-session revenue allocation (CA Accounting Policy / A1.1).
+   * = total_paid_paise / 100 / sessions_purchased (rupees per session).
+   * NUMERIC(18,8); round to 2 dp only at posting/refund/display.
+   * FROZEN at checkout from what was PAID (post-coupon), never list price.
+   */
+  perSessionAllocation: decimal("per_session_allocation", { precision: 18, scale: 8 }),
   /** Member's chosen program window. */
   horizonStartAt: timestamp("horizon_start_at"),
   horizonEndAt: timestamp("horizon_end_at"),
@@ -508,6 +541,36 @@ export const subscriptions = pgTable("subscriptions", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+/**
+ * Append-only entitlement ledger (SPEC-SESSIONS-01 Part B).
+ * Counters on subscriptions are a cache; this table is the truth.
+ */
+export const sessionLedger = pgTable(
+  "session_ledger",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    subscriptionId: varchar("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id),
+    /** Null for conversions / purchased events not tied to one occurrence. */
+    occurrenceId: varchar("occurrence_id"),
+    eventType: varchar("event_type", { length: 32 }).notNull(),
+    dScheduled: integer("d_scheduled").notNull().default(0),
+    dConsumed: integer("d_consumed").notNull().default(0),
+    dUnscheduled: integer("d_unscheduled").notNull().default(0),
+    dCredited: integer("d_credited").notNull().default(0),
+    valuePaise: integer("value_paise").notNull().default(0),
+    actor: text("actor").notNull().default("system"),
+    reason: text("reason"),
+    createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("session_ledger_occurrence_event_uidx")
+      .on(table.occurrenceId, table.eventType)
+      .where(sql`${table.occurrenceId} is not null`),
+  ],
+);
 
 export const flexiBookings = pgTable("flexi_bookings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -662,7 +725,7 @@ export const updateProfilePartialSchema = updateProfileSchema.extend({
 
 // Health Update validation schema with mandatory text field
 export const healthUpdateSchema = z.object({
-  healthUpdateText: z.string().min(1, "Health update is required. Enter 'None' if no health concerns to share."),
+  healthUpdateText: z.string().min(1, "Health History is required. Enter 'None' if no health concerns to share."),
   healthDocumentUrls: z.array(z.string()).optional(),
   healthMediaLinks: z.array(healthMediaLinkSchema).optional(),
 });
@@ -763,6 +826,7 @@ export const shareCouponSchema = z.object({
 export const validateCouponSchema = z.object({
   code: z.string().trim().min(1),
   classId: z.string().min(1),
+  programId: z.string().min(1).optional(),
 });
 
 export const insertCouponCodeSchema = createInsertSchema(couponCodes).omit({
@@ -792,9 +856,11 @@ export const insertBookingSchema = createInsertSchema(bookings).omit({
   createdAt: true,
 });
 
-/** Member POST /api/bookings — only classId; userId is taken from the auth session. */
+/** Member POST /api/bookings — classId + Program SKU (SPEC-SESSIONS-01 A3). */
 export const memberBookingBodySchema = z.object({
   classId: z.string().min(1, "Class is required"),
+  /** Required when an active Program exists for this class type / kind (FR-10, FR-04). */
+  programId: z.string().min(1).optional(),
 });
 
 /** Guest phone on POST /api/bookings (required only for guest checkout). */
@@ -806,7 +872,7 @@ export const guestPhoneSchema = z
     message: "A valid 10-digit mobile number is required to complete your booking.",
   });
 
-/** POST /api/bookings — members send classId only; guests add contact + consent fields. */
+/** POST /api/bookings — members send classId + programId; guests add contact + consent fields. */
 export const createBookingRequestSchema = memberBookingBodySchema.extend({
   guestEmail: z.string().trim().email().max(120).optional(),
   guestName: z.string().trim().min(1).max(80).optional(),
@@ -815,6 +881,9 @@ export const createBookingRequestSchema = memberBookingBodySchema.extend({
   guestConsentTerms: z.boolean().optional(),
   guestConsentAge: z.boolean().optional(),
   consentVersion: z.string().optional(),
+  /** FR-A18 clickwrap — required for new paid checkout (server enforces). */
+  acceptCancellationPolicy: z.boolean().optional(),
+  cancellationPolicyVersion: z.string().optional(),
   flexiSelections: z
     .array(
       z.object({
@@ -913,6 +982,7 @@ export type AdminProfile = typeof adminProfiles.$inferSelect;
 export type InsertAdminProfile = z.infer<typeof insertAdminProfileSchema>;
 export type ClassTypeNotifyRequest = typeof classTypeNotifyRequests.$inferSelect;
 export type InsertNotifyRequest = z.infer<typeof insertNotifyRequestSchema>;
+export type SessionLedger = typeof sessionLedger.$inferSelect;
 export type Program = typeof programs.$inferSelect;
 export type InsertProgram = z.infer<typeof insertProgramSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;

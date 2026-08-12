@@ -16,12 +16,19 @@ export const FLEXI_OPTIONS_STALE_MS = 45_000;
 
 const prefetchTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export function flexiOptionsQueryKey(anchorClassId: string): readonly [string, string] {
-  return ["/api/flexi/options", anchorClassId];
+export function flexiOptionsQueryKey(
+  anchorClassId: string,
+  programId?: string | null,
+): readonly [string, string, string] {
+  return ["/api/flexi/options", anchorClassId, programId ?? ""];
 }
 
-export async function fetchFlexiOptions(anchorClassId: string): Promise<FlexiOptionsData> {
-  const res = await fetch(`/api/flexi/options/${anchorClassId}`, {
+export async function fetchFlexiOptions(
+  anchorClassId: string,
+  programId?: string | null,
+): Promise<FlexiOptionsData> {
+  const qs = programId ? `?programId=${encodeURIComponent(programId)}` : "";
+  const res = await fetch(`/api/flexi/options/${anchorClassId}${qs}`, {
     credentials: "include",
   });
   if (!res.ok) {
@@ -33,10 +40,13 @@ export async function fetchFlexiOptions(anchorClassId: string): Promise<FlexiOpt
   return res.json();
 }
 
-export function flexiOptionsQueryOptions(anchorClassId: string | null | undefined) {
+export function flexiOptionsQueryOptions(
+  anchorClassId: string | null | undefined,
+  programId?: string | null,
+) {
   return {
-    queryKey: flexiOptionsQueryKey(anchorClassId ?? ""),
-    queryFn: () => fetchFlexiOptions(anchorClassId as string),
+    queryKey: flexiOptionsQueryKey(anchorClassId ?? "", programId),
+    queryFn: () => fetchFlexiOptions(anchorClassId as string, programId),
     staleTime: FLEXI_OPTIONS_STALE_MS,
     retry: false as const,
   };
@@ -46,6 +56,7 @@ export function prefetchFlexiOptionsIfEligible(
   queryClient: QueryClient,
   anchorClassId: string,
   schedule?: FlexiEligibleScheduleLike | null,
+  programId?: string | null,
 ): Promise<void> {
   if (!anchorClassId) return Promise.resolve();
   // Guard against firing (and 404-ing) for schedules we already know are ineligible.
@@ -53,7 +64,7 @@ export function prefetchFlexiOptionsIfEligible(
     return Promise.resolve();
   }
   return queryClient
-    .prefetchQuery(flexiOptionsQueryOptions(anchorClassId))
+    .prefetchQuery(flexiOptionsQueryOptions(anchorClassId, programId))
     .then(() => undefined)
     .catch(() => undefined);
 }

@@ -9,12 +9,24 @@
  * Runs automatically after: npm run db:push
  *
  * Skip: SKIP_SEED_PURGE=1 npm run db:push
+ *
+ * Guard B (SPEC-SESSIONS-01 §8.4):
+ * - Always refuses when NODE_ENV=production
+ * - Refuses remote DATABASE_URL unless I_UNDERSTAND_THIS_DELETES_DATA=1
  */
 import "dotenv/config";
 import { pool } from "../../server/db.ts";
+import { assertPurgeAllowed } from "../../shared/purge-safety.ts";
 import { purgeQaFixturesFromDb } from "./purge-qa-fixtures-core.ts";
 
 async function main() {
+  try {
+    assertPurgeAllowed(process.env as import("../../shared/purge-safety.ts").PurgeEnv);
+  } catch (err) {
+    console.error(`[purge-seed] ${(err as Error).message}`);
+    process.exit(1);
+  }
+
   const skip = process.env.SKIP_SEED_PURGE === "1" || process.env.SKIP_SEED_PURGE === "true";
   if (skip) {
     console.log("[purge-seed] SKIP_SEED_PURGE set — skipping QA fixture cleanup.");

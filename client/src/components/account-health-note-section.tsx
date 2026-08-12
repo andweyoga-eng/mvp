@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MousePointerClick, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AccountFoldSection } from "@/components/account-fold-section";
+import { cn } from "@/lib/utils";
 import {
   HEALTH_NO_CONCERNS_TEXT,
   isHealthDisclosureComplete,
@@ -25,6 +26,8 @@ import {
   HealthDocumentUploadSummary,
 } from "@/components/health-document-upload-field";
 
+type HealthTab = "latest" | "recent";
+
 export interface AccountHealthNoteSectionProps {
   currentText: string;
   documentUrls: string[];
@@ -39,7 +42,7 @@ export interface AccountHealthNoteSectionProps {
 
 function HealthHistoryList({ history }: { history: HealthHistoryEntry[] }) {
   if (history.length === 0) {
-    return <p className="text-sm font-medium text-foreground/70">No previous notes yet.</p>;
+    return <p className="text-sm font-medium text-foreground/70">No previous updates yet.</p>;
   }
 
   return (
@@ -53,7 +56,8 @@ function HealthHistoryList({ history }: { history: HealthHistoryEntry[] }) {
             className="rounded-xl border border-primary/10 bg-primary/[0.02] p-4"
           >
             <p className="text-xs font-semibold text-foreground/70">
-              {new Date(entry.savedAt).toLocaleDateString()}
+              {new Date(entry.savedAt).toLocaleDateString()} at{" "}
+              {new Date(entry.savedAt).toLocaleTimeString()}
             </p>
             <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-foreground">{entry.text}</p>
             <div className="mt-2 space-y-2">
@@ -76,9 +80,10 @@ export function AccountHealthNoteSection({
   onSave,
   isLoading,
   startInEditMode = false,
-  continueLabel = "Save note",
+  continueLabel = "Save update",
 }: AccountHealthNoteSectionProps) {
   const { toast } = useToast();
+  const [tab, setTab] = useState<HealthTab>("latest");
   const [isEditing, setIsEditing] = useState(() => startInEditMode && !isHealthDisclosureComplete(currentText));
   const [draftText, setDraftText] = useState("");
   const [draftMediaLinks, setDraftMediaLinks] = useState<HealthMediaLink[]>([]);
@@ -92,6 +97,7 @@ export function AccountHealthNoteSection({
   useEffect(() => {
     if (startInEditMode && !hasCurrentNote) {
       setIsEditing(true);
+      setTab("latest");
     }
   }, [startInEditMode, hasCurrentNote]);
 
@@ -111,6 +117,7 @@ export function AccountHealthNoteSection({
   };
 
   const startEdit = () => {
+    setTab("latest");
     setIsEditing(true);
   };
 
@@ -125,8 +132,8 @@ export function AccountHealthNoteSection({
   const handleSave = async () => {
     if (!isHealthDisclosureComplete(draftText)) {
       toast({
-        title: "Health note required",
-        description: `Add your note or tap "${HEALTH_NO_CONCERNS_TEXT}".`,
+        title: "Health History required",
+        description: `Add your latest update or tap "${HEALTH_NO_CONCERNS_TEXT}".`,
         variant: "destructive",
       });
       return;
@@ -137,13 +144,20 @@ export function AccountHealthNoteSection({
       mediaLinks: draftMediaLinks,
     });
     setIsEditing(false);
+    setTab("latest");
   };
+
+  const subTabBtn = (active: boolean) =>
+    cn(
+      "flex-1 rounded-[10px] px-2 py-2 text-[13px] font-semibold transition-colors",
+      active ? "bg-primary text-primary-foreground" : "font-semibold text-foreground/75 hover:text-primary",
+    );
 
   const editForm = (
     <div className="space-y-4">
       {hasCurrentNote ? (
         <p className="text-sm font-medium text-foreground/75">
-          Editing saves the current note to History and starts a new one.
+          Editing saves the current update to Recent History and starts a new one.
         </p>
       ) : null}
 
@@ -166,7 +180,7 @@ export function AccountHealthNoteSection({
 
       <div className="space-y-2">
         <Label htmlFor="health-note-draft" className="text-sm font-medium text-foreground">
-          Your health note
+          Your latest update
         </Label>
         <Textarea
           id="health-note-draft"
@@ -227,60 +241,74 @@ export function AccountHealthNoteSection({
     </div>
   );
 
+  const latestContent =
+    isEditing || !hasCurrentNote ? (
+      editForm
+    ) : (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-primary/10 bg-primary/[0.02] p-4">
+          {lastModified ? (
+            <p className="text-xs font-semibold text-foreground/70">
+              Last updated {new Date(lastModified).toLocaleDateString()} at{" "}
+              {new Date(lastModified).toLocaleTimeString()}
+            </p>
+          ) : null}
+          <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-foreground">{currentText}</p>
+          <div className="mt-3 space-y-2">
+            <HealthDocumentUploadSummary documentUrls={currentUploads} />
+            <HealthMediaLinksSummary links={resolvedCurrentLinks} />
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={startEdit}
+          className="rounded-full font-semibold"
+          data-testid="health-edit-note"
+        >
+          <Pencil className="mr-2 h-4 w-4" />
+          Edit update
+        </Button>
+      </div>
+    );
+
   return (
     <div className="space-y-4" data-testid="account-health-note">
-      {isEditing ? (
-        editForm
-      ) : hasCurrentNote ? (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-primary/10 bg-primary/[0.02] p-4">
-            {lastModified ? (
-              <p className="text-xs font-semibold text-foreground/70">
-                Last updated {new Date(lastModified).toLocaleDateString()} at{" "}
-                {new Date(lastModified).toLocaleTimeString()}
-              </p>
-            ) : null}
-            <p className="mt-2 whitespace-pre-wrap text-sm font-medium text-foreground">{currentText}</p>
-            <div className="mt-3 space-y-2">
-              <HealthDocumentUploadSummary documentUrls={currentUploads} />
-              <HealthMediaLinksSummary links={resolvedCurrentLinks} />
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={startEdit}
-            className="rounded-full font-semibold"
-            data-testid="health-edit-note"
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit note
-          </Button>
-
-          {history.length > 0 ? (
-            <AccountFoldSection
-              nested
-              title="Note history"
-              subtitle={`${history.length} previous ${history.length === 1 ? "entry" : "entries"}`}
-              defaultOpen={false}
-            >
-              <HealthHistoryList history={history} />
-            </AccountFoldSection>
-          ) : null}
-        </div>
-      ) : (
-        editForm
-      )}
-
-      <div className="sr-only" aria-hidden>
-        <button type="button" data-testid="health-tab-current" tabIndex={-1}>
-          Current note
+      <div className="flex gap-1.5 rounded-[14px] bg-muted p-1.5">
+        <button
+          type="button"
+          onClick={() => setTab("latest")}
+          className={subTabBtn(tab === "latest")}
+          data-testid="health-tab-current"
+        >
+          Latest update
         </button>
-        <button type="button" data-testid="health-tab-history" tabIndex={-1}>
-          History
+        <button
+          type="button"
+          onClick={() => setTab("recent")}
+          className={subTabBtn(tab === "recent")}
+          data-testid="health-tab-history"
+        >
+          Recent History
         </button>
       </div>
+
+      {tab === "latest" ? (
+        latestContent
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-foreground/70">
+            {history.length === 0
+              ? "Previous updates appear here after you save a new one."
+              : `${history.length} previous ${history.length === 1 ? "entry" : "entries"}`}
+          </p>
+          {/* Cap is ≤5 server-side; one-fold scroll is enough for speed. */}
+          <div className="max-h-[min(50vh,24rem)] overflow-y-auto overscroll-contain pr-1">
+            <HealthHistoryList history={history} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

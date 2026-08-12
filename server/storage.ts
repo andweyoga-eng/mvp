@@ -43,8 +43,11 @@ import {
   type FuelMeal,
   type FuelRecipe,
   type FuelDailyMedia,
+  type Program,
+  type InsertProgram,
   users,
   classTypes,
+  programs,
   instructors,
   classes,
   bookings,
@@ -92,6 +95,7 @@ import {
 } from "@shared/flexi-discovery";
 import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./consent";
 import type { ConsentType } from "@shared/consent";
+import { applyCancelEntitlementsForClass } from "./session-cancel-entitlement";
 import { db } from "./db";
 import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like, ne } from "drizzle-orm";
 import {
@@ -119,6 +123,15 @@ import {
   bookingIsResumableCheckout,
   existingBookingBlocksNewBooking,
 } from "@shared/member-booking-duplicate";
+import {
+  bookingHoldsSeatForCollision,
+  findInternalProposedCollisions,
+  findTimeCollisions,
+  sessionIntervalMs,
+  type HeldOccurrence,
+  type ProposedOccurrence,
+  type TimeCollision,
+} from "@shared/member-time-collision";
 import { getMeetJoinState } from "@shared/session-meet-access";
 import { resolveEffectiveSessionPaymentStatus } from "@shared/session-payment-status";
 import { dispositionFromPaymentStatus, normalizeSessionPaymentMethod, usesHostedCheckout } from "@shared/payment-gateway";
@@ -135,6 +148,15 @@ import {
 } from "./admin-bootstrap";
 import { deleteHealthDocumentObject } from "./health-document-upload";
 import { hasHealthSupportingMaterials, type HealthMediaLink } from "@shared/health-media-links";
+import {
+  classTypeNameKey,
+  normalizeClassTypeName,
+} from "@shared/class-type-name";
+import {
+  computeProgramTotalSessions,
+  programRupeesToPaise,
+  validateProgramShape,
+} from "@shared/programs";
 
 /** Resolves after first DB init + admin bootstrap sync (await before handling traffic). */
 let resolveStorageReady: () => void = () => {};
@@ -162,6 +184,7 @@ export interface MemberSessionRow {
   classId: string;
   anchorClassId: string | null;
   className: string;
+  classTypeId: string;
   instructorName: string;
   sessionDate: string;
   googleMeetLink: string | null;
@@ -235,6 +258,17 @@ export interface SubscriptionSummaryRow {
   classTypeName: string;
   subscriptionType: string;
   flexiBookingId: string | null;
+  programId: string | null;
+  sessionsPurchased: number | null;
+  totalPaidPaise: number | null;
+  perSessionAllocation: string | null;
+  sessionsConsumed: number;
+  sessionsScheduled: number;
+  sessionsUnscheduled: number;
+  sessionsCredited: number;
+  instructorId: string | null;
+  horizonStartAt: string | null;
+  horizonEndAt: string | null;
   totalAmountPaise: number;
   totalSessions: number;
   utilizedSessions: number;
@@ -413,6 +447,61 @@ export interface IStorage {
   }>;
   countClassesByClassTypeId(classTypeId: string): Promise<number>;
   getClassTypeIdsWithUpcomingSessions(): Promise<string[]>;
+  findClassTypeByNormalizedName(
+    name: string,
+    excludeId?: string,
+  ): Promise<ClassType | undefined>;
+
+  // Programs (SPEC-SESSIONS-01 Part A / A2)
+  listPrograms(filters?: {
+    classTypeId?: string;
+    status?: string;
+  }): Promise<(Program & { classTypeName: string | null; subscriptionCount: number })[]>;
+  getProgram(id: string): Promise<Program | undefined>;
+  countSubscriptionsForProgram(programId: string): Promise<number>;
+  createProgram(input: {
+    classTypeId: string;
+    kind: string;
+    sessionsPerWeek: number;
+    durationWeeks: number;
+    priceRupees: number;
+    flexiAllowed?: boolean;
+    status?: string;
+  }): Promise<Program>;
+  updateProgram(
+    id: string,
+    input: {
+      classTypeId: string;
+      kind: string;
+      sessionsPerWeek: number;
+      durationWeeks: number;
+      priceRupees: number;
+      flexiAllowed?: boolean;
+      status?: string;
+    },
+  ): Promise<
+    | { ok: true; program: Program; versioned: boolean }
+    | { ok: false; message: string }
+  >;
+  archiveProgram(id: string): Promise<Program | undefined>;
+  listActiveProgramsForClassType(
+    classTypeId: string,
+    kind?: string,
+  ): Promise<Program[]>;
+  resolveCheckoutProgram(params: {
+    classTypeId: string;
+    kind: string;
+    programId?: string | null;
+    guest?: boolean;
+  }): Promise<
+    | { ok: true; program: Program }
+    | { ok: false; message: string; code: string }
+  >;
+  getSubscriptionByBookingId(bookingId: string): Promise<Subscription | undefined>;
+  userHasEverBoughtTrialForClassType(
+    userId: string,
+    classTypeId: string,
+  ): Promise<boolean>;
 
   // Carousel promotions (super admin curated "Available Today" cards)
   getCarouselPromotions(): Promise<CarouselPromotion[]>;
@@ -458,6 +547,8 @@ export interface IStorage {
     paymentStatus?: "paid" | "waived";
     /** When set, forces subscription total (e.g. keep original package size on repair). */
     totalSessionsOverride?: number;
+    /** Cap how many series occurrences are enrolled (Program.total_sessions). */
+    maxSessionsToEnroll?: number;
     /** When set, forces subscription utilized count (e.g. admin repair). */
     utilizedSessionsOverride?: number;
     /**
@@ -591,6 +682,52 @@ export interface IStorage {
   ): Promise<Booking | undefined>;
   getUserBookings(userId: string): Promise<Booking[]>;
   userHasUpcomingBookingForClass(userId: string, classId: string): Promise<boolean>;
+  /**
+   * SPEC-SESSIONS-01 FR-17 — occurrences the member (or guest email) currently holds
+   * for time-collision checks (paid / waived / active pending hold).
+   */
+  listMemberHeldOccurrences(params: {
+    userId?: string | null;
+    guestEmail?: string | null;
+    nowMs?: number;
+  }): Promise<
+    Array<{
+      classId: string;
+      startMs: number;
+      endMs: number;
+      label?: string;
+    }>
+  >;
+  findMemberTimeCollisions(params: {
+    userId?: string | null;
+    guestEmail?: string | null;
+    proposed: Array<{
+      classId: string;
+      startMs: number;
+      endMs: number;
+      label?: string;
+    }>;
+    nowMs?: number;
+  }): Promise<
+    Array<{
+      proposedClassId: string;
+      heldClassId: string;
+      proposedLabel?: string;
+      heldLabel?: string;
+    }>
+  >;
+  /** Build proposed FR-17 intervals for a fixed recurring Program enrollment from an anchor. */
+  listProposedSeriesEnrollmentOccurrences(params: {
+    anchorClassId: string;
+    maxSessionsToEnroll?: number;
+  }): Promise<
+    Array<{
+      classId: string;
+      startMs: number;
+      endMs: number;
+      label?: string;
+    }>
+  >;
   guestHasUpcomingBookingForClass(guestEmail: string, classId: string): Promise<boolean>;
   getGuestBookingConflict(
     guestEmail: string,
@@ -656,6 +793,28 @@ export interface IStorage {
   createFlexiBooking(data: InsertFlexiBooking): Promise<FlexiBooking>;
   createFlexiBookingSelections(rows: InsertFlexiBookingSelection[]): Promise<FlexiBookingSelection[]>;
   createFlexiBookingOccurrences(rows: InsertFlexiBookingOccurrence[]): Promise<FlexiBookingOccurrence[]>;
+  /**
+   * SPEC FR-15 — reserve the full Flexi composition in one transaction.
+   * Locks occurrence class rows in sorted id order; fails entirely if any seat is unavailable.
+   */
+  reserveFlexiCompositionAtomic(params: {
+    existingBooking?: Booking | null;
+    bookingInsert?: InsertBooking;
+    flexi: Omit<InsertFlexiBooking, "bookingId">;
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      sourceTimeLabel?: string | null;
+    }>;
+    occurrences: Array<{
+      classId: string;
+      weekday: number;
+      occurrenceDate: Date;
+      status: string;
+      holdExpiresAt?: Date | null;
+    }>;
+  }): Promise<{ booking: Booking; flexiBooking: FlexiBooking }>;
   getFlexiBooking(id: string): Promise<FlexiBooking | undefined>;
   getFlexiBookingByBookingId(bookingId: string): Promise<FlexiBooking | undefined>;
   getFlexiBookingSelections(flexiBookingId: string): Promise<FlexiBookingSelection[]>;
@@ -780,6 +939,13 @@ export interface IStorage {
   recordGuestBookingConsents(params: {
     bookingId: string;
     consentVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+    cancellationPolicyVersion?: string | null;
+  }): Promise<void>;
+  recordCancellationPolicyAcceptance(params: {
+    bookingId: string;
+    policyVersion: string;
     ipAddress?: string | null;
     userAgent?: string | null;
   }): Promise<void>;
@@ -1116,7 +1282,19 @@ export class DatabaseStorage implements IStorage {
 
   async createClassType(classType: InsertClassType): Promise<ClassType> {
     try {
-      const [newClassType] = await db.insert(classTypes).values(classType).returning();
+      const name = normalizeClassTypeName(classType.name);
+      const clash = await this.findClassTypeByNormalizedName(name);
+      if (clash) {
+        const err = new Error(
+          `A session type named "${clash.name}" already exists. Names must be unique (case-insensitive).`,
+        );
+        (err as Error & { code?: string }).code = "CLASS_TYPE_NAME_TAKEN";
+        throw err;
+      }
+      const [newClassType] = await db
+        .insert(classTypes)
+        .values({ ...classType, name })
+        .returning();
       return newClassType;
     } catch (error) {
       console.error('[DB] Error creating class type:', error);
@@ -1129,15 +1307,44 @@ export class DatabaseStorage implements IStorage {
     updates: Partial<InsertClassType>,
   ): Promise<ClassType | undefined> {
     try {
+      const nextUpdates = { ...updates };
+      if (typeof nextUpdates.name === "string") {
+        nextUpdates.name = normalizeClassTypeName(nextUpdates.name);
+        const clash = await this.findClassTypeByNormalizedName(nextUpdates.name, id);
+        if (clash) {
+          const err = new Error(
+            `A session type named "${clash.name}" already exists. Names must be unique (case-insensitive).`,
+          );
+          (err as Error & { code?: string }).code = "CLASS_TYPE_NAME_TAKEN";
+          throw err;
+        }
+      }
       const [updated] = await db
         .update(classTypes)
-        .set(updates)
+        .set(nextUpdates)
         .where(eq(classTypes.id, id))
         .returning();
       return updated || undefined;
     } catch (error) {
       console.error("[DB] Error updating class type:", error);
       throw error;
+    }
+  }
+
+  async findClassTypeByNormalizedName(
+    name: string,
+    excludeId?: string,
+  ): Promise<ClassType | undefined> {
+    try {
+      const key = classTypeNameKey(name);
+      const rows = await db
+        .select()
+        .from(classTypes)
+        .where(sql`lower(btrim(${classTypes.name})) = ${key}`);
+      return rows.find((r) => r.id !== excludeId);
+    } catch (error) {
+      console.error("[DB] Error finding class type by name:", error);
+      return undefined;
     }
   }
 
@@ -1179,6 +1386,418 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error("[DB] Error loading class type availability:", error);
       return [];
+    }
+  }
+
+  async listPrograms(filters?: {
+    classTypeId?: string;
+    status?: string;
+  }): Promise<(Program & { classTypeName: string | null; subscriptionCount: number })[]> {
+    try {
+      const conditions = [];
+      if (filters?.classTypeId) {
+        conditions.push(eq(programs.classTypeId, filters.classTypeId));
+      }
+      if (filters?.status) {
+        conditions.push(eq(programs.status, filters.status));
+      }
+      const rows = await db
+        .select({
+          program: programs,
+          classTypeName: classTypes.name,
+        })
+        .from(programs)
+        .leftJoin(classTypes, eq(programs.classTypeId, classTypes.id))
+        .where(conditions.length ? and(...conditions) : undefined)
+        .orderBy(desc(programs.updatedAt));
+
+      const withCounts = await Promise.all(
+        rows.map(async (row) => {
+          const subscriptionCount = await this.countSubscriptionsForProgram(row.program.id);
+          return {
+            ...row.program,
+            classTypeName: row.classTypeName,
+            subscriptionCount,
+          };
+        }),
+      );
+      return withCounts;
+    } catch (error) {
+      console.error("[DB] Error listing programs:", error);
+      return [];
+    }
+  }
+
+  async getProgram(id: string): Promise<Program | undefined> {
+    try {
+      const [row] = await db.select().from(programs).where(eq(programs.id, id));
+      return row || undefined;
+    } catch (error) {
+      console.error("[DB] Error getting program:", error);
+      return undefined;
+    }
+  }
+
+  async countSubscriptionsForProgram(programId: string): Promise<number> {
+    try {
+      const [row] = await db
+        .select({ value: count() })
+        .from(subscriptions)
+        .where(eq(subscriptions.programId, programId));
+      return Number(row?.value ?? 0);
+    } catch (error) {
+      console.error("[DB] Error counting program subscriptions:", error);
+      return 0;
+    }
+  }
+
+  private async assertActiveProgramShapeAvailable(params: {
+    classTypeId: string;
+    kind: string;
+    sessionsPerWeek: number;
+    durationWeeks: number;
+    excludeProgramId?: string;
+  }): Promise<string | null> {
+    const rows = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.classTypeId, params.classTypeId),
+          eq(programs.kind, params.kind),
+          eq(programs.sessionsPerWeek, params.sessionsPerWeek),
+          eq(programs.durationWeeks, params.durationWeeks),
+          eq(programs.status, "active"),
+        ),
+      );
+    const clash = rows.find((r) => r.id !== params.excludeProgramId);
+    if (clash) {
+      return (
+        `An active ${params.kind} program already exists for this class type ` +
+        `(${params.sessionsPerWeek}/week × ${params.durationWeeks} weeks, v${clash.version}). ` +
+        "Archive it first, or edit that program."
+      );
+    }
+    return null;
+  }
+
+  async createProgram(input: {
+    classTypeId: string;
+    kind: string;
+    sessionsPerWeek: number;
+    durationWeeks: number;
+    priceRupees: number;
+    flexiAllowed?: boolean;
+    status?: string;
+  }): Promise<Program> {
+    const shapeError = validateProgramShape(input);
+    if (shapeError) {
+      const err = new Error(shapeError);
+      (err as Error & { code?: string }).code = "PROGRAM_INVALID";
+      throw err;
+    }
+    const classType = await this.getClassType(input.classTypeId);
+    if (!classType) {
+      const err = new Error("Class type not found");
+      (err as Error & { code?: string }).code = "CLASS_TYPE_NOT_FOUND";
+      throw err;
+    }
+
+    const status = input.status ?? "active";
+    const totalSessions = computeProgramTotalSessions(
+      input.sessionsPerWeek,
+      input.durationWeeks,
+    );
+    const pricePaise = programRupeesToPaise(input.priceRupees);
+    const flexiAllowed = input.flexiAllowed ?? false;
+
+    if (status === "active") {
+      const clash = await this.assertActiveProgramShapeAvailable({
+        classTypeId: input.classTypeId,
+        kind: input.kind,
+        sessionsPerWeek: input.sessionsPerWeek,
+        durationWeeks: input.durationWeeks,
+      });
+      if (clash) {
+        const err = new Error(clash);
+        (err as Error & { code?: string }).code = "PROGRAM_SHAPE_TAKEN";
+        throw err;
+      }
+    }
+
+    const [created] = await db
+      .insert(programs)
+      .values({
+        classTypeId: input.classTypeId,
+        kind: input.kind,
+        sessionsPerWeek: input.sessionsPerWeek,
+        durationWeeks: input.durationWeeks,
+        totalSessions,
+        pricePaise,
+        flexiAllowed,
+        status,
+        version: 1,
+      })
+      .returning();
+    return created;
+  }
+
+  async updateProgram(
+    id: string,
+    input: {
+      classTypeId: string;
+      kind: string;
+      sessionsPerWeek: number;
+      durationWeeks: number;
+      priceRupees: number;
+      flexiAllowed?: boolean;
+      status?: string;
+    },
+  ): Promise<
+    | { ok: true; program: Program; versioned: boolean }
+    | { ok: false; message: string }
+  > {
+    const existing = await this.getProgram(id);
+    if (!existing) return { ok: false, message: "Program not found" };
+
+    const shapeError = validateProgramShape(input);
+    if (shapeError) return { ok: false, message: shapeError };
+
+    const classType = await this.getClassType(input.classTypeId);
+    if (!classType) return { ok: false, message: "Class type not found" };
+
+    const status = input.status ?? existing.status;
+    const totalSessions = computeProgramTotalSessions(
+      input.sessionsPerWeek,
+      input.durationWeeks,
+    );
+    const pricePaise = programRupeesToPaise(input.priceRupees);
+    const flexiAllowed = input.flexiAllowed ?? false;
+    const subscriptionCount = await this.countSubscriptionsForProgram(id);
+
+    // FR-02: any subscription → version n+1 active, archive n. Else edit in place.
+    if (subscriptionCount > 0) {
+      if (status === "archived") {
+        return {
+          ok: false,
+          message:
+            "This program has subscriptions. Archive it separately; do not edit shape while archiving.",
+        };
+      }
+      const clash = await this.assertActiveProgramShapeAvailable({
+        classTypeId: input.classTypeId,
+        kind: input.kind,
+        sessionsPerWeek: input.sessionsPerWeek,
+        durationWeeks: input.durationWeeks,
+        excludeProgramId: id,
+      });
+      if (clash) return { ok: false, message: clash };
+
+      const [created] = await db.transaction(async (tx) => {
+        await tx
+          .update(programs)
+          .set({ status: "archived", updatedAt: new Date() })
+          .where(eq(programs.id, id));
+        return tx
+          .insert(programs)
+          .values({
+            classTypeId: input.classTypeId,
+            kind: input.kind,
+            sessionsPerWeek: input.sessionsPerWeek,
+            durationWeeks: input.durationWeeks,
+            totalSessions,
+            pricePaise,
+            flexiAllowed,
+            status: "active",
+            version: existing.version + 1,
+          })
+          .returning();
+      });
+      return { ok: true, program: created, versioned: true };
+    }
+
+    if (status === "active") {
+      const clash = await this.assertActiveProgramShapeAvailable({
+        classTypeId: input.classTypeId,
+        kind: input.kind,
+        sessionsPerWeek: input.sessionsPerWeek,
+        durationWeeks: input.durationWeeks,
+        excludeProgramId: id,
+      });
+      if (clash) return { ok: false, message: clash };
+    }
+
+    const [updated] = await db
+      .update(programs)
+      .set({
+        classTypeId: input.classTypeId,
+        kind: input.kind,
+        sessionsPerWeek: input.sessionsPerWeek,
+        durationWeeks: input.durationWeeks,
+        totalSessions,
+        pricePaise,
+        flexiAllowed,
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(programs.id, id))
+      .returning();
+    if (!updated) return { ok: false, message: "Failed to update program" };
+    return { ok: true, program: updated, versioned: false };
+  }
+
+  async archiveProgram(id: string): Promise<Program | undefined> {
+    try {
+      const [updated] = await db
+        .update(programs)
+        .set({ status: "archived", updatedAt: new Date() })
+        .where(eq(programs.id, id))
+        .returning();
+      return updated || undefined;
+    } catch (error) {
+      console.error("[DB] Error archiving program:", error);
+      return undefined;
+    }
+  }
+
+  async listActiveProgramsForClassType(
+    classTypeId: string,
+    kind?: string,
+  ): Promise<Program[]> {
+    try {
+      const conditions = [
+        eq(programs.classTypeId, classTypeId),
+        eq(programs.status, "active"),
+      ];
+      if (kind) conditions.push(eq(programs.kind, kind));
+      return await db
+        .select()
+        .from(programs)
+        .where(and(...conditions))
+        .orderBy(programs.kind, programs.durationWeeks, programs.sessionsPerWeek);
+    } catch (error) {
+      console.error("[DB] Error listing active programs:", error);
+      return [];
+    }
+  }
+
+  /**
+   * SPEC-SESSIONS-01 A3 / FR-04 / FR-10.
+   * Never falls back to class_types.price.
+   */
+  async resolveCheckoutProgram(params: {
+    classTypeId: string;
+    kind: string;
+    programId?: string | null;
+    guest?: boolean;
+  }): Promise<
+    | { ok: true; program: Program }
+    | { ok: false; message: string; code: string }
+  > {
+    const active = await this.listActiveProgramsForClassType(params.classTypeId, params.kind);
+    if (active.length === 0) {
+      return {
+        ok: false,
+        code: "NO_ACTIVE_PROGRAM",
+        message:
+          "No active program is configured for this session type. Checkout cannot use a session-type price.",
+      };
+    }
+
+    if (params.guest && params.kind !== "trial" && params.kind !== "drop_in") {
+      return {
+        ok: false,
+        code: "GUEST_PROGRAM_NOT_ALLOWED",
+        message: "Guests may only book trial or drop-in programs.",
+      };
+    }
+
+    let program: Program | undefined;
+    if (params.programId) {
+      program = active.find((p) => p.id === params.programId);
+      if (!program) {
+        const byId = await this.getProgram(params.programId);
+        if (!byId || byId.status !== "active" || byId.classTypeId !== params.classTypeId) {
+          return {
+            ok: false,
+            code: "PROGRAM_NOT_FOUND",
+            message: "Selected program is not available for this session.",
+          };
+        }
+        if (byId.kind !== params.kind) {
+          return {
+            ok: false,
+            code: "PROGRAM_KIND_MISMATCH",
+            message: `Selected program does not match this ${params.kind} session.`,
+          };
+        }
+        program = byId;
+      }
+    } else if (active.length === 1) {
+      program = active[0];
+    } else {
+      return {
+        ok: false,
+        code: "PROGRAM_REQUIRED",
+        message: "Choose a program to continue checkout.",
+        // clients should list active programs
+      };
+    }
+
+    if (!program) {
+      return {
+        ok: false,
+        code: "PROGRAM_REQUIRED",
+        message: "Choose a program to continue checkout.",
+      };
+    }
+
+    if (params.guest && program.kind !== "trial" && program.kind !== "drop_in") {
+      return {
+        ok: false,
+        code: "GUEST_PROGRAM_NOT_ALLOWED",
+        message: "Guests may only book trial or drop-in programs.",
+      };
+    }
+
+    return { ok: true, program };
+  }
+
+  async getSubscriptionByBookingId(bookingId: string): Promise<Subscription | undefined> {
+    try {
+      const [row] = await db
+        .select()
+        .from(subscriptions)
+        .where(eq(subscriptions.bookingId, bookingId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+      return row || undefined;
+    } catch (error) {
+      console.error("[DB] Error getting subscription by booking:", error);
+      return undefined;
+    }
+  }
+
+  async userHasEverBoughtTrialForClassType(
+    userId: string,
+    classTypeId: string,
+  ): Promise<boolean> {
+    try {
+      const [row] = await db
+        .select({ id: subscriptions.id })
+        .from(subscriptions)
+        .where(
+          and(
+            eq(subscriptions.userId, userId),
+            eq(subscriptions.classTypeId, classTypeId),
+            eq(subscriptions.subscriptionType, "trial"),
+          ),
+        )
+        .limit(1);
+      return Boolean(row);
+    } catch (error) {
+      console.error("[DB] Error checking trial history:", error);
+      return false;
     }
   }
 
@@ -1445,6 +2064,7 @@ export class DatabaseStorage implements IStorage {
     anchorClassId: string;
     paymentStatus?: "paid" | "waived";
     totalSessionsOverride?: number;
+    maxSessionsToEnroll?: number;
     utilizedSessionsOverride?: number;
     forceCompletedCount?: number;
     now?: Date;
@@ -1461,8 +2081,38 @@ export class DatabaseStorage implements IStorage {
     const classType = await this.getClassType(anchor.classTypeId);
     const duration = classType?.duration ?? 60;
     const seriesClasses = await this.listClassesInSeries(anchor.seriesId);
-    const packageClasses = filterSeriesClassesFromAnchor(seriesClasses, anchor.date);
+    let packageClasses = filterSeriesClassesFromAnchor(seriesClasses, anchor.date);
+    if (
+      params.maxSessionsToEnroll != null &&
+      params.maxSessionsToEnroll > 0 &&
+      packageClasses.length > params.maxSessionsToEnroll
+    ) {
+      packageClasses = packageClasses.slice(0, params.maxSessionsToEnroll);
+    }
     if (packageClasses.length === 0) return empty;
+
+    const proposed = packageClasses.map((cls) => {
+      const interval = sessionIntervalMs(cls.date, duration);
+      return {
+        classId: cls.id,
+        startMs: interval.startMs,
+        endMs: interval.endMs,
+        label: classType?.name ?? undefined,
+      };
+    });
+    const collisions = await this.findMemberTimeCollisions({
+      userId: params.userId,
+      proposed,
+      nowMs: now.getTime(),
+    });
+    // Same classIds already held by this member are ignored; only cross-subscription overlaps reject.
+    if (collisions.length > 0) {
+      console.error(
+        "[enrollUserInPaidRecurringSeries] FR-17 time_collision; refusing enrollment",
+        collisions[0],
+      );
+      return empty;
+    }
 
     const existingBookings = await db
       .select({ id: bookings.id, classId: bookings.classId })
@@ -1687,6 +2337,13 @@ export class DatabaseStorage implements IStorage {
 
       await db.delete(carouselPromotions).where(eq(carouselPromotions.classId, id));
 
+      const entitlement = await applyCancelEntitlementsForClass({
+        classId: id,
+        actor: "admin",
+        reason: trimmedReason,
+        cancelAt: now,
+      });
+
       const recipients = await this.getCancellationRecipientsForClass(id);
 
       return {
@@ -1695,6 +2352,7 @@ export class DatabaseStorage implements IStorage {
         instructorName: instructor?.name,
         sessionDateIso: cls.date.toISOString(),
         recipients,
+        entitlement,
       };
     } catch (error) {
       console.error("[DB] Error cancelling class session:", error);
@@ -2421,10 +3079,21 @@ export class DatabaseStorage implements IStorage {
       const cls = await this.getClass(id);
       if (!cls) return { ok: false as const, message: "Session not found" };
 
-      const [classType, instructor, bookingCount, recipients] = await Promise.all([
+      const bookingCount = await this.countBookingsForClass(id);
+      if (bookingCount > 0) {
+        return {
+          ok: false as const,
+          message:
+            `This session has ${bookingCount} booking(s). Hard-delete is blocked. ` +
+            "Cancel the session instead so members keep their entitlement.",
+          code: "BOOKINGS_EXIST" as const,
+          bookingCount,
+        };
+      }
+
+      const [classType, instructor, recipients] = await Promise.all([
         this.getClassType(cls.classTypeId),
         this.getInstructor(cls.instructorId),
-        this.countBookingsForClass(id),
         this.getCancellationRecipientsForClass(id),
       ]);
 
@@ -2435,7 +3104,7 @@ export class DatabaseStorage implements IStorage {
         classTypeName: classType?.name ?? "Session",
         instructorName: instructor?.name,
         sessionDateIso: cls.date.toISOString(),
-        bookingCount,
+        bookingCount: 0,
         recipients,
       };
     } catch (error) {
@@ -2762,6 +3431,129 @@ export class DatabaseStorage implements IStorage {
         .where(eq(classes.id, classId));
     }
     return inserted;
+  }
+
+  async reserveFlexiCompositionAtomic(params: {
+    existingBooking?: Booking | null;
+    bookingInsert?: InsertBooking;
+    flexi: Omit<InsertFlexiBooking, "bookingId">;
+    selections: Array<{
+      weekday: number;
+      sourceSeriesId: string;
+      sourceClassId: string;
+      sourceTimeLabel?: string | null;
+    }>;
+    occurrences: Array<{
+      classId: string;
+      weekday: number;
+      occurrenceDate: Date;
+      status: string;
+      holdExpiresAt?: Date | null;
+    }>;
+  }): Promise<{ booking: Booking; flexiBooking: FlexiBooking }> {
+    if (!params.occurrences.length) {
+      throw new Error("FLEXI_COMPOSITION_EMPTY");
+    }
+    const neededByClass = new Map<string, number>();
+    for (const occ of params.occurrences) {
+      neededByClass.set(occ.classId, (neededByClass.get(occ.classId) ?? 0) + 1);
+    }
+    const sortedClassIds = [...neededByClass.keys()].sort();
+
+    return db.transaction(async (tx) => {
+      // Deterministic lock order avoids deadlocks under concurrent composition (FR-15 / §7.1).
+      const activeBefore = new Map<string, number>();
+      for (const classId of sortedClassIds) {
+        const [locked] = await tx
+          .select({ id: classes.id, maxCapacity: classes.maxCapacity })
+          .from(classes)
+          .where(eq(classes.id, classId))
+          .for("update");
+        if (!locked) {
+          throw new Error(`FLEXI_CLASS_MISSING:${classId}`);
+        }
+        const counts = await this.getActiveBookingCountsForClasses([classId]);
+        const active = counts.get(classId) ?? 0;
+        const need = neededByClass.get(classId) ?? 0;
+        if (active + need > locked.maxCapacity) {
+          throw new Error(`FLEXI_SLOT_FULL:${classId}`);
+        }
+        activeBefore.set(classId, active);
+      }
+
+      let booking = params.existingBooking ?? null;
+      if (!booking) {
+        if (!params.bookingInsert) {
+          throw new Error("FLEXI_BOOKING_INSERT_REQUIRED");
+        }
+        const cls = await this.getClass(params.bookingInsert.classId);
+        const paymentMethod =
+          params.bookingInsert.paymentMethod ?? cls?.paymentMethod ?? "razorpay_link";
+        const [created] = await tx
+          .insert(bookings)
+          .values({ ...params.bookingInsert, paymentMethod })
+          .returning();
+        booking = created;
+        if (params.bookingInsert.userId) {
+          const [existingMap] = await tx
+            .select({ id: userSessionMappings.id })
+            .from(userSessionMappings)
+            .where(
+              and(
+                eq(userSessionMappings.userId, params.bookingInsert.userId),
+                eq(userSessionMappings.classId, params.bookingInsert.classId),
+              ),
+            )
+            .limit(1);
+          if (!existingMap) {
+            await tx.insert(userSessionMappings).values({
+              userId: params.bookingInsert.userId,
+              classId: params.bookingInsert.classId,
+              status: "upcoming",
+            });
+          }
+        }
+      }
+
+      const [flexiBooking] = await tx
+        .insert(flexiBookings)
+        .values({ ...params.flexi, bookingId: booking.id })
+        .returning();
+
+      if (params.selections.length) {
+        await tx.insert(flexiBookingSelections).values(
+          params.selections.map((selection) => ({
+            flexiBookingId: flexiBooking.id,
+            weekday: selection.weekday,
+            sourceSeriesId: selection.sourceSeriesId,
+            sourceClassId: selection.sourceClassId,
+            sourceTimeLabel: selection.sourceTimeLabel ?? null,
+          })),
+        );
+      }
+
+      await tx.insert(flexiBookingOccurrences).values(
+        params.occurrences.map((occurrence) => ({
+          flexiBookingId: flexiBooking.id,
+          classId: occurrence.classId,
+          weekday: occurrence.weekday,
+          occurrenceDate: occurrence.occurrenceDate,
+          status: occurrence.status,
+          holdExpiresAt: occurrence.holdExpiresAt ?? null,
+        })),
+      );
+
+      for (const classId of sortedClassIds) {
+        const need = neededByClass.get(classId) ?? 0;
+        const next = (activeBefore.get(classId) ?? 0) + need;
+        await tx
+          .update(classes)
+          .set({ currentBookings: next })
+          .where(eq(classes.id, classId));
+      }
+
+      return { booking, flexiBooking };
+    });
   }
 
   async getFlexiBooking(id: string): Promise<FlexiBooking | undefined> {
@@ -3270,6 +4062,178 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async listMemberHeldOccurrences(params: {
+    userId?: string | null;
+    guestEmail?: string | null;
+    nowMs?: number;
+  }): Promise<HeldOccurrence[]> {
+    const nowMs = params.nowMs ?? Date.now();
+    const userId = params.userId?.trim() || null;
+    const guestEmail = params.guestEmail?.trim().toLowerCase() || null;
+    if (!userId && !guestEmail) return [];
+
+    try {
+      const ownerFilter = userId
+        ? eq(bookings.userId, userId)
+        : and(
+            eq(bookings.isGuestCheckout, true),
+            sql`lower(${bookings.guestEmail}) = ${guestEmail}`,
+          );
+
+      const bookingRows = await db
+        .select({
+          classId: bookings.classId,
+          paymentStatus: bookings.paymentStatus,
+          heldUntil: bookings.heldUntil,
+          mappingStatus: userSessionMappings.status,
+          sessionDate: classes.date,
+          durationMinutes: classTypes.duration,
+          className: classTypes.name,
+        })
+        .from(bookings)
+        .innerJoin(classes, eq(bookings.classId, classes.id))
+        .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+        .leftJoin(
+          userSessionMappings,
+          and(
+            eq(userSessionMappings.classId, bookings.classId),
+            userId
+              ? eq(userSessionMappings.userId, userId)
+              : sql`false`,
+          ),
+        )
+        .where(ownerFilter);
+
+      const held: HeldOccurrence[] = [];
+      const seenClassIds = new Set<string>();
+
+      for (const row of bookingRows) {
+        if (
+          !bookingHoldsSeatForCollision({
+            paymentStatus: row.paymentStatus,
+            heldUntil: row.heldUntil,
+            mappingStatus: row.mappingStatus,
+            nowMs,
+          })
+        ) {
+          continue;
+        }
+        const interval = sessionIntervalMs(row.sessionDate, row.durationMinutes ?? 60);
+        if (interval.endMs <= nowMs) continue;
+        seenClassIds.add(row.classId);
+        held.push({
+          classId: row.classId,
+          startMs: interval.startMs,
+          endMs: interval.endMs,
+          label: row.className ?? undefined,
+        });
+      }
+
+      if (userId) {
+        const flexiRows = await db
+          .select({
+            classId: flexiBookingOccurrences.classId,
+            occurrenceDate: flexiBookingOccurrences.occurrenceDate,
+            occurrenceStatus: flexiBookingOccurrences.status,
+            occurrenceHoldExpiresAt: flexiBookingOccurrences.holdExpiresAt,
+            paymentStatus: flexiBookings.paymentStatus,
+            holdExpiresAt: flexiBookings.holdExpiresAt,
+            durationMinutes: classTypes.duration,
+            className: classTypes.name,
+            sessionDate: classes.date,
+          })
+          .from(flexiBookingOccurrences)
+          .innerJoin(flexiBookings, eq(flexiBookingOccurrences.flexiBookingId, flexiBookings.id))
+          .innerJoin(classes, eq(flexiBookingOccurrences.classId, classes.id))
+          .innerJoin(classTypes, eq(classes.classTypeId, classTypes.id))
+          .where(
+            and(
+              eq(flexiBookings.userId, userId),
+              inArray(flexiBookingOccurrences.status, ["reserved", "paid"]),
+            ),
+          );
+
+        for (const row of flexiRows) {
+          if (seenClassIds.has(row.classId)) continue;
+          const holdUntil = row.holdExpiresAt ?? row.occurrenceHoldExpiresAt;
+          if (
+            !bookingHoldsSeatForCollision({
+              paymentStatus: row.paymentStatus,
+              heldUntil: holdUntil,
+              mappingStatus: "upcoming",
+              nowMs,
+            })
+          ) {
+            continue;
+          }
+          const start = row.occurrenceDate ?? row.sessionDate;
+          const interval = sessionIntervalMs(start, row.durationMinutes ?? 60);
+          if (interval.endMs <= nowMs) continue;
+          seenClassIds.add(row.classId);
+          held.push({
+            classId: row.classId,
+            startMs: interval.startMs,
+            endMs: interval.endMs,
+            label: row.className ? `${row.className} (Flexi)` : "Flexi session",
+          });
+        }
+      }
+
+      return held;
+    } catch (error) {
+      console.error("[DB] Error listing member held occurrences:", error);
+      return [];
+    }
+  }
+
+  async findMemberTimeCollisions(params: {
+    userId?: string | null;
+    guestEmail?: string | null;
+    proposed: ProposedOccurrence[];
+    nowMs?: number;
+  }): Promise<TimeCollision[]> {
+    if (!params.proposed.length) return [];
+    const internal = findInternalProposedCollisions(params.proposed);
+    if (internal.length) return internal;
+    const held = await this.listMemberHeldOccurrences({
+      userId: params.userId,
+      guestEmail: params.guestEmail,
+      nowMs: params.nowMs,
+    });
+    return findTimeCollisions(params.proposed, held);
+  }
+
+  async listProposedSeriesEnrollmentOccurrences(params: {
+    anchorClassId: string;
+    maxSessionsToEnroll?: number;
+  }): Promise<ProposedOccurrence[]> {
+    const anchor = await this.getClass(params.anchorClassId);
+    if (!anchor || anchor.sessionFrequency !== "recurring" || !anchor.seriesId) {
+      return [];
+    }
+    const classType = await this.getClassType(anchor.classTypeId);
+    const duration = classType?.duration ?? 60;
+    const label = classType?.name ?? undefined;
+    const seriesClasses = await this.listClassesInSeries(anchor.seriesId);
+    let packageClasses = filterSeriesClassesFromAnchor(seriesClasses, anchor.date);
+    if (
+      params.maxSessionsToEnroll != null &&
+      params.maxSessionsToEnroll > 0 &&
+      packageClasses.length > params.maxSessionsToEnroll
+    ) {
+      packageClasses = packageClasses.slice(0, params.maxSessionsToEnroll);
+    }
+    return packageClasses.map((cls) => {
+      const interval = sessionIntervalMs(cls.date, duration);
+      return {
+        classId: cls.id,
+        startMs: interval.startMs,
+        endMs: interval.endMs,
+        label,
+      };
+    });
+  }
+
   async guestHasUpcomingBookingForClass(
     guestEmail: string,
     classId: string,
@@ -3733,6 +4697,7 @@ export class DatabaseStorage implements IStorage {
           mappingId: userSessionMappings.id,
           bookingId: bookings.id,
           classId: classes.id,
+          classTypeId: classes.classTypeId,
           className: classTypes.name,
           instructorName: instructors.name,
           sessionDate: classes.date,
@@ -3801,6 +4766,7 @@ export class DatabaseStorage implements IStorage {
           id: r.mappingId ?? r.bookingId,
           bookingId: r.bookingId,
           classId: r.classId,
+          classTypeId: r.classTypeId,
           anchorClassId: null,
           className: r.className,
           instructorName: r.instructorName,
@@ -3829,6 +4795,7 @@ export class DatabaseStorage implements IStorage {
           flexiBookingId: flexiBookings.id,
           bookingId: bookings.id,
           classId: classes.id,
+          classTypeId: classes.classTypeId,
           anchorClassId: flexiBookings.anchorClassId,
           className: classTypes.name,
           instructorName: instructors.name,
@@ -3881,6 +4848,7 @@ export class DatabaseStorage implements IStorage {
           id: r.occurrenceId,
           bookingId: r.bookingId ?? r.occurrenceId,
           classId: r.classId,
+          classTypeId: r.classTypeId,
           anchorClassId: r.anchorClassId,
           className: r.className,
           instructorName: r.instructorName,
@@ -4365,6 +5333,17 @@ export class DatabaseStorage implements IStorage {
         classTypeName: classTypes.name,
         subscriptionType: subscriptions.subscriptionType,
         flexiBookingId: subscriptions.flexiBookingId,
+        programId: subscriptions.programId,
+        sessionsPurchased: subscriptions.sessionsPurchased,
+        totalPaidPaise: subscriptions.totalPaidPaise,
+        perSessionAllocation: subscriptions.perSessionAllocation,
+        sessionsConsumed: subscriptions.sessionsConsumed,
+        sessionsScheduled: subscriptions.sessionsScheduled,
+        sessionsUnscheduled: subscriptions.sessionsUnscheduled,
+        sessionsCredited: subscriptions.sessionsCredited,
+        instructorId: subscriptions.instructorId,
+        horizonStartAt: subscriptions.horizonStartAt,
+        horizonEndAt: subscriptions.horizonEndAt,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
         utilizedSessions: subscriptions.utilizedSessions,
@@ -4382,6 +5361,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(subscriptions.createdAt));
     return rows.map((r) => ({
       ...r,
+      perSessionAllocation: r.perSessionAllocation ?? null,
+      instructorId: r.instructorId ?? null,
+      horizonStartAt: r.horizonStartAt?.toISOString() ?? null,
+      horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     }));
@@ -4398,6 +5381,17 @@ export class DatabaseStorage implements IStorage {
         classTypeName: classTypes.name,
         subscriptionType: subscriptions.subscriptionType,
         flexiBookingId: subscriptions.flexiBookingId,
+        programId: subscriptions.programId,
+        sessionsPurchased: subscriptions.sessionsPurchased,
+        totalPaidPaise: subscriptions.totalPaidPaise,
+        perSessionAllocation: subscriptions.perSessionAllocation,
+        sessionsConsumed: subscriptions.sessionsConsumed,
+        sessionsScheduled: subscriptions.sessionsScheduled,
+        sessionsUnscheduled: subscriptions.sessionsUnscheduled,
+        sessionsCredited: subscriptions.sessionsCredited,
+        instructorId: subscriptions.instructorId,
+        horizonStartAt: subscriptions.horizonStartAt,
+        horizonEndAt: subscriptions.horizonEndAt,
         totalAmountPaise: subscriptions.totalAmountPaise,
         totalSessions: subscriptions.totalSessions,
         utilizedSessions: subscriptions.utilizedSessions,
@@ -4416,6 +5410,10 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(subscriptions.createdAt));
     return rows.map((r) => ({
       ...r,
+      perSessionAllocation: r.perSessionAllocation ?? null,
+      instructorId: r.instructorId ?? null,
+      horizonStartAt: r.horizonStartAt?.toISOString() ?? null,
+      horizonEndAt: r.horizonEndAt?.toISOString() ?? null,
       expiresAt: r.expiresAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     }));
@@ -4497,6 +5495,7 @@ export class DatabaseStorage implements IStorage {
     consentVersion: string;
     ipAddress?: string | null;
     userAgent?: string | null;
+    cancellationPolicyVersion?: string | null;
   }): Promise<void> {
     const now = new Date();
     await db
@@ -4506,6 +5505,12 @@ export class DatabaseStorage implements IStorage {
         guestConsentTerms: true,
         guestConsentAge: true,
         guestConsentAt: now,
+        ...(params.cancellationPolicyVersion
+          ? {
+              cancellationPolicyVersion: params.cancellationPolicyVersion,
+              cancellationPolicyAcceptedAt: now,
+            }
+          : {}),
       })
       .where(eq(bookings.id, params.bookingId));
 
@@ -4519,6 +5524,38 @@ export class DatabaseStorage implements IStorage {
     for (const consentType of ["profile_booking", "terms", "age_declaration"] as const) {
       await this.insertConsentLog({ ...base, consentType });
     }
+    if (params.cancellationPolicyVersion) {
+      await this.insertConsentLog({
+        ...base,
+        consentType: "cancellation_refund",
+        consentVersion: params.cancellationPolicyVersion,
+      });
+    }
+  }
+
+  async recordCancellationPolicyAcceptance(params: {
+    bookingId: string;
+    policyVersion: string;
+    ipAddress?: string | null;
+    userAgent?: string | null;
+  }): Promise<void> {
+    const now = new Date();
+    await db
+      .update(bookings)
+      .set({
+        cancellationPolicyVersion: params.policyVersion,
+        cancellationPolicyAcceptedAt: now,
+      })
+      .where(eq(bookings.id, params.bookingId));
+
+    await this.insertConsentLog({
+      bookingId: params.bookingId,
+      consentType: "cancellation_refund",
+      action: "opt_in",
+      consentVersion: params.policyVersion,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+    });
   }
 
   async withdrawHealthDataConsent(params: {

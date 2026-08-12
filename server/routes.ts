@@ -42,7 +42,10 @@ import {
   adminPaymentQrCodeSchema,
   adminUpdateInstructorStatusSchema,
   adminInstructorEmailOtpSchema,
+  adminCreateProgramSchema,
+  adminUpdateProgramSchema,
   formatZodErrorsForDisplay,
+  LEGACY_CLASS_TYPE_PRICE_PLACEHOLDER,
 } from "@shared/admin-validation";
 import {
   isInstructorSessionPoolEligible,
@@ -82,7 +85,19 @@ import {
   cancelGuestCheckout,
   expirePaymentHolds,
 } from "./booking-hold-service";
+import { runSessionLedgerSweep } from "./session-ledger-sweep";
+import { runRefundSweep } from "./refund-service";
+import {
+  CANCELLATION_POLICY_VERSION,
+  isCurrentCancellationPolicyVersion,
+} from "@shared/cancellation-policy";
+import { confirmReschedule, listRescheduleTargets } from "./member-reschedule";
 import { initialBookingHeldUntil } from "@shared/booking-payment-hold";
+import {
+  formatTimeCollisionMessage,
+  sessionIntervalMs,
+  type ProposedOccurrence,
+} from "@shared/member-time-collision";
 import { buildResumeCheckoutPayload, bookingCanResumeCheckout } from "./resume-checkout";
 import { paginationQuerySchema, buildPaginatedResponse } from "@shared/admin-pagination";
 import { REQUIRED_PHONE_MESSAGE, validateRequiredGuestPhone } from "@shared/guest-phone";
@@ -159,6 +174,15 @@ import {
 } from "./account";
 import { getConfiguredCheckoutGateway, rupeesToPaise } from "./payment-gateways";
 import {
+  computeProgramHorizon,
+  missingProgramResponse,
+  programHasFee,
+  programPriceRupeesDisplay,
+  sessionFrequencyToProgramKind,
+  subscriptionContractFromProgram,
+  toPublicCheckoutProgram,
+} from "./checkout-program";
+import {
   normalizeSessionPaymentMethod,
   providerForSessionMethod,
   usesHostedCheckout,
@@ -227,6 +251,29 @@ function rateLimit(maxRequests: number, windowMs: number) {
     record.count++;
     next();
   };
+}
+
+/** SPEC-SESSIONS-01 FR-17 — reject overlapping held seats across subscriptions. */
+async function rejectIfTimeCollision(params: {
+  res: Response;
+  userId?: string | null;
+  guestEmail?: string | null;
+  proposed: ProposedOccurrence[];
+}): Promise<boolean> {
+  const collisions = await storage.findMemberTimeCollisions({
+    userId: params.userId,
+    guestEmail: params.guestEmail,
+    proposed: params.proposed,
+  });
+  if (!collisions.length) return false;
+  const first = collisions[0]!;
+  params.res.status(409).json({
+    code: "time_collision",
+    message: formatTimeCollisionMessage(first),
+    proposedClassId: first.proposedClassId,
+    heldClassId: first.heldClassId,
+  });
+  return true;
 }
 
 // Clean up stale rate limit entries every 10 minutes
@@ -819,7 +866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({
-        message: 'Health update saved successfully',
+        message: 'Health History saved successfully',
         profileCompletionStatus: updatedUser.profileCompletionStatus
       });
     } catch (error) {
@@ -988,8 +1035,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY FIX 3: requireAdminAuth added
   app.post("/api/class-types", requireAdminAuth, async (req, res) => {
     try {
-      const validatedData = adminCreateClassTypeSchema.parse(req.body);
-      const classType = await storage.createClassType(validatedData);
+      // Price is owned by Programs — ignore any client price and write a DB placeholder.
+      const { price: _ignoredPrice, ...body } = req.body ?? {};
+      const validatedData = adminCreateClassTypeSchema.parse(body);
+      const classType = await storage.createClassType({
+        ...validatedData,
+        price: LEGACY_CLASS_TYPE_PRICE_PLACEHOLDER,
+      });
       res.status(201).json(classType);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -998,13 +1050,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: error.errors,
         });
       }
+      if (
+        error instanceof Error &&
+        (error as Error & { code?: string }).code === "CLASS_TYPE_NAME_TAKEN"
+      ) {
+        return res.status(409).json({ message: error.message });
+      }
       res.status(500).json({ message: "Failed to create class type" });
     }
   });
 
   app.patch("/api/class-types/:id", requireAdminAuth, async (req, res) => {
     try {
-      const updates = adminCreateClassTypeSchema.partial().parse(req.body);
+      // Never let admin PATCH update legacy class_types.price — Programs own pricing.
+      const { price: _ignoredPrice, ...body } = req.body ?? {};
+      const updates = adminCreateClassTypeSchema.partial().parse(body);
       const existing = await storage.getClassType(req.params.id);
       if (!existing) {
         return res.status(404).json({ message: "Class type not found" });
@@ -1021,7 +1081,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
           errors: error.errors,
         });
       }
+      if (
+        error instanceof Error &&
+        (error as Error & { code?: string }).code === "CLASS_TYPE_NAME_TAKEN"
+      ) {
+        return res.status(409).json({ message: error.message });
+      }
       res.status(500).json({ message: "Failed to update class type" });
+    }
+  });
+
+  // SPEC-SESSIONS-01 A2 — Program admin CRUD (prices are whole-program; A3 switches checkout).
+  app.get("/api/admin/programs", requireAdminAuth, async (req, res) => {
+    try {
+      const classTypeId =
+        typeof req.query.classTypeId === "string" ? req.query.classTypeId : undefined;
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const rows = await storage.listPrograms({ classTypeId, status });
+      res.json(rows);
+    } catch (error) {
+      console.error("list programs:", error);
+      res.status(500).json({ message: "Failed to list programs" });
+    }
+  });
+
+  app.get("/api/admin/programs/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const program = await storage.getProgram(req.params.id);
+      if (!program) return res.status(404).json({ message: "Program not found" });
+      const subscriptionCount = await storage.countSubscriptionsForProgram(program.id);
+      res.json({ ...program, subscriptionCount });
+    } catch (error) {
+      console.error("get program:", error);
+      res.status(500).json({ message: "Failed to load program" });
+    }
+  });
+
+  app.post("/api/admin/programs", requireAdminAuth, async (req, res) => {
+    try {
+      const body = adminCreateProgramSchema.parse(req.body);
+      const program = await storage.createProgram({
+        ...body,
+        flexiAllowed: body.flexiAllowed ?? false,
+      });
+      res.status(201).json(program);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      if (error instanceof Error) {
+        const code = (error as Error & { code?: string }).code;
+        if (
+          code === "PROGRAM_SHAPE_TAKEN" ||
+          code === "PROGRAM_INVALID" ||
+          code === "CLASS_TYPE_NOT_FOUND"
+        ) {
+          return res.status(code === "CLASS_TYPE_NOT_FOUND" ? 404 : 409).json({
+            message: error.message,
+          });
+        }
+      }
+      console.error("create program:", error);
+      res.status(500).json({ message: "Failed to create program" });
+    }
+  });
+
+  app.patch("/api/admin/programs/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const body = adminUpdateProgramSchema.parse(req.body);
+      const result = await storage.updateProgram(req.params.id, {
+        ...body,
+        flexiAllowed: body.flexiAllowed ?? false,
+      });
+      if (!result.ok) {
+        return res.status(400).json({ message: result.message });
+      }
+      res.json({
+        program: result.program,
+        versioned: result.versioned,
+        message: result.versioned
+          ? "Created a new program version; previous version archived. Existing subscriptions stay on the old version."
+          : "Program updated.",
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: formatZodErrorsForDisplay(error.errors)[0] || "Invalid input",
+          errors: error.errors,
+        });
+      }
+      console.error("update program:", error);
+      res.status(500).json({ message: "Failed to update program" });
+    }
+  });
+
+  app.post("/api/admin/programs/:id/archive", requireAdminAuth, async (req, res) => {
+    try {
+      const archived = await storage.archiveProgram(req.params.id);
+      if (!archived) return res.status(404).json({ message: "Program not found" });
+      res.json(archived);
+    } catch (error) {
+      console.error("archive program:", error);
+      res.status(500).json({ message: "Failed to archive program" });
+    }
+  });
+
+  /** Public/member: active Programs for checkout (SPEC-SESSIONS-01 A3). */
+  app.get("/api/programs/active", async (req, res) => {
+    try {
+      const classTypeId =
+        typeof req.query.classTypeId === "string" ? req.query.classTypeId.trim() : "";
+      if (!classTypeId) {
+        return res.status(400).json({ message: "classTypeId is required" });
+      }
+      const kind =
+        typeof req.query.kind === "string" && req.query.kind.trim()
+          ? req.query.kind.trim()
+          : undefined;
+      const rows = await storage.listActiveProgramsForClassType(classTypeId, kind);
+      res.json(rows.map(toPublicCheckoutProgram));
+    } catch (error) {
+      console.error("list active programs:", error);
+      res.status(500).json({ message: "Failed to list programs" });
     }
   });
 
@@ -1820,7 +2004,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!cls || !isFlexiEnabledSchedule(cls)) {
         return res.status(404).json({ message: "Flexi options not available for this schedule." });
       }
-      const options = await storage.getFlexiOptions(req.params.anchorClassId);
+      let selectionCount: number | undefined;
+      const programId =
+        typeof req.query.programId === "string" ? req.query.programId.trim() : "";
+      if (programId) {
+        const program = await storage.getProgram(programId);
+        if (program && program.classTypeId === cls.classTypeId && program.status === "active") {
+          selectionCount = program.sessionsPerWeek;
+        }
+      }
+      const options = await storage.getFlexiOptions(req.params.anchorClassId, {
+        ...(selectionCount != null ? { selectionCount } : {}),
+      });
       if (!options) {
         return res.status(404).json({ message: "Flexi options not available for this schedule." });
       }
@@ -1986,8 +2181,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             validatedData.recurrenceKind === "weekly" ? validatedData.occurrenceCount : null,
           flexiEnabled:
             validatedData.recurrenceKind === "weekly" ? validatedData.flexiEnabled : false,
-          flexiSelectionCount:
-            validatedData.recurrenceKind === "weekly" ? validatedData.flexiSelectionCount : null,
           seriesId,
         });
         created.push(cls);
@@ -2271,7 +2464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const classType = await storage.getClassType(cls.classTypeId);
       const instructor = await storage.getInstructor(cls.instructorId);
       res.json(
-        buildResumeCheckoutPayload({
+        await buildResumeCheckoutPayload({
           booking,
           cls,
           classType,
@@ -2371,12 +2564,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             guestConsentProfile: payload.guestConsentProfile,
             guestConsentTerms: payload.guestConsentTerms,
             guestConsentAge: payload.guestConsentAge,
+            acceptCancellationPolicy: payload.acceptCancellationPolicy,
+            cancellationPolicyVersion:
+              payload.cancellationPolicyVersion ?? CANCELLATION_POLICY_VERSION,
             consentVersion: payload.consentVersion ?? consentVersion(),
           });
         } catch {
           return res.status(400).json({
-            message: "Guest booking requires profile, terms, and age declaration consent.",
+            message:
+              "Guest booking requires profile, terms, age, and Cancellation Policy consent.",
             code: "guest_consent_required",
+          });
+        }
+        if (
+          !payload.acceptCancellationPolicy ||
+          !isCurrentCancellationPolicyVersion(
+            payload.cancellationPolicyVersion ?? CANCELLATION_POLICY_VERSION,
+          )
+        ) {
+          return res.status(400).json({
+            message: "Please accept the Cancellation and Refund Policy to continue.",
+            code: "cancellation_policy_required",
           });
         }
 
@@ -2415,6 +2623,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "This session is no longer open for booking." });
         }
 
+        const guestProgramKind = sessionFrequencyToProgramKind(cls.sessionFrequency);
+        if (!guestProgramKind || guestProgramKind === "recurring") {
+          return res.status(400).json({
+            message: "Guests may only book trial or drop-in programs.",
+            code: "GUEST_PROGRAM_NOT_ALLOWED",
+          });
+        }
+        const guestProgramResolved = await storage.resolveCheckoutProgram({
+          classTypeId: cls.classTypeId,
+          kind: guestProgramKind,
+          programId: payload.programId,
+          guest: true,
+        });
+        if (!guestProgramResolved.ok) {
+          return res.status(409).json(missingProgramResponse(guestProgramResolved));
+        }
+        const checkoutProgram = guestProgramResolved.program;
+
         const guestConflict = await storage.getGuestBookingConflict(guestEmail, classId);
         if (guestConflict.state === "processing") {
           let resumeCheckout: Record<string, unknown> | null = null;
@@ -2422,7 +2648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const existing = guestConflict.booking;
             const classTypeResume = await storage.getClassType(cls.classTypeId);
             const instructorResume = await storage.getInstructor(cls.instructorId);
-            resumeCheckout = buildResumeCheckoutPayload({
+            resumeCheckout = await buildResumeCheckoutPayload({
               booking: existing,
               cls,
               classType: classTypeResume,
@@ -2459,9 +2685,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const guestClassType = classTypeForBooking ?? (await storage.getClassType(cls.classTypeId));
-        const guestPrice = guestClassType?.price ?? null;
-        const guestHasPrice =
-          guestPrice !== null && guestPrice !== "" && parseFloat(String(guestPrice)) > 0;
+        {
+          const duration = guestClassType?.duration ?? 60;
+          const interval = sessionIntervalMs(cls.date, duration);
+          const proposed: ProposedOccurrence[] = [
+            {
+              classId: cls.id,
+              startMs: interval.startMs,
+              endMs: interval.endMs,
+              label: guestClassType?.name ?? undefined,
+            },
+          ];
+          if (
+            await rejectIfTimeCollision({
+              res,
+              guestEmail,
+              proposed,
+            })
+          ) {
+            return;
+          }
+        }
+        const guestHasPrice = programHasFee(checkoutProgram);
         const guestHoldUntil = initialBookingHeldUntil(guestHasPrice);
 
         const booking = resumableGuestBooking
@@ -2481,14 +2726,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.recordGuestBookingConsents({
             bookingId: booking.id,
             consentVersion: payload.consentVersion ?? consentVersion(),
+            cancellationPolicyVersion: CANCELLATION_POLICY_VERSION,
             ...meta,
           });
         }
 
-        const classType = await storage.getClassType(cls.classTypeId);
+        const classType = guestClassType;
         const instructor = await storage.getInstructor(cls.instructorId);
-        const price = classType?.price ?? null;
-        const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
+        const price = programPriceRupeesDisplay(checkoutProgram);
+        const hasPrice = guestHasPrice;
         const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
         const checkoutGateway = getConfiguredCheckoutGateway();
         const checkoutEnabled =
@@ -2499,7 +2745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (hasPrice) {
-          const amountPaise = rupeesToPaise(classType!.price);
+          const amountPaise = checkoutProgram.pricePaise;
           const provider = providerForSessionMethod(sessionPaymentMethod);
           await storage.ensurePaymentStubForBooking({
             bookingId: booking.id,
@@ -2589,7 +2835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (mustBeSignedIn && !isAccountProfileComplete(user)) {
         return res.status(409).json({
           message:
-            "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your health update in My Account before booking.",
+            "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your Health History in My Account before booking.",
           requiresHealthUpdate: true,
           redirectTo: "/my-account#profile",
           code: "profile_incomplete"
@@ -2628,6 +2874,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         return res.status(400).json({ message: "This session is no longer open for booking." });
       }
+
+      const memberProgramKind = sessionFrequencyToProgramKind(cls.sessionFrequency);
+      if (!memberProgramKind) {
+        return res.status(400).json({
+          message: "This session type cannot be purchased.",
+          code: "INVALID_SESSION_FREQUENCY",
+        });
+      }
+      if (memberProgramKind === "trial") {
+        const alreadyTried = await storage.userHasEverBoughtTrialForClassType(
+          user.id,
+          cls.classTypeId,
+        );
+        if (alreadyTried) {
+          return res.status(409).json({
+            code: "TRIAL_ALREADY_USED",
+            message:
+              "You have already purchased a trial for this class type. Choose a drop-in or recurring program.",
+          });
+        }
+      }
+      const memberProgramResolved = await storage.resolveCheckoutProgram({
+        classTypeId: cls.classTypeId,
+        kind: memberProgramKind,
+        programId: payload.programId,
+        guest: false,
+      });
+      if (!memberProgramResolved.ok) {
+        return res.status(409).json(missingProgramResponse(memberProgramResolved));
+      }
+      const checkoutProgram = memberProgramResolved.program;
 
       const recurringSeriesBounds = cls.seriesId
         ? await storage.getRecurringSeriesBounds(cls.seriesId)
@@ -2684,7 +2961,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (isFlexiBookingRequest) {
-        const selectionCount = resolveFlexiSelectionCount(cls);
+        if (!checkoutProgram.flexiAllowed) {
+          return res.status(400).json({
+            message: "This program does not allow Flexi composition.",
+            code: "FLEXI_NOT_ALLOWED",
+          });
+        }
+        const selectionCount = checkoutProgram.sessionsPerWeek;
         if (requestedFlexiSelections.length !== selectionCount) {
           return res.status(400).json({
             message: `Choose exactly ${selectionCount} weekly selections for this Flexi package.`,
@@ -2700,15 +2983,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           weekdaySet.add(selection.weekday);
         }
 
-        const horizonStart = new Date(cls.date);
-        const horizonEnd = new Date(cls.date);
-        horizonEnd.setDate(horizonEnd.getDate() + ((cls.seriesWeekCount ?? 1) * 7 - 1));
+        const { horizonStartAt: horizonStart, horizonEndAt: horizonEnd } =
+          computeProgramHorizon({
+            startAt: new Date(cls.date),
+            durationWeeks: checkoutProgram.durationWeeks,
+          });
         const classesInHorizon = await storage.getClassesInRange(horizonStart, horizonEnd);
+        // A4: pool is class-type scoped; member's instructor sorts preference but any
+        // batch of the class type may supply occurrences (composition across batches).
         const poolClasses = classesInHorizon.filter(
           (candidate) =>
             isFlexiEnabledSchedule(candidate) &&
-            candidate.classTypeId === cls.classTypeId &&
-            candidate.instructorId === cls.instructorId,
+            candidate.classTypeId === cls.classTypeId,
         );
         const occurrencesToReserve: Array<{
           classId: string;
@@ -2721,17 +3007,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             !source ||
             !isFlexiEnabledSchedule(source) ||
             source.classTypeId !== cls.classTypeId ||
-            source.instructorId !== cls.instructorId ||
             source.seriesId !== selection.sourceSeriesId
           ) {
             return res.status(400).json({ message: "One or more Flexi selections are invalid." });
-          }
-          const sourceEnd = new Date(source.date);
-          sourceEnd.setDate(sourceEnd.getDate() + ((source.seriesWeekCount ?? 1) * 7 - 1));
-          if (sourceEnd.getTime() < horizonEnd.getTime()) {
-            return res.status(400).json({
-              message: "Selected Flexi slot does not cover the full package duration.",
-            });
           }
           const matchingOccurrences = poolClasses
             .filter(
@@ -2745,12 +3023,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               new Date(candidate.date).getTime() >= horizonStart.getTime() &&
               new Date(candidate.date).getTime() <= horizonEnd.getTime(),
           );
-          if (neededOccurrences.length < (cls.seriesWeekCount ?? 1)) {
+          if (neededOccurrences.length < checkoutProgram.durationWeeks) {
             return res.status(400).json({
-              message: "Selected Flexi slot does not have enough weeks to cover your package.",
+              message: `Selected slot is short ${checkoutProgram.durationWeeks - neededOccurrences.length} occurrence(s) inside your program horizon.`,
+              code: "SLOT_SHORTFALL",
+              shortfall: checkoutProgram.durationWeeks - neededOccurrences.length,
             });
           }
-          for (const occurrence of neededOccurrences.slice(0, cls.seriesWeekCount ?? 1)) {
+          for (const occurrence of neededOccurrences.slice(0, checkoutProgram.durationWeeks)) {
             occurrencesToReserve.push({
               classId: occurrence.id,
               weekday: selection.weekday,
@@ -2774,62 +3054,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const memberPrice = classTypeForBooking?.price ?? null;
-        const memberHasPrice =
-          memberPrice !== null && memberPrice !== "" && parseFloat(String(memberPrice)) > 0;
-        const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
-        const booking = resumableBooking
-          ? resumableBooking
-          : await storage.createBooking({
+        {
+          const duration = (await storage.getClassType(cls.classTypeId))?.duration ?? 60;
+          const proposed: ProposedOccurrence[] = occurrencesToReserve.map((occurrence) => {
+            const interval = sessionIntervalMs(occurrence.occurrenceDate, duration);
+            return {
+              classId: occurrence.classId,
+              startMs: interval.startMs,
+              endMs: interval.endMs,
+              label: classTypeForBooking?.name ?? undefined,
+            };
+          });
+          if (
+            await rejectIfTimeCollision({
+              res,
               userId: user.id,
-              classId,
-              ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
+              proposed,
+            })
+          ) {
+            return;
+          }
+        }
+
+        const memberHasPrice = programHasFee(checkoutProgram);
+        const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
+        const hasPrice = memberHasPrice;
+        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+        let booking: Awaited<ReturnType<typeof storage.createBooking>>;
+        let flexiBooking: Awaited<ReturnType<typeof storage.createFlexiBooking>>;
+        try {
+          const reserved = await storage.reserveFlexiCompositionAtomic({
+            existingBooking: resumableBooking ?? null,
+            bookingInsert: resumableBooking
+              ? undefined
+              : {
+                  userId: user.id,
+                  classId,
+                  ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
+                },
+            flexi: {
+              userId: user.id,
+              anchorClassId: cls.id,
+              classTypeId: cls.classTypeId,
+              instructorId: cls.instructorId,
+              selectionCount,
+              horizonStartAt: horizonStart,
+              horizonEndAt: horizonEnd,
+              holdExpiresAt: memberHoldUntil,
+              paymentStatus: hasPrice ? "pending" : "waived",
+              paymentMethod: sessionPaymentMethod,
+              status: "pending",
+            },
+            selections: requestedFlexiSelections.map((selection) => ({
+              weekday: selection.weekday,
+              sourceSeriesId: selection.sourceSeriesId,
+              sourceClassId: selection.sourceClassId,
+              sourceTimeLabel: selection.timeLabel,
+            })),
+            occurrences: occurrencesToReserve.map((occurrence) => ({
+              classId: occurrence.classId,
+              weekday: occurrence.weekday,
+              occurrenceDate: occurrence.occurrenceDate,
+              status: hasPrice ? "reserved" : "paid",
+              holdExpiresAt: memberHoldUntil,
+            })),
+          });
+          booking = reserved.booking;
+          flexiBooking = reserved.flexiBooking;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.startsWith("FLEXI_SLOT_FULL:")) {
+            return res.status(400).json({
+              message: "One of your selected Flexi slots is full. Please choose another time.",
+              code: "FLEXI_SLOT_FULL",
             });
+          }
+          console.error("[bookings] FR-15 flexi composition failed:", err);
+          return res.status(500).json({ message: "Could not reserve Flexi composition." });
+        }
         const classType = await storage.getClassType(cls.classTypeId);
         const instructor = await storage.getInstructor(cls.instructorId);
-        const price = classType?.price ?? null;
-        const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
-        const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
+        const price = programPriceRupeesDisplay(checkoutProgram);
         const checkoutGateway = getConfiguredCheckoutGateway();
         const checkoutEnabled =
           hasPrice && usesHostedCheckout(sessionPaymentMethod) && !!checkoutGateway;
-        const flexiBooking = await storage.createFlexiBooking({
-          userId: user.id,
-          anchorClassId: cls.id,
-          classTypeId: cls.classTypeId,
-          instructorId: cls.instructorId,
-          bookingId: booking.id,
-          selectionCount,
-          horizonStartAt: horizonStart,
-          horizonEndAt: horizonEnd,
-          holdExpiresAt: memberHoldUntil,
-          paymentStatus: hasPrice ? "pending" : "waived",
-          paymentMethod: sessionPaymentMethod,
-          status: "pending",
-        });
-        await storage.createFlexiBookingSelections(
-          requestedFlexiSelections.map((selection) => ({
-            flexiBookingId: flexiBooking.id,
-            weekday: selection.weekday,
-            sourceSeriesId: selection.sourceSeriesId,
-            sourceClassId: selection.sourceClassId,
-            sourceTimeLabel: selection.timeLabel,
-          })),
-        );
-        await storage.createFlexiBookingOccurrences(
-          occurrencesToReserve.map((occurrence) => ({
-            flexiBookingId: flexiBooking.id,
-            classId: occurrence.classId,
-            weekday: occurrence.weekday,
-            occurrenceDate: occurrence.occurrenceDate,
-            status: hasPrice ? "reserved" : "paid",
-            holdExpiresAt: memberHoldUntil,
-          })),
-        );
         if (!hasPrice) {
           await storage.updateBookingPaymentStatus(booking.id, "waived");
         } else {
-          const amountPaise = rupeesToPaise(classType!.price);
+          const amountPaise = checkoutProgram.pricePaise;
           const provider = providerForSessionMethod(sessionPaymentMethod);
           await storage.ensurePaymentStubForBooking({
             bookingId: booking.id,
@@ -2842,14 +3154,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             payerPhone: user.primaryMobile ?? null,
           });
           try {
+            const contract = subscriptionContractFromProgram({
+              program: checkoutProgram,
+              instructorId: cls.instructorId,
+              startAt: horizonStart,
+              totalPaidPaise: amountPaise,
+            });
             await storage.createSubscription({
               userId: user.id,
               classTypeId: cls.classTypeId,
               bookingId: booking.id,
               flexiBookingId: flexiBooking.id,
               subscriptionType: cls.sessionFrequency ?? "recurring",
-              totalSessions: occurrencesToReserve.length,
-              totalAmountPaise: amountPaise,
+              ...contract,
               status: "active",
             });
           } catch (subErr) {
@@ -2912,10 +3229,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const memberPrice = classTypeForBooking?.price ?? null;
-      const memberHasPrice =
-        memberPrice !== null && memberPrice !== "" && parseFloat(String(memberPrice)) > 0;
+      {
+        let proposed: ProposedOccurrence[];
+        if (
+          cls.sessionFrequency === "recurring" &&
+          cls.seriesId &&
+          checkoutProgram.kind === "recurring"
+        ) {
+          proposed = await storage.listProposedSeriesEnrollmentOccurrences({
+            anchorClassId: cls.id,
+            maxSessionsToEnroll: checkoutProgram.totalSessions,
+          });
+        } else {
+          const duration = classTypeForBooking?.duration ?? 60;
+          const interval = sessionIntervalMs(cls.date, duration);
+          proposed = [
+            {
+              classId: cls.id,
+              startMs: interval.startMs,
+              endMs: interval.endMs,
+              label: classTypeForBooking?.name ?? undefined,
+            },
+          ];
+        }
+        if (
+          await rejectIfTimeCollision({
+            res,
+            userId: user.id,
+            proposed,
+          })
+        ) {
+          return;
+        }
+      }
+
+      const memberHasPrice = programHasFee(checkoutProgram);
       const memberHoldUntil = initialBookingHeldUntil(memberHasPrice);
+
+      if (
+        !resumableBooking &&
+        (!payload.acceptCancellationPolicy ||
+          !isCurrentCancellationPolicyVersion(
+            payload.cancellationPolicyVersion ?? "",
+          ))
+      ) {
+        return res.status(400).json({
+          message: "Please accept the Cancellation and Refund Policy to continue.",
+          code: "cancellation_policy_required",
+        });
+      }
 
       const booking = resumableBooking
         ? resumableBooking
@@ -2925,10 +3287,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...(memberHoldUntil ? { heldUntil: memberHoldUntil } : {}),
           });
 
+      if (!resumableBooking) {
+        const meta = requestMeta(req);
+        await storage.recordCancellationPolicyAcceptance({
+          bookingId: booking.id,
+          policyVersion: CANCELLATION_POLICY_VERSION,
+          ...meta,
+        });
+      }
+
       const classType = await storage.getClassType(cls.classTypeId);
       const instructor = await storage.getInstructor(cls.instructorId);
-      const price = classType?.price ?? null;
-      const hasPrice = price !== null && price !== "" && parseFloat(String(price)) > 0;
+      const price = programPriceRupeesDisplay(checkoutProgram);
+      const hasPrice = memberHasPrice;
       const sessionPaymentMethod = normalizeSessionPaymentMethod(cls.paymentMethod);
       const checkoutGateway = getConfiguredCheckoutGateway();
       const checkoutEnabled =
@@ -2938,14 +3309,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateBookingPaymentStatus(booking.id, "waived");
         if (cls.sessionFrequency === "recurring" && cls.seriesId && user.id) {
           try {
-            const totalSessions = await storage.countClassesInSeriesFrom(cls.seriesId, cls.date);
+            const contract = subscriptionContractFromProgram({
+              program: checkoutProgram,
+              instructorId: cls.instructorId,
+              startAt: new Date(cls.date),
+              totalPaidPaise: 0,
+            });
             await storage.createSubscription({
               userId: user.id,
               classTypeId: cls.classTypeId,
               bookingId: booking.id,
               subscriptionType: cls.sessionFrequency ?? "recurring",
-              totalSessions,
-              totalAmountPaise: 0,
+              ...contract,
               status: "active",
             });
           } catch (subErr) {
@@ -2956,6 +3331,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               userId: user.id,
               anchorClassId: cls.id,
               paymentStatus: "waived",
+              totalSessionsOverride: checkoutProgram.totalSessions,
+              maxSessionsToEnroll: checkoutProgram.totalSessions,
             });
           } catch (enrollErr) {
             console.error("[bookings] waived series enrollment (non-fatal):", enrollErr);
@@ -2964,7 +3341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (hasPrice) {
-        const amountPaise = rupeesToPaise(classType!.price);
+        const amountPaise = checkoutProgram.pricePaise;
         const provider = providerForSessionMethod(sessionPaymentMethod);
         await storage.ensurePaymentStubForBooking({
           bookingId: booking.id,
@@ -2978,23 +3355,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         try {
-          let totalSessions = 1;
-          if (cls.sessionFrequency === "recurring") {
-            if (cls.seriesId) {
-              totalSessions = await storage.countClassesInSeriesFrom(cls.seriesId, cls.date);
-            } else if (cls.seriesWeekCount != null && cls.seriesWeekCount > 0) {
-              totalSessions = cls.seriesWeekCount;
-            } else {
-              totalSessions = 4;
-            }
-          }
+          const contract = subscriptionContractFromProgram({
+            program: checkoutProgram,
+            instructorId: cls.instructorId,
+            startAt: new Date(cls.date),
+            totalPaidPaise: amountPaise,
+          });
           await storage.createSubscription({
             userId: user.id,
             classTypeId: cls.classTypeId,
             bookingId: booking.id,
             subscriptionType: cls.sessionFrequency ?? "recurring",
-            totalSessions,
-            totalAmountPaise: amountPaise,
+            ...contract,
             status: "active",
           });
         } catch (subErr) {
@@ -3135,11 +3507,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const classType = await storage.getClassType(cls.classTypeId);
-      if (!classType?.price) {
-        return res.status(400).json({ message: "This session has no fee configured" });
+      const sub = await storage.getSubscriptionByBookingId(bookingId);
+      let originalAmountPaise: number | null = null;
+      if (sub?.programId) {
+        const program = await storage.getProgram(sub.programId);
+        if (program) originalAmountPaise = program.pricePaise;
+      }
+      if (originalAmountPaise == null && sub?.totalPaidPaise != null && sub.totalPaidPaise > 0) {
+        originalAmountPaise = sub.totalPaidPaise;
+      }
+      if (originalAmountPaise == null) {
+        const existingPayment = await storage.getPaymentByBookingId(bookingId);
+        if (existingPayment?.amountPaise != null && existingPayment.amountPaise > 0) {
+          originalAmountPaise = existingPayment.amountPaise;
+        }
+      }
+      if (originalAmountPaise == null || originalAmountPaise <= 0) {
+        return res.status(400).json({
+          message:
+            "No active program price is configured for this booking. Checkout cannot use a session-type price.",
+          code: "NO_ACTIVE_PROGRAM",
+        });
       }
 
-      const originalAmountPaise = rupeesToPaise(classType.price);
       let amountPaise = originalAmountPaise;
       let discountAmountPaise = 0;
       let appliedCouponId: string | null = null;
@@ -3881,8 +4271,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           validated.recurrenceKind === "weekly" ? validated.occurrenceCount : null,
         flexiEnabled:
           validated.recurrenceKind === "weekly" ? validated.flexiEnabled : false,
-        flexiSelectionCount:
-          validated.recurrenceKind === "weekly" ? validated.flexiSelectionCount : null,
       });
       if (!updated) return res.status(404).json({ message: "Session not found" });
       res.json(updated);
@@ -3984,11 +4372,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: otp.message });
       }
 
-      const compensation = body.compensation?.trim() ?? "";
       const bookingCount = await storage.countBookingsForClass(req.params.id);
-      if (bookingCount > 0 && compensation.length < 3) {
-        return res.status(400).json({
-          message: "Compensation details are required when the session has bookings.",
+      if (bookingCount > 0) {
+        return res.status(409).json({
+          message:
+            `This session has ${bookingCount} booking(s). Hard-delete is blocked. ` +
+            "Use Cancel session instead so members keep their entitlement.",
+          code: "BOOKINGS_EXIST",
+          bookingCount,
         });
       }
 
@@ -4000,7 +4391,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notifySummary = await notifySessionCancellation(prep.recipients ?? [], {
         kind: "session_deleted",
         reason: body.reason,
-        compensation: compensation || undefined,
         classTypeName: prep.classTypeName ?? "Session",
         sessionDateIso: prep.sessionDateIso,
         instructorName: prep.instructorName,
@@ -4013,10 +4403,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: req.params.id,
         metadata: JSON.stringify({
           reason: body.reason,
-          compensation: compensation || null,
           performedByEmail: req.admin?.email,
           recipientCount: notifySummary.recipientCount,
-          bookingCount,
+          bookingCount: 0,
         }),
         ipAddress: req.ip ?? null,
         userAgent: req.get("user-agent") ?? null,
@@ -4165,6 +4554,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/subscriptions", requireAdminAuth, async (_req, res) => {
     const rows = await storage.getSubscriptionSummariesForAdmin();
     res.json(rows);
+  });
+
+  /**
+   * Option B CA export — suggested accrual amounts from entitlement counters.
+   * ?format=csv for spreadsheet download; default JSON.
+   */
+  app.get("/api/admin/accounting/subscriptions-export", requireAdminAuth, async (req, res) => {
+    try {
+      const {
+        buildSubscriptionAccrualExportRow,
+        formatSubscriptionAccrualCsv,
+      } = await import("@shared/accounting-export");
+      const summaries = await storage.getSubscriptionSummariesForAdmin();
+      const rows = summaries
+        .map((s) =>
+          buildSubscriptionAccrualExportRow({
+            subscriptionId: s.id,
+            userId: s.userId,
+            userEmail: s.userEmail,
+            userName: s.userName,
+            programId: s.programId,
+            classTypeId: s.classTypeId,
+            classTypeName: s.classTypeName,
+            status: s.status,
+            totalPaidPaise: s.totalPaidPaise,
+            totalAmountPaise: s.totalAmountPaise,
+            sessionsPurchased: s.sessionsPurchased,
+            totalSessions: s.totalSessions,
+            perSessionAllocation: s.perSessionAllocation,
+            sessionsConsumed: s.sessionsConsumed,
+            sessionsScheduled: s.sessionsScheduled,
+            sessionsUnscheduled: s.sessionsUnscheduled,
+            sessionsCredited: s.sessionsCredited,
+            horizonEndAt: s.horizonEndAt,
+            createdAt: s.createdAt,
+          }),
+        )
+        .filter((r): r is NonNullable<typeof r> => r != null);
+
+      const format = typeof req.query.format === "string" ? req.query.format.toLowerCase() : "json";
+      if (format === "csv") {
+        const csv = formatSubscriptionAccrualCsv(rows);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="subscription-accrual-export.csv"`,
+        );
+        return res.send(csv);
+      }
+      res.json({
+        policy: "Option B - export for CA posting (no in-app GL)",
+        generatedAt: new Date().toISOString(),
+        rowCount: rows.length,
+        rows,
+      });
+    } catch (error) {
+      console.error("[admin/accounting/subscriptions-export]", error);
+      res.status(500).json({ message: "Failed to build accounting export" });
+    }
   });
 
   app.get("/api/admin/coupons/otp-hint", requireAdminAuth, async (_req, res) => {
@@ -4353,7 +4801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/coupons/validate", requireBookingAuth, async (req: AuthRequest, res) => {
     try {
-      const { code, classId } = validateCouponSchema.parse(req.body);
+      const { code, classId, programId } = validateCouponSchema.parse(req.body);
       const cls = await storage.getClass(classId);
       if (!cls) return res.status(404).json({ message: "Session not found" });
       const classType = await storage.getClassType(cls.classTypeId);
@@ -4361,8 +4809,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isSessionAllowedInPublicCatalog(classType, instructor, req)) {
         return res.status(404).json({ message: "Session not found" });
       }
-      if (!classType?.price) {
-        return res.status(400).json({ message: "This session has no fee" });
+      const kind = sessionFrequencyToProgramKind(cls.sessionFrequency);
+      if (!kind) {
+        return res.status(400).json({ message: "This session cannot be purchased" });
+      }
+      const resolved = await storage.resolveCheckoutProgram({
+        classTypeId: cls.classTypeId,
+        kind,
+        programId,
+        guest: false,
+      });
+      if (!resolved.ok) {
+        return res.status(409).json({ valid: false, ...missingProgramResponse(resolved) });
+      }
+      if (!programHasFee(resolved.program)) {
+        return res.status(400).json({ message: "This program has no fee" });
       }
 
       const coupon = await storage.getActiveCouponByCode(code);
@@ -4392,7 +4853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const originalPaise = rupeesToPaise(classType.price);
+      const originalPaise = resolved.program.pricePaise;
       const { discountPaise, finalPaise } = computeFinalAmountPaise(
         originalPaise,
         coupon.discountType as "fixed" | "percent",
@@ -4427,6 +4888,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const rows = await storage.getSubscriptionSummariesForUser(req.user.id);
     res.json(rows);
   });
+
+  app.get(
+    "/api/subscriptions/:subscriptionId/reschedule-targets",
+    requireAuth,
+    async (req: any, res) => {
+      const result = await listRescheduleTargets({
+        userId: req.user.id,
+        subscriptionId: req.params.subscriptionId,
+      });
+      if (!result.ok) {
+        return res.status(400).json({ code: result.code, message: result.message });
+      }
+      res.json(result);
+    },
+  );
+
+  app.post(
+    "/api/subscriptions/:subscriptionId/reschedule",
+    requireAuth,
+    async (req: any, res) => {
+      const body = z
+        .object({
+          targetClassId: z.string().min(1),
+          sourceBookingId: z.string().min(1).optional(),
+        })
+        .safeParse(req.body);
+      if (!body.success) {
+        return res.status(400).json({ message: "targetClassId is required" });
+      }
+      const result = await confirmReschedule({
+        userId: req.user.id,
+        subscriptionId: req.params.subscriptionId,
+        targetClassId: body.data.targetClassId,
+        sourceBookingId: body.data.sourceBookingId,
+      });
+      if (!result.ok) {
+        const status = result.code === "SLOT_FULL" || result.code === "TARGET_UNAVAILABLE" ? 409 : 400;
+        return res.status(status).json({ code: result.code, message: result.message });
+      }
+      res.status(201).json(result);
+    },
+  );
 
   // ============================================================
   // HEALTH DOCUMENTS — upload + download
@@ -4521,6 +5024,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
   }, 2 * 60 * 1000);
   paymentHoldInterval.unref?.();
+
+  // SPEC-SESSIONS-01 Part B: consume elapsed entitlement every 15 minutes
+  const sessionLedgerInterval = setInterval(() => {
+    void runSessionLedgerSweep()
+      .then((r) => {
+        if (r.consumed || r.errors) {
+          console.log(
+            `[cron] sessionLedgerSweep consumed=${r.consumed} skipped=${r.skipped} errors=${r.errors}`,
+          );
+        }
+      })
+      .catch((err) => console.error("[cron] sessionLedgerSweep failed:", err));
+  }, 15 * 60 * 1000);
+  sessionLedgerInterval.unref?.();
+
+  const refundSweepInterval = setInterval(() => {
+    void runRefundSweep()
+      .then((r) => {
+        if (r.guestInitiated || r.memberLapsed || r.manualRequired || r.errors) {
+          console.log(
+            `[cron] refundSweep guest=${r.guestInitiated} lapsed=${r.memberLapsed} manual=${r.manualRequired} errors=${r.errors}`,
+          );
+        }
+      })
+      .catch((err) => console.error("[cron] refundSweep failed:", err));
+  }, 15 * 60 * 1000);
+  refundSweepInterval.unref?.();
 
   const erasureInterval = setInterval(() => {
     void storage.processDueAccountErasures().catch((err) =>
