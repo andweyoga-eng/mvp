@@ -13,6 +13,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
@@ -41,9 +42,10 @@ import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { SessionsSearchBar } from "@/components/sessions/sessions-search-bar";
 import { WeeklySchedulePanel } from "@/components/sessions/weekly-schedule-panel";
 import { PracticeCalendarPanel } from "@/components/sessions/practice-calendar-panel";
+import { CalendarDaySessionsPanel } from "@/components/sessions/calendar-day-sessions";
 import { YourMentorsSection } from "@/components/sessions/your-mentors-section";
 import { filterUpcomingScheduleDays, type ScheduleDayLike } from "@/lib/booking-flow";
-import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS, fetchScheduleMonth } from "@/lib/public-session-catalog";
 import {
   practiceClassImage,
   samePracticeCalendarDay,
@@ -153,17 +155,8 @@ function ClassTypeCard({
       aria-label={classType.name}
       data-testid={`hub-workout-card-${classType.id}`}
     >
-      <div className="relative flex h-[160px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]">
-        {classType.imageUrl ? (
-          <img
-            src={classType.imageUrl}
-            alt=""
-            aria-hidden
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <Flower2 className="h-16 w-16 text-primary/25" aria-hidden />
-        )}
+      <div className="relative overflow-hidden">
+        <ClassTypeCoverImage imageUrl={classType.imageUrl} alt="" />
       </div>
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-2.5 flex items-start justify-between gap-2">
@@ -207,6 +200,7 @@ export default function Dashboard() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
+  const [calendarFocusKey, setCalendarFocusKey] = useState<string | null>(null);
 
   const dailyQuote = useMemo(() => {
     const dayIndex = Math.floor(Date.now() / 86_400_000);
@@ -263,6 +257,20 @@ export default function Dashboard() {
     ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]
   >({
     queryKey: ["/api/schedule/week"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+
+  const monthYear = calendarMonth.getFullYear();
+  const monthIndex = calendarMonth.getMonth() + 1;
+  const { data: monthSchedule = [] } = useQuery<
+    ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]
+  >({
+    queryKey: ["/api/schedule/month", monthYear, monthIndex],
+    queryFn: () =>
+      fetchScheduleMonth<ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]>(
+        monthYear,
+        monthIndex,
+      ),
     ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
@@ -355,13 +363,13 @@ export default function Dashboard() {
 
   const sessionsByDateKey = useMemo(() => {
     const map = new Map<string, PracticeSession[]>();
-    for (const day of upcomingSchedule) {
+    for (const day of monthSchedule) {
       const first = day.classes[0];
       if (!first) continue;
       map.set(new Date(first.date).toDateString(), day.classes);
     }
     return map;
-  }, [upcomingSchedule]);
+  }, [monthSchedule]);
 
   const calendarCells = useMemo(() => {
     const year = calendarMonth.getFullYear();
@@ -467,14 +475,22 @@ export default function Dashboard() {
   }, [memberSessions, upcomingSchedule, carouselSessions, classTypes, bookingMentors, instructors]);
 
   const jumpToWeeklyDay = (dateKey: string) => {
-    window.setTimeout(() => {
-      const header = weeklyHeaderRefs.current.get(dateKey);
-      if (!header) return;
-      header.scrollIntoView({ behavior: "smooth", block: "start" });
-      setHighlightedDayKey(dateKey);
-      window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
-    }, 60);
+    const header = weeklyHeaderRefs.current.get(dateKey);
+    if (header) {
+      setCalendarFocusKey(null);
+      window.setTimeout(() => {
+        header.scrollIntoView({ behavior: "smooth", block: "start" });
+        setHighlightedDayKey(dateKey);
+        window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
+      }, 60);
+      return;
+    }
+    setCalendarFocusKey(dateKey);
   };
+
+  const focusedCalendarSessions = calendarFocusKey
+    ? (sessionsByDateKey.get(calendarFocusKey) ?? [])
+    : [];
 
   const scrollToMentors = () => {
     mentorsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -756,9 +772,20 @@ export default function Dashboard() {
             monthLabel={monthLabel}
             cells={calendarCells}
             calendarMonth={calendarMonth}
-            onMonthChange={setCalendarMonth}
+            onMonthChange={(month) => {
+              setCalendarFocusKey(null);
+              setCalendarMonth(month);
+            }}
             onJumpToDay={jumpToWeeklyDay}
           />
+          {calendarFocusKey ? (
+            <CalendarDaySessionsPanel
+              dateKey={calendarFocusKey}
+              sessions={focusedCalendarSessions}
+              onReserve={reserveSession}
+              onDismiss={() => setCalendarFocusKey(null)}
+            />
+          ) : null}
         </section>
 
         <div ref={mentorsSectionRef}>

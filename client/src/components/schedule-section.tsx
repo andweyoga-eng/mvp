@@ -19,9 +19,11 @@ import meditationImg from "@assets/meditation_1756809174781.jpg";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import { cn } from "@/lib/utils";
 import { AvailableTodaySessionCard } from "@/components/available-today-session-card";
-import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS, fetchScheduleMonth } from "@/lib/public-session-catalog";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { FlexiInfoBadge } from "@/components/flexi-info-badge";
+import { CalendarDaySessionsPanel } from "@/components/sessions/calendar-day-sessions";
+import type { PracticeSession } from "@/lib/practice-schedule";
 import { isFlexiEnabledSchedule } from "@shared/flexi-mode";
 
 interface ClassType {
@@ -103,9 +105,18 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
   const weeklyListRef = useRef<HTMLDivElement>(null);
   const weeklyHeaderRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
+  const [calendarFocusKey, setCalendarFocusKey] = useState<string | null>(null);
 
   const { data: weeklySchedule, isLoading, error } = useQuery<ScheduleDay[]>({
     queryKey: ["/api/schedule/week"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+
+  const monthYear = calendarMonth.getFullYear();
+  const monthIndex = calendarMonth.getMonth() + 1;
+  const { data: monthSchedule = [] } = useQuery<ScheduleDay[]>({
+    queryKey: ["/api/schedule/month", monthYear, monthIndex],
+    queryFn: () => fetchScheduleMonth<ScheduleDay[]>(monthYear, monthIndex),
     ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
   });
 
@@ -156,14 +167,14 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
 
   const sessionsByDateKey = useMemo(() => {
     const map = new Map<string, ScheduleDay["classes"]>();
-    for (const day of upcomingSchedule) {
+    for (const day of monthSchedule) {
       const first = day.classes[0];
       if (!first) continue;
       const key = new Date(first.date).toDateString();
       map.set(key, day.classes);
     }
     return map;
-  }, [upcomingSchedule]);
+  }, [monthSchedule]);
 
   const formatTimeIST = (date: Date) =>
     new Date(date).toLocaleTimeString("en-IN", {
@@ -181,11 +192,19 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
 
   const jumpToWeeklyDay = (dateKey: string) => {
     const header = weeklyHeaderRefs.current.get(dateKey);
-    if (!header) return;
-    header.scrollIntoView({ behavior: "smooth", block: "start" });
-    setHighlightedDayKey(dateKey);
-    window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
+    if (header) {
+      setCalendarFocusKey(null);
+      header.scrollIntoView({ behavior: "smooth", block: "start" });
+      setHighlightedDayKey(dateKey);
+      window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
+      return;
+    }
+    setCalendarFocusKey(dateKey);
   };
+
+  const focusedCalendarSessions = (calendarFocusKey
+    ? (sessionsByDateKey.get(calendarFocusKey) ?? [])
+    : []) as PracticeSession[];
 
   const calendarCells = useMemo(() => {
     const year = calendarMonth.getFullYear();
@@ -513,6 +532,16 @@ export default function ScheduleSection({ onBookingClick }: ScheduleSectionProps
               </span>
             </div>
           </GlassCard>
+          {calendarFocusKey ? (
+            <div className="w-full">
+              <CalendarDaySessionsPanel
+                dateKey={calendarFocusKey}
+                sessions={focusedCalendarSessions}
+                onReserve={(id) => onBookingClick(id)}
+                onDismiss={() => setCalendarFocusKey(null)}
+              />
+            </div>
+          ) : null}
 
           {/* Weekly schedule */}
           <GlassCard className="flex min-w-[min(100%,400px)] flex-1 flex-col p-4 md:p-6">

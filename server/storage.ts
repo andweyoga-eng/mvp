@@ -488,6 +488,7 @@ export interface IStorage {
     classTypeId: string,
     kind?: string,
   ): Promise<Program[]>;
+  listAllActivePrograms(): Promise<Program[]>;
   resolveCheckoutProgram(params: {
     classTypeId: string;
     kind: string;
@@ -597,6 +598,7 @@ export interface IStorage {
   getClass(id: string): Promise<Class | undefined>;
   getClassesByDate(date: Date): Promise<Class[]>;
   getBookableClassesByDate(date: Date): Promise<Class[]>;
+  getBookableClassesInRange(start: Date, end: Date): Promise<Class[]>;
   getClassesInRange(start: Date, end: Date): Promise<Class[]>;
   createClass(classData: InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }): Promise<Class>;
   updateClassSession(id: string, updates: Partial<InsertClass & { status?: string; publishedAt?: Date | null; pausedAt?: Date | null }>): Promise<Class | undefined>;
@@ -1677,6 +1679,19 @@ export class DatabaseStorage implements IStorage {
         .orderBy(programs.kind, programs.durationWeeks, programs.sessionsPerWeek);
     } catch (error) {
       console.error("[DB] Error listing active programs:", error);
+      return [];
+    }
+  }
+
+  async listAllActivePrograms(): Promise<Program[]> {
+    try {
+      return await db
+        .select()
+        .from(programs)
+        .where(eq(programs.status, "active"))
+        .orderBy(programs.classTypeId, programs.kind);
+    } catch (error) {
+      console.error("[DB] Error listing all active programs:", error);
       return [];
     }
   }
@@ -2928,6 +2943,25 @@ export class DatabaseStorage implements IStorage {
         );
     } catch (error) {
       console.error("[DB] Error getting bookable classes by date:", error);
+      return [];
+    }
+  }
+
+  async getBookableClassesInRange(start: Date, end: Date): Promise<Class[]> {
+    try {
+      return await db
+        .select()
+        .from(classes)
+        .where(
+          and(
+            gte(classes.date, start),
+            lte(classes.date, end),
+            bookableClassSqlConditions(),
+          ),
+        )
+        .orderBy(classes.date);
+    } catch (error) {
+      console.error("[DB] Error getting bookable classes in range:", error);
       return [];
     }
   }

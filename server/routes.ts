@@ -1948,6 +1948,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   }
 
+  async function buildPublicScheduleDays(rangeStart: Date, rangeEnd: Date) {
+    const rows = await storage.getBookableClassesInRange(rangeStart, rangeEnd);
+    const enriched = (
+      await Promise.all(rows.map((cls) => enrichPublicClassForBooking(cls)))
+    ).filter((cls): cls is NonNullable<typeof cls> => cls != null);
+
+    const now = Date.now();
+    const byDay = new Map<string, typeof enriched>();
+    for (const cls of enriched) {
+      const sessionDate = cls.date instanceof Date ? cls.date : new Date(cls.date);
+      const durationMinutes =
+        typeof cls.classType?.duration === "number" && cls.classType.duration > 0
+          ? cls.classType.duration
+          : 60;
+      if (sessionDate.getTime() + durationMinutes * 60_000 <= now) continue;
+      const key = sessionDate.toDateString();
+      const list = byDay.get(key) ?? [];
+      list.push(cls);
+      byDay.set(key, list);
+    }
+
+    const dayNames = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
+    const days = [];
+    const cursor = new Date(rangeStart);
+    cursor.setHours(0, 0, 0, 0);
+    const last = new Date(rangeEnd);
+    last.setHours(0, 0, 0, 0);
+    while (cursor.getTime() <= last.getTime()) {
+      const key = cursor.toDateString();
+      const classesForDay = (byDay.get(key) ?? []).sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      );
+      if (classesForDay.length > 0) {
+        days.push({
+          day: dayNames[cursor.getDay()],
+          date: new Date(cursor),
+          classes: classesForDay,
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  }
+
   /** Marketing instructor list — full onboarding + active only. */
   async function enrichPublicClassIfVisible(cls: Awaited<ReturnType<typeof storage.getClass>>) {
     if (!cls || !isClassVisibleForBooking(cls)) return null;
@@ -2283,49 +2335,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Weekly schedule (public read)
+  // Weekly schedule (public read) — rolling 7 local days from today.
   app.get("/api/schedule/week", async (req, res) => {
     try {
       setPublicCatalogNoStore(res);
       const today = new Date();
       const startDay = new Date(today);
       startDay.setHours(0, 0, 0, 0);
-
-      const weekSchedule = [];
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-      for (let i = 0; i < 7; i++) {
-        const currentDay = new Date(startDay);
-        currentDay.setDate(startDay.getDate() + i);
-
-        const dayClasses = await storage.getBookableClassesByDate(currentDay);
-        const enrichedClasses = (
-          await Promise.all(dayClasses.map((cls) => enrichPublicClassForBooking(cls)))
-        ).filter((cls): cls is NonNullable<typeof cls> => cls != null);
-
-        const now = Date.now();
-        const upcomingClasses = enrichedClasses
-          .filter((cls) => {
-            const durationMinutes =
-              typeof cls.classType?.duration === "number" && cls.classType.duration > 0
-                ? cls.classType.duration
-                : 60;
-            return cls.date.getTime() + durationMinutes * 60_000 > now;
-          })
-          .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-        if (upcomingClasses.length > 0) {
-          weekSchedule.push({
-            day: dayNames[currentDay.getDay()],
-            date: currentDay,
-            classes: upcomingClasses,
-          });
-        }
-      }
-
-      res.json(weekSchedule);
+      const endDay = new Date(startDay);
+      endDay.setDate(startDay.getDate() + 6);
+      endDay.setHours(23, 59, 59, 999);
+      res.json(await buildPublicScheduleDays(startDay, endDay));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch weekly schedule" });
+    }
+  });
+
+  // Month grid (dashboard / home calendar) — Program/Batch sessions beyond the rolling week.
+  app.get("/api/schedule/month", async (req, res) => {
+    try {
+      setPublicCatalogNoStore(res);
+      const year = Number(req.query.year);
+      const month = Number(req.query.month);
+      if (
+        !Number.isInteger(year) ||
+        year < 2000 ||
+        year > 2100 ||
+        !Number.isInteger(month) ||
+        month < 1 ||
+        month > 12
+      ) {
+        return res.status(400).json({ message: "year and month (1-12) are required" });
+      }
+      const startDay = new Date(year, month - 1, 1);
+      startDay.setHours(0, 0, 0, 0);
+      const endDay = new Date(year, month, 0);
+      endDay.setHours(23, 59, 59, 999);
+      res.json(await buildPublicScheduleDays(startDay, endDay));
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch monthly schedule" });
     }
   });
 
