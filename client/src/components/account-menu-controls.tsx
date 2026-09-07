@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Menu } from "lucide-react";
 import { AccountDrawer } from "@/components/account-drawer";
 import {
@@ -15,11 +16,9 @@ interface AccountMenuControlsProps {
   /** Sticky header pill — visible while the header is in view. */
   showHeaderButton?: boolean;
   /**
-   * Bottom-right hamburger — only appears after scrolling past the first fold
-   * so account stays reachable without duplicating the header CTA at the top.
+   * On compact viewports, hide the header My Account control after scroll so
+   * the corner FAB can appear. They are mutually exclusive.
    */
-  /** When true, the floating menu button is always visible (not only after scroll). */
-  alwaysShowFloatingMenu?: boolean;
   showFloatingMenuWhenScrolled?: boolean;
   scrollThreshold?: number;
   headerButtonClassName?: string;
@@ -29,17 +28,19 @@ interface AccountMenuControlsProps {
 
 export function AccountMenuControls({
   showHeaderButton = true,
-  alwaysShowFloatingMenu = false,
   showFloatingMenuWhenScrolled = false,
   scrollThreshold = 120,
   headerButtonClassName,
   headerTestId = "account-menu-header",
   fabTestId = "account-menu-fab",
 }: AccountMenuControlsProps) {
+  const headerBtnRef = useRef<HTMLButtonElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scrolledPastFold, setScrolledPastFold] = useState(false);
+  const [headerInView, setHeaderInView] = useState(true);
   const { user, isLoading: authLoading } = useAuth();
   const incompleteHref = getIncompleteAccountHref(user);
+  const hideHeaderOnCompactScroll = showFloatingMenuWhenScrolled && scrolledPastFold;
 
   useEffect(() => {
     if (!showFloatingMenuWhenScrolled) return;
@@ -48,6 +49,20 @@ export function AccountMenuControls({
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [showFloatingMenuWhenScrolled, scrollThreshold]);
+
+  useEffect(() => {
+    const el = headerBtnRef.current;
+    if (!showHeaderButton || !el) {
+      setHeaderInView(false);
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => setHeaderInView(!!entry?.isIntersecting),
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [showHeaderButton, hideHeaderOnCompactScroll, user, authLoading]);
 
   const openAccount = () => {
     if (incompleteHref) {
@@ -59,52 +74,60 @@ export function AccountMenuControls({
 
   if (authLoading || !user) return null;
 
-  const showFab = alwaysShowFloatingMenu || (showFloatingMenuWhenScrolled && scrolledPastFold);
+  const showFab = !headerInView;
+
+  const headerButton = showHeaderButton ? (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            ref={headerBtnRef}
+            type="button"
+            onClick={openAccount}
+            className={cn(
+              "flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold shadow-dz-primary transition-transform hover:shadow-dz-hero active:scale-95",
+              incompleteHref
+                ? "bg-orange-600 text-white hover:bg-orange-700"
+                : "bg-primary text-primary-foreground",
+              hideHeaderOnCompactScroll && "max-lg:hidden",
+              headerButtonClassName,
+            )}
+            data-testid={headerTestId}
+          >
+            {incompleteHref ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
+            <span className="hidden sm:inline">My Account</span>
+            <Menu className="h-[17px] w-[17px]" />
+          </button>
+        </TooltipTrigger>
+        {incompleteHref ? (
+          <TooltipContent side="bottom" className="max-w-xs text-center">
+            Complete your phone number and Health History to book sessions.
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
+    </TooltipProvider>
+  ) : null;
+
+  const fab =
+    showFab && typeof document !== "undefined"
+      ? createPortal(
+          <button
+            type="button"
+            onClick={openAccount}
+            className="fixed bottom-6 right-6 z-40 flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white shadow-dz-hero transition-transform hover:scale-105 active:scale-95 lg:hidden"
+            aria-label="Open my account menu"
+            data-testid={fabTestId}
+          >
+            <Menu className="h-7 w-7" />
+          </button>,
+          document.body,
+        )
+      : null;
 
   return (
     <>
-      {showHeaderButton ? (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={openAccount}
-                className={cn(
-                  "flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold shadow-dz-primary transition-transform hover:shadow-dz-hero active:scale-95",
-                  incompleteHref
-                    ? "bg-orange-600 text-white hover:bg-orange-700"
-                    : "bg-primary text-primary-foreground",
-                  headerButtonClassName,
-                )}
-                data-testid={headerTestId}
-              >
-                {incompleteHref ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
-                <span className="hidden sm:inline">My Account</span>
-                <Menu className="h-[17px] w-[17px]" />
-              </button>
-            </TooltipTrigger>
-            {incompleteHref ? (
-              <TooltipContent side="bottom" className="max-w-xs text-center">
-                Complete your phone number and Health History to book sessions.
-              </TooltipContent>
-            ) : null}
-          </Tooltip>
-        </TooltipProvider>
-      ) : null}
-
-      {showFab ? (
-        <button
-          type="button"
-          onClick={openAccount}
-          className="fixed bottom-6 right-6 z-40 flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white shadow-dz-hero transition-transform hover:scale-105 active:scale-95"
-          aria-label="Open my account menu"
-          data-testid={fabTestId}
-        >
-          <Menu className="h-7 w-7" />
-        </button>
-      ) : null}
-
+      {headerButton}
+      {fab}
       <AccountDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </>
   );

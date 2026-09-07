@@ -8,6 +8,8 @@ interface BrandLogoProps {
   testId?: string;
   /** When false, renders the logo without a home link (e.g. inline in headings). */
   linked?: boolean;
+  /** Override default home navigation (e.g. checkout must clear pending booking first). */
+  onNavigate?: () => void;
 }
 
 export function BrandLogo({
@@ -15,6 +17,7 @@ export function BrandLogo({
   imgClassName = "h-[clamp(38px,5.5vw,48px)] w-auto",
   testId = "logo",
   linked = true,
+  onNavigate,
 }: BrandLogoProps) {
   const img = (
     <img
@@ -37,6 +40,10 @@ export function BrandLogo({
       href="/"
       onClick={(e) => {
         e.preventDefault();
+        if (onNavigate) {
+          onNavigate();
+          return;
+        }
         navigateToHomeSection("home");
       }}
       className={cn("inline-flex flex-shrink-0", className)}
