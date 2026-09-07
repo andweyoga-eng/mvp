@@ -21,6 +21,7 @@ import {
 } from "@/components/session-share-menu";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { ClampedDescription } from "@/components/clamped-description";
+import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { sanitizeGuestPhoneInput } from "@shared/guest-phone";
 import { formatProfileWhatsapp } from "@shared/waitlist";
 
@@ -191,12 +192,11 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                 key={classType.id}
                 className="overflow-hidden rounded-[22px] border border-dz-glass-border bg-white shadow-dz-ambient transition hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="relative">
-                  <img
-                    src={classType.imageUrl || "/api/placeholder/600/300"}
+                <div className="relative overflow-hidden">
+                  <ClassTypeCoverImage
+                    imageUrl={classType.imageUrl || "/api/placeholder/600/300"}
                     alt={`${classType.name} class`}
-                    className="w-full h-48 object-cover"
-                    data-testid={`class-image-${classType.id}`}
+                    testId={`class-image-${classType.id}`}
                   />
                   {!hasUpcomingSession(classType.id) && (
                     <Badge className="absolute left-3 top-3 bg-dz-secondary text-white">
