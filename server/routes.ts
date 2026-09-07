@@ -100,6 +100,7 @@ import {
 } from "@shared/member-time-collision";
 import { buildResumeCheckoutPayload, bookingCanResumeCheckout } from "./resume-checkout";
 import { paginationQuerySchema, buildPaginatedResponse } from "@shared/admin-pagination";
+import { summarizeListingPrice } from "@shared/program-listing-price";
 import { REQUIRED_PHONE_MESSAGE, validateRequiredGuestPhone } from "@shared/guest-phone";
 import {
   WAITLIST_SOURCE_GUEST,
@@ -946,7 +947,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const classTypes = (await storage.getAllClassTypes()).filter(
         (ct) => !isQaFixtureClassTypeName(ct.name),
       );
-      res.json(classTypes);
+      const activePrograms = await storage.listAllActivePrograms();
+      const pricesByType = new Map<string, number[]>();
+      for (const program of activePrograms) {
+        const list = pricesByType.get(program.classTypeId) ?? [];
+        list.push(program.pricePaise);
+        pricesByType.set(program.classTypeId, list);
+      }
+      res.json(
+        classTypes.map((ct) => ({
+          ...ct,
+          listingPrice: summarizeListingPrice(pricesByType.get(ct.id) ?? []),
+        })),
+      );
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch class types" });
     }

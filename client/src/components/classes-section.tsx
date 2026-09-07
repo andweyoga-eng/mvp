@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { getSessionBadgeLabel, SESSION_INFO_BADGE_CLASSNAME } from "@/lib/session-badges";
+import { formatProgramListingPriceLabel, type ProgramListingPrice } from "@shared/program-listing-price";
 import type { ClassType } from "@shared/schema";
 import type { BookingIntent } from "@/lib/pending-booking";
 import { isClassVisibleForBooking } from "@shared/class-visibility";
@@ -27,6 +28,10 @@ interface ClassesSectionProps {
   onBookingClick: (intent?: BookingIntent) => void;
 }
 
+type ListingClassType = ClassType & {
+  listingPrice?: ProgramListingPrice | null;
+};
+
 export default function ClassesSection({ onBookingClick }: ClassesSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -34,7 +39,7 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
   const [guestEmail, setGuestEmail] = useState("");
   const [guestWhatsapp, setGuestWhatsapp] = useState("");
   const [memberWhatsapp, setMemberWhatsapp] = useState("");
-  const { data: classTypes, isLoading, error } = useQuery<ClassType[]>({
+  const { data: classTypes, isLoading, error } = useQuery<ListingClassType[]>({
     queryKey: ["/api/class-types"],
   });
   const { data: availability } = useQuery<{ classTypeIds: string[] }>({
@@ -223,7 +228,7 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     {user ? (
                       <span className="font-bold text-dz-secondary" data-testid={`class-price-${classType.id}`}>
-                        ₹{classType.price}/session
+                        {formatProgramListingPriceLabel(classType.listingPrice) ?? "\u00a0"}
                       </span>
                     ) : (
                       <span aria-hidden className="flex-1" />

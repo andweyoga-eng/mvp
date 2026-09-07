@@ -24,7 +24,10 @@ import {
 } from "@shared/session-meet-access";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { formatSessionPrice } from "@/lib/booking-payment";
+import {
+  formatProgramListingPriceLabel,
+  type ProgramListingPrice,
+} from "@shared/program-listing-price";
 import {
   fetchMemberSessions,
   memberSessionsQueryKey,
@@ -131,14 +134,18 @@ function scrollCarouselEl(el: HTMLDivElement | null, dir: number) {
   el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.85, 306), behavior: "smooth" });
 }
 
+type ListingClassType = ClassType & {
+  listingPrice?: ProgramListingPrice | null;
+};
+
 function ClassTypeCard({
   classType,
   onBook,
 }: {
-  classType: ClassType;
+  classType: ListingClassType;
   onBook: (classTypeId: string) => void;
 }) {
-  const price = formatSessionPrice(classType.price);
+  const price = formatProgramListingPriceLabel(classType.listingPrice);
 
   return (
     <article
@@ -244,7 +251,7 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
-  const { data: classTypes = [] } = useQuery<ClassType[]>({
+  const { data: classTypes = [] } = useQuery<ListingClassType[]>({
     queryKey: ["/api/class-types"],
   });
 
