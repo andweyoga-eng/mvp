@@ -7,8 +7,6 @@ import {
   User as UserIcon,
   Lock,
   CreditCard,
-  Loader2,
-  Flower2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -38,7 +36,8 @@ import {
   memberSessionsQueryKey,
   findUpcomingMemberSessionForClass,
 } from "@/lib/member-sessions";
-import { setPendingBooking } from "@/lib/pending-booking";
+import { setPendingBooking, clearPendingBooking } from "@/lib/pending-booking";
+import { navigateToHomeSection } from "@/lib/home-navigation";
 import { useBookingCheckout } from "@/hooks/use-booking-checkout";
 import { useCheckoutPrograms } from "@/hooks/use-checkout-programs";
 import {
@@ -51,11 +50,8 @@ import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-ch
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { navigateToDashboardAfterSpotRelease } from "@/lib/spot-release-navigation";
-import {
-  SessionTermsBlock,
-  SessionTermsAcceptanceCopy,
-} from "@/components/session-terms-block";
 import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
+import { CheckoutProcessingOverlay } from "@/components/checkout-processing-overlay";
 import { CANCELLATION_POLICY_CLICKWRAP_COPY } from "@shared/cancellation-policy";
 import { SessionDeliveryInfo } from "@/components/session-delivery-info";
 import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
@@ -68,10 +64,11 @@ import {
   isFixedRecurringCheckout,
 } from "@/lib/recurring-series-display";
 import { BrandLogo } from "@/components/brand-logo";
+import { ClassTypeCoverFrame, ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { AccountMenuControls } from "@/components/account-menu-controls";
 import { PAYMENT_HOLD_MINUTES } from "@shared/booking-payment-hold";
 import type { Class, ClassType } from "@shared/schema";
-import { defaultFlexiTermsItems, isFlexiEnabledSchedule } from "@shared/flexi-mode";
+import { isFlexiEnabledSchedule } from "@shared/flexi-mode";
 import {
   FlexiCheckoutSection,
   isFlexiCheckoutReady,
@@ -142,11 +139,12 @@ export default function Reserve() {
   const fromLogin = params.get("from") === "login";
   const fromProfile = params.get("from") === "profile";
   const fromHome = params.get("from") === "home";
-  const exitPath = fromProfile || fromHome ? "/#schedule" : fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
+  const exitPath = fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
   const backLabel =
     fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
 
-  const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [armHoldOnProgramPick, setArmHoldOnProgramPick] = useState(false);
+  const [leaveIntent, setLeaveIntent] = useState<"back" | "home" | null>(null);
   const [acceptCancellationPolicy, setAcceptCancellationPolicy] = useState(false);
   const [bookingMode, setBookingMode] = useState<"series" | "flexi">("series");
   const [flexiSelections, setFlexiSelections] = useState<FlexiSelection[]>([]);
@@ -299,7 +297,6 @@ export default function Reserve() {
     ? findUpcomingMemberSessionForClass(memberSessions, selected.id)
     : undefined;
 
-  const price = selected ? formatSessionPrice(selected.classType.price) : null;
   const profileComplete = isAuthUserProfileComplete(user);
   const isTrialDrop = isTrialOrDropIn(selected?.sessionFrequency ?? null);
   const checkoutPrograms = useCheckoutPrograms({
@@ -309,7 +306,12 @@ export default function Reserve() {
   });
   const displayPrice = checkoutPrograms.selected
     ? formatSessionPrice(checkoutPrograms.selected.priceRupees)
-    : price;
+    : checkoutPrograms.programs.length === 1
+      ? formatSessionPrice(checkoutPrograms.programs[0]!.priceRupees)
+      : null;
+  const showCheckoutTotal =
+    checkoutPrograms.programs.length <= 1 || !!checkoutPrograms.programId;
+  const hasMultiplePrograms = checkoutPrograms.programs.length > 1;
   const {
     data: flexiOptions,
     isLoading: flexiOptionsLoading,
@@ -322,6 +324,19 @@ export default function Reserve() {
     // background (surfaces as isFetching, not isLoading — no default spinner).
     refetchOnMount: "always",
   });
+
+  const leaveCheckout = (intent: "back" | "home") => {
+    clearPendingBooking();
+    if (intent === "home") {
+      navigateToHomeSection("home");
+      return;
+    }
+    if (fromProfile || fromHome) {
+      navigateToHomeSection("schedule");
+      return;
+    }
+    setLocation(exitPath);
+  };
 
   const handleConfirm = () => {
     if (!selected) return;
@@ -417,29 +432,44 @@ export default function Reserve() {
     checkout.isPaying || checkout.paymentPhase != null;
 
   const navigateAfterRelease = () => {
+    clearPendingBooking();
     navigateToDashboardAfterSpotRelease(setLocation);
   };
 
-  const handleReleaseSpot = async () => {
+  const handleReleaseSpot = async (leave: boolean) => {
     const ok = await checkout.releaseCheckout();
-    if (ok) navigateAfterRelease();
-  };
-
-  const handleBackClick = () => {
-    if (isMidHold) {
-      setBackConfirmOpen(true);
+    if (!ok) return;
+    if (leave) {
+      navigateAfterRelease();
       return;
     }
-    setLocation(exitPath);
+    setArmHoldOnProgramPick(true);
   };
 
-  const confirmBackRelease = async () => {
-    setBackConfirmOpen(false);
+  const handleProgramChange = (programId: string) => {
+    checkoutPrograms.setProgramId(programId);
+    if (!armHoldOnProgramPick || !programId || !selected) return;
+    checkout.startBooking(selected.id, {
+      programId,
+      ...(bookingMode === "flexi" && flexiSelections.length
+        ? { flexiSelections }
+        : {}),
+    });
+  };
+
+  const requestLeave = (intent: "back" | "home") => {
     if (isMidHold) {
-      await handleReleaseSpot();
+      setLeaveIntent(intent);
       return;
     }
-    setLocation(exitPath);
+    leaveCheckout(intent);
+  };
+
+  const confirmLeaveRelease = async () => {
+    const intent = leaveIntent ?? "back";
+    setLeaveIntent(null);
+    const ok = await checkout.releaseCheckout();
+    if (ok) leaveCheckout(intent);
   };
 
   return (
@@ -454,20 +484,19 @@ export default function Reserve() {
       />
 
       {/* HEADER */}
-      <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px]">
+      <header className="z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px] max-lg:relative lg:sticky lg:top-0">
         <PageContainer className="flex h-[76px] items-center justify-between gap-4">
-          <BrandLogo testId="reserve-logo" />
+          <BrandLogo testId="reserve-logo" onNavigate={() => requestLeave("home")} />
           <div className="flex items-center gap-3">
             <AccountMenuControls
               showHeaderButton
-              alwaysShowFloatingMenu
               showFloatingMenuWhenScrolled
               headerTestId="reserve-account-toggle"
               fabTestId="reserve-account-fab"
             />
             <button
               type="button"
-              onClick={handleBackClick}
+              onClick={() => requestLeave("back")}
               className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -514,19 +543,15 @@ export default function Reserve() {
               {/* LEFT */}
               <div className="flex flex-[3_1_480px] flex-col gap-6">
                 {/* session summary */}
-                <GlassCard className="flex flex-wrap overflow-hidden rounded-[22px]">
-                  <div className="relative flex min-h-[180px] flex-[1_1_200px] items-center justify-center bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]">
-                    {selected.classType.imageUrl ? (
-                      <img
-                        src={selected.classType.imageUrl}
-                        alt={selected.classType.name}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <Flower2 className="h-[72px] w-[72px] text-primary/25" />
-                    )}
-                  </div>
-                  <div className="flex flex-[1_1_260px] flex-col justify-center gap-4 p-6">
+                <GlassCard className="flex flex-col overflow-hidden rounded-[22px] lg:flex-row lg:items-stretch">
+                  <ClassTypeCoverFrame variant="checkout-sidebar">
+                    <ClassTypeCoverImage
+                      imageUrl={selected.classType.imageUrl}
+                      alt={selected.classType.name}
+                      fillColumn
+                    />
+                  </ClassTypeCoverFrame>
+                  <div className="flex min-w-0 flex-1 flex-col justify-center gap-4 p-6">
                     <div>
                       <h2 className="font-display text-2xl font-semibold text-primary">
                         {selected.classType.name}
@@ -634,7 +659,13 @@ export default function Reserve() {
 
               {/* RIGHT */}
               <div className="flex-[1_1_300px] lg:sticky lg:top-[96px]">
-                <GlassCard className="rounded-[22px] p-6">
+                <GlassCard className="relative overflow-hidden rounded-[22px] p-6">
+                  {checkout.isReserving || checkout.isPaying || checkout.paymentPhase ? (
+                    <CheckoutProcessingOverlay
+                      title={checkout.processingCopy?.title ?? (checkout.isReserving ? "Reserving your spot…" : "Processing…")}
+                      description={checkout.processingCopy?.description}
+                    />
+                  ) : null}
                   {checkout.step !== "payment-confirmed" ? (
                     <>
                       <h3 className="mb-[18px] font-display text-lg font-semibold">Booking summary</h3>
@@ -658,26 +689,18 @@ export default function Reserve() {
                           value={formatSessionDeliverySummary(selected)}
                         />
                       </div>
-                      <div className="flex items-baseline justify-between py-[18px]">
-                        <span className="text-[15px] font-semibold">Total</span>
-                        <span className="font-display text-[26px] font-bold text-primary">
-                          {price ?? "N/A"}
-                        </span>
-                      </div>
+                      {showCheckoutTotal ? (
+                        <div className="flex items-baseline justify-between py-[18px]">
+                          <span className="text-[15px] font-semibold">Total</span>
+                          <span className="font-display text-[26px] font-bold text-primary">
+                            {displayPrice ?? "N/A"}
+                          </span>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
 
                   {/* ===== CHECKOUT STATE MACHINE ===== */}
-                  {checkout.processingCopy && (
-                    <Alert className="mb-3 border-amber-300 bg-amber-50">
-                      <Loader2 className="h-4 w-4 animate-spin text-amber-700" />
-                      <AlertDescription className="text-amber-950">
-                        <p className="font-semibold">{checkout.processingCopy.title}</p>
-                        <p className="mt-1 text-sm">{checkout.processingCopy.description}</p>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   {existingBooking && checkout.step === "idle" ? (
                     <AlreadyBookedSessionContent
                       className={existingBooking.className}
@@ -727,8 +750,12 @@ export default function Reserve() {
                       >
                         {checkout.isPaying ? "Opening…" : "Retry payment"}
                       </Button>
-                      <Button variant="outline" className="w-full" onClick={() => void handleReleaseSpot()}>
-                        Release my spot and leave
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => void handleReleaseSpot(!hasMultiplePrograms)}
+                      >
+                        {hasMultiplePrograms ? "Release this spot" : "Release my spot and leave"}
                       </Button>
                     </div>
                   ) : checkout.step === "pay" && reserved && checkout.holdCountdown.expired ? (
@@ -741,12 +768,6 @@ export default function Reserve() {
                           isWarning={checkout.holdCountdown.isWarning}
                         />
                       )}
-                      <SessionTermsBlock
-                        termsAndConditions={selected.classType.termsAndConditions}
-                        collapsible={false}
-                        items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
-                      />
-                      <SessionTermsAcceptanceCopy />
 
                       {reserved.useQrPayment && reserved.qrPayment && reserved.bookingId ? (
                         <ManualPaymentReferenceBlock
@@ -777,10 +798,10 @@ export default function Reserve() {
                       ) : null}
                       <button
                         type="button"
-                        onClick={() => void handleReleaseSpot()}
+                        onClick={() => void handleReleaseSpot(!hasMultiplePrograms)}
                         className="w-full py-2.5 text-[13px] text-muted-foreground underline decoration-muted-foreground/30 underline-offset-[3px]"
                       >
-                        Release my spot and leave
+                        {hasMultiplePrograms ? "Release this spot" : "Release my spot and leave"}
                       </button>
                     </div>
                   ) : (
@@ -802,7 +823,8 @@ export default function Reserve() {
                           <select
                             className="w-full rounded-md border bg-white px-3 py-2 text-sm"
                             value={checkoutPrograms.programId}
-                            onChange={(e) => checkoutPrograms.setProgramId(e.target.value)}
+                            onChange={(e) => handleProgramChange(e.target.value)}
+                            disabled={checkout.isReserving || checkout.isPaying}
                           >
                             {checkoutPrograms.programs.length > 1 ? (
                               <option value="">Select a program…</option>
@@ -814,11 +836,6 @@ export default function Reserve() {
                             ))}
                           </select>
                         )}
-                        {displayPrice ? (
-                          <p className="text-sm font-medium text-primary">
-                            Program price: {displayPrice}
-                          </p>
-                        ) : null}
                       </div>
                       {flexiEligible ? (
                         <div className="mb-3">
@@ -844,19 +861,12 @@ export default function Reserve() {
                           </AlertDescription>
                         </Alert>
                       )}
-                      <SessionTermsBlock
-                        termsAndConditions={selected.classType.termsAndConditions}
-                        collapsible={false}
-                        className="mb-3"
-                        items={bookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
-                      />
                       <CancellationPolicyClickwrap
                         checked={acceptCancellationPolicy}
                         onChange={setAcceptCancellationPolicy}
                         testId="reserve-accept-cancellation-policy"
                         className="mb-3"
                       />
-                      <SessionTermsAcceptanceCopy className="mb-3" />
                       <Separator className="mb-3" />
                       <div className="mb-3 space-y-1">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -912,7 +922,7 @@ export default function Reserve() {
         </PageContainer>
       </main>
 
-      <AlertDialog open={backConfirmOpen} onOpenChange={setBackConfirmOpen}>
+      <AlertDialog open={leaveIntent != null} onOpenChange={(open) => !open && setLeaveIntent(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Release your held spot?</AlertDialogTitle>
@@ -923,7 +933,7 @@ export default function Reserve() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep my spot</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmBackRelease()}>
+            <AlertDialogAction onClick={() => void confirmLeaveRelease()}>
               Release my spot and leave
             </AlertDialogAction>
           </AlertDialogFooter>

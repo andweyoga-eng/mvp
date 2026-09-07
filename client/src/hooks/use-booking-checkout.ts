@@ -77,6 +77,7 @@ export function useBookingCheckout({
   const invalidateSessions = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/classes"] });
     queryClient.invalidateQueries({ queryKey: ["/api/schedule/week"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/schedule/month"] });
     queryClient.invalidateQueries({ queryKey: ["/api/class-types-availability/upcoming"] });
     queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
   }, [queryClient]);
@@ -106,9 +107,7 @@ export function useBookingCheckout({
         throw new Error("Release failed");
       }
       invalidateSessions();
-      setHeldUntil(null);
-      setPaymentResult(null);
-      setStep("idle");
+      reset();
       return true;
     } catch {
       toast({
@@ -118,7 +117,7 @@ export function useBookingCheckout({
       });
       return false;
     }
-  }, [paymentResult, invalidateSessions, toast]);
+  }, [paymentResult, invalidateSessions, reset, toast]);
 
   const startRazorpayCheckout = useCallback(
     async (booking: MemberBookingResult) => {

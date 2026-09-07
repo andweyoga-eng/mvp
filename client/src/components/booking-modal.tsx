@@ -61,10 +61,7 @@ import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
 import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
-import {
-  SessionTermsBlock,
-  SessionTermsAcceptanceCopy,
-} from "@/components/session-terms-block";
+import { CheckoutProcessingOverlay } from "@/components/checkout-processing-overlay";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ClassType, Class } from "@shared/schema";
@@ -81,11 +78,9 @@ import {
   markMemberLandingChecked,
 } from "@/lib/member-landing";
 import {
-  PAYMENT_PROCESSING_FOOTER,
   PAYMENT_PROCESSING_MESSAGES,
   type PaymentProcessingPhase,
 } from "@/lib/payment-processing-messages";
-import { Loader2 } from "lucide-react";
 import {
   ManualPaymentReferenceBlock,
   ManualPaymentSubmittedMessage,
@@ -102,11 +97,12 @@ import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 import { detectConsentLanguage } from "@/lib/consent-language";
 import { Link } from "wouter";
 import { AlreadyBookedSessionContent } from "@/components/already-booked-session-content";
+import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { Badge } from "@/components/ui/badge";
 import { getSessionBadgeLabel } from "@/lib/session-badges";
 import { DEFAULT_SESSION_DURATION_MINUTES } from "@shared/session-window";
 import { cn } from "@/lib/utils";
-import { defaultFlexiTermsItems, isFlexiEnabledSchedule } from "@shared/flexi-mode";
+import { isFlexiEnabledSchedule } from "@shared/flexi-mode";
 import {
   FlexiCheckoutSection,
   isFlexiCheckoutReady,
@@ -373,12 +369,6 @@ export default function BookingModal({
     enabled: isOpen,
   });
 
-  const checkoutSessionTerms =
-    selectedSession?.classType?.termsAndConditions ??
-    displayClass?.classType?.termsAndConditions ??
-    filteredClassType?.termsAndConditions ??
-    null;
-
   const canAccessCheckoutUi =
     !!user || !!getAuthToken() || !!getGuestCheckoutToken();
   const flexiEligibleSession = !!selectedSession && isFlexiEnabledSchedule(selectedSession);
@@ -619,6 +609,7 @@ export default function BookingModal({
       clearPendingBooking();
       queryClient.invalidateQueries({ queryKey: ["/api/classes"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule/week"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule/month"] });
       queryClient.invalidateQueries({ queryKey: ["/api/class-types-availability/upcoming"] });
       queryClient.invalidateQueries({ queryKey: ["/api/sessions/my"] });
 
@@ -1433,7 +1424,13 @@ export default function BookingModal({
       <AuthChoiceDialog open={true} onOpenChange={(open) => !open && onClose()} />
     ) : (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" showClose={!hideDialogClose}>
+      <DialogContent className="relative sm:max-w-md max-h-[90vh] overflow-y-auto" showClose={!hideDialogClose}>
+        {isPaying || paymentPhase || bookingMutation.isPending ? (
+          <CheckoutProcessingOverlay
+            title={processingCopy?.title ?? (bookingMutation.isPending ? "Reserving your spot…" : "Processing…")}
+            description={processingCopy?.description}
+          />
+        ) : null}
         {!paymentResult && user && !isProfileComplete && !bookingSessionIsTrialDropIn && (
           <Alert className="mb-4 border-orange-200 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
@@ -1478,17 +1475,6 @@ export default function BookingModal({
                 : "Book Your Yoga Session"}
           </DialogTitle>
         </DialogHeader>
-
-        {processingCopy && (
-          <Alert className="border-amber-300 bg-amber-50">
-            <Loader2 className="h-4 w-4 animate-spin text-amber-700" />
-            <AlertDescription className="text-amber-950">
-              <p className="font-semibold">{processingCopy.title}</p>
-              <p className="text-sm mt-1">{processingCopy.description}</p>
-              <p className="text-xs mt-2 text-amber-800">{PAYMENT_PROCESSING_FOOTER}</p>
-            </AlertDescription>
-          </Alert>
-        )}
 
         {paymentResult && canAccessCheckoutUi && paymentStep === "guest-confirmed" && (
           <GuestBookingConfirmedContent
@@ -1788,13 +1774,6 @@ export default function BookingModal({
               ) : null}
             </div>
 
-            <SessionTermsBlock
-              termsAndConditions={checkoutSessionTerms}
-              collapsible={false}
-              items={paymentResult?.flexiBookingId ? defaultFlexiTermsItems().slice(1) : []}
-            />
-            <SessionTermsAcceptanceCopy />
-
             {paymentResult.useQrPayment && paymentResult.qrPayment && paymentResult.bookingId ? (
               <ManualPaymentReferenceBlock
                 variant="qr"
@@ -1953,12 +1932,18 @@ export default function BookingModal({
               </div>
             ) : effectiveCanGuestBook && hasPreselectedSession && displayClass && preselectedIsBookable ? (
               <div className="space-y-3 text-left">
-                <div className="text-left p-3 bg-muted rounded-md">
-                  <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatSessionDateLabel(displayClass.date)} at{" "}
-                    {formatSessionTimeLabel(displayClass.date)}
-                  </p>
+                <div className="overflow-hidden rounded-md border border-border/40">
+                  <ClassTypeCoverImage
+                    imageUrl={displayClass.classType.imageUrl}
+                    alt={displayClass.classType.name}
+                  />
+                  <div className="bg-muted p-3 text-left">
+                    <p className="text-sm font-bold text-purple-600">{displayClass.classType.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatSessionDateLabel(displayClass.date)} at{" "}
+                      {formatSessionTimeLabel(displayClass.date)}
+                    </p>
+                  </div>
                 </div>
                 <Alert className="border-green-200 bg-green-50">
                   <AlertDescription className="text-green-900">
@@ -2107,13 +2092,6 @@ export default function BookingModal({
                     className="border-0 bg-transparent p-0"
                   />
                 </div>
-                <SessionTermsBlock
-                  termsAndConditions={checkoutSessionTerms}
-                  collapsible={false}
-                  className="mb-1"
-                  items={[]}
-                />
-                <SessionTermsAcceptanceCopy className="mb-1" />
                 <div className="flex gap-2">
                   <Button
                     className="w-full bg-primary !text-white"
@@ -2222,26 +2200,32 @@ export default function BookingModal({
                       <Skeleton className="h-3 w-2/3" />
                     </div>
                   ) : displayClass && preselectedIsBookable ? (
-                    <div className="mt-1 p-3 bg-muted rounded-md">
-                      <p className="font-bold text-purple-600" data-testid="selected-class-name">
-                        {displayClass.classType.name}
-                      </p>
-                      <p className="text-sm text-muted-foreground" data-testid="selected-class-details">
-                        {formatSessionDateLabel(displayClass.date)} at{" "}
-                        {formatSessionTimeLabel(displayClass.date)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        With {displayClass.instructor.name}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {displayClass.currentBookings}/{displayClass.maxCapacity} spots filled
-                      </p>
-                      <StrictNoToBlock
-                        strictNoTo={displayClass.classType.strictNoTo}
-                        compact
-                        defaultExpanded
-                        className="mt-3 border-none pt-0"
+                    <div className="mt-1 overflow-hidden rounded-md border border-border/40">
+                      <ClassTypeCoverImage
+                        imageUrl={displayClass.classType.imageUrl}
+                        alt={displayClass.classType.name}
                       />
+                      <div className="bg-muted p-3">
+                        <p className="font-bold text-purple-600" data-testid="selected-class-name">
+                          {displayClass.classType.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground" data-testid="selected-class-details">
+                          {formatSessionDateLabel(displayClass.date)} at{" "}
+                          {formatSessionTimeLabel(displayClass.date)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          With {displayClass.instructor.name}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {displayClass.currentBookings}/{displayClass.maxCapacity} spots filled
+                        </p>
+                        <StrictNoToBlock
+                          strictNoTo={displayClass.classType.strictNoTo}
+                          compact
+                          defaultExpanded
+                          className="mt-3 border-none pt-0"
+                        />
+                      </div>
                     </div>
                   ) : displayClass ? (
                     <Alert className="mt-2 border-amber-200 bg-amber-50">
@@ -2380,18 +2364,12 @@ export default function BookingModal({
                 </div>
               )}
 
-              <SessionTermsBlock
-                termsAndConditions={checkoutSessionTerms}
-                collapsible={false}
-                items={memberBookingMode === "flexi" ? defaultFlexiTermsItems().slice(1) : []}
-              />
               <CancellationPolicyClickwrap
                 checked={acceptCancellationPolicy}
                 onChange={setAcceptCancellationPolicy}
                 testId="member-accept-cancellation-policy"
                 className="mb-2"
               />
-              <SessionTermsAcceptanceCopy />
 
               {flexiEligibleSession ? (
                 <FlexiCheckoutSection
