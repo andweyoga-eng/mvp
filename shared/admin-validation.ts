@@ -161,10 +161,10 @@ export const adminCreateClassTypeSchema = z.object({
     .optional()
     .nullable()
     .transform((v) => (v === "" || v == null ? null : v)),
+  // Session-type T&C is retired (checkout uses Cancellation Policy clickwrap only).
   termsAndConditions: z
     .string()
     .trim()
-    .min(10, "Terms & conditions must be at least 10 characters")
     .max(SESSION_TERMS_MAX_LENGTH, "Terms & conditions are too long")
     .optional()
     .nullable()
