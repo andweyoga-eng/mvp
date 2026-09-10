@@ -1,4 +1,5 @@
 import { getAuthHeaders } from "@/lib/auth";
+import type { FuelEstimateReviewState } from "@shared/fuel";
 
 export type FuelDailyContent = {
   recipe: {
@@ -16,25 +17,27 @@ export type FuelDailyContent = {
   } | null;
 };
 
+type FuelDashboardBase = FuelDailyContent & {
+  estimationAvailable: boolean;
+  today: string;
+};
+
 export type FuelDashboardResponse =
   | ({
       gate: "health_consent_required";
       healthConsented: false;
       configured: false;
-      today: string;
-    } & FuelDailyContent)
+    } & FuelDashboardBase)
   | ({
       gate: "not_configured";
       healthConsented: true;
       configured: false;
-      today: string;
       message: string;
-    } & FuelDailyContent)
+    } & FuelDashboardBase)
   | ({
       gate: "ok";
       healthConsented: true;
       configured: true;
-      today: string;
       target: number;
       deficit: number;
       mealPlan: Array<{ index: number; label: string; startTime: string; endTime: string }>;
@@ -51,7 +54,7 @@ export type FuelDashboardResponse =
       }>;
       meals: FuelMealRow[];
       pepPhrases: Array<{ pre: string; accent: string; post: string }>;
-    } & FuelDailyContent);
+    } & FuelDashboardBase);
 
 export type FuelMealRow = {
   id: string;
@@ -78,6 +81,35 @@ export type FuelStatementResponse = {
     }
   >;
 };
+
+export type FuelEstimateResponse = {
+  name: string;
+  calories: number;
+  confidence: number;
+  items?: string[];
+  model?: string;
+  latency_ms?: number;
+  reviewState: FuelEstimateReviewState;
+  advisory: true;
+};
+
+export type FuelEstimateErrorBody = {
+  error: "disabled" | "unreadable" | "quota" | "provider_down" | "schema" | "no_food";
+  message: string;
+  retry_after?: number;
+};
+
+export class FuelEstimateRequestError extends Error {
+  readonly status: number;
+  readonly body: FuelEstimateErrorBody;
+
+  constructor(status: number, body: FuelEstimateErrorBody) {
+    super(body.message || "Photo estimate failed");
+    this.name = "FuelEstimateRequestError";
+    this.status = status;
+    this.body = body;
+  }
+}
 
 export function clientLocalDateTime(now = new Date()) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -155,23 +187,34 @@ export async function deleteFuelMeal(id: string): Promise<void> {
   await parseJson(res);
 }
 
-export async function estimateFuelMeal(file: File): Promise<{
-  name: string;
-  calories: number;
-  advisory: true;
-  label: string;
-  fallback?: boolean;
-}> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
-  const imageBase64 = `data:${file.type || "image/jpeg"};base64,${btoa(binary)}`;
+export async function estimateFuelMeal(
+  file: File,
+  opts?: { slotIndex?: number | null },
+): Promise<FuelEstimateResponse> {
+  const form = new FormData();
+  form.append("photo", file);
+  if (opts?.slotIndex != null) {
+    form.append("slot_index", String(opts.slotIndex));
+  }
+  form.append("client_ts", new Date().toISOString());
+
   const res = await fetch("/api/fuel/estimate", {
     method: "POST",
     credentials: "include",
-    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, mimeType: file.type || "image/jpeg" }),
+    headers: getAuthHeaders(),
+    body: form,
   });
-  return parseJson(res);
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new FuelEstimateRequestError(res.status, {
+      error: (data as FuelEstimateErrorBody).error ?? "provider_down",
+      message:
+        typeof (data as { message?: string }).message === "string"
+          ? (data as { message: string }).message
+          : "Photo estimate failed",
+      retry_after: (data as FuelEstimateErrorBody).retry_after,
+    });
+  }
+  return data as FuelEstimateResponse;
 }

@@ -1,4 +1,5 @@
 import type { Express, Response } from "express";
+import multer from "multer";
 import { z } from "zod";
 import {
   adminFuelConfigSchema,
@@ -10,8 +11,9 @@ import {
   caloriesLeftCopy,
   dayStatus,
   DEFAULT_FUEL_MEAL_PLAN,
+  FUEL_ESTIMATE_ALLOWED_MIMES,
+  FUEL_ESTIMATE_MAX_BYTES,
   FUEL_PEP_PHRASES,
-  fuelEstimateSchema,
   fuelLogMealSchema,
   formatSignedDelta,
   matchMealSlot,
@@ -22,11 +24,27 @@ import {
 } from "@shared/fuel";
 import { isAdult } from "@shared/consent";
 import { storage } from "./storage";
-import { estimateMealCalories } from "./fuel-estimation";
+import {
+  estimateMealCalories,
+  FuelEstimationError,
+  getFuelEstimationModel,
+  isFuelEstimationEnabled,
+  isFuelEstimationFlagOn,
+  sniffImageMime,
+} from "./fuel-estimation";
 import type { AuthRequest } from "./auth";
 import { requireAuth } from "./auth";
 import type { AdminAuthRequest } from "./adminAuth";
 import { requireAdminAuth } from "./adminAuth";
+
+const fuelPhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: FUEL_ESTIMATE_MAX_BYTES, files: 1 },
+});
+
+function estimationMeta() {
+  return { estimationAvailable: isFuelEstimationEnabled() };
+}
 
 function localTodayParts(timeZone?: string): { date: string; time: string } {
   const tz = timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -161,6 +179,7 @@ export function registerFuelRoutes(app: Express) {
           healthConsented: false,
           configured: false,
           today,
+          ...estimationMeta(),
           ...daily,
         });
       }
@@ -177,6 +196,7 @@ export function registerFuelRoutes(app: Express) {
           configured: false,
           today,
           message: "Your coach has not set a target yet",
+          ...estimationMeta(),
           ...daily,
         });
       }
@@ -225,6 +245,7 @@ export function registerFuelRoutes(app: Express) {
         meals: meals.map(publicMeal),
         ...daily,
         pepPhrases: FUEL_PEP_PHRASES,
+        ...estimationMeta(),
       });
     } catch (error) {
       console.error("[fuel] dashboard error:", error);
@@ -360,42 +381,101 @@ export function registerFuelRoutes(app: Express) {
     }
   });
 
-  app.post("/api/fuel/estimate", requireAuth, async (req: AuthRequest, res) => {
-    try {
-      const gate = await fuelAccessGate(req.user!.id, res);
-      if (!gate) return;
-      if (!gate.healthConsented) {
-        return res.status(403).json({ code: "fuel_consent_required" });
+  app.post(
+    "/api/fuel/estimate",
+    requireAuth,
+    (req, res, next) => {
+      fuelPhotoUpload.single("photo")(req, res, (err) => {
+        if (err) {
+          if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+            return res.status(422).json({
+              error: "unreadable",
+              message: "Photo must be 4 MB or smaller.",
+            });
+          }
+          return res.status(422).json({
+            error: "unreadable",
+            message: "Could not read this photo.",
+          });
+        }
+        next();
+      });
+    },
+    async (req: AuthRequest, res) => {
+      try {
+        const gate = await fuelAccessGate(req.user!.id, res);
+        if (!gate) return;
+        if (!gate.healthConsented) {
+          return res.status(403).json({ code: "fuel_consent_required" });
+        }
+
+        if (!isFuelEstimationFlagOn() || !process.env.GEMINI_API_KEY?.trim()) {
+          return res.status(501).json({
+            error: "disabled",
+            message: "Photo estimation is disabled.",
+          });
+        }
+
+        const file = req.file;
+        if (!file?.buffer?.length) {
+          return res.status(422).json({
+            error: "unreadable",
+            message: "Could not read this photo.",
+          });
+        }
+
+        const declaredMime = file.mimetype?.toLowerCase();
+        if (
+          !declaredMime ||
+          !FUEL_ESTIMATE_ALLOWED_MIMES.includes(
+            declaredMime as (typeof FUEL_ESTIMATE_ALLOWED_MIMES)[number],
+          )
+        ) {
+          return res.status(422).json({
+            error: "unreadable",
+            message: "Use a JPG, PNG, or WebP photo.",
+          });
+        }
+
+        const sniffed = sniffImageMime(file.buffer);
+        if (!sniffed || sniffed !== declaredMime) {
+          return res.status(422).json({
+            error: "unreadable",
+            message: "Could not read this photo.",
+          });
+        }
+
+        const result = await estimateMealCalories({
+          buffer: file.buffer,
+          mimeType: sniffed,
+        });
+
+        res.json({
+          name: result.name,
+          calories: result.calories,
+          confidence: result.confidence,
+          items: result.items,
+          model: result.model,
+          latency_ms: result.latencyMs,
+          reviewState: result.reviewState,
+          advisory: true as const,
+        });
+      } catch (error) {
+        if (error instanceof FuelEstimationError) {
+          return res.status(error.status).json({
+            error: error.code,
+            message: error.message,
+            ...(error.retryAfter != null ? { retry_after: error.retryAfter } : {}),
+          });
+        }
+        console.error("[fuel] estimate error:", error);
+        return res.status(503).json({
+          error: "provider_down",
+          message: "Photo estimation is temporarily unavailable.",
+        });
       }
-      const body = fuelEstimateSchema.parse(req.body);
-      const result = await estimateMealCalories({
-        imageBase64: body.imageBase64,
-        mimeType: body.mimeType,
-      });
-      // Photo discarded here — only advisory numbers returned.
-      res.json({
-        name: result.name,
-        calories: result.calories,
-        advisory: true as const,
-        label: "Rough estimate. Edit before saving",
-        fallback: Boolean(result.fallback),
-        provider: result.provider,
-      });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid image payload" });
-      }
-      console.error("[fuel] estimate error:", error);
-      res.status(500).json({
-        name: "",
-        calories: 0,
-        advisory: true,
-        label: "Rough estimate. Edit before saving",
-        fallback: true,
-        message: "Estimation unavailable. Enter calories manually.",
-      });
-    }
-  });
+    },
+  );
 
   // ——— Admin ———
   app.put("/api/admin/users/:id/fuel", requireAdminAuth, async (req: AdminAuthRequest, res) => {
@@ -516,6 +596,24 @@ export function registerFuelRoutes(app: Express) {
       console.error("[fuel] save media error:", error);
       res.status(500).json({ message: "Failed to save media" });
     }
+  });
+
+  app.get("/api/admin/fuel/estimation-status", requireAdminAuth, (_req, res) => {
+    const flagOn = isFuelEstimationFlagOn();
+    const keyPresent = Boolean(process.env.GEMINI_API_KEY?.trim());
+    const active = isFuelEstimationEnabled();
+    const model = getFuelEstimationModel();
+    res.json({
+      estimationEnabled: flagOn,
+      geminiKeyPresent: keyPresent,
+      active,
+      model,
+      statusLabel: active
+        ? `Live · ${model}`
+        : flagOn
+          ? "Enabled, key missing"
+          : "Disabled, manual only",
+    });
   });
 
   app.get("/api/admin/fuel/content", requireAdminAuth, async (req, res) => {

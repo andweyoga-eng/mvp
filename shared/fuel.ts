@@ -338,3 +338,76 @@ export function averageDailyTotalsVsTarget(
   const avg = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length;
   return Math.round(avg - target);
 }
+
+/** Photo estimation (SPEC-FUEL v3 / Gemini handoff). */
+export const FUEL_ESTIMATE_MAX_BYTES = 4 * 1024 * 1024;
+export const FUEL_ESTIMATE_ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"] as const;
+export type FuelEstimateMime = (typeof FUEL_ESTIMATE_ALLOWED_MIMES)[number];
+export const FUEL_ESTIMATE_CONFIDENCE_SUCCESS = 0.75;
+export const FUEL_ESTIMATE_CONFIDENCE_LOW = 0.4;
+export const FUEL_ESTIMATE_TIMEOUT_MS = 8000;
+export const FUEL_ESTIMATE_KCAL_MIN = 1;
+export const FUEL_ESTIMATE_KCAL_MAX = 4000;
+export const FUEL_ESTIMATE_KCAL_ROUND = 5;
+export const FUEL_ESTIMATE_NAME_MAX = 60;
+
+export type FuelEstimateReviewState = "success" | "low" | "failure";
+
+export function roundFuelCalories(kcal: number): number {
+  const rounded = Math.round(kcal / FUEL_ESTIMATE_KCAL_ROUND) * FUEL_ESTIMATE_KCAL_ROUND;
+  return Math.max(FUEL_ESTIMATE_KCAL_MIN, Math.min(FUEL_ESTIMATE_KCAL_MAX, rounded));
+}
+
+export function clampFuelMealName(name: string): string {
+  return name.trim().slice(0, FUEL_ESTIMATE_NAME_MAX);
+}
+
+/** Maps model confidence to member review UI band (v3 handoff §4). */
+export function fuelEstimateReviewState(
+  confidence: number | null | undefined,
+): FuelEstimateReviewState {
+  if (confidence == null || !Number.isFinite(confidence)) return "low";
+  if (confidence >= FUEL_ESTIMATE_CONFIDENCE_SUCCESS) return "success";
+  if (confidence >= FUEL_ESTIMATE_CONFIDENCE_LOW) return "low";
+  return "failure";
+}
+
+export const FUEL_ESTIMATE_SUCCESS_COPY =
+  "Advisory estimate. Check it before saving.";
+export const FUEL_ESTIMATE_LOW_COPY =
+  "The plate was hard to read. We filled in a rough guess only. Please correct both fields.";
+export const FUEL_ESTIMATE_FAILURE_COPY =
+  "We could not read this photo well enough to guess. Enter your meal manually.";
+export const FUEL_ESTIMATE_TRANSIENT_COPY =
+  "Photo estimate did not work this time. Try again or enter manually.";
+export const FUEL_ESTIMATE_NO_FOOD_COPY =
+  "No food detected in this photo. Retake a clearer shot of your meal.";
+export const FUEL_ESTIMATE_PHOTO_FORMATS_COPY = "JPG, PNG, or WebP only · max 4 MB";
+export const FUEL_ESTIMATE_PHOTO_HEIC_COPY =
+  "iPhone HEIC photos are not supported. Save as JPG first.";
+
+/** Client-side guard before upload; server still validates MIME and magic bytes. */
+export function fuelEstimatePhotoFileError(file: File): string | null {
+  if (file.size === 0) return "Could not read this photo.";
+  if (file.size > FUEL_ESTIMATE_MAX_BYTES) return "Photo must be 4 MB or smaller.";
+
+  const mime = file.type?.toLowerCase() ?? "";
+  const allowed = new Set<string>(FUEL_ESTIMATE_ALLOWED_MIMES);
+  if (mime && allowed.has(mime)) return null;
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!mime && (ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "webp")) {
+    return null;
+  }
+
+  if (
+    mime === "image/heic" ||
+    mime === "image/heif" ||
+    ext === "heic" ||
+    ext === "heif"
+  ) {
+    return FUEL_ESTIMATE_PHOTO_HEIC_COPY;
+  }
+
+  return `Use a JPG, PNG, or WebP photo (max 4 MB).`;
+}

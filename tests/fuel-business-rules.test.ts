@@ -12,6 +12,10 @@ import {
   matchMealSlot,
   shouldShowDayVerdict,
   signedDelta,
+  fuelEstimateReviewState,
+  fuelEstimatePhotoFileError,
+  FUEL_ESTIMATE_MAX_BYTES,
+  roundFuelCalories,
 } from "../shared/fuel.ts";
 
 describe("andWeFuel business rules", () => {
@@ -80,6 +84,31 @@ describe("andWeFuel business rules", () => {
       adminFuelRecipeSchema.safeParse({ ...base, imageUrl: "www.example.com/a.jpg" }).success,
       false,
     );
+  });
+
+  it("rounds and clamps photo estimate calories", () => {
+    assert.equal(roundFuelCalories(537), 535);
+    assert.equal(roundFuelCalories(8000), 4000);
+    assert.equal(roundFuelCalories(2), 1);
+    assert.equal(roundFuelCalories(3), 5);
+  });
+
+  it("maps confidence to review bands", () => {
+    assert.equal(fuelEstimateReviewState(0.86), "success");
+    assert.equal(fuelEstimateReviewState(0.75), "success");
+    assert.equal(fuelEstimateReviewState(0.74), "low");
+    assert.equal(fuelEstimateReviewState(0.4), "low");
+    assert.equal(fuelEstimateReviewState(0.39), "failure");
+    assert.equal(fuelEstimateReviewState(null), "low");
+  });
+
+  it("rejects oversized and HEIC meal photos before upload", () => {
+    const big = { size: FUEL_ESTIMATE_MAX_BYTES + 1, type: "image/jpeg", name: "meal.jpg" } as File;
+    assert.match(fuelEstimatePhotoFileError(big)!, /4 MB/);
+    const heic = { size: 1000, type: "image/heic", name: "meal.heic" } as File;
+    assert.match(fuelEstimatePhotoFileError(heic)!, /HEIC/);
+    const ok = { size: 1000, type: "image/jpeg", name: "meal.jpg" } as File;
+    assert.equal(fuelEstimatePhotoFileError(ok), null);
   });
 
   it("normalizes YouTube shorts URLs to embed ids", () => {

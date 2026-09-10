@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -8,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Heart,
+  ImagePlus,
   PlayCircle,
   RefreshCw,
   Trash2,
@@ -27,14 +29,24 @@ import {
   estimateFuelMeal,
   fetchFuelDashboard,
   fetchFuelStatement,
+  FuelEstimateRequestError,
   logFuelMeal,
   type FuelDashboardResponse,
   type FuelMealRow,
 } from "@/lib/fuel-api";
 import {
+  FUEL_ESTIMATE_FAILURE_COPY,
+  FUEL_ESTIMATE_LOW_COPY,
+  FUEL_ESTIMATE_NO_FOOD_COPY,
+  FUEL_ESTIMATE_PHOTO_FORMATS_COPY,
+  FUEL_ESTIMATE_PHOTO_HEIC_COPY,
+  FUEL_ESTIMATE_SUCCESS_COPY,
+  FUEL_ESTIMATE_TRANSIENT_COPY,
+  fuelEstimatePhotoFileError,
   FUEL_MEDICAL_DISCLAIMER,
   FUEL_SUPPORT_COPY,
   FUEL_SUPPORT_HREF,
+  type FuelEstimateReviewState,
 } from "@shared/fuel";
 
 type FuelView = "fuel" | "statement";
@@ -73,31 +85,157 @@ function LogMealModal({
   mealPlan,
   dayTotal,
   target,
+  estimationAvailable,
 }: {
   open: boolean;
   onClose: () => void;
   mealPlan: Array<{ index: number; label: string }>;
   dayTotal: number;
   target: number;
+  estimationAvailable: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<"upload" | "scanning" | "result">("upload");
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const [step, setStep] = useState<"upload" | "camera" | "scanning" | "result" | "error">("upload");
   const [name, setName] = useState("");
   const [calories, setCalories] = useState("");
   const [slotIndex, setSlotIndex] = useState<number | "">("");
-  const [advisory, setAdvisory] = useState(false);
+  const [reviewState, setReviewState] = useState<FuelEstimateReviewState | "manual" | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+
+  const clearPhotoPreview = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+    setPhotoPreviewUrl(null);
+  };
+
+  const setPhotoFile = (file: File | null) => {
+    clearPhotoPreview();
+    setLastFile(file);
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    previewUrlRef.current = url;
+    setPhotoPreviewUrl(url);
+  };
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCameraReady(false);
+  };
+
+  const resetModalState = () => {
+    stopCamera();
+    clearPhotoPreview();
+    setStep("upload");
+    setName("");
+    setCalories("");
+    setSlotIndex("");
+    setReviewState(null);
+    setRetryCount(0);
+    setLastFile(null);
+    setErrorMessage("");
+    setErrorCode(null);
+    setDragOver(false);
+    setCameraStarting(false);
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (libraryInputRef.current) libraryInputRef.current.value = "";
+  };
 
   useEffect(() => {
     if (!open) {
-      setStep("upload");
-      setName("");
-      setCalories("");
-      setSlotIndex("");
-      setAdvisory(false);
+      resetModalState();
+      return;
     }
-  }, [open]);
+    if (!estimationAvailable) {
+      setStep("result");
+      setReviewState("manual");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when open/availability flips
+  }, [open, estimationAvailable]);
+
+  useEffect(() => () => {
+    stopCamera();
+    clearPhotoPreview();
+  }, []);
+
+  // Bind stream only after the camera step mounts <video> (fixes black preview on desktop).
+  useEffect(() => {
+    if (step !== "camera") return;
+
+    let cancelled = false;
+    let poll: number | undefined;
+    let timeout: number | undefined;
+    let raf = 0;
+
+    const cleanupVideoHandlers = (video: HTMLVideoElement) => {
+      video.onloadedmetadata = null;
+      video.onplaying = null;
+    };
+
+    const bind = () => {
+      const stream = streamRef.current;
+      const video = videoRef.current;
+      if (!stream || !video || cancelled) return false;
+
+      const markReady = () => {
+        if (!cancelled && video.videoWidth > 0) setCameraReady(true);
+      };
+
+      video.srcObject = stream;
+      video.onloadedmetadata = markReady;
+      video.onplaying = markReady;
+      void video.play().then(markReady).catch(() => undefined);
+
+      poll = window.setInterval(() => {
+        if (cancelled) return;
+        if (video.videoWidth > 0) {
+          setCameraReady(true);
+          if (poll != null) window.clearInterval(poll);
+        }
+      }, 100);
+      timeout = window.setTimeout(() => {
+        if (poll != null) window.clearInterval(poll);
+      }, 8000);
+
+      return true;
+    };
+
+    if (!bind()) {
+      raf = requestAnimationFrame(() => {
+        if (!bind() && !cancelled) {
+          toast({
+            title: "Camera preview failed",
+            description: "Cancel and try Take photo again, or use Choose from library.",
+            variant: "destructive",
+          });
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      if (poll != null) window.clearInterval(poll);
+      if (timeout != null) window.clearTimeout(timeout);
+      if (videoRef.current) cleanupVideoHandlers(videoRef.current);
+    };
+  }, [step, toast]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -115,29 +253,191 @@ function LogMealModal({
     onError: (err: Error) => toast({ title: "Could not save", description: err.message, variant: "destructive" }),
   });
 
+  const applyEstimate = (est: Awaited<ReturnType<typeof estimateFuelMeal>>) => {
+    setName(est.name || "");
+    setCalories(est.calories ? String(est.calories) : "");
+    setReviewState(est.reviewState);
+    setStep("result");
+  };
+
   const onPickPhoto = async (file: File | null) => {
     if (!file) return;
-    setStep("scanning");
-    try {
-      const est = await estimateFuelMeal(file);
-      setName(est.name || "");
-      setCalories(est.calories ? String(est.calories) : "");
-      setAdvisory(true);
-      setStep("result");
-      if (est.fallback) {
-        toast({
-          title: "Enter calories manually",
-          description: "Photo estimate unavailable right now.",
-        });
-      }
-    } catch (err) {
-      setStep("result");
-      setAdvisory(true);
-      toast({
-        title: "Enter calories manually",
-        description: err instanceof Error ? err.message : "Estimation failed",
-      });
+    const fileError = fuelEstimatePhotoFileError(file);
+    if (fileError) {
+      setPhotoFile(null);
+      setErrorMessage(fileError);
+      setErrorCode("unreadable");
+      setStep("error");
+      return;
     }
+    setPhotoFile(file);
+    setStep("scanning");
+    setErrorMessage("");
+    setErrorCode(null);
+    try {
+      const est = await estimateFuelMeal(file, {
+        slotIndex: slotIndex === "" ? undefined : Number(slotIndex),
+      });
+      applyEstimate(est);
+    } catch (err) {
+      if (err instanceof FuelEstimateRequestError && err.status === 501) {
+        setReviewState("manual");
+        setStep("result");
+        return;
+      }
+      if (err instanceof FuelEstimateRequestError) {
+        setErrorCode(err.body.error);
+        setErrorMessage(
+          err.body.error === "no_food"
+            ? err.message || FUEL_ESTIMATE_NO_FOOD_COPY
+            : err.message,
+        );
+      } else {
+        setErrorCode("provider_down");
+        setErrorMessage(err instanceof Error ? err.message : FUEL_ESTIMATE_TRANSIENT_COPY);
+      }
+      setStep("error");
+    }
+  };
+
+  const openLibraryPicker = () => libraryInputRef.current?.click();
+
+  const openCameraFallback = () => cameraInputRef.current?.click();
+
+  const startLiveCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast({
+        title: "Live camera unavailable",
+        description: "Opening the system camera picker instead.",
+      });
+      openCameraFallback();
+      return;
+    }
+    setCameraStarting(true);
+    setCameraReady(false);
+    try {
+      stopCamera();
+      // Prefer rear camera on phones; plain video:true is more reliable on desktop Macs.
+      const isCoarsePointer =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: isCoarsePointer
+            ? { facingMode: { ideal: "environment" } }
+            : true,
+          audio: false,
+        });
+      } catch (firstErr) {
+        // Retry once with the simplest constraint set.
+        if (!isCoarsePointer) throw firstErr;
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      streamRef.current = stream;
+      setStep("camera");
+    } catch (err) {
+      stopCamera();
+      setStep("upload");
+      const denied =
+        err instanceof DOMException &&
+        (err.name === "NotAllowedError" || err.name === "PermissionDeniedError");
+      toast({
+        title: denied ? "Camera permission blocked" : "Could not start camera",
+        description: denied
+          ? "Allow camera access for this site, then try Take photo again."
+          : "Try Choose from library, or allow camera access and retry.",
+        variant: "destructive",
+      });
+    } finally {
+      setCameraStarting(false);
+    }
+  };
+
+  const captureFromCamera = async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) {
+      toast({
+        title: "Camera not ready",
+        description: "Wait until the live preview appears, then tap Capture.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      toast({
+        title: "Capture failed",
+        description: "Try again, or choose a photo from your library.",
+        variant: "destructive",
+      });
+      return;
+    }
+    ctx.drawImage(video, 0, 0);
+    stopCamera();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.92),
+    );
+    if (!blob) {
+      toast({
+        title: "Capture failed",
+        description: "Try again, or choose a photo from your library.",
+        variant: "destructive",
+      });
+      setStep("upload");
+      return;
+    }
+    const file = new File([blob], `meal-${Date.now()}.jpg`, { type: "image/jpeg" });
+    void onPickPhoto(file);
+  };
+
+  const retryPhoto = () => {
+    if (retryCount >= 1) {
+      setReviewState("manual");
+      setStep("result");
+      setName("");
+      setCalories("");
+      return;
+    }
+    setRetryCount((c) => c + 1);
+    if (lastFile) {
+      void onPickPhoto(lastFile);
+    } else {
+      setStep("upload");
+    }
+  };
+
+  const goToUploadChooser = () => {
+    stopCamera();
+    clearPhotoPreview();
+    setLastFile(null);
+    setName("");
+    setCalories("");
+    setReviewState(null);
+    setRetryCount(0);
+    setErrorMessage("");
+    setErrorCode(null);
+    setStep("upload");
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (libraryInputRef.current) libraryInputRef.current.value = "";
+  };
+
+  const retakeWithCamera = () => {
+    stopCamera();
+    clearPhotoPreview();
+    setLastFile(null);
+    setName("");
+    setCalories("");
+    setReviewState(null);
+    setRetryCount(0);
+    setErrorMessage("");
+    setErrorCode(null);
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (libraryInputRef.current) libraryInputRef.current.value = "";
+    void startLiveCamera();
   };
 
   if (!open) return null;
@@ -146,7 +446,41 @@ function LogMealModal({
   const previewTotal = dayTotal + (Number.isFinite(calNum) ? calNum : 0);
   const canSave = name.trim().length > 0 && Number.isFinite(calNum) && calNum >= 0;
 
-  return (
+  const advisoryCopy =
+    reviewState === "success"
+      ? FUEL_ESTIMATE_SUCCESS_COPY
+      : reviewState === "low"
+        ? FUEL_ESTIMATE_LOW_COPY
+        : reviewState === "failure"
+          ? FUEL_ESTIMATE_FAILURE_COPY
+          : null;
+
+  const advisoryClass =
+    reviewState === "success"
+      ? "border-[#cfe9d1] bg-[#cfe9d1]/40 text-[#354c3a]"
+      : reviewState === "low"
+        ? "border-[#f0d4b8] bg-[#fdf4eb] text-[#7a3a10]"
+        : "text-muted-foreground";
+
+  const photoThumb = (heightClass = "h-[90px]") =>
+    photoPreviewUrl ? (
+      <img
+        src={photoPreviewUrl}
+        alt="Selected meal"
+        className={cn("mt-4 w-full rounded-xl object-cover", heightClass)}
+      />
+    ) : (
+      <div
+        className={cn(
+          "mt-4 flex items-center justify-center rounded-xl bg-primary/10 text-primary",
+          heightClass,
+        )}
+      >
+        <Utensils className="h-8 w-8" />
+      </div>
+    );
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
@@ -165,34 +499,172 @@ function LogMealModal({
           <X className="h-5 w-5" />
         </button>
 
-        {step === "upload" && (
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            void onPickPhoto(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={libraryInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+          className="hidden"
+          onChange={(e) => {
+            void onPickPhoto(e.target.files?.[0] ?? null);
+            e.target.value = "";
+          }}
+        />
+
+        {step === "upload" && estimationAvailable && (
           <>
             <h3 className="font-display text-xl font-bold text-primary">Log a meal</h3>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="mt-4 flex h-[150px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-primary/25 bg-primary/[0.03] text-sm text-muted-foreground"
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={openLibraryPicker}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  openLibraryPicker();
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                void onPickPhoto(e.dataTransfer.files?.[0] ?? null);
+              }}
+              className={cn(
+                "mt-4 flex h-[150px] w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-primary/[0.03] text-sm text-muted-foreground",
+                dragOver ? "border-primary bg-primary/[0.08]" : "border-primary/25",
+              )}
             >
-              <Camera className="h-8 w-8 text-primary/70" />
-              Drag a photo or tap to snap your meal
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => void onPickPhoto(e.target.files?.[0] ?? null)}
-            />
-            <Button className="mt-4 w-full" onClick={() => fileRef.current?.click()}>
-              Upload photo
+              <ImagePlus className="h-8 w-8 text-primary/70" />
+              Drag a photo here, or choose from your library
+            </div>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              {FUEL_ESTIMATE_PHOTO_FORMATS_COPY}
+              <br />
+              {FUEL_ESTIMATE_PHOTO_HEIC_COPY}
+            </p>
+            <Button
+              className="mt-4 w-full"
+              disabled={cameraStarting}
+              onClick={() => void startLiveCamera()}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              {cameraStarting ? "Starting camera…" : "Take photo"}
+            </Button>
+            <Button variant="secondary" className="mt-2 w-full" onClick={openLibraryPicker}>
+              <ImagePlus className="mr-2 h-4 w-4" />
+              Choose from library
             </Button>
             <Button
               variant="secondary"
               className="mt-2 w-full"
               onClick={() => {
-                setAdvisory(false);
+                clearPhotoPreview();
+                setLastFile(null);
+                setReviewState("manual");
                 setStep("result");
+              }}
+            >
+              Skip, enter manually
+            </Button>
+          </>
+        )}
+
+        {step === "camera" && (
+          <>
+            <h3 className="font-display text-xl font-bold text-primary">Take a photo</h3>
+            <div className="relative mt-4 overflow-hidden rounded-xl bg-black">
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                autoPlay
+                className="aspect-[4/3] w-full object-cover"
+              />
+              {!cameraReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/55 px-4 text-center text-sm text-white">
+                  Starting camera…
+                </div>
+              )}
+            </div>
+            <Button
+              className="mt-4 w-full"
+              disabled={!cameraReady}
+              onClick={() => void captureFromCamera()}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              {cameraReady ? "Capture" : "Waiting for camera…"}
+            </Button>
+            <Button
+              variant="secondary"
+              className="mt-2 w-full"
+              onClick={() => {
+                stopCamera();
+                setStep("upload");
+              }}
+            >
+              Cancel
+            </Button>
+          </>
+        )}
+
+        {step === "scanning" && (
+          <div className="flex flex-col items-center gap-4 py-6 text-center">
+            <h3 className="font-display text-xl font-bold text-primary">Scanning your plate</h3>
+            {photoThumb("h-[140px]")}
+            <div className="h-11 w-11 animate-spin rounded-full border-2 border-dashed border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">Detecting food and estimating calories…</p>
+          </div>
+        )}
+
+        {step === "error" && (
+          <>
+            <h3 className="font-display text-xl font-bold text-primary">
+              {errorCode === "no_food" ? "No food detected" : "Could not estimate"}
+            </h3>
+            {photoThumb()}
+            <p className="mt-3 text-sm text-muted-foreground">
+              {errorMessage ||
+                (errorCode === "no_food" ? FUEL_ESTIMATE_NO_FOOD_COPY : FUEL_ESTIMATE_TRANSIENT_COPY)}
+            </p>
+            {errorCode === "no_food" ? (
+              <Button className="mt-4 w-full" onClick={retakeWithCamera}>
+                <Camera className="mr-2 h-4 w-4" />
+                Retake photo
+              </Button>
+            ) : (
+              <Button className="mt-4 w-full" onClick={retryPhoto}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Try photo again
+              </Button>
+            )}
+            {errorCode !== "no_food" && (
+              <Button variant="secondary" className="mt-2 w-full" onClick={goToUploadChooser}>
+                Choose another photo
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              className="mt-2 w-full"
+              onClick={() => {
+                setReviewState("manual");
+                setStep("result");
+                setName("");
+                setCalories("");
               }}
             >
               Enter manually
@@ -200,23 +672,23 @@ function LogMealModal({
           </>
         )}
 
-        {step === "scanning" && (
-          <div className="flex flex-col items-center gap-4 py-10 text-center">
-            <h3 className="font-display text-xl font-bold text-primary">Scanning your plate</h3>
-            <div className="h-11 w-11 animate-spin rounded-full border-2 border-dashed border-primary border-t-transparent" />
-            <p className="text-sm text-muted-foreground">Detecting food & estimating calories…</p>
-          </div>
-        )}
-
         {step === "result" && (
           <>
             <h3 className="font-display text-xl font-bold text-primary">Confirm your meal</h3>
-            <div className="mt-4 flex h-[90px] items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Utensils className="h-8 w-8" />
-            </div>
-            {advisory && (
+            {photoThumb()}
+            {advisoryCopy && (
+              <p
+                className={cn(
+                  "mt-3 rounded-lg border px-3 py-2 text-xs font-medium",
+                  advisoryClass,
+                )}
+              >
+                {advisoryCopy}
+              </p>
+            )}
+            {reviewState === "manual" && !photoPreviewUrl && (
               <p className="mt-3 text-xs font-medium text-muted-foreground">
-                Rough estimate. Edit before saving
+                Manual entry — nothing was estimated.
               </p>
             )}
             <div className="mt-3 space-y-3">
@@ -270,22 +742,16 @@ function LogMealModal({
             >
               Add to Calorie Bank
             </Button>
-            <Button
-              variant="secondary"
-              className="mt-2 w-full"
-              onClick={() => {
-                setStep("upload");
-                setName("");
-                setCalories("");
-                setAdvisory(false);
-              }}
-            >
-              Retake
-            </Button>
+            {estimationAvailable && (
+              <Button variant="secondary" className="mt-2 w-full" onClick={retakeWithCamera}>
+                Retake photo
+              </Button>
+            )}
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -710,6 +1176,7 @@ export default function FuelPage() {
             mealPlan={data.mealPlan}
             dayTotal={data.dayTotal}
             target={data.target}
+            estimationAvailable={data.estimationAvailable}
           />
         )}
       </PageContainer>

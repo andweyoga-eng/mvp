@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Apple, Loader2 } from "lucide-react";
+import { Apple, Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,27 @@ export function AdminFuelContentPanel() {
   const [embedId, setEmbedId] = useState("");
   const [mediaTitle, setMediaTitle] = useState("");
 
+  const [estimationStatus, setEstimationStatus] = useState<{
+    estimationEnabled: boolean;
+    geminiKeyPresent: boolean;
+    active: boolean;
+    model: string;
+    statusLabel: string;
+  } | null>(null);
+
+  const loadEstimationStatus = async () => {
+    try {
+      const res = await fetch("/api/admin/fuel/estimation-status", {
+        credentials: "include",
+        headers: adminHeaders(),
+      });
+      if (!res.ok) return;
+      setEstimationStatus(await res.json());
+    } catch {
+      /* non-blocking */
+    }
+  };
+
   const load = async (date: string) => {
     setLoading(true);
     try {
@@ -77,6 +98,10 @@ export function AdminFuelContentPanel() {
     void load(forDate);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forDate]);
+
+  useEffect(() => {
+    void loadEstimationStatus();
+  }, []);
 
   const saveRecipe = async () => {
     setSaving(true);
@@ -157,6 +182,28 @@ export function AdminFuelContentPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {estimationStatus && (
+          <div
+            className={`rounded-lg border p-4 ${
+              estimationStatus.active
+                ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30"
+                : "border-muted bg-muted/40"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <Camera className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium">Photo calorie estimation</p>
+                <p className="text-muted-foreground">{estimationStatus.statusLabel}</p>
+                <p className="text-xs text-muted-foreground">
+                  Flag: {estimationStatus.estimationEnabled ? "on" : "off"} · API key:{" "}
+                  {estimationStatus.geminiKeyPresent ? "present" : "missing"} · Model:{" "}
+                  {estimationStatus.model}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="max-w-xs">
           <Label>For date</Label>
           <Input type="date" value={forDate} onChange={(e) => setForDate(e.target.value)} />
