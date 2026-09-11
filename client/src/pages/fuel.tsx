@@ -58,7 +58,7 @@ type StatementDayVerdict = DayVerdictStatus; // on_track | over | under | pendin
 
 function statusPillClass(status: string) {
   if (status === "on_track") return "bg-[#cfe9d1] text-[#354c3a]";
-  if (status === "pending") return "bg-muted text-muted-foreground";
+  if (status === "pending") return "border border-black bg-white text-primary";
   return "bg-red-100 text-[#ba1a1a]";
 }
 
@@ -69,6 +69,9 @@ function statementDayTrayClass(status: StatementDayVerdict) {
   }
   if (status === "on_track") {
     return "bg-[#f3faf4] border-emerald-100/80";
+  }
+  if (status === "pending") {
+    return "border-black bg-white";
   }
   return "";
 }
@@ -1087,7 +1090,7 @@ function StatementView() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Target missed — over / under eating
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-primary/30" /> In progress
+          <span className="h-2.5 w-2.5 rounded-full border border-black bg-white" /> In progress
         </span>
         <span className="rounded-lg bg-[#f4f1f8] px-2.5 py-1 font-semibold text-primary">This week</span>
       </div>
