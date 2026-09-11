@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Apple,
-  ArrowLeft,
   Camera,
   ChevronDown,
   ChevronRight,
@@ -32,9 +31,11 @@ import {
   FuelEstimateRequestError,
   logFuelMeal,
   type FuelDashboardResponse,
-  type FuelMealRow,
+  type FuelStatementResponse,
 } from "@/lib/fuel-api";
 import {
+  dayStatus,
+  formatSignedDelta,
   FUEL_ESTIMATE_FAILURE_COPY,
   FUEL_ESTIMATE_LOW_COPY,
   FUEL_ESTIMATE_NO_FOOD_COPY,
@@ -46,10 +47,14 @@ import {
   FUEL_MEDICAL_DISCLAIMER,
   FUEL_SUPPORT_COPY,
   FUEL_SUPPORT_HREF,
+  signedDelta,
+  type DayVerdictStatus,
   type FuelEstimateReviewState,
 } from "@shared/fuel";
 
 type FuelView = "fuel" | "statement";
+
+type StatementDayVerdict = DayVerdictStatus; // on_track | over | under | pending
 
 function statusPillClass(status: string) {
   if (status === "on_track") return "bg-[#cfe9d1] text-[#354c3a]";
@@ -57,26 +62,97 @@ function statusPillClass(status: string) {
   return "bg-red-100 text-[#ba1a1a]";
 }
 
-function dateDividerLabel(date: string, today: string) {
-  if (date === today) return "Today";
-  const y = new Date(`${today}T12:00:00`);
-  y.setDate(y.getDate() - 1);
-  const ymd = y.toISOString().slice(0, 10);
-  if (date === ymd) return "Yesterday";
-  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+/** Color fill for statement day trays outside the target band. */
+function statementDayTrayClass(status: StatementDayVerdict) {
+  if (status === "over" || status === "under") {
+    return "bg-red-50 border-red-100";
+  }
+  if (status === "on_track") {
+    return "bg-[#f3faf4] border-emerald-100/80";
+  }
+  return "";
 }
 
-function groupMeals(meals: FuelMealRow[], today: string) {
-  const map = new Map<string, FuelMealRow[]>();
-  for (const m of meals) {
-    const list = map.get(m.loggedDate) ?? [];
-    list.push(m);
-    map.set(m.loggedDate, list);
+function statementDayHeaderTextClass(status: StatementDayVerdict) {
+  if (status === "over" || status === "under") return "text-[#9f1239]";
+  if (status === "on_track") return "text-[#354c3a]";
+  return "text-primary";
+}
+
+function statementDayVerdictLabel(status: StatementDayVerdict): string {
+  if (status === "on_track") return "Target Hit";
+  if (status === "over") return "Target missed — Over eating";
+  if (status === "under") return "Target missed — Under eating";
+  return "In progress";
+}
+
+function weekDateKeys(anchorDate: string): string[] {
+  const [y, m, d] = anchorDate.split("-").map(Number);
+  const anchor = new Date(Date.UTC(y, m - 1, d));
+  const dow = anchor.getUTCDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(anchor);
+  monday.setUTCDate(anchor.getUTCDate() + mondayOffset);
+  const keys: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setUTCDate(monday.getUTCDate() + i);
+    keys.push(day.toISOString().slice(0, 10));
   }
-  return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  return keys;
+}
+
+function formatStatementDate(date: string): { ddmm: string; weekday: string } {
+  const [y, m, d] = date.split("-");
+  const weekday = new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+  return { ddmm: `${d}/${m}`, weekday };
+}
+
+type StatementDayTray = {
+  date: string;
+  meals: FuelStatementResponse["rows"];
+  dayTotal: number;
+  target: number;
+  status: StatementDayVerdict;
+  delta: number | null;
+};
+
+function buildStatementDayTrays(data: FuelStatementResponse): StatementDayTray[] {
+  const byDate = new Map<string, FuelStatementResponse["rows"]>();
+  for (const row of data.rows) {
+    const list = byDate.get(row.loggedDate) ?? [];
+    list.push(row);
+    byDate.set(row.loggedDate, list);
+  }
+
+  return weekDateKeys(data.today)
+    .filter((date) => date <= data.today)
+    .map((date) => {
+      const meals = (byDate.get(date) ?? []).slice().sort((a, b) => {
+        const ta = a.clientLocalTime || "";
+        const tb = b.clientLocalTime || "";
+        return ta.localeCompare(tb);
+      });
+      const dayTotal = meals.reduce((s, m) => s + m.calories, 0);
+      const targetFromMeal = meals.find((m) => m.targetAtLogCal > 0)?.targetAtLogCal;
+      const target = targetFromMeal || data.target;
+
+      let status: StatementDayVerdict;
+      if (date === data.today && meals.length === 0) {
+        status = "pending";
+      } else if (date === data.today && meals.some((m) => m.dayStatus === "pending")) {
+        status = "pending";
+      } else if (meals.length === 0) {
+        // Past day with nothing logged → under eating / target missed
+        status = "under";
+      } else {
+        status = dayStatus(dayTotal, target, data.deficit);
+      }
+
+      const delta = status === "pending" ? null : signedDelta(dayTotal, target);
+      return { date, meals, dayTotal, target, status, delta };
+    })
+    .reverse(); // newest first
 }
 
 function LogMealModal({
@@ -857,8 +933,7 @@ function FuelDashboardView({
     onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
 
-  const grouped = useMemo(() => groupMeals(data.meals, data.today), [data.meals, data.today]);
-  const maxBar = Math.max(1, ...data.weekBars.map((b) => Math.abs(b.delta ?? b.total)));
+  const todayMeals = data.meals.filter((m) => m.loggedDate === data.today);
 
   return (
     <div className="space-y-6">
@@ -877,42 +952,73 @@ function FuelDashboardView({
         </Button>
       </div>
 
-      <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
-        <GlassCard className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Today</p>
-          <p className="mt-2 font-mono text-[26px] font-semibold text-primary">
-            {data.dayTotal} / {data.target} cal
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">{data.caloriesLeftLabel}</p>
-          {data.verdictReady && data.status !== "pending" && (
-            <span className={cn("mt-3 inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold", statusPillClass(data.status))}>
-              {data.statusDelta} · {data.status.replace("_", " ")}
-            </span>
-          )}
-        </GlassCard>
+      <GlassCard className="p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Today</p>
+        <p className="mt-2 font-mono text-[26px] font-semibold text-primary">
+          {data.dayTotal} / {data.target} cal
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{data.caloriesLeftLabel}</p>
+        {data.verdictReady && data.status !== "pending" && (
+          <span className={cn("mt-3 inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold", statusPillClass(data.status))}>
+            {data.statusDelta} · {data.status.replace("_", " ")}
+          </span>
+        )}
+      </GlassCard>
 
-        <GlassCard className="p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">This week</p>
-          <div className="mt-4 flex h-28 items-end gap-2">
-            {data.weekBars.map((bar) => {
-              const h = Math.max(8, Math.round((Math.abs(bar.delta ?? bar.total) / maxBar) * 100));
-              const color =
-                bar.status === "on_track"
-                  ? "bg-emerald-600/70"
-                  : bar.status === "pending"
-                    ? "bg-primary/20"
-                    : "bg-red-500/70";
-              return (
-                <div key={bar.date} className="flex flex-1 flex-col items-center gap-1">
-                  <div className={cn("w-4 rounded-t", color)} style={{ height: `${h}%` }} title={`${bar.date}: ${bar.total}`} />
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {bar.date.slice(8)}
-                  </span>
+      <div>
+        <h3 className="font-display text-[19px] font-bold text-primary">Today&apos;s meals</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Entries for today against your target band (−{data.deficit} cal).
+        </p>
+        <div className="mt-4 space-y-2">
+          {todayMeals.length === 0 && (
+            <GlassCard className="p-5 text-sm text-muted-foreground">No meals logged today yet.</GlassCard>
+          )}
+          {todayMeals.map((row) =>
+            confirmId === row.id ? (
+              <div
+                key={row.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-[#ba1a1a]"
+              >
+                <span>Delete “{row.name}”?</span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setConfirmId(null)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate(row.id)}
+                  >
+                    Delete
+                  </Button>
                 </div>
-              );
-            })}
-          </div>
-        </GlassCard>
+              </div>
+            ) : (
+              <GlassCard key={row.id} className="flex items-center gap-3 px-3 py-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Utensils className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-primary">{row.name}</p>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {row.clientLocalTime || "-"}
+                  </p>
+                </div>
+                <p className="font-mono text-sm font-semibold text-primary">{row.calories}</p>
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-[#ba1a1a]"
+                  onClick={() => setConfirmId(row.id)}
+                  aria-label="Delete meal"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </GlassCard>
+            ),
+          )}
+        </div>
       </div>
 
       <DailyInspirationCards recipe={data.recipe} practiceAlong={data.practiceAlong} />
@@ -936,74 +1042,6 @@ function FuelDashboardView({
           </button>
         </div>
       </div>
-
-      <div>
-        <h3 className="border-t border-dashed border-primary/20 pt-5 font-display text-[19px] font-bold text-primary">
-          Calorie Bank: ledger
-        </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Day colour appears after your last meal slot (or at day close). Individual meals stay neutral.
-        </p>
-
-        <div className="mt-4 space-y-4">
-          {grouped.length === 0 && (
-            <GlassCard className="p-5 text-sm text-muted-foreground">No meals logged yet.</GlassCard>
-          )}
-          {grouped.map(([date, rows]) => (
-            <div key={date}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {dateDividerLabel(date, data.today)}
-              </p>
-              <div className="space-y-2">
-                {rows.map((row) =>
-                  confirmId === row.id ? (
-                    <div
-                      key={row.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-[#ba1a1a]"
-                    >
-                      <span>Delete “{row.name}” from the ledger?</span>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="secondary" onClick={() => setConfirmId(null)}>
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => deleteMutation.mutate(row.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <GlassCard key={row.id} className="flex items-center gap-3 px-3 py-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <Utensils className="h-5 w-5" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-primary">{row.name}</p>
-                        <p className="font-mono text-xs text-muted-foreground">
-                          {row.clientLocalTime || "-"}
-                        </p>
-                      </div>
-                      <p className="font-mono text-sm font-semibold text-primary">{row.calories}</p>
-                      <button
-                        type="button"
-                        className="rounded-lg p-2 text-muted-foreground hover:bg-red-50 hover:text-[#ba1a1a]"
-                        onClick={() => setConfirmId(row.id)}
-                        aria-label="Delete meal"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </GlassCard>
-                  ),
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1013,6 +1051,9 @@ function StatementView() {
     queryKey: ["fuel-statement"],
     queryFn: fetchFuelStatement,
   });
+  const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+
+  const dayTrays = useMemo(() => (data ? buildStatementDayTrays(data) : []), [data]);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading statement…</p>;
   if (error || !data) {
@@ -1023,39 +1064,104 @@ function StatementView() {
     );
   }
 
+  const floor = Math.max(0, data.target - data.deficit);
+
   return (
     <div className="space-y-5">
       <p className="font-mono text-xs text-muted-foreground">My Account &gt; Calorie Bank &amp; Statement</p>
       <h1 className="font-display text-[clamp(28px,4vw,42px)] font-bold tracking-tight text-primary">
         Your calorie <span className="font-accent italic font-normal text-dz-secondary">statement</span>
       </h1>
+      <p className="inline-flex flex-wrap rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+        Target set: {data.target} cal/day · maintain {floor}–{data.target} (band −{data.deficit})
+      </p>
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> within band
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> Target Hit
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> over / under-fuelled
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Target missed — over / under eating
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-primary/30" /> In progress
         </span>
         <span className="rounded-lg bg-[#f4f1f8] px-2.5 py-1 font-semibold text-primary">This week</span>
       </div>
 
-      <div className="space-y-2">
-        {data.rows.map((row) => (
-          <GlassCard key={row.id} className="grid grid-cols-[72px_1fr_72px_72px_90px] items-center gap-2 px-4 py-3 text-sm">
-            <span className="font-mono text-xs text-muted-foreground">
-              {row.loggedDate.slice(5).replace("-", "/")}
-            </span>
-            <span className="truncate font-medium text-primary">{row.name}</span>
-            <span className="text-right font-mono">{row.calories}</span>
-            <span className="text-right font-mono text-muted-foreground">{row.targetAtLogCal}</span>
-            <span className={cn("justify-self-end rounded-lg px-2 py-1 text-xs font-semibold", statusPillClass(row.dayStatus))}>
-              {row.dayDelta ?? "-"}
-            </span>
-          </GlassCard>
-        ))}
-        {!data.rows.length && (
-          <GlassCard className="p-5 text-sm text-muted-foreground">No meals this week yet.</GlassCard>
-        )}
+      <div className="space-y-3">
+        {dayTrays.map((day) => {
+          const { ddmm, weekday } = formatStatementDate(day.date);
+          const expanded = openDays[day.date] ?? day.date === data.today;
+          const headerTone = statementDayHeaderTextClass(day.status);
+          return (
+            <GlassCard
+              key={day.date}
+              className={cn("overflow-hidden p-0", statementDayTrayClass(day.status))}
+            >
+              <button
+                type="button"
+                className="flex w-full items-start gap-3 px-4 py-3.5 text-left"
+                onClick={() =>
+                  setOpenDays((prev) => ({
+                    ...prev,
+                    [day.date]: !expanded,
+                  }))
+                }
+                aria-expanded={expanded}
+              >
+                <span className="mt-0.5 text-muted-foreground">
+                  {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </span>
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className={cn("font-mono text-sm font-semibold", headerTone)}>
+                      {ddmm} <span className="font-sans font-medium">{weekday}</span>
+                    </p>
+                    <span className={cn("rounded-lg px-2.5 py-1 text-xs font-semibold", statusPillClass(day.status))}>
+                      {statementDayVerdictLabel(day.status)}
+                    </span>
+                  </div>
+                  <p className={cn("font-mono text-xs", day.status === "over" || day.status === "under" ? "text-[#9f1239]/80" : "text-muted-foreground")}>
+                    Target set {day.target}
+                    {" · "}
+                    Consumed {day.dayTotal}
+                    {day.delta != null ? ` · vs target ${formatSignedDelta(day.delta)}` : ""}
+                  </p>
+                </div>
+              </button>
+
+              {expanded && (
+                <div className="border-t border-black/5 px-4 py-3">
+                  {day.meals.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {day.status === "pending" ? "No meals logged yet today." : "No meals logged this day."}
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {day.meals.map((meal) => (
+                        <li
+                          key={meal.id}
+                          className="flex items-center gap-3 rounded-xl bg-white/60 px-3 py-2.5"
+                        >
+                          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                            <Utensils className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-primary">{meal.name}</p>
+                            <p className="font-mono text-xs text-muted-foreground">
+                              {meal.clientLocalTime || "—"}
+                            </p>
+                          </div>
+                          <p className="font-mono text-sm font-semibold text-primary">{meal.calories}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </GlassCard>
+          );
+        })}
       </div>
 
       <p className="font-mono text-xs text-muted-foreground">
@@ -1097,8 +1203,8 @@ export default function FuelPage() {
         <div className="mb-6 inline-flex rounded-full bg-primary/5 p-1">
           {(
             [
-              ["fuel", "Fuel"],
-              ["statement", "Statement"],
+              ["fuel", "Diet Control"],
+              ["statement", "Calorie Statement"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -1159,15 +1265,7 @@ export default function FuelPage() {
         {data?.gate === "ok" && view === "fuel" && (
           <FuelDashboardView data={data} onOpenLog={() => setLogOpen(true)} />
         )}
-        {data?.gate === "ok" && view === "statement" && (
-          <>
-            <Button variant="secondary" className="mb-4" onClick={() => setView("fuel")}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to dashboard
-            </Button>
-            <StatementView />
-          </>
-        )}
+        {data?.gate === "ok" && view === "statement" && <StatementView />}
 
         {data?.gate === "ok" && (
           <LogMealModal
