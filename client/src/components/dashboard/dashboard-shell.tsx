@@ -55,9 +55,9 @@ interface LauncherItem {
 }
 
 const LAUNCHER_ITEMS: LauncherItem[] = [
-  { id: "fuel", label: "WeFuel", icon: Apple, href: "/fuel" },
-  { id: "workshops", label: "WeBuild", icon: Dumbbell, href: "/workshops" },
-  { id: "emojou", label: "WeEmo", icon: Smile, href: "/emojou" },
+  { id: "fuel", label: "weDiet", icon: Apple, href: "/fuel" },
+  { id: "workshops", label: "weBuild", icon: Dumbbell, href: "/workshops" },
+  { id: "emojou", label: "weEmo", icon: Smile, href: "/emojou" },
   { id: "sessions", label: "andWeYOGa", icon: AndWeYogaIcon, href: "/dashboard" },
 ];
 

@@ -128,9 +128,9 @@ describe("unified Sessions tab", () => {
 
     assert.doesNotMatch(shell, /id: "calendar"/);
     assert.match(shell, /grid-cols-4/);
-    assert.match(shell, /label: "WeFuel"/);
-    assert.match(shell, /label: "WeBuild"/);
-    assert.match(shell, /label: "WeEmo"/);
+    assert.match(shell, /label: "weDiet"/);
+    assert.match(shell, /label: "weBuild"/);
+    assert.match(shell, /label: "weEmo"/);
     assert.match(shell, /label: "andWeYOGa"/);
     assert.match(shell, /focusSessionsSearch/);
     assert.match(calendar, /setLocation\("\/dashboard"/);

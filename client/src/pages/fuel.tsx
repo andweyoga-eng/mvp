@@ -940,15 +940,19 @@ function FuelDashboardView({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-[clamp(28px,4vw,42px)] font-bold tracking-tight text-primary">
-            Your daily <span className="font-accent italic font-normal text-dz-secondary">fuel</span>
+            Your daily <span className="font-accent italic font-normal text-dz-secondary">diet</span>
           </h1>
           <p className="mt-2 inline-flex rounded-lg bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
             Target: {data.target} cal/day · band −{data.deficit}
           </p>
         </div>
-        <Button className="h-12 min-w-[200px]" onClick={onOpenLog} data-testid="fuel-log-meal">
-          <Camera className="mr-2 h-4 w-4" />
-          Log a meal
+        <Button
+          className="h-9 shrink-0 px-3.5 text-sm sm:h-10 sm:px-4"
+          onClick={onOpenLog}
+          data-testid="fuel-log-meal"
+        >
+          <Camera className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
+          Track your Diet
         </Button>
       </div>
 
