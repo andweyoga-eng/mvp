@@ -12,7 +12,7 @@ import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
   Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
-  GalleryHorizontalEnd, Apple, Package
+  GalleryHorizontalEnd, Apple, Package, Activity
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { waitlistMarketingLabel } from "@shared/waitlist";
@@ -63,6 +63,7 @@ import { AdminPagination } from "@/components/admin/admin-pagination";
 import { AdminHealthMaterialsPanel } from "@/components/admin/health-materials-panel";
 import { AdminFuelMemberDialog } from "@/components/admin/fuel-member-dialog";
 import { AdminFuelContentPanel } from "@/components/admin/fuel-content-panel";
+import { AndWeProgressPanel } from "@/components/admin/andwe-progress-panel";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 import {
   getInstructorStatusLabel,
@@ -675,7 +676,10 @@ export default function AdminDashboard() {
               <CreditCard className="w-4 h-4 mr-2 shrink-0" /> Subscription Management
             </TabsTrigger>
             <TabsTrigger value="fuel-content" className={adminNavTabTrigger}>
-              <Apple className="w-4 h-4 mr-2 shrink-0" /> WeFuel
+              <Apple className="w-4 h-4 mr-2 shrink-0" /> WeDiet
+            </TabsTrigger>
+            <TabsTrigger value="andwe-progress" className={adminNavTabTrigger}>
+              <Activity className="w-4 h-4 mr-2 shrink-0" /> andWeProgress
             </TabsTrigger>
             <TabsTrigger value="consent-logs" className={adminNavTabTrigger}>
               <Shield className="w-4 h-4 mr-2 shrink-0" /> Consent Log
@@ -832,7 +836,7 @@ export default function AdminDashboard() {
                               onClick={() => setFuelViewUser(user)}
                             >
                               <Apple className="w-3 h-3 mr-1" />
-                              Fuel
+                              Diet
                             </Button>
                             <Button size="sm" variant="outline" className="text-xs h-7"
                               onClick={() => toggleUserActive(user.id, !(user.isActive ?? true))}>
@@ -1361,13 +1365,17 @@ export default function AdminDashboard() {
             <AdminFuelContentPanel />
           </TabsContent>
 
+          <TabsContent value="andwe-progress">
+            <AndWeProgressPanel />
+          </TabsContent>
+
           <TabsContent value="consent-logs">
             <Card>
               <CardHeader>
                 <CardTitle>Consent audit log</CardTitle>
                 <CardDescription>
                   DPDPA append-only consent records for profile, terms, age, and health data events
-                  (including WeFuel calorie logs under health data).
+                  (including WeDiet calorie logs under health data).
                 </CardDescription>
               </CardHeader>
               <CardContent>

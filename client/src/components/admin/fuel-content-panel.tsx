@@ -85,7 +85,7 @@ export function AdminFuelContentPanel() {
       setMediaTitle(data.media?.title ?? "");
     } catch (err) {
       toast({
-        title: "Could not load Fuel content",
+        title: "Could not load WeDiet content",
         description: err instanceof Error ? err.message : "Error",
         variant: "destructive",
       });
@@ -175,7 +175,7 @@ export function AdminFuelContentPanel() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Apple className="h-5 w-5" />
-          WeFuel content
+          WeDiet content
         </CardTitle>
         <CardDescription>
           Curate the recipe of the day and practice-along embed (provider + id only; no raw member URLs).

@@ -156,6 +156,7 @@ import {
   verifyAdminCredentials,
 } from "./adminAuth";
 import { registerFuelRoutes } from "./fuel-routes";
+import { registerProgressRoutes } from "./progress-routes";
 import {
   sendEmail,
   sendEmailDetailed,
@@ -5075,6 +5076,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   registerFuelRoutes(app);
+  registerProgressRoutes(app);
 
   const httpServer = createServer(app);
 

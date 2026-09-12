@@ -45,6 +45,7 @@ import {
   type FuelDailyMedia,
   type Program,
   type InsertProgram,
+  type ProgressSectionComment,
   users,
   classTypes,
   programs,
@@ -76,6 +77,7 @@ import {
   fuelMeals,
   fuelRecipes,
   fuelDailyMedia,
+  progressSectionComments,
   DEFAULT_CLASS_INTENSITY,
 } from "@shared/schema";
 import {
@@ -1004,6 +1006,60 @@ export interface IStorage {
     title: string;
     createdBy: string;
   }): Promise<FuelDailyMedia>;
+
+  // andWeProgress
+  getProgressProgramsTree(): Promise<
+    Array<{
+      id: string;
+      classTypeId: string;
+      classTypeName: string | null;
+      kind: string;
+      sessionsPerWeek: number;
+      durationWeeks: number;
+      totalSessions: number;
+      version: number;
+      status: string;
+      activeEnrollmentCount: number;
+      users: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        subscriptionId: string;
+        horizonStartAt: string | null;
+        horizonEndAt: string | null;
+      }>;
+    }>
+  >;
+  listProgressSectionComments(
+    userId: string,
+    section: string,
+  ): Promise<
+    Array<
+      import("@shared/schema").ProgressSectionComment & {
+        authorName: string;
+        authorRole: string;
+      }
+    >
+  >;
+  createProgressSectionComment(input: {
+    userId: string;
+    section: string;
+    body: string;
+    authorAdminId: string;
+    instructorAckRequired?: boolean;
+  }): Promise<import("@shared/schema").ProgressSectionComment>;
+  getProgressSectionComment(
+    id: string,
+  ): Promise<import("@shared/schema").ProgressSectionComment | undefined>;
+  softEditProgressSectionComment(input: {
+    id: string;
+    body: string;
+    editedByAdminId: string;
+  }): Promise<import("@shared/schema").ProgressSectionComment | undefined>;
+  softDeleteProgressSectionComment(input: {
+    id: string;
+    deletedByAdminId: string;
+  }): Promise<import("@shared/schema").ProgressSectionComment | undefined>;
 
   requestAccountErasure(params: {
     userId: string;
@@ -6341,6 +6397,217 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row;
+  }
+
+  async getProgressProgramsTree(): Promise<
+    Array<{
+      id: string;
+      classTypeId: string;
+      classTypeName: string | null;
+      kind: string;
+      sessionsPerWeek: number;
+      durationWeeks: number;
+      totalSessions: number;
+      version: number;
+      status: string;
+      activeEnrollmentCount: number;
+      users: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        subscriptionId: string;
+        horizonStartAt: string | null;
+        horizonEndAt: string | null;
+      }>;
+    }>
+  > {
+    const rows = await db
+      .select({
+        programId: programs.id,
+        classTypeId: programs.classTypeId,
+        classTypeName: classTypes.name,
+        kind: programs.kind,
+        sessionsPerWeek: programs.sessionsPerWeek,
+        durationWeeks: programs.durationWeeks,
+        totalSessions: programs.totalSessions,
+        version: programs.version,
+        programStatus: programs.status,
+        subscriptionId: subscriptions.id,
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+        horizonStartAt: subscriptions.horizonStartAt,
+        horizonEndAt: subscriptions.horizonEndAt,
+      })
+      .from(subscriptions)
+      .innerJoin(programs, eq(subscriptions.programId, programs.id))
+      .innerJoin(users, eq(subscriptions.userId, users.id))
+      .innerJoin(classTypes, eq(programs.classTypeId, classTypes.id))
+      .where(and(eq(subscriptions.status, "active"), sql`${subscriptions.programId} IS NOT NULL`))
+      .orderBy(classTypes.name, programs.kind, users.name);
+
+    const byProgram = new Map<
+      string,
+      {
+        id: string;
+        classTypeId: string;
+        classTypeName: string | null;
+        kind: string;
+        sessionsPerWeek: number;
+        durationWeeks: number;
+        totalSessions: number;
+        version: number;
+        status: string;
+        users: Map<
+          string,
+          {
+            userId: string;
+            name: string;
+            email: string;
+            subscriptionId: string;
+            horizonStartAt: string | null;
+            horizonEndAt: string | null;
+          }
+        >;
+      }
+    >();
+
+    for (const row of rows) {
+      let prog = byProgram.get(row.programId);
+      if (!prog) {
+        prog = {
+          id: row.programId,
+          classTypeId: row.classTypeId,
+          classTypeName: row.classTypeName,
+          kind: row.kind,
+          sessionsPerWeek: row.sessionsPerWeek,
+          durationWeeks: row.durationWeeks,
+          totalSessions: row.totalSessions,
+          version: row.version,
+          status: row.programStatus,
+          users: new Map(),
+        };
+        byProgram.set(row.programId, prog);
+      }
+      if (!prog.users.has(row.userId)) {
+        prog.users.set(row.userId, {
+          userId: row.userId,
+          name: row.userName,
+          email: row.userEmail,
+          subscriptionId: row.subscriptionId,
+          horizonStartAt: row.horizonStartAt?.toISOString() ?? null,
+          horizonEndAt: row.horizonEndAt?.toISOString() ?? null,
+        });
+      }
+    }
+
+    return Array.from(byProgram.values()).map((p) => {
+      const usersList = Array.from(p.users.values());
+      return {
+        id: p.id,
+        classTypeId: p.classTypeId,
+        classTypeName: p.classTypeName,
+        kind: p.kind,
+        sessionsPerWeek: p.sessionsPerWeek,
+        durationWeeks: p.durationWeeks,
+        totalSessions: p.totalSessions,
+        version: p.version,
+        status: p.status,
+        activeEnrollmentCount: usersList.length,
+        users: usersList,
+      };
+    });
+  }
+
+  async listProgressSectionComments(
+    userId: string,
+    section: string,
+  ): Promise<Array<ProgressSectionComment & { authorName: string; authorRole: string }>> {
+    const rows = await db
+      .select({
+        comment: progressSectionComments,
+        authorName: adminUsers.name,
+        authorRole: adminUsers.role,
+      })
+      .from(progressSectionComments)
+      .innerJoin(adminUsers, eq(progressSectionComments.authorAdminId, adminUsers.id))
+      .where(
+        and(
+          eq(progressSectionComments.userId, userId),
+          eq(progressSectionComments.section, section),
+          isNull(progressSectionComments.deletedAt),
+        ),
+      )
+      .orderBy(progressSectionComments.createdAt);
+    return rows.map((r) => ({
+      ...r.comment,
+      authorName: r.authorName,
+      authorRole: r.authorRole,
+    }));
+  }
+
+  async createProgressSectionComment(input: {
+    userId: string;
+    section: string;
+    body: string;
+    authorAdminId: string;
+    instructorAckRequired?: boolean;
+  }): Promise<ProgressSectionComment> {
+    const [row] = await db
+      .insert(progressSectionComments)
+      .values({
+        userId: input.userId,
+        section: input.section,
+        body: input.body,
+        authorAdminId: input.authorAdminId,
+        instructorAckRequired: input.instructorAckRequired ?? false,
+      })
+      .returning();
+    return row;
+  }
+
+  async getProgressSectionComment(id: string): Promise<ProgressSectionComment | undefined> {
+    const [row] = await db
+      .select()
+      .from(progressSectionComments)
+      .where(eq(progressSectionComments.id, id));
+    return row || undefined;
+  }
+
+  async softEditProgressSectionComment(input: {
+    id: string;
+    body: string;
+    editedByAdminId: string;
+  }): Promise<ProgressSectionComment | undefined> {
+    const [row] = await db
+      .update(progressSectionComments)
+      .set({
+        body: input.body,
+        editedAt: new Date(),
+        editedByAdminId: input.editedByAdminId,
+      })
+      .where(
+        and(eq(progressSectionComments.id, input.id), isNull(progressSectionComments.deletedAt)),
+      )
+      .returning();
+    return row || undefined;
+  }
+
+  async softDeleteProgressSectionComment(input: {
+    id: string;
+    deletedByAdminId: string;
+  }): Promise<ProgressSectionComment | undefined> {
+    const [row] = await db
+      .update(progressSectionComments)
+      .set({
+        deletedAt: new Date(),
+        deletedByAdminId: input.deletedByAdminId,
+      })
+      .where(
+        and(eq(progressSectionComments.id, input.id), isNull(progressSectionComments.deletedAt)),
+      )
+      .returning();
+    return row || undefined;
   }
 
   // Profile completeness calculation helper

@@ -33,6 +33,7 @@
 11. [AI/Engineering Decisions](#10-decisions-made-by-aiengineering-without-explicit-product-request)
 12. [SPEC-SESSIONS-01 MVP (Aug 2026)](#12-spec-sessions-01-mvp-aug-2026)
 13. [Open Questions](#11-open-questions-for-product-owner)
+14. [andWeProgress (Sep 2026)](#14-andweprogress-sep-2026)
 
 ---
 
@@ -614,6 +615,18 @@
 | **Rationale** | Production-grade deploy path |
 | **Shapes product** | US interim hosting until India migration |
 
+### 8.7 andWeProgress (admin coaching tree)
+
+| | |
+|---|---|
+| **Feature** | Admin tab: programs → users → health history / calorie statement + section comment threads |
+| **Type** | New |
+| **Decided by** | You (11 Sep 2026) |
+| **Decision** | Active enrollments only; multi-program users under each program; health = current + ≤5 archives (paginated); calorie by week; **threaded section comments** with soft-edit/delete audit; instructor ack columns nullable for future |
+| **Rationale** | Ops need one place to coach progress without flat Users dialogs only |
+| **Shapes product** | See [`docs/SPEC-ANDWEPROGRESS-01.md`](./SPEC-ANDWEPROGRESS-01.md). Instructor session-join ack deferred |
+| **Out of scope (v1)** | Instructor UI; force ack before session join; per-line/per-page comments; inactive enrollments; program-scoped threads; member-facing surface |
+
 ---
 
 ## 9. Explicitly On Hold or Not Built
@@ -634,6 +647,9 @@
 | Health document in-app upload | On hold | Email path for now | Infra and scale |
 | Admin test data tab | On hold | Requested Jul 2026 | Not fully built |
 | Credits and subscriptions | On hold | UI placeholder | Future phase |
+| andWeProgress instructor ack before session join | On hold | Schema hooks only (Sep 2026) | Build admin threads first; gate later — see SPEC-ANDWEPROGRESS-01 §2 |
+| andWeProgress per-entry / per-week comments | On hold | Rejected for v1 | Section-level threads only |
+| andWeProgress inactive enrollment tree | On hold | Active only | Product decision 11 Sep 2026 |
 
 ---
 
@@ -670,6 +686,15 @@ Full tracker: [`docs/SPEC-SESSIONS-01-MVP-SCOPE.md`](./SPEC-SESSIONS-01-MVP-SCOP
 | **Decision** | See MVP scope note. Highlights: composition/reschedule = any instructor same class type; **A1.1 now**; revenue **Option B (CA export)** for MVP; keep `credited` for refund/lapse only; Cancellation Policy v2.0 **effective 3 Aug 2026** + checkout clickwrap; purge by QA **prefix** not live names; FR-15 one transaction; **FR-20** Sessions by Program must |
 | **Deferred** | In-app GL (Option A), GST credit-note split, voluntary member reschedule, drop `class_types.price` column |
 | **Shapes product** | No credit wallet. Money recognition follows CA math via export until GL-A is scheduled |
+
+---
+
+## 14. andWeProgress (Sep 2026)
+
+Full tracker + **out-of-scope backlog**: [`docs/SPEC-ANDWEPROGRESS-01.md`](./SPEC-ANDWEPROGRESS-01.md).
+
+Shipped v1: admin tab accordion, APIs, section comment threads (soft-edit/delete), nullable instructor ack fields.  
+Deferred: instructor UI, force-ack before session join, per-line comments, inactive enrollments, program-scoped threads.
 
 ---
 

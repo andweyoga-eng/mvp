@@ -109,6 +109,10 @@ export const fuelDailyMedia = pgTable("fuel_daily_media", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** andWeProgress section keys — comments attach here, not to line items / pages. */
+export const PROGRESS_SECTION_TYPES = ["health_history", "calorie_statement"] as const;
+export type ProgressSectionType = (typeof PROGRESS_SECTION_TYPES)[number];
+
 /** Practice intensity used for filtering on the member Calendar. */
 export const CLASS_INTENSITIES = ["Gentle", "Moderate", "Dynamic", "Restorative"] as const;
 export type ClassIntensity = (typeof CLASS_INTENSITIES)[number];
@@ -471,6 +475,34 @@ export const adminProfiles = pgTable("admin_profiles", {
   verifiedAt: timestamp("verified_at"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+/**
+ * Admin/super-admin coaching notes for andWeProgress.
+ * Thread is keyed by userId + section. Soft-edit / soft-delete preserve audit.
+ * Instructor ack columns are placeholders for a future session-join gate.
+ */
+export const progressSectionComments = pgTable("progress_section_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  section: varchar("section", { length: 32 }).notNull(),
+  body: text("body").notNull(),
+  authorAdminId: varchar("author_admin_id")
+    .notNull()
+    .references(() => adminUsers.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  editedAt: timestamp("edited_at"),
+  editedByAdminId: varchar("edited_by_admin_id").references(() => adminUsers.id),
+  deletedAt: timestamp("deleted_at"),
+  deletedByAdminId: varchar("deleted_by_admin_id").references(() => adminUsers.id),
+  /** Future: flag note for instructor to acknowledge before session join. */
+  instructorAckRequired: boolean("instructor_ack_required").notNull().default(false),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  acknowledgedByInstructorId: varchar("acknowledged_by_instructor_id").references(
+    () => instructors.id,
+  ),
 });
 
 export const classTypeNotifyRequests = pgTable("class_type_notify_requests", {
@@ -1002,3 +1034,4 @@ export type ErasureRequest = typeof erasureRequests.$inferSelect;
 export type FuelMeal = typeof fuelMeals.$inferSelect;
 export type FuelRecipe = typeof fuelRecipes.$inferSelect;
 export type FuelDailyMedia = typeof fuelDailyMedia.$inferSelect;
+export type ProgressSectionComment = typeof progressSectionComments.$inferSelect;
