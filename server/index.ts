@@ -2,48 +2,25 @@ import "dotenv/config";
 
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { getAllowedCorsOrigin, validateEnvironment } from "./startup-security";
 import { setupVite, serveStatic, log } from "./vite";
 
-// ============================================================
-// SECURITY: Validate all required environment variables exist
-// before starting the server. Fail loudly and early rather
-// than silently using insecure defaults.
-// ============================================================
-function validateEnvironment() {
-  const required = ['JWT_SECRET'];
-  const missing = required.filter(key => !process.env[key]);
-  if (!process.env.DATABASE_URL?.trim() && !process.env.DATABASE_PUBLIC_URL?.trim()) {
-    missing.push('DATABASE_URL or DATABASE_PUBLIC_URL');
-  }
-
-  if (missing.length > 0) {
-    console.error('\n⛔ FATAL: Missing required environment variables:');
-    missing.forEach(key => console.error(`   - ${key}`));
-    console.error('\nCreate a .env file or set these in your hosting platform.\n');
-    process.exit(1);
-  }
-
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
-    console.error('\n⛔ FATAL: JWT_SECRET is too short. Must be at least 32 characters.\n');
-    process.exit(1);
-  }
-
-  console.log('✅ Environment validation passed');
-}
-
 validateEnvironment();
+console.log("✅ Environment validation passed");
 
 const app = express();
+app.set("trust proxy", 1);
 
-// ============================================================
-// SECURITY: CORS — only allow requests from your own domain
-// ============================================================
 app.use((req, res, next) => {
-  const allowedOrigin = process.env.ALLOWED_ORIGIN
-    ? `https://${process.env.ALLOWED_ORIGIN}`
-    : '*';
+  const allowedOrigin = getAllowedCorsOrigin();
+  const requestOrigin = req.headers.origin;
 
-  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  if (requestOrigin && requestOrigin !== allowedOrigin) {
+    return res.status(403).json({ message: "CORS origin denied." });
+  }
+
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Origin', requestOrigin || allowedOrigin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -64,6 +41,20 @@ app.use((req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   if (process.env.NODE_ENV === 'production') {
     res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data: https:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com https://*.razorpay.com",
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://checkout.razorpay.com https://*.razorpay.com",
+        "frame-src https://accounts.google.com https://checkout.razorpay.com https://*.razorpay.com",
+      ].join("; "),
+    );
   }
   next();
 });
@@ -73,9 +64,20 @@ app.use((req, res, next) => {
 // Install with: npm install cookie-parser @types/cookie-parser
 // ============================================================
 import cookieParser from 'cookie-parser';
+import { handleRazorpayWebhook } from './payment-webhook';
+import { checkDatabaseHealth } from './db-health';
+
 app.use(cookieParser());
 
-app.use(express.json({ limit: '1mb' })); // Limit body size to prevent large payload attacks
+// Razorpay webhooks require the raw body for signature verification
+app.post(
+  '/api/payments/webhook',
+  express.raw({ type: 'application/json' }),
+  handleRazorpayWebhook,
+);
+
+// Health uploads send base64 in JSON (~33% overhead); allow headroom for 5MB files + other payloads.
+app.use(express.json({ limit: '8mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 // Serve static files from attached_assets
@@ -112,9 +114,33 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const dbHealth = await checkDatabaseHealth();
+  if (!dbHealth.ok) {
+    console.error("\n⚠️  Database connection failed at startup.");
+    console.error(`   ${dbHealth.error}`);
+    console.error(
+      "   Admin login and most API routes will not work until DATABASE_URL is valid.",
+    );
+    console.error(
+      "   Fix: In Railway → Postgres → Connect, copy DATABASE_PUBLIC_URL into .env (and webapp vars).\n",
+    );
+  } else {
+    try {
+      const { ensureDefaultPlatformSettings } = await import("./platform-settings");
+      await ensureDefaultPlatformSettings();
+    } catch (err) {
+      console.error("[startup] Could not seed default platform settings:", err);
+    }
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if (err.type === "entity.too.large") {
+      return res.status(413).json({
+        message: "Request body is too large. Try a smaller image (under 2MB).",
+      });
+    }
     const status = err.status || err.statusCode || 500;
     // SECURITY: Never expose internal error details to clients in production
     const message = process.env.NODE_ENV === 'production'

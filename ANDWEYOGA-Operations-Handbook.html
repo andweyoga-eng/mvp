@@ -1,0 +1,2418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>andWeYoga Operations Handbook</title>
+<style>
+body { font-family: Georgia, "Times New Roman", serif; max-width: 900px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; }
+h1 { color: #401e9c; border-bottom: 2px solid #e36b16; padding-bottom: 8px; }
+h2 { color: #401e9c; margin-top: 2em; }
+h3 { color: #333; margin-top: 1.5em; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.95em; }
+th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+th { background: #f3f0fa; }
+code, pre { background: #f5f5f5; font-family: Menlo, Monaco, monospace; font-size: 0.9em; }
+pre { padding: 12px; overflow-x: auto; border-radius: 6px; }
+blockquote { border-left: 4px solid #e36b16; margin: 1em 0; padding: 0.5em 1em; background: #faf8ff; }
+hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+li { margin: 0.25em 0; }
+@media print { body { margin: 0; max-width: none; } }
+</style>
+</head>
+<body>
+<h1>andWeYoga MVP Operations Handbook</h1>
+
+<table>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+<tr>
+<td>**Version**</td>
+<td>1.2</td>
+</tr>
+<tr>
+<td>**Last updated**</td>
+<td>10 July 2026</td>
+</tr>
+<tr>
+<td>**Repository**</td>
+<td>https://github.com/andweyoga-eng/mvp</td>
+</tr>
+<tr>
+<td>**Active branch**</td>
+<td>`cursor/webapp-redesign`</td>
+</tr>
+<tr>
+<td>**Legal entity**</td>
+<td>Ashtanga Welltech OPC Pvt Ltd</td>
+</tr>
+<tr>
+<td>**Brand**</td>
+<td>andWeYoga</td>
+</tr>
+<tr>
+<td>**Support email**</td>
+<td>mudit@andweyoga.com</td>
+</tr>
+<tr>
+<td>**Support phone**</td>
+<td>+91 9513022331</td>
+</tr>
+<tr>
+<td>**Support hours**</td>
+<td>Mon to Sat, 9:30 AM to 1:30 PM and 3:30 PM to 5:30 PM IST</td>
+</tr>
+</table>
+
+<p><strong>Related docs:</strong> <code>PRODUCT_BIBLE.md</code>, <code>awy.md</code>, <code>SOP-TESTING-AND-PRODUCTION.md</code>, <code>ADMIN-FEATURES-AUDIT.md</code>, <code>SECURITY_AUDIT.md</code></p>
+
+<hr>
+
+<h2>Table of Contents</h2>
+
+<p>1. [What This Platform Does](#1-what-this-platform-does)</p>
+<p>2. [Who Uses It](#2-who-uses-it)</p>
+<p>3. [Module and Feature Guide](#3-module-and-feature-guide)</p>
+<p>4. [Member Actions Explained](#4-member-actions-explained)</p>
+<p>5. [Admin Actions Explained](#5-admin-actions-explained)</p>
+<p>6. [Support Playbook](#6-support-playbook)</p>
+<p>7. [Chatbot vs Human Routing](#7-chatbot-vs-human-routing)</p>
+<p>8. [How-To Guides](#8-how-to-guides)</p>
+<p>9. [Technical Architecture](#9-technical-architecture)</p>
+<p>10. [API Reference Summary](#10-api-reference-summary)</p>
+<p>11. [Operations and Deployment](#11-operations-and-deployment)</p>
+<p>12. [Current Limits and Capacity](#12-current-limits-and-capacity)</p>
+<p>13. [Known Limitations](#13-known-limitations)</p>
+<p>14. [Issues Resolved (Development Log)](#14-issues-resolved-development-log)</p>
+<p>15. [Git Commit History](#15-git-commit-history)</p>
+<p>16. [Future Scope and Challenges](#16-future-scope-and-challenges)</p>
+<p>17. [Document Maintenance](#17-document-maintenance)</p>
+
+<hr>
+
+<h2>1. What This Platform Does</h2>
+
+<p>andWeYoga is a web platform for a yoga studio. Members can:</p>
+
+<li>Browse yoga sessions and class types</li>
+<li>Create an account (Google sign in or email)</li>
+<li>Complete a health and profile form before booking</li>
+<li>Book and pay for sessions (Razorpay)</li>
+<li>View session history and payments</li>
+<li>Manage privacy consent and account settings</li>
+
+<p>Studio staff use an admin console to:</p>
+
+<li>Create class types, instructors, and sessions</li>
+<li>Manage bookings and payments</li>
+<li>Control platform settings (guest checkout, maintenance mode, coupons)</li>
+<li>Review users and compliance data</li>
+
+<p>The site also has marketing pages (home, calendar, workshops, trips, explore) and legal pages (privacy, terms, grievance).</p>
+
+<blockquote><p>**Note:** `PRODUCT_BIBLE.md` (April 2026) says Razorpay was not built. That is outdated. Payments, guest checkout, flexi mode, coupons, and maintenance mode are all in the current codebase. Use this handbook as the living reference.</p></blockquote>
+
+<hr>
+
+<h2>2. Who Uses It</h2>
+
+<table>
+<tr>
+<th>Role</th>
+<th>Access</th>
+<th>Login</th>
+</tr>
+<tr>
+<td>**Member**</td>
+<td>Public site and My Account</td>
+<td>Google OAuth or email/password</td>
+</tr>
+<tr>
+<td>**Guest booker**</td>
+<td>Checkout only (when enabled)</td>
+<td>No full account needed</td>
+</tr>
+<tr>
+<td>**Admin**</td>
+<td>`/admin/dashboard`</td>
+<td>Email and password (httpOnly cookie)</td>
+</tr>
+<tr>
+<td>**Super admin**</td>
+<td>Platform settings, retire class types</td>
+<td>Same login, elevated role in DB</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>3. Module and Feature Guide</h2>
+
+<h3>3.1 Public Website (Member Facing)</h3>
+
+<table>
+<tr>
+<th>Module</th>
+<th>Route</th>
+<th>What It Means</th>
+</tr>
+<tr>
+<td>**Home**</td>
+<td>`/`</td>
+<td>Hero carousel, hub schedules, class catalogue, community sections</td>
+</tr>
+<tr>
+<td>**Dashboard**</td>
+<td>`/dashboard`</td>
+<td>Member landing after login; shows upcoming sessions</td>
+</tr>
+<tr>
+<td>**Calendar**</td>
+<td>`/calendar`</td>
+<td>Week view of bookable sessions</td>
+</tr>
+<tr>
+<td>**Reserve / Checkout**</td>
+<td>`/reserve`</td>
+<td>Payment hold and Razorpay checkout flow</td>
+</tr>
+<tr>
+<td>**Workshops**</td>
+<td>`/workshops`</td>
+<td>Workshop marketing (booking via main flow)</td>
+</tr>
+<tr>
+<td>**Trips**</td>
+<td>`/trips`</td>
+<td>Trip marketing page</td>
+</tr>
+<tr>
+<td>**Explore**</td>
+<td>`/explore`</td>
+<td>Discovery page</td>
+</tr>
+<tr>
+<td>**Emojou**</td>
+<td>`/emojou`</td>
+<td>Mood and wellness feature page</td>
+</tr>
+<tr>
+<td>**My Account**</td>
+<td>`/my-account`</td>
+<td>Profile, health, sessions, payments, privacy</td>
+</tr>
+<tr>
+<td>**Session Feedback**</td>
+<td>`/session-feedback`</td>
+<td>Post-session mood and feedback</td>
+</tr>
+<tr>
+<td>**Legal pages**</td>
+<td>`/privacy`, `/terms`, `/grievance`</td>
+<td>Compliance documents</td>
+</tr>
+</table>
+
+<p><strong>Key components:</strong></p>
+
+<li>**Hero carousel:** Six discipline slides with Book CTA. Auto-advances every 5 seconds.</li>
+<li>**Schedule section:** This week&#x27;s sessions grouped by day (IST times).</li>
+<li>**Hub carousel:** Featured sessions with schedules.</li>
+<li>**Not Suitable block (`strictNoTo`):** Health contraindications for a class type (for example pregnancy, back injury). Shown on cards and at checkout.</li>
+<li>**Maintenance overlay:** Full screen message when studio turns on maintenance mode.</li>
+
+<h3>3.2 My Account Sections</h3>
+
+<table>
+<tr>
+<th>Section</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td>**Profile**</td>
+<td>Name, email, phones (primary, emergency, optional secondary), address, date of birth, WhatsApp consent</td>
+</tr>
+<tr>
+<td>**Health note**</td>
+<td>Health concerns text (up to 500 characters) or &quot;No health concerns.&quot; Health document upload and media links</td>
+</tr>
+<tr>
+<td>**Sessions**</td>
+<td>Past and upcoming booked sessions</td>
+</tr>
+<tr>
+<td>**Payments**</td>
+<td>Payment history</td>
+</tr>
+<tr>
+<td>**Privacy and consent**</td>
+<td>DPDP consents, re-consent after policy updates, account erasure</td>
+</tr>
+<tr>
+<td>**Subscriptions**</td>
+<td>Coming soon badge (placeholder)</td>
+</tr>
+<tr>
+<td>**Preferences**</td>
+<td>Coming soon badge (placeholder)</td>
+</tr>
+</table>
+
+<p><strong>Profile complete rule (single rule everywhere):</strong></p>
+
+<p>Account is complete only when ALL of these pass:</p>
+
+<li>Email verified</li>
+<li>Name filled</li>
+<li>Primary mobile valid (10 digits, India rules)</li>
+<li>Emergency mobile valid</li>
+<li>Secondary mobile valid if provided</li>
+<li>Health disclosure complete (meaningful text or &quot;No health concerns.&quot;)</li>
+<li>Required consents and date of birth for adults (18+)</li>
+
+<p>Until complete, booking is blocked with a redirect to My Account.</p>
+
+<p><strong>Source of truth:</strong> <code>shared/profileCompleteness.ts</code></p>
+
+<h3>3.3 Booking and Payments</h3>
+
+<table>
+<tr>
+<th>Feature</th>
+<th>Meaning</th>
+</tr>
+<tr>
+<td>**Reserve and Pay**</td>
+<td>Member reserves a seat; spot held for **14 minutes** while paying</td>
+</tr>
+<tr>
+<td>**Payment hold**</td>
+<td>Pending bookings count toward capacity until hold expires or payment completes</td>
+</tr>
+<tr>
+<td>**Razorpay checkout**</td>
+<td>Standard payment (cards, UPI, net banking)</td>
+</tr>
+<tr>
+<td>**QR / manual payment**</td>
+<td>Admin can confirm QR payments manually</td>
+</tr>
+<tr>
+<td>**Guest checkout**</td>
+<td>Book without full account (super admin toggle)</td>
+</tr>
+<tr>
+<td>**Flexi mode**</td>
+<td>Weekly package where member picks practice days from eligible slots at checkout</td>
+</tr>
+<tr>
+<td>**Session terms**</td>
+<td>Per class type terms shown and accepted at checkout</td>
+</tr>
+<tr>
+<td>**Coupons**</td>
+<td>Discount codes at checkout (super admin managed)</td>
+</tr>
+<tr>
+<td>**Waitlist**</td>
+<td>Schema exists; marketing waitlist features partially built</td>
+</tr>
+</table>
+
+<p><strong>Booking payment statuses:</strong></p>
+
+<table>
+<tr>
+<th>Status</th>
+<th>Meaning</th>
+</tr>
+<tr>
+<td>`pending`</td>
+<td>Hold active, payment not yet complete</td>
+</tr>
+<tr>
+<td>`paid`</td>
+<td>Payment confirmed</td>
+</tr>
+<tr>
+<td>`waived`</td>
+<td>Free session, no payment needed</td>
+</tr>
+<tr>
+<td>`failed`</td>
+<td>Payment failed; may still hold spot briefly</td>
+</tr>
+<tr>
+<td>`hold_expired`</td>
+<td>Hold timed out; spot released</td>
+</tr>
+<tr>
+<td>`cancelled_by_user`</td>
+<td>Member released spot voluntarily</td>
+</tr>
+</table>
+
+<h3>3.4 Admin Console</h3>
+
+<table>
+<tr>
+<th>Tab / Area</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td>**Overview**</td>
+<td>User counts, profile completion stats</td>
+</tr>
+<tr>
+<td>**Users**</td>
+<td>List users with completion flags</td>
+</tr>
+<tr>
+<td>**Class types**</td>
+<td>Create, edit, retire yoga disciplines</td>
+</tr>
+<tr>
+<td>**Instructors**</td>
+<td>Create, verify email, manage status</td>
+</tr>
+<tr>
+<td>**Sessions**</td>
+<td>Create weekly/recurring sessions, pause, resume, delete, cancel</td>
+</tr>
+<tr>
+<td>**Payment QR**</td>
+<td>Upload QR codes for manual payment sessions</td>
+</tr>
+<tr>
+<td>**Platform controls**</td>
+<td>Guest checkout on/off, maintenance window</td>
+</tr>
+<tr>
+<td>**Offers and promotions**</td>
+<td>Carousel promotions, coupons</td>
+</tr>
+<tr>
+<td>**Payment history**</td>
+<td>Verify and review payments</td>
+</tr>
+<tr>
+<td>**Health materials**</td>
+<td>Admin health content panel</td>
+</tr>
+</table>
+
+<p><strong>Admin URLs:</strong> <code>/admin/login</code>, <code>/admin/dashboard</code></p>
+
+<h3>3.5 Compliance and Privacy</h3>
+
+<table>
+<tr>
+<th>Feature</th>
+<th>Meaning</th>
+</tr>
+<tr>
+<td>**Onboarding consent modal**</td>
+<td>First login: date of birth, profile, terms, age consent</td>
+</tr>
+<tr>
+<td>**Health data consent**</td>
+<td>Separate consent before saving health info</td>
+</tr>
+<tr>
+<td>**WhatsApp consent**</td>
+<td>Opt in for WhatsApp messages</td>
+</tr>
+<tr>
+<td>**Re-consent**</td>
+<td>Triggered when legal document version changes</td>
+</tr>
+<tr>
+<td>**Account erasure**</td>
+<td>Member types &quot;ERASE&quot; to request data deletion</td>
+</tr>
+<tr>
+<td>**Erasure executor**</td>
+<td>Server cleans identity and health data per policy</td>
+</tr>
+</table>
+
+<p><strong>Legal config source:</strong> <code>shared/legal-config.ts</code> (company name, CIN, grievance officer, subprocessors)</p>
+
+<p><strong>Consent types:</strong> <code>profile_booking</code>, <code>terms</code>, <code>age_declaration</code>, <code>health_data</code>, <code>whatsapp_contact</code></p>
+
+<h3>3.6 Shared Business Rules (Code Modules)</h3>
+
+<table>
+<tr>
+<th>File / Module</th>
+<th>Role</th>
+</tr>
+<tr>
+<td>`shared/profileCompleteness.ts`</td>
+<td>Single profile complete definition</td>
+</tr>
+<tr>
+<td>`shared/mobile-validation.ts`</td>
+<td>Phone number rules (client and server)</td>
+</tr>
+<tr>
+<td>`shared/booking-payment-hold.ts`</td>
+<td>14 min hold, capacity counting</td>
+</tr>
+<tr>
+<td>`shared/booking-eligibility.ts`</td>
+<td>Trial/drop-in vs recurring book windows</td>
+</tr>
+<tr>
+<td>`shared/consent.ts`</td>
+<td>Consent types, age check, erasure schema</td>
+</tr>
+<tr>
+<td>`shared/flexi-mode.ts`</td>
+<td>Flexi slot selection logic</td>
+</tr>
+<tr>
+<td>`shared/legal-config.ts`</td>
+<td>Company legal details, subprocessors</td>
+</tr>
+<tr>
+<td>`shared/support.ts`</td>
+<td>Customer care contact details</td>
+</tr>
+<tr>
+<td>`shared/health-disclosure.ts`</td>
+<td>Health text limits, document size (5 MB max)</td>
+</tr>
+<tr>
+<td>`shared/maintenance-notify.ts`</td>
+<td>Maintenance overlay copy and notify channels</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>4. Member Actions Explained</h2>
+
+<table>
+<tr>
+<th>Action</th>
+<th>What Happens</th>
+<th>If It Fails</th>
+</tr>
+<tr>
+<td>**Book / Signup (nav)**</td>
+<td>Routes to booking or sign in based on session phase</td>
+<td>Check login and profile status</td>
+</tr>
+<tr>
+<td>**Book on session card**</td>
+<td>Opens reserve flow or sign in gate</td>
+<td>Profile incomplete: toast and redirect to account</td>
+</tr>
+<tr>
+<td>**Confirm and Reserve**</td>
+<td>Creates booking, starts 14 min hold</td>
+<td>Session full, duplicate booking, or profile incomplete</td>
+</tr>
+<tr>
+<td>**Pay (Razorpay)**</td>
+<td>Opens payment window</td>
+<td>Hold may expire; use resume checkout</td>
+</tr>
+<tr>
+<td>**Back during checkout**</td>
+<td>Confirm dialog; releasing spot frees capacity</td>
+<td>By design at current scale</td>
+</tr>
+<tr>
+<td>**Release my spot**</td>
+<td>Cancels hold immediately</td>
+<td>Spot returns to pool</td>
+</tr>
+<tr>
+<td>**Complete Profile**</td>
+<td>Saves profile fields; server recalculates completion</td>
+<td>Validation errors on phone format</td>
+</tr>
+<tr>
+<td>**Save health note**</td>
+<td>Saves health text; may need health data consent</td>
+<td>Text too long or consent missing</td>
+</tr>
+<tr>
+<td>**Upload health document**</td>
+<td>Upload to object storage (when routes enabled)</td>
+<td>File over 5 MB: email support instead</td>
+</tr>
+<tr>
+<td>**Sign in with Google**</td>
+<td>OAuth flow, httpOnly cookie set</td>
+<td>Wrong `ALLOWED_ORIGIN` or OAuth config</td>
+</tr>
+<tr>
+<td>**Request erasure**</td>
+<td>Starts erasure workflow</td>
+<td>Must type ERASE exactly</td>
+</tr>
+<tr>
+<td>**Send a message (Not Suitable)**</td>
+<td>Opens SMS to support number</td>
+<td>Outside hours: leave message</td>
+</tr>
+<tr>
+<td>**Join session (Meet link)**</td>
+<td>Logs join event, opens Google Meet</td>
+<td>Link must be set by admin</td>
+</tr>
+</table>
+
+<p><strong>Trial and drop-in mid-session rule:</strong></p>
+
+<p>If a trial or drop-in session has already started, booking is blocked. Message: &quot;This session has already begun. We keep trial and drop-in spaces calm for yogis who joined on time. Please book the next scheduled session instead.&quot;</p>
+
+<hr>
+
+<h2>5. Admin Actions Explained</h2>
+
+<table>
+<tr>
+<th>Action</th>
+<th>What Happens</th>
+<th>Notes</th>
+</tr>
+<tr>
+<td>**Create session**</td>
+<td>New row in schedule with capacity, links, publish time</td>
+<td>Validates meet link, payment method, QR fields</td>
+</tr>
+<tr>
+<td>**Pause session**</td>
+<td>Session hidden from public booking</td>
+<td>Existing bookings kept</td>
+</tr>
+<tr>
+<td>**Resume session**</td>
+<td>Session visible again</td>
+<td>Syncs public catalog</td>
+</tr>
+<tr>
+<td>**Cancel / retire session**</td>
+<td>Super admin; notify placeholders</td>
+<td>Member comms partially stubbed</td>
+</tr>
+<tr>
+<td>**Confirm QR payment**</td>
+<td>Marks booking paid manually</td>
+<td>For UPI QR flows</td>
+</tr>
+<tr>
+<td>**Toggle guest checkout**</td>
+<td>Super admin platform setting</td>
+<td>Affects auth popup copy</td>
+</tr>
+<tr>
+<td>**Toggle maintenance**</td>
+<td>Public site shows overlay</td>
+<td>Admin routes still work</td>
+</tr>
+<tr>
+<td>**Create coupon**</td>
+<td>Discount code for checkout</td>
+<td>Super admin</td>
+</tr>
+<tr>
+<td>**Deactivate user**</td>
+<td>Soft block on account</td>
+<td>User sees deactivated message</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>6. Support Playbook</h2>
+
+<h3>6.1 First Response Script</h3>
+
+<blockquote><p>&quot;Thank you for reaching out to andWeYoga. I am [name]. I can see you need help with [issue]. Let me check your account and booking status.&quot;</p></blockquote>
+
+<p>Always collect:</p>
+
+<p>1. Full name and email used on account</p>
+<p>2. Session name and date (if booking related)</p>
+<p>3. Screenshot or exact error message</p>
+<p>4. Device and browser (mobile Safari, Chrome, etc.)</p>
+
+<h3>6.2 Common Issues and Steps</h3>
+
+<h4>&quot;I cannot book&quot;</h4>
+
+<p>1. Ask if they are signed in</p>
+<p>2. Check profile status in admin (complete vs incomplete)</p>
+<p>3. Verify email is verified</p>
+<p>4. Check health note is saved</p>
+<p>5. Check session is not full and not past book window</p>
+<p>6. For trial/drop-in mid-session: explain calm studio policy (book next session)</p>
+
+<h4>&quot;Payment failed or timed out&quot;</h4>
+
+<p>1. Check if hold expired (14 minutes)</p>
+<p>2. Ask them to go to Dashboard or use email link to resume checkout</p>
+<p>3. If hold expired, book again if spot available</p>
+<p>4. For QR sessions: admin must confirm payment manually</p>
+
+<h4>&quot;Profile says incomplete but I filled everything&quot;</h4>
+
+<p>1. Refresh page (server reconciles on <code>/api/auth/me</code>)</p>
+<p>2. Check both mobiles are 10 valid digits</p>
+<p>3. Check health text is not empty (or use &quot;No health concerns.&quot;)</p>
+<p>4. Check consents and date of birth after policy update</p>
+
+<h4>&quot;Google sign in failed&quot;</h4>
+
+<p>1. Confirm they use correct site URL (andweyoga.com vs Railway URL)</p>
+<p>2. Escalate to engineering if OAuth redirect error</p>
+<p>3. Try email login if account exists</p>
+
+<h4>&quot;Account deactivated&quot;</h4>
+
+<p>Use message from <code>shared/support.ts</code>:</p>
+
+<blockquote><p>&quot;Your andWeYoga account has been deactivated. To reactivate it, please contact our customer care team.&quot;</p></blockquote>
+
+<p>Only admin can reactivate.</p>
+
+<h4>&quot;I want my data deleted&quot;</h4>
+
+<p>Guide to My Account, Privacy, Erasure. Must type ERASE. Acknowledge 30 day processing per privacy notice.</p>
+
+<h4>&quot;Not Suitable / health concern&quot;</h4>
+
+<p>Do not give medical advice. Suggest they contact team via message button or support phone. Instructor reviews health note before session.</p>
+
+<h3>6.3 Escalation to Engineering</h3>
+
+<p>Escalate when:</p>
+
+<li>Payment taken but booking not confirmed</li>
+<li>OAuth works on Wi-Fi but not mobile data (DNS)</li>
+<li>Database or site wide outage</li>
+<li>Erasure not completing</li>
+<li>Suspected security issue</li>
+<li>Razorpay webhook mismatch</li>
+
+<hr>
+
+<h2>7. Chatbot vs Human Routing</h2>
+
+<h3>7.1 Safe for Chatbot (Tier 1)</h3>
+
+<table>
+<tr>
+<th>Topic</th>
+<th>Bot Can Do</th>
+</tr>
+<tr>
+<td>Support hours and contact</td>
+<td>Share phone, email, WhatsApp, hours from `shared/support.ts`</td>
+</tr>
+<tr>
+<td>Profile completion checklist</td>
+<td>List required fields</td>
+</tr>
+<tr>
+<td>Booking steps</td>
+<td>Explain sign in, complete profile, pick session, pay within 14 min</td>
+</tr>
+<tr>
+<td>Hold timer</td>
+<td>Explain 14 minute reservation</td>
+</tr>
+<tr>
+<td>Password reset</td>
+<td>Link to forgot password flow</td>
+</tr>
+<tr>
+<td>Legal links</td>
+<td>Point to /privacy, /terms, /grievance</td>
+</tr>
+<tr>
+<td>Maintenance message</td>
+<td>Explain studio is briefly offline</td>
+</tr>
+<tr>
+<td>Flexi mode (general)</td>
+<td>Explain pick your days at checkout</td>
+</tr>
+<tr>
+<td>Not Suitable (general)</td>
+<td>Explain tags are contraindications; contact team for questions</td>
+</tr>
+<tr>
+<td>Office location / company name</td>
+<td>From legal config</td>
+</tr>
+</table>
+
+<h3>7.2 Human Required (Tier 2)</h3>
+
+<table>
+<tr>
+<th>Topic</th>
+<th>Why Human</th>
+</tr>
+<tr>
+<td>Refunds and payment disputes</td>
+<td>Money and policy judgment</td>
+</tr>
+<tr>
+<td>Medical or injury advice</td>
+<td>Liability</td>
+</tr>
+<tr>
+<td>Account reactivation</td>
+<td>Admin action</td>
+</tr>
+<tr>
+<td>Manual payment confirmation</td>
+<td>Admin verifies bank/UPI</td>
+</tr>
+<tr>
+<td>Session cancellation by studio</td>
+<td>Staff decision and comms</td>
+</tr>
+<tr>
+<td>Coupon exceptions</td>
+<td>Super admin</td>
+</tr>
+<tr>
+<td>Data erasure disputes</td>
+<td>Legal and DPDP</td>
+</tr>
+<tr>
+<td>Instructor schedule changes</td>
+<td>Operations</td>
+</tr>
+<tr>
+<td>Accessibility accommodations</td>
+<td>Personal care</td>
+</tr>
+<tr>
+<td>Angry or distressed members</td>
+<td>Empathy</td>
+</tr>
+</table>
+
+<h3>7.3 Engineering Only (Tier 3)</h3>
+
+<table>
+<tr>
+<th>Topic</th>
+<th>Why Engineering</th>
+</tr>
+<tr>
+<td>OAuth redirect mismatch</td>
+<td>Server config</td>
+</tr>
+<tr>
+<td>Database connectivity</td>
+<td>Railway/env</td>
+</tr>
+<tr>
+<td>Webhook failures</td>
+<td>Razorpay integration</td>
+</tr>
+<tr>
+<td>Bug in booking capacity</td>
+<td>Code fix</td>
+</tr>
+<tr>
+<td>Security incident</td>
+<td>Immediate response</td>
+</tr>
+</table>
+
+<p><strong>Suggested bot handoff phrase:</strong></p>
+
+<blockquote><p>&quot;I want to make sure you get the right help. Let me connect you with our team during office hours, or you can WhatsApp us at +91 9513022331.&quot;</p></blockquote>
+
+<hr>
+
+<h2>8. How-To Guides</h2>
+
+<h3>8.1 Local Development (Engineers)</h3>
+
+<pre><code>
+cd mvp
+npm install
+cp .env.example .env   # fill secrets
+npm run db:push
+npm run dev            # http://localhost:3000
+npm test
+npm run test:sanity
+npm run qa:smoke-a01-e01
+</code></pre>
+
+<p>See <code>SOP-TESTING-AND-PRODUCTION.md</code> for full checklist.</p>
+
+<h3>8.2 Deploy to Railway</h3>
+
+<p>1. Push to GitHub (<code>awy-main</code> or feature branch connected to Railway)</p>
+<p>2. Set web service variables: <code>JWT_SECRET</code>, <code>DATABASE_PUBLIC_URL</code>, <code>ALLOWED_ORIGIN</code>, Razorpay keys, Google OAuth, Gmail SMTP</p>
+<p>3. Run <code>npm run db:patch</code> on production DB when new SQL patches ship</p>
+<p>4. Verify logs: <code>Environment validation passed</code>, no <code>ENOTFOUND postgres.railway.internal</code></p>
+<p>5. Test OAuth and one full booking on staging URL before DNS cutover</p>
+
+<h3>8.3 Admin Bootstrap (Ops)</h3>
+
+<p>Set on Railway web service AND local <code>.env</code>:</p>
+
+<li>`ADMIN_INITIAL_EMAIL`</li>
+<li>`ADMIN_INITIAL_PASSWORD` (min 8 chars)</li>
+<li>`ADMIN_INITIAL_NAME`</li>
+
+<p>Server syncs primary admin on every boot. Look for <code>[DB] Admin bootstrap synced for ...</code> in server logs.</p>
+
+<h3>8.4 Enable Health Document Uploads (When Ready)</h3>
+
+<p>1. Configure S3 or compatible storage in <code>.env</code></p>
+<p>2. Set <code>ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = true</code> in <code>server/routes.ts</code></p>
+<p>3. Redeploy and test upload/download ACL</p>
+
+<h3>8.5 Pre-Live Checklist</h3>
+
+<p>Use <code>SOP-TESTING-AND-PRODUCTION.md</code> Section 12:</p>
+
+<li>DNS on GoDaddy pointing to Railway</li>
+<li>`ALLOWED_ORIGIN=andweyoga.com`</li>
+<li>Google OAuth production URIs</li>
+<li>Gmail SMTP for production email</li>
+<li>Mobile cellular test on real domain</li>
+
+<h3>8.6 QA Before Every Release</h3>
+
+<p>From <code>docs/QA-BEFORE-UAT.md</code>:</p>
+
+<p>1. <code>npm test</code></p>
+<p>2. <code>npm run test:sanity</code></p>
+<p>3. <code>npm run db:push</code> (when schema changes)</p>
+<p>4. <code>npm run qa:smoke-a01-e01</code></p>
+<p>5. Browser UAT on changed flows</p>
+<p>6. No <code>Smoke QA ...</code> fixtures left in database</p>
+
+<hr>
+
+<h2>9. Technical Architecture</h2>
+
+<table>
+<tr>
+<th>Layer</th>
+<th>Technology</th>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>React 18, Vite, Tailwind, Radix UI, Wouter routing</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>Express (TypeScript), bundled with esbuild</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL via Drizzle ORM</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>JWT in httpOnly cookies (members and admin)</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>Razorpay SDK and webhooks</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>Gmail SMTP (Google Workspace)</td>
+</tr>
+<tr>
+<td>File storage</td>
+<td>S3 compatible (optional, gated)</td>
+</tr>
+<tr>
+<td>Hosting</td>
+<td>Railway (US interim; India migration planned)</td>
+</tr>
+<tr>
+<td>DNS</td>
+<td>GoDaddy to andweyoga.com</td>
+</tr>
+</table>
+
+<p><strong>Folder structure:</strong></p>
+
+<pre><code>
+client/src/     React UI (pages, components, hooks, lib)
+server/         Express routes, auth, storage, payments
+shared/         Schemas and business rules used by both sides
+scripts/db/     SQL patches (npm run db:patch)
+tests/          71+ automated test files
+docs/           Internal notes and this handbook
+</code></pre>
+
+<p><strong>Key server files:</strong></p>
+
+<table>
+<tr>
+<th>File</th>
+<th>Role</th>
+</tr>
+<tr>
+<td>`server/index.ts`</td>
+<td>Entry, env validation</td>
+</tr>
+<tr>
+<td>`server/routes.ts`</td>
+<td>All HTTP APIs</td>
+</tr>
+<tr>
+<td>`server/storage.ts`</td>
+<td>Database access</td>
+</tr>
+<tr>
+<td>`server/auth.ts`</td>
+<td>Member JWT and cookies</td>
+</tr>
+<tr>
+<td>`server/adminAuth.ts`</td>
+<td>Admin JWT and cookies</td>
+</tr>
+<tr>
+<td>`server/payment-service.ts`</td>
+<td>Razorpay integration</td>
+</tr>
+<tr>
+<td>`server/booking-hold-service.ts`</td>
+<td>Hold expiry logic</td>
+</tr>
+</table>
+
+<p><strong>Database patches:</strong> 33 incremental SQL files in <code>scripts/db/patches/</code> (001 through 033).</p>
+
+<p><strong>Subprocessors (disclosed in Privacy Notice):</strong></p>
+
+<table>
+<tr>
+<th>Name</th>
+<th>Role</th>
+<th>Location</th>
+</tr>
+<tr>
+<td>Railway Corp.</td>
+<td>App and database hosting</td>
+<td>United States (interim)</td>
+</tr>
+<tr>
+<td>Razorpay</td>
+<td>Payment processing</td>
+<td>India</td>
+</tr>
+<tr>
+<td>Google LLC</td>
+<td>OAuth sign in and email</td>
+<td>US and global</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>10. API Reference Summary</h2>
+
+<h3>10.1 Public and Member APIs</h3>
+
+<table>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/class-types`</td>
+<td>List yoga disciplines</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/instructors`</td>
+<td>List instructors</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/classes`</td>
+<td>List scheduled sessions</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/schedule/week`</td>
+<td>Week schedule for home/calendar</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/platform/config`</td>
+<td>Guest checkout, maintenance flags</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/bookings`</td>
+<td>Create booking (auth or guest)</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/bookings/my`</td>
+<td>Member bookings</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/sessions/my`</td>
+<td>Member sessions with status</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/payments/create-order`</td>
+<td>Start Razorpay order</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/payments/verify`</td>
+<td>Confirm payment</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/auth/me`</td>
+<td>Current user and profile reconciliation</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>`/api/auth/profile`</td>
+<td>Update profile</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/users/:id/health-update`</td>
+<td>Save health note</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/flexi/options/:anchorClassId`</td>
+<td>Flexi slot options</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/sessions/:classId/mood`</td>
+<td>Pre or post session mood</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/sessions/:classId/join`</td>
+<td>Log Meet join event</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/auth/register`</td>
+<td>Email registration</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/auth/login`</td>
+<td>Email login</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/auth/logout`</td>
+<td>Clear session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/auth/google`</td>
+<td>Start Google OAuth</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/oauth2callback`</td>
+<td>Google OAuth callback</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/auth/forgot-password`</td>
+<td>Password reset request</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/auth/reset-password`</td>
+<td>Set new password</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/bookings/:id/cancel-checkout`</td>
+<td>Release held spot</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/bookings/:id/resume-checkout`</td>
+<td>Resume payment flow</td>
+</tr>
+</table>
+
+<h3>10.2 Admin APIs (require admin cookie)</h3>
+
+<table>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/admin/auth/login`</td>
+<td>Admin login</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/admin/auth/verify`</td>
+<td>Verify admin session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/admin/users`</td>
+<td>Users with completeness</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/admin/users/:id`</td>
+<td>Activate/deactivate user</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/classes`</td>
+<td>Create session</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/admin/classes/:id`</td>
+<td>Edit session</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/admin/platform-settings`</td>
+<td>Super admin settings</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/admin/platform-settings/guest-checkout`</td>
+<td>Toggle guest checkout</td>
+</tr>
+<tr>
+<td>PATCH</td>
+<td>`/api/admin/platform-settings/maintenance-window`</td>
+<td>Toggle maintenance</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/admin/bookings/:id/confirm-qr`</td>
+<td>Manual QR confirm</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/admin/payments/history`</td>
+<td>Payment history</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>`/api/admin/payments/:id/verify`</td>
+<td>Verify payment</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/bookings`</td>
+<td>All bookings</td>
+</tr>
+<tr>
+<td>GET</td>
+<td>`/api/contact-messages`</td>
+<td>Contact form submissions</td>
+</tr>
+</table>
+
+<p>Full route list is in <code>server/routes.ts</code> (80+ endpoints).</p>
+
+<h3>10.3 Required Environment Variables</h3>
+
+<table>
+<tr>
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+<tr>
+<td>`JWT_SECRET`</td>
+<td>Auth signing (min 32 chars; server fails without it)</td>
+</tr>
+<tr>
+<td>`DATABASE_URL` / `DATABASE_PUBLIC_URL`</td>
+<td>Postgres (prefer public on Railway)</td>
+</tr>
+<tr>
+<td>`ALLOWED_ORIGIN`</td>
+<td>Hostname only for CORS and OAuth</td>
+</tr>
+<tr>
+<td>`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`</td>
+<td>Google sign in</td>
+</tr>
+<tr>
+<td>`GMAIL_USER` / `GMAIL_APP_PASSWORD`</td>
+<td>Transactional email</td>
+</tr>
+<tr>
+<td>`RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET`</td>
+<td>Payments</td>
+</tr>
+<tr>
+<td>`ADMIN_INITIAL_EMAIL` / `ADMIN_INITIAL_PASSWORD` / `ADMIN_INITIAL_NAME`</td>
+<td>Admin bootstrap</td>
+</tr>
+<tr>
+<td>`NODE_ENV`</td>
+<td>`development` or `production`</td>
+</tr>
+</table>
+
+<p>See <code>.env.example</code> for full reference.</p>
+
+<hr>
+
+<h2>11. Operations and Deployment</h2>
+
+<table>
+<tr>
+<th>Item</th>
+<th>Detail</th>
+</tr>
+<tr>
+<td>**Repo**</td>
+<td>github.com/andweyoga-eng/mvp</td>
+</tr>
+<tr>
+<td>**Branches**</td>
+<td>`awy-main` (default), `cursor/webapp-redesign`, `cursor/member-booking-payments-platform`</td>
+</tr>
+<tr>
+<td>**Deploy trigger**</td>
+<td>Git push to connected branch on Railway</td>
+</tr>
+<tr>
+<td>**Build**</td>
+<td>`npm run build`</td>
+</tr>
+<tr>
+<td>**Start**</td>
+<td>`npm start` (production Node on `PORT`)</td>
+</tr>
+<tr>
+<td>**Schema (dev)**</td>
+<td>`npm run db:push`</td>
+</tr>
+<tr>
+<td>**Schema (prod)**</td>
+<td>`npm run db:patch`</td>
+</tr>
+<tr>
+<td>**QA smoke**</td>
+<td>`npm run qa:smoke-a01-e01`</td>
+</tr>
+<tr>
+<td>**Typecheck**</td>
+<td>`npm run check`</td>
+</tr>
+</table>
+
+<p><strong>Rate limits:</strong></p>
+
+<li>Auth endpoints: 10 attempts per 15 minutes per IP</li>
+<li>Forgot password: 3 per hour per IP</li>
+
+<p><strong>Security baseline (April 2026, extended July 2026):</strong></p>
+
+<li>No JWT in URL (cookies only)</li>
+<li>Admin routes protected</li>
+<li>CORS fail closed</li>
+<li>bcrypt passwords (12 rounds members; admin synced from env)</li>
+<li>Legacy `admin123` backdoor removed</li>
+<li>JWT algorithm pinned to HS256</li>
+<li>Vulnerable dependencies patched</li>
+
+<p><strong>Git workflow before deploy:</strong></p>
+
+<pre><code>
+git status          # confirm .env not staged
+npm test
+npm run test:sanity
+git add -A
+git commit -m &quot;clear message&quot;
+git push origin &lt;branch&gt;
+</code></pre>
+
+<hr>
+
+<h2>12. Current Limits and Capacity</h2>
+
+<table>
+<tr>
+<th>Limit</th>
+<th>Value</th>
+<th>Where Defined</th>
+</tr>
+<tr>
+<td>Payment hold</td>
+<td>14 minutes</td>
+<td>`shared/booking-payment-hold.ts`</td>
+</tr>
+<tr>
+<td>Razorpay checkout window</td>
+<td>~12 minutes</td>
+<td>Same module (2 min buffer)</td>
+</tr>
+<tr>
+<td>Default session capacity</td>
+<td>20 seats</td>
+<td>`shared/schema.ts` default</td>
+</tr>
+<tr>
+<td>Max weekly recurring occurrences</td>
+<td>52 weeks</td>
+<td>`shared/session-schedule.ts`</td>
+</tr>
+<tr>
+<td>Health concerns text</td>
+<td>500 characters</td>
+<td>`shared/health-disclosure.ts`</td>
+</tr>
+<tr>
+<td>Health document size</td>
+<td>5 MB</td>
+<td>`shared/health-disclosure.ts`</td>
+</tr>
+<tr>
+<td>Session terms length</td>
+<td>5000 characters</td>
+<td>`shared/session-terms.ts`</td>
+</tr>
+<tr>
+<td>Strict No To field</td>
+<td>120 characters</td>
+<td>`shared/schema.ts`</td>
+</tr>
+<tr>
+<td>Minimum member age</td>
+<td>18 years</td>
+<td>`shared/consent.ts`</td>
+</tr>
+<tr>
+<td>JWT member session</td>
+<td>7 days</td>
+<td>`server/auth.ts`</td>
+</tr>
+<tr>
+<td>JWT admin session</td>
+<td>8 hours</td>
+<td>`server/adminAuth.ts`</td>
+</tr>
+<tr>
+<td>Request body max</td>
+<td>1 MB</td>
+<td>`server/routes.ts`</td>
+</tr>
+<tr>
+<td>Email verification token</td>
+<td>24 hours</td>
+<td>`server/auth.ts`</td>
+</tr>
+<tr>
+<td>Password reset token</td>
+<td>1 hour</td>
+<td>`server/routes.ts`</td>
+</tr>
+<tr>
+<td>Grievance acknowledgment</td>
+<td>48 hours</td>
+<td>`shared/legal-config.ts`</td>
+</tr>
+<tr>
+<td>Grievance resolution target</td>
+<td>30 days (statutory max 90)</td>
+<td>`shared/legal-config.ts`</td>
+</tr>
+<tr>
+<td>Account erasure after closure</td>
+<td>30 days</td>
+<td>`shared/legal-config.ts`</td>
+</tr>
+</table>
+
+<p><strong>Capacity behavior:</strong></p>
+
+<li>Pending paid bookings with active hold count toward `maxCapacity`</li>
+<li>Expired holds and user cancel free the spot immediately</li>
+<li>Paid and waived bookings always count</li>
+<li>Free sessions skip payment hold</li>
+
+<hr>
+
+<h2>13. Known Limitations</h2>
+
+<table>
+<tr>
+<th>Area</th>
+<th>Limitation</th>
+</tr>
+<tr>
+<td>**Hosting**</td>
+<td>Data at rest in US (Railway interim). India migration planned.</td>
+</tr>
+<tr>
+<td>**Google Meet**</td>
+<td>No auto redirect after call ends. Links are manual.</td>
+</tr>
+<tr>
+<td>**SMS OTP**</td>
+<td>Phone verify UI removed. Numbers format-validated only.</td>
+</tr>
+<tr>
+<td>**Waitlist**</td>
+<td>Partially built. Not full auto notify flow.</td>
+</tr>
+<tr>
+<td>**Subscriptions tab**</td>
+<td>UI placeholder only.</td>
+</tr>
+<tr>
+<td>**Bulk user upload**</td>
+<td>API returns 501.</td>
+</tr>
+<tr>
+<td>**Instructor self-service**</td>
+<td>Admin driven onboarding only.</td>
+</tr>
+<tr>
+<td>**Push notifications**</td>
+<td>Not built. Email and WhatsApp for some flows.</td>
+</tr>
+<tr>
+<td>**Multi-language**</td>
+<td>English primary. Kannada consent copy exists.</td>
+</tr>
+<tr>
+<td>**Mobile app**</td>
+<td>Web only. Responsive design.</td>
+</tr>
+<tr>
+<td>**Maintenance notify**</td>
+<td>Email and WhatsApp channels. SMS not wired.</td>
+</tr>
+<tr>
+<td>**Session cancel notify**</td>
+<td>Placeholder stubs for member emails.</td>
+</tr>
+<tr>
+<td>**Admin role permissions**</td>
+<td>`admin` vs `super_admin` stored but not fully enforced on all routes.</td>
+</tr>
+<tr>
+<td>**Database indexes**</td>
+<td>Security audit notes missing indexes on email, userId, classId, date.</td>
+</tr>
+<tr>
+<td>**PRODUCT_BIBLE.md**</td>
+<td>Outdated on payments. Use this handbook instead.</td>
+</tr>
+<tr>
+<td>**awy.md deploy log**</td>
+<td>Only one deploy row logged. Many commits deployed since.</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>14. Issues Resolved (Development Log)</h2>
+
+<h3>14.1 Security and Auth (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>Hardcoded JWT secret</td>
+<td>Server crashes if missing</td>
+<td>`33cd498`</td>
+</tr>
+<tr>
+<td>JWT exposed in URL after OAuth</td>
+<td>httpOnly cookies</td>
+<td>`49f3019`</td>
+</tr>
+<tr>
+<td>Unprotected admin APIs</td>
+<td>`requireAdminAuth` on writes</td>
+<td>`33cd498`</td>
+</tr>
+<tr>
+<td>No rate limiting</td>
+<td>Auth rate limits added</td>
+<td>`33cd498`</td>
+</tr>
+<tr>
+<td>Legacy admin123 backdoor</td>
+<td>Removed, env bootstrap</td>
+<td>`04afa76`</td>
+</tr>
+<tr>
+<td>JWT algorithm confusion</td>
+<td>Pinned to HS256</td>
+<td>`c33b897`</td>
+</tr>
+<tr>
+<td>CORS open / proxy trust</td>
+<td>Fail closed CORS, trust Railway proxy</td>
+<td>`e1b1c64`</td>
+</tr>
+<tr>
+<td>Vulnerable dependencies</td>
+<td>Patched</td>
+<td>`2972ff2`</td>
+</tr>
+<tr>
+<td>Email enumeration on forgot password</td>
+<td>Neutral response always</td>
+<td>`33cd498`</td>
+</tr>
+<tr>
+<td>Verification tokens never expired</td>
+<td>24 hour expiry</td>
+<td>`33cd498`</td>
+</tr>
+</table>
+
+<h3>14.2 Database and Railway (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>`ENOTFOUND postgres.railway.internal`</td>
+<td>Prefer `DATABASE_PUBLIC_URL`</td>
+<td>`e9080e5`</td>
+</tr>
+<tr>
+<td>Neon driver on Railway</td>
+<td>Switched to standard `pg`</td>
+<td>`439bfc7`</td>
+</tr>
+<tr>
+<td>Schema drift on prod</td>
+<td>`npm run db:patch` idempotent SQL patches</td>
+<td>`a19b25c`</td>
+</tr>
+<tr>
+<td>Admin password not syncing</td>
+<td>`syncAdminFromEnv()` on boot</td>
+<td>`4838b4c`</td>
+</tr>
+<tr>
+<td>cookie-parser missing</td>
+<td>Installed dependency</td>
+<td>`dd42fdf`</td>
+</tr>
+</table>
+
+<h3>14.3 Profile and Booking (2025 to 2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>Health-only completion marked profile complete</td>
+<td>Single rule in `profileCompleteness.ts`</td>
+<td>`35046ec`</td>
+</tr>
+<tr>
+<td>Booking allowed with empty phones</td>
+<td>Server 409 on incomplete profile</td>
+<td>`35046ec`</td>
+</tr>
+<tr>
+<td>Profile completion order mattered</td>
+<td>Merged checks, reconcile on `/api/auth/me`</td>
+<td>`35046ec`</td>
+</tr>
+<tr>
+<td>Profile completion blocked booking</td>
+<td>Fixed completion error</td>
+<td>`80efd1a`, `4a0bf5f`</td>
+</tr>
+<tr>
+<td>Consent Agree disabled after DOB</td>
+<td>Fixed enable logic</td>
+<td>`9e95378`</td>
+</tr>
+<tr>
+<td>Re-consent blocked after policy update</td>
+<td>Unblocked</td>
+<td>`6c60408`</td>
+</tr>
+<tr>
+<td>New members wrong landing</td>
+<td>Redirect to dashboard after profile complete</td>
+<td>`4a2e1e9`</td>
+</tr>
+</table>
+
+<h3>14.4 Payments and Checkout (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>No payment collection</td>
+<td>Razorpay integrated</td>
+<td>`d038ce1`</td>
+</tr>
+<tr>
+<td>Spot lost during payment</td>
+<td>14 minute hold</td>
+<td>`580c113`</td>
+</tr>
+<tr>
+<td>Manual QR confusion</td>
+<td>Unified payment confirmation UI</td>
+<td>`3f38d7e`</td>
+</tr>
+<tr>
+<td>Book CTA lost after signup</td>
+<td>Resume intent after auth</td>
+<td>`d70a69b`</td>
+</tr>
+<tr>
+<td>Flexi times wrong timezone</td>
+<td>Render in IST on server</td>
+<td>`b6afa7f`, `9174e62`</td>
+</tr>
+<tr>
+<td>Flexi booking UX gaps</td>
+<td>Improved flow</td>
+<td>`5ff5df0`</td>
+</tr>
+</table>
+
+<h3>14.5 Compliance (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>Incomplete erasure</td>
+<td>Full erasure and health cleanup</td>
+<td>`ba984b8`</td>
+</tr>
+<tr>
+<td>Health uploads broken</td>
+<td>Restored with object routes</td>
+<td>`6c60408`</td>
+</tr>
+<tr>
+<td>Guest checkout without controls</td>
+<td>Super admin toggle and gating</td>
+<td>`a2eb268`</td>
+</tr>
+<tr>
+<td>Consent compliance gaps</td>
+<td>Full consent flow</td>
+<td>`6afa70a`</td>
+</tr>
+</table>
+
+<h3>14.6 UX and Admin (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>Em and en dashes in copy</td>
+<td>Removed from user facing text</td>
+<td>`f5c1e03`</td>
+</tr>
+<tr>
+<td>Admin session scheduling bugs</td>
+<td>Validation and week grid fixes</td>
+<td>`888b8ed`</td>
+</tr>
+<tr>
+<td>Public catalog out of sync</td>
+<td>Sync on pause/resume/delete</td>
+<td>`808cccc`</td>
+</tr>
+<tr>
+<td>Replit legacy code</td>
+<td>Removed</td>
+<td>`7160e59`</td>
+</tr>
+<tr>
+<td>Calendar badge styling</td>
+<td>Aligned</td>
+<td>`1041ef8`</td>
+</tr>
+<tr>
+<td>Hero carousel images</td>
+<td>Updated slides</td>
+<td>`849033d`</td>
+</tr>
+<tr>
+<td>Hub carousel and contraindications</td>
+<td>Improved UX</td>
+<td>`f75528a`</td>
+</tr>
+<tr>
+<td>Session terms at checkout</td>
+<td>Added</td>
+<td>`2658d2e`</td>
+</tr>
+<tr>
+<td>Maintenance window and coupons</td>
+<td>Added</td>
+<td>`097e113`</td>
+</tr>
+<tr>
+<td>Admin session images and WhatsApp consent</td>
+<td>Added</td>
+<td>`099ce4d`</td>
+</tr>
+<tr>
+<td>Super-admin retire/cancel sessions</td>
+<td>Added</td>
+<td>`8b4e4a0`</td>
+</tr>
+</table>
+
+<h3>14.7 OAuth and DNS (2026)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+</tr>
+<tr>
+<td>OAuth redirect to wrong host</td>
+<td>Match `ALLOWED_ORIGIN` to live URL</td>
+</tr>
+<tr>
+<td>Cellular DNS fails on Railway URL</td>
+<td>Use custom domain `andweyoga.com`</td>
+</tr>
+<tr>
+<td>Google OAuth callback DB error</td>
+<td>Fix database connectivity first</td>
+</tr>
+</table>
+
+<h3>14.8 Health Documents (2025)</h3>
+
+<table>
+<tr>
+<th>Issue</th>
+<th>Resolution</th>
+<th>Commit</th>
+</tr>
+<tr>
+<td>Upload and download broken</td>
+<td>Fixed profile page flows</td>
+<td>`298ce71`, `a201334`</td>
+</tr>
+<tr>
+<td>Wrong download format</td>
+<td>Preserve original file types</td>
+<td>`a5bddda`, `63e3cd0`</td>
+</tr>
+<tr>
+<td>Secure upload added</td>
+<td>ACL and validation</td>
+<td>`862d443`, `ff8cf91`</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>15. Git Commit History</h2>
+
+<p><strong>Remote:</strong> <code>origin</code> → https://github.com/andweyoga-eng/mvp.git</p>
+
+<h3>Phase 1: Foundation (September to October 2025)</h3>
+
+<p>Early platform build. Auth popup, Google login, health profile, admin portal, document upload and download fixes.</p>
+
+<table>
+<tr>
+<th>Date</th>
+<th>Hash</th>
+<th>Author</th>
+<th>Message</th>
+</tr>
+<tr>
+<td>2025-09-16</td>
+<td>`724b1b6`</td>
+<td>arunbdt</td>
+<td>Replace authentication modal with slideout</td>
+</tr>
+<tr>
+<td>2025-09-16</td>
+<td>`859f910`</td>
+<td>arunbdt</td>
+<td>Remove email and password sign-up option</td>
+</tr>
+<tr>
+<td>2025-09-18</td>
+<td>`1b725b6`</td>
+<td>arunbdt</td>
+<td>Ensure secure Google login with HTTPS</td>
+</tr>
+<tr>
+<td>2025-09-19</td>
+<td>`a15d1aa`</td>
+<td>andweyoga-eng</td>
+<td>Published app sign in and unified header</td>
+</tr>
+<tr>
+<td>2025-09-23</td>
+<td>`70392bd`</td>
+<td>arunbdt</td>
+<td>Add user health profile validation before booking</td>
+</tr>
+<tr>
+<td>2025-09-23</td>
+<td>`d9f0fdc`</td>
+<td>arunbdt</td>
+<td>Add administrative portal</td>
+</tr>
+<tr>
+<td>2025-09-23</td>
+<td>`22327a5`</td>
+<td>arunbdt</td>
+<td>Add secure admin login and user management</td>
+</tr>
+<tr>
+<td>2025-09-23</td>
+<td>`ecd00da`</td>
+<td>arunbdt</td>
+<td>Add health update and session history to account</td>
+</tr>
+<tr>
+<td>2025-10-01</td>
+<td>`862d443`</td>
+<td>arunbdt</td>
+<td>Add health document upload and download</td>
+</tr>
+<tr>
+<td>2025-10-01</td>
+<td>`63e3cd0`</td>
+<td>arunbdt</td>
+<td>Fix document download format</td>
+</tr>
+</table>
+
+<h3>Phase 2: Security Baseline (April 2026)</h3>
+
+<table>
+<tr>
+<th>Date</th>
+<th>Hash</th>
+<th>Author</th>
+<th>Message</th>
+</tr>
+<tr>
+<td>2026-04-21</td>
+<td>`33cd498`</td>
+<td>Arun Sachy</td>
+<td>security: fix critical vulnerabilities v1.0.0 baseline</td>
+</tr>
+<tr>
+<td>2026-04-21</td>
+<td>`a0e99ad`</td>
+<td>Arun Sachy</td>
+<td>docs: add Product Bible and Security Audit report</td>
+</tr>
+<tr>
+<td>2026-04-27</td>
+<td>`dd42fdf`</td>
+<td>Arun Sachy</td>
+<td>fix: install cookie-parser dependency</td>
+</tr>
+<tr>
+<td>2026-04-28</td>
+<td>`439bfc7`</td>
+<td>Arun Sachy</td>
+<td>fix: switch from Neon to standard pg for Railway</td>
+</tr>
+<tr>
+<td>2026-05-13</td>
+<td>`35046ec`</td>
+<td>Arun Sachy</td>
+<td>Profile completion parity, auth/session fixes</td>
+</tr>
+<tr>
+<td>2026-05-14</td>
+<td>`e9080e5`</td>
+<td>Arun Sachy</td>
+<td>Prefer DATABASE_PUBLIC_URL for Railway Postgres</td>
+</tr>
+<tr>
+<td>2026-05-14</td>
+<td>`6583ccb`</td>
+<td>Arun Sachy</td>
+<td>docs: session log for Railway OAuth and deploy</td>
+</tr>
+<tr>
+<td>2026-05-15</td>
+<td>`9e0c002`</td>
+<td>Arun Sachy</td>
+<td>docs: add SOP for local, Railway, pre-live testing</td>
+</tr>
+<tr>
+<td>2026-05-15</td>
+<td>`e1571ca`</td>
+<td>Arun Sachy</td>
+<td>docs: add admin features audit</td>
+</tr>
+<tr>
+<td>2026-05-15</td>
+<td>`31eee28`</td>
+<td>Arun Sachy</td>
+<td>feat: admin slice 1 auth hardening</td>
+</tr>
+<tr>
+<td>2026-05-15</td>
+<td>`a19b25c`</td>
+<td>Arun Sachy</td>
+<td>fix: add incremental SQL patches via db:patch</td>
+</tr>
+<tr>
+<td>2026-05-15</td>
+<td>`4838b4c`</td>
+<td>Arun Sachy</td>
+<td>fix: sync bootstrap credentials from env on boot</td>
+</tr>
+</table>
+
+<h3>Phase 3: Booking Platform (May to June 2026)</h3>
+
+<table>
+<tr>
+<th>Date</th>
+<th>Hash</th>
+<th>Author</th>
+<th>Message</th>
+</tr>
+<tr>
+<td>2026-05-29</td>
+<td>`d038ce1`</td>
+<td>Arun Sachy</td>
+<td>feat: member booking, Razorpay payments, admin platform</td>
+</tr>
+<tr>
+<td>2026-06-11</td>
+<td>`22eace4`</td>
+<td>Arun Sachy</td>
+<td>fix: booking flow UX, admin sessions, instructor verification</td>
+</tr>
+<tr>
+<td>2026-06-23</td>
+<td>`87a4d8a`</td>
+<td>Arun Sachy</td>
+<td>WIP: guest checkout, account pages, health docs</td>
+</tr>
+<tr>
+<td>2026-06-24</td>
+<td>`3b45a80`</td>
+<td>Arun Sachy</td>
+<td>Add homepage redesign handoff package</td>
+</tr>
+<tr>
+<td>2026-06-26</td>
+<td>`5990b1f`</td>
+<td>Arun Sachy</td>
+<td>feat: Digital Zen home page redesign</td>
+</tr>
+<tr>
+<td>2026-06-30</td>
+<td>`3657420`</td>
+<td>Arun Sachy</td>
+<td>feat: account redesign, launcher tabs, booking/auth polish</td>
+</tr>
+<tr>
+<td>2026-06-30</td>
+<td>`8490011`</td>
+<td>Arun Sachy</td>
+<td>chore: trigger Railway deployment</td>
+</tr>
+</table>
+
+<h3>Phase 4: Production Hardening (July 2026)</h3>
+
+<table>
+<tr>
+<th>Date</th>
+<th>Hash</th>
+<th>Author</th>
+<th>Message</th>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`6afa70a`</td>
+<td>Arun Sachy</td>
+<td>feat: consent compliance, guest checkout UX, booking fixes</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`9e95378`</td>
+<td>Mudit</td>
+<td>fix: enable consent Agree button after DOB picks</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`3f38d7e`</td>
+<td>Mudit</td>
+<td>fix: unified manual payment confirmation for members</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`04afa76`</td>
+<td>Mudit</td>
+<td>fix: remove legacy admin123 backdoor</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`e1b1c64`</td>
+<td>Mudit</td>
+<td>fix: trust Railway proxy for rate limits and CORS</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`2972ff2`</td>
+<td>Mudit</td>
+<td>fix: patch vulnerable production dependencies</td>
+</tr>
+<tr>
+<td>2026-07-02</td>
+<td>`c33b897`</td>
+<td>Mudit</td>
+<td>fix: pin JWT verification to HS256</td>
+</tr>
+<tr>
+<td>2026-07-03</td>
+<td>`849033d`</td>
+<td>Mudit</td>
+<td>Update hero carousel slide images</td>
+</tr>
+<tr>
+<td>2026-07-03</td>
+<td>`49f3019`</td>
+<td>Mudit</td>
+<td>fix: move member and admin auth to httpOnly cookies</td>
+</tr>
+<tr>
+<td>2026-07-03</td>
+<td>`a2eb268`</td>
+<td>Mudit</td>
+<td>feat: add guest checkout controls and sign-in gating</td>
+</tr>
+<tr>
+<td>2026-07-04</td>
+<td>`ba984b8`</td>
+<td>Mudit</td>
+<td>fix: complete erasure and health data cleanup</td>
+</tr>
+<tr>
+<td>2026-07-04</td>
+<td>`1041ef8`</td>
+<td>Mudit</td>
+<td>fix: align calendar session badge styling</td>
+</tr>
+<tr>
+<td>2026-07-04</td>
+<td>`888b8ed`</td>
+<td>Mudit</td>
+<td>fix: improve admin session scheduling and week grid</td>
+</tr>
+<tr>
+<td>2026-07-04</td>
+<td>`099ce4d`</td>
+<td>Mudit</td>
+<td>feat: admin session images, profile onboarding, WhatsApp consent</td>
+</tr>
+<tr>
+<td>2026-07-04</td>
+<td>`f5c1e03`</td>
+<td>Mudit</td>
+<td>fix: remove em and en dashes from user-facing copy</td>
+</tr>
+<tr>
+<td>2026-07-05</td>
+<td>`8b4e4a0`</td>
+<td>Mudit</td>
+<td>feat: super-admin session retire/cancel and admin auth fixes</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`f75528a`</td>
+<td>Mudit</td>
+<td>feat: improve hub carousel and contraindications</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`580c113`</td>
+<td>Mudit</td>
+<td>feat: Reserve and Pay checkout with 14-minute hold</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`7160e59`</td>
+<td>Mudit</td>
+<td>chore: remove Replit legacy code</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`40cb994`</td>
+<td>Mudit</td>
+<td>feat: adapt join popup copy, rename nav CTA</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`4a2e1e9`</td>
+<td>Mudit</td>
+<td>fix: redirect new members to dashboard after profile complete</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`2658d2e`</td>
+<td>Mudit</td>
+<td>feat: session terms at checkout</td>
+</tr>
+<tr>
+<td>2026-07-06</td>
+<td>`6c60408`</td>
+<td>Mudit</td>
+<td>fix: unblock reconsent, restore health document uploads</td>
+</tr>
+<tr>
+<td>2026-07-07</td>
+<td>`097e113`</td>
+<td>Mudit</td>
+<td>feat: maintenance window, coupons, public-site polish</td>
+</tr>
+<tr>
+<td>2026-07-08</td>
+<td>`d70a69b`</td>
+<td>Mudit</td>
+<td>feat: route Book CTAs to checkout, resume intent after signup</td>
+</tr>
+<tr>
+<td>2026-07-08</td>
+<td>`808cccc`</td>
+<td>Mudit</td>
+<td>Add admin session pause/resume/delete, sync public catalog</td>
+</tr>
+<tr>
+<td>2026-07-09</td>
+<td>`5ff5df0`</td>
+<td>Mudit</td>
+<td>feat: improve flexi booking flow and session UX</td>
+</tr>
+<tr>
+<td>2026-07-09</td>
+<td>`9174e62`</td>
+<td>Mudit</td>
+<td>fix: render member session times in IST</td>
+</tr>
+<tr>
+<td>2026-07-09</td>
+<td>`b6afa7f`</td>
+<td>Mudit</td>
+<td>fix: render flexi option times in IST on the server</td>
+</tr>
+</table>
+
+<h3>Uncommitted Work (as of 10 July 2026)</h3>
+
+<p>Files modified but not yet committed on <code>cursor/webapp-redesign</code>:</p>
+
+<li>`client/src/components/account-drawer.tsx`</li>
+<li>`client/src/components/account-fold-section.tsx` (new)</li>
+<li>`client/src/components/account-health-note-section.tsx`</li>
+<li>`client/src/components/privacy-consent-section.tsx`</li>
+<li>`client/src/pages/my-account.tsx`</li>
+
+<p>These appear to be ongoing My Account UI fold and section work.</p>
+
+<hr>
+
+<h2>16. Future Scope and Challenges</h2>
+
+<h3>16.1 Planned (from roadmap and code comments)</h3>
+
+<table>
+<tr>
+<th>Item</th>
+<th>Priority</th>
+<th>Notes</th>
+</tr>
+<tr>
+<td>India data hosting migration</td>
+<td>High</td>
+<td>Legal disclosure already mentions interim US hosting</td>
+</tr>
+<tr>
+<td>Google Meet automation</td>
+<td>Medium</td>
+<td>Manual links today</td>
+</tr>
+<tr>
+<td>Full waitlist auto notify</td>
+<td>Medium</td>
+<td>Schema exists</td>
+</tr>
+<tr>
+<td>SMS OTP verification</td>
+<td>Low</td>
+<td>Deferred by product</td>
+</tr>
+<tr>
+<td>Instructor self-service portal</td>
+<td>Medium</td>
+<td>Onboarding APIs partially built</td>
+</tr>
+<tr>
+<td>Member session cancellation</td>
+<td>Medium</td>
+<td>Admin cancel exists</td>
+</tr>
+<tr>
+<td>Push notifications</td>
+<td>Low</td>
+<td>Email and WhatsApp first</td>
+</tr>
+<tr>
+<td>Commerce and merchandise</td>
+<td>Phase 3</td>
+<td>Not started</td>
+</tr>
+<tr>
+<td>Community feed</td>
+<td>Phase 2</td>
+<td>Not started</td>
+</tr>
+<tr>
+<td>Native mobile app</td>
+<td>Long term</td>
+<td>Responsive web now</td>
+</tr>
+<tr>
+<td>Bulk Excel user upload</td>
+<td>Medium</td>
+<td>API returns 501 today</td>
+</tr>
+<tr>
+<td>Database indexes</td>
+<td>Medium</td>
+<td>Noted in security audit</td>
+</tr>
+</table>
+
+<h3>16.2 Technical Challenges</h3>
+
+<p>1. <strong>Scale and hold policy:</strong> At high volume, back button releasing holds may need revisit. See <code>docs/checkout-hold-ux-notes.md</code>.</p>
+<p>2. <strong>Webhook reliability:</strong> Razorpay webhooks must be monitored in production.</p>
+<p>3. <strong>Admin role permissions:</strong> <code>admin</code> vs <code>super_admin</code> not fully enforced on all routes.</p>
+<p>4. <strong>Cellular DNS:</strong> Railway subdomain may fail on some carriers until custom domain is live.</p>
+<p>5. <strong>Doc drift:</strong> Multiple docs lag behind code. Update this handbook with each release.</p>
+<p>6. <strong>Meet leave URL:</strong> Google Meet does not redirect when a call ends. Needs Workspace admin config or manual return.</p>
+
+<h3>16.3 Test Coverage</h3>
+
+<p>71 test files covering booking, consent, erasure, flexi, coupons, maintenance, guest checkout, admin sessions, and payments.</p>
+
+<pre><code>
+npm test              # full suite
+npm run test:sanity   # regression subset
+</code></pre>
+
+<hr>
+
+<h2>17. Document Maintenance</h2>
+
+<table>
+<tr>
+<th>When</th>
+<th>Action</th>
+</tr>
+<tr>
+<td>New feature shipped</td>
+<td>Add to Section 3 and Section 14</td>
+</tr>
+<tr>
+<td>Bug fixed in production</td>
+<td>Add row to Section 14</td>
+</tr>
+<tr>
+<td>New env var</td>
+<td>Update Section 10.3 and `.env.example`</td>
+</tr>
+<tr>
+<td>Deploy to production</td>
+<td>Add row to commit table in Section 15</td>
+</tr>
+<tr>
+<td>Support process change</td>
+<td>Update Section 6 and 7</td>
+</tr>
+<tr>
+<td>New limitation discovered</td>
+<td>Add to Section 13</td>
+</tr>
+</table>
+
+<p><strong>Export to Word:</strong></p>
+
+<pre><code>
+pandoc docs/ANDWEYOGA-OPERATIONS-HANDBOOK.md -o ANDWEYOGA-Operations-Handbook.docx
+</code></pre>
+
+<p><strong>Export to PDF:</strong> Open the Word file and Save as PDF, or use a Markdown PDF extension in your editor.</p>
+
+<hr>
+
+<p>*End of handbook. Maintained by andWeYoga engineering and product.*</p>
+</body>
+</html>

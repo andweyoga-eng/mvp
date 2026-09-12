@@ -44,6 +44,6 @@ After: Always returns the same neutral response.
 - GET /api/auth/logout clears auth cookie properly
 
 ## Remaining Items Before Scale
-- Migrate health documents from Replit storage to Google Cloud Storage
+- Migrate health documents to S3-compatible object storage when uploads are re-enabled
 - Add database indexes on email, userId, classId, date columns
 - Update frontend to use /api/auth/me instead of localStorage token reads

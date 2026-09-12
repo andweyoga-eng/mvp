@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAdminAuth } from "@/components/admin-auth-provider";
 import { Button } from "@/components/ui/button";
@@ -12,25 +12,38 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
-  const { login, admin } = useAdminAuth();
+  const { login, admin, isLoading: authLoading } = useAdminAuth();
   const { toast } = useToast();
   
   const [formData, setFormData] = useState({
     email: "",
     password: ""
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Redirect if already logged in
-  if (admin) {
-    setLocation("/admin/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && admin) {
+      setLocation("/admin/dashboard");
+    }
+  }, [authLoading, admin, setLocation]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    fetch("/api/admin/auth/login-hint")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.bootstrapEmail) return;
+        setFormData((prev) =>
+          prev.email ? prev : { ...prev, email: data.bootstrapEmail },
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
     setError("");
 
     try {
@@ -48,7 +61,7 @@ export default function AdminLogin() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -56,6 +69,14 @@ export default function AdminLogin() {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  if (authLoading || admin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-orange-50 flex items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#3d1b80]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-orange-50 flex items-center justify-center p-4">
@@ -96,7 +117,7 @@ export default function AdminLogin() {
                       onChange={handleInputChange}
                       placeholder="admin@andweyoga.com"
                       required
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                       className="pl-10"
                       data-testid="input-admin-email"
                     />
@@ -117,7 +138,7 @@ export default function AdminLogin() {
                       onChange={handleInputChange}
                       placeholder="Enter admin password"
                       required
-                      disabled={isLoading}
+                      disabled={isSubmitting}
                       className="pl-10"
                       data-testid="input-admin-password"
                     />
@@ -126,11 +147,11 @@ export default function AdminLogin() {
 
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isSubmitting}
                   className="w-full bg-primary !text-white font-bold hover:bg-primary/90"
                   data-testid="button-admin-login"
                 >
-                  {isLoading ? (
+                  {isSubmitting ? (
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Signing In...

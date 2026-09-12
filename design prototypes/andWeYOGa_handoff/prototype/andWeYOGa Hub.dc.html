@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#f4f1f8;font-family:'Onest',system-ui,sans-serif;color:#1b1c1b;-webkit-font-smoothing:antialiased;}
+@keyframes floaty{0%,100%{transform:translate(0,0);}50%{transform:translate(20px,-24px);}}
+.hubgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;grid-auto-rows:198px;}
+[data-tile="sessions"]{grid-column:span 2;grid-row:span 2;}
+[data-tile="emojou"]{grid-column:span 2;}
+[data-tile="trips"]{grid-column:span 2;}
+[data-tile="explore"]{grid-column:span 2;}
+@media (max-width:920px){
+  .hubgrid{grid-template-columns:repeat(2,1fr);grid-auto-rows:188px;}
+  [data-tile]{grid-column:auto !important;grid-row:auto !important;}
+  [data-tile="sessions"]{grid-column:span 2 !important;}
+}
+@media (max-width:560px){
+  .hubgrid{grid-template-columns:1fr;grid-auto-rows:150px;}
+  [data-tile="sessions"]{grid-column:auto !important;grid-row:span 1 !important;}
+}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#f4f1f8;color:#1b1c1b;overflow-x:hidden;position:relative;">
+  <div style="position:fixed;top:-12%;right:-6%;width:520px;height:520px;border-radius:60% 40% 30% 70%/60% 30% 70% 40%;background:rgba(52,25,106,0.10);filter:blur(80px);pointer-events:none;z-index:0;animation:floaty 14s ease-in-out infinite;"></div>
+  <div style="position:fixed;bottom:-10%;left:-6%;width:460px;height:460px;border-radius:60% 40% 30% 70%/60% 30% 70% 40%;background:rgba(154,70,18,0.08);filter:blur(80px);pointer-events:none;z-index:0;animation:floaty 18s ease-in-out infinite reverse;"></div>
+
+  <!-- top bar -->
+  <header style="position:relative;z-index:10;max-width:1180px;margin:0 auto;padding:clamp(20px,4vw,32px) clamp(16px,4vw,24px) 0;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+    <a href="andWeYOGa%20Home.dc.html" style="display:flex;align-items:center;text-decoration:none;"><img src="assets/awy-logo.png" alt="andWeYoga" style="height:clamp(40px,4vw,48px);width:auto;display:block;"></a>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button style="width:40px;height:40px;border:none;background:rgba(255,255,255,0.7);backdrop-filter:blur(10px);border-radius:50%;color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(27,28,27,0.06);transition:transform .15s;" style-hover="transform:translateY(-2px);"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0;font-size:20px;">search</span></button>
+      <button style="width:40px;height:40px;border:none;background:rgba(255,255,255,0.7);backdrop-filter:blur(10px);border-radius:50%;color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 4px 14px rgba(27,28,27,0.06);transition:transform .15s;" style-hover="transform:translateY(-2px);"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0;font-size:20px;">notifications</span><span style="position:absolute;top:10px;right:11px;width:6px;height:6px;border-radius:50%;background:#9a4612;border:1.5px solid #fff;"></span></button>
+      <button onClick="{{ toggleNav }}" style="display:flex;align-items:center;gap:8px;background:#34196a;color:#fff;border:none;padding:9px 16px;border-radius:99px;font-family:'Onest';font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 6px 18px rgba(52,25,106,0.26);transition:transform .15s,box-shadow .2s;" style-hover="transform:translateY(-2px);box-shadow:0 10px 26px rgba(52,25,106,0.34);" style-active="transform:scale(0.96);"><span style="width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#d98a4e,#9a4612);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:'Bricolage Grotesque';">P</span><span>My Account</span><span style="font-family:'Material Symbols Outlined';font-size:17px;">menu</span></button>
+    </div>
+  </header>
+
+  <div onClick="{{ closeNav }}" style="position:fixed;inset:0;z-index:55;background:rgba(27,28,27,0.28);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);transition:opacity .3s;opacity:{{ overlayOpacity }};pointer-events:{{ overlayPointer }};"></div>
+
+  <aside style="position:fixed;top:0;right:0;height:100vh;width:min(360px,88vw);z-index:60;background:rgba(251,249,247,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-left:1px solid rgba(75,50,130,0.1);box-shadow:-12px 0 40px rgba(27,28,27,0.12);padding:16px;display:flex;flex-direction:column;justify-content:space-between;transition:transform .32s cubic-bezier(.4,0,.2,1);transform:{{ drawerTransform }};overflow-y:auto;">
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(75,50,130,0.1);">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#4b3282,#34196a);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;">P</div>
+          <div>
+            <h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;color:#34196a;">My Account</h3>
+            <p style="margin:2px 0 0;font-size:12px;color:#494550;">Manage your wellness journey</p>
+          </div>
+        </div>
+        <button onClick="{{ closeNav }}" style="border:none;background:transparent;color:#494550;cursor:pointer;display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:10px;" style-hover="background:rgba(52,25,106,0.06);">
+          <span style="font-family:'Material Symbols Outlined';font-size:22px;">arrow_forward</span>
+        </button>
+      </div>
+
+      <nav style="display:flex;flex-direction:column;gap:4px;">
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;background:#34196a;color:#fff;font-weight:600;font-size:15px;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">calendar_add_on</span><span>Book Sessions</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">person</span><span>Profile</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">monitor_heart</span><span>Health Updates</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">card_membership</span><span>My Subscriptions</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">payments</span><span>Payment History</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">devices</span><span>Link Devices</span>
+          <span style="margin-left:auto;font-size:10px;font-weight:700;letter-spacing:0.08em;color:#9a4612;background:rgba(154,70,18,0.1);padding:3px 8px;border-radius:99px;">SOON</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">history</span><span>Session History</span>
+        </a>
+      </nav>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;padding-top:18px;border-top:1px solid rgba(75,50,130,0.1);">
+      <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#9a4612;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;transition:background .2s,box-shadow .2s;box-shadow:0 4px 14px rgba(154,70,18,0.22);" style-hover="background:#793000;box-shadow:0 6px 20px rgba(154,70,18,0.3);">
+        <span style="font-family:'Material Symbols Outlined';font-size:20px;">school</span><span>Switch to Instructor</span>
+      </button>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="#" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#494550;text-decoration:none;font-size:13px;transition:color .18s;" style-hover="color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">help</span><span>Help Center</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#494550;text-decoration:none;font-size:13px;transition:color .18s;" style-hover="color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">security</span><span>Privacy</span>
+        </a>
+        <a href="andWeYOGa%20Home.dc.html" onClick="{{ signOut }}" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#ba1a1a;text-decoration:none;font-size:13px;transition:opacity .18s;margin-top:4px;" style-hover="opacity:0.75;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">logout</span><span>Sign Out</span>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+
+  <main style="position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:clamp(24px,4vw,40px) clamp(16px,4vw,24px) 64px;">
+
+    <!-- greeting -->
+    <div style="margin-bottom:clamp(22px,3vw,34px);">
+      <div style="display:inline-flex;align-items:center;gap:8px;padding:7px 15px;background:rgba(255,255,255,0.7);backdrop-filter:blur(10px);border:1px solid rgba(75,50,130,0.1);border-radius:99px;margin-bottom:16px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#354c3a;box-shadow:0 0 0 3px rgba(53,76,58,0.18);"></span>
+        <span style="font-size:13px;font-weight:600;color:#494550;">3 live sessions today</span>
+      </div>
+      <h1 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(32px,5.5vw,56px);line-height:1.02;letter-spacing:-0.03em;color:#34196a;">Good morning, Priya. <br>Where to <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">today</span>?</h1>
+    </div>
+
+    <!-- bento matrix -->
+    <div class="hubgrid">
+
+      <a data-tile="sessions" href="andWeYOGa%20Dashboard%20v2.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:30px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(150deg,#4b3282 0%,#34196a 55%,#2a1457 100%);color:#fff;box-shadow:0 14px 40px rgba(52,25,106,0.28);transition:transform .25s,box-shadow .25s;" style-hover="transform:translateY(-5px);box-shadow:0 22px 54px rgba(52,25,106,0.4);">
+        <span style="position:absolute;right:-26px;bottom:-26px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:200px;color:rgba(255,255,255,0.08);">self_improvement</span>
+        <div style="position:relative;display:flex;align-items:center;justify-content:space-between;">
+          <span style="display:inline-block;padding:6px 13px;background:rgba(255,255,255,0.18);border-radius:99px;font-size:12px;font-weight:700;letter-spacing:0.06em;">BOOK A FLOW</span>
+          <span style="width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:24px;">arrow_outward</span></span>
+        </div>
+        <div style="position:relative;">
+          <h2 style="margin:0 0 8px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(26px,3vw,34px);letter-spacing:-0.02em;">Your Sessions</h2>
+          <p style="margin:0;font-size:15px;line-height:1.5;color:rgba(255,255,255,0.82);max-width:300px;">Reserve your next class, explore upcoming flows, and pick up where you left off.</p>
+        </div>
+      </a>
+
+      <a data-tile="emojou" href="andWeYOGa%20Emojou.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:26px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(135deg,#d98a4e 0%,#9a4612 100%);color:#fff;box-shadow:0 12px 34px rgba(154,70,18,0.26);transition:transform .25s,box-shadow .25s;" style-hover="transform:translateY(-5px);box-shadow:0 20px 48px rgba(154,70,18,0.38);">
+        <span style="position:absolute;right:-18px;bottom:-22px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:140px;color:rgba(255,255,255,0.12);">mood</span>
+        <div style="position:relative;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-family:'Material Symbols Outlined';font-size:30px;">mood</span>
+          <span style="font-family:'Material Symbols Outlined';font-size:24px;opacity:0.85;">arrow_outward</span>
+        </div>
+        <div style="position:relative;"><h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;">Emojou</h3><p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Track how every practice makes you feel.</p></div>
+      </a>
+
+      <a data-tile="calendar" href="andWeYOGa%20Calendar.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:rgba(255,255,255,0.72);backdrop-filter:blur(16px);border:1px solid rgba(75,50,130,0.1);box-shadow:0 8px 30px rgba(27,28,27,0.05);transition:transform .25s,box-shadow .25s,border-color .25s;" style-hover="transform:translateY(-5px);box-shadow:0 18px 44px rgba(27,28,27,0.1);border-color:rgba(52,25,106,0.22);">
+        <div style="display:flex;align-items:center;justify-content:space-between;"><span style="width:46px;height:46px;border-radius:14px;background:rgba(52,25,106,0.1);display:flex;align-items:center;justify-content:center;color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:24px;">calendar_month</span></span><span style="font-family:'Material Symbols Outlined';font-size:22px;color:#9a4612;">arrow_outward</span></div>
+        <div><h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque';font-weight:700;font-size:21px;color:#34196a;">Calendar</h3><p style="margin:0;font-size:13px;color:#494550;">This week's schedule</p></div>
+      </a>
+
+      <a data-tile="workshops" href="andWeYOGa%20Workshops.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:24px;display:flex;flex-direction:column;justify-content:space-between;background:rgba(255,255,255,0.72);backdrop-filter:blur(16px);border:1px solid rgba(75,50,130,0.1);box-shadow:0 8px 30px rgba(27,28,27,0.05);transition:transform .25s,box-shadow .25s,border-color .25s;" style-hover="transform:translateY(-5px);box-shadow:0 18px 44px rgba(27,28,27,0.1);border-color:rgba(52,25,106,0.22);">
+        <div style="display:flex;align-items:center;justify-content:space-between;"><span style="width:46px;height:46px;border-radius:14px;background:rgba(154,70,18,0.1);display:flex;align-items:center;justify-content:center;color:#9a4612;"><span style="font-family:'Material Symbols Outlined';font-size:24px;">school</span></span><span style="font-size:10px;font-weight:700;letter-spacing:0.08em;color:#9a4612;background:rgba(154,70,18,0.1);padding:4px 9px;border-radius:99px;">SOON</span></div>
+        <div><h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque';font-weight:700;font-size:21px;color:#34196a;">Workshops</h3><p style="margin:0;font-size:13px;color:#494550;">Deep-dive intensives</p></div>
+      </a>
+
+      <a data-tile="trips" href="andWeYOGa%20Trips.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:26px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(135deg,#6850a1 0%,#4b3282 100%);color:#fff;box-shadow:0 12px 34px rgba(75,50,130,0.26);transition:transform .25s,box-shadow .25s;" style-hover="transform:translateY(-5px);box-shadow:0 20px 48px rgba(75,50,130,0.4);">
+        <span style="position:absolute;right:-14px;bottom:-18px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:130px;color:rgba(255,255,255,0.1);">hiking</span>
+        <div style="position:relative;display:flex;align-items:center;justify-content:space-between;"><span style="font-family:'Material Symbols Outlined';font-size:30px;">hiking</span><span style="font-size:10px;font-weight:700;letter-spacing:0.08em;background:rgba(255,255,255,0.2);padding:4px 9px;border-radius:99px;">SOON</span></div>
+        <div style="position:relative;"><h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;">Trips &amp; Treks</h3><p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Immersive wellness retreats.</p></div>
+      </a>
+
+      <a data-tile="explore" href="andWeYOGa%20Explore.dc.html" style="position:relative;overflow:hidden;border-radius:26px;text-decoration:none;padding:26px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(135deg,#3f5a45 0%,#314736 100%);color:#fff;box-shadow:0 12px 34px rgba(49,71,54,0.26);transition:transform .25s,box-shadow .25s;" style-hover="transform:translateY(-5px);box-shadow:0 20px 48px rgba(49,71,54,0.4);">
+        <span style="position:absolute;right:-14px;bottom:-18px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:130px;color:rgba(255,255,255,0.1);">explore</span>
+        <div style="position:relative;display:flex;align-items:center;justify-content:space-between;"><span style="font-family:'Material Symbols Outlined';font-size:30px;">explore</span><span style="font-family:'Material Symbols Outlined';font-size:24px;opacity:0.85;">arrow_outward</span></div>
+        <div style="position:relative;"><h3 style="margin:0 0 4px;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;">Explore</h3><p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Classes, teachers &amp; experiences for you.</p></div>
+      </a>
+
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { navOpen: false };
+  renderVals() {
+    const open = this.state.navOpen;
+    return {
+      toggleNav: () => this.setState(s => ({ navOpen: !s.navOpen })),
+      closeNav: () => this.setState({ navOpen: false }),
+      drawerTransform: open ? 'translateX(0)' : 'translateX(100%)',
+      overlayOpacity: open ? '1' : '0',
+      overlayPointer: open ? 'auto' : 'none',
+      signOut: () => { try { localStorage.removeItem('awy_auth'); } catch(e){} window.location.href = 'andWeYOGa Home.dc.html'; },
+    };
+  }
+}
+</script>
+</body>
+</html>

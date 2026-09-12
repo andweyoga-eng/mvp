@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>andWeYoga Product Decision Log</title>
+<style>
+body { font-family: Georgia, "Times New Roman", serif; max-width: 920px; margin: 40px auto; padding: 0 24px; line-height: 1.6; color: #222; }
+h1 { color: #401e9c; border-bottom: 2px solid #e36b16; padding-bottom: 8px; }
+h2 { color: #401e9c; margin-top: 2em; page-break-before: auto; }
+h3 { color: #333; margin-top: 1.5em; border-left: 4px solid #e36b16; padding-left: 10px; }
+table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.92em; }
+th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; vertical-align: top; }
+th { background: #f3f0fa; }
+code, pre { background: #f5f5f5; font-family: Menlo, Monaco, monospace; font-size: 0.9em; }
+pre { padding: 12px; overflow-x: auto; border-radius: 6px; }
+blockquote { border-left: 4px solid #e36b16; margin: 1em 0; padding: 0.5em 1em; background: #faf8ff; }
+hr { border: none; border-top: 1px solid #ddd; margin: 2em 0; }
+li { margin: 0.25em 0; }
+@media print { body { margin: 0; max-width: none; } h3 { page-break-after: avoid; } }
+</style>
+</head>
+<body>
+<h1>andWeYoga Product Decision Log</h1>
+
+<table>
+<tr>
+<th>Field</th>
+<th>Value</th>
+</tr>
+<tr>
+<td>**Version**</td>
+<td>1.0</td>
+</tr>
+<tr>
+<td>**Compiled**</td>
+<td>11 July 2026</td>
+</tr>
+<tr>
+<td>**Repository**</td>
+<td>https://github.com/andweyoga-eng/mvp</td>
+</tr>
+<tr>
+<td>**Sources**</td>
+<td>`awy.md`, git commits, chat transcripts, internal docs, codebase</td>
+</tr>
+</table>
+
+<p><strong>Decision maker key</strong></p>
+
+<table>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+<tr>
+<td>**You**</td>
+<td>Explicit product direction from Arun / product owner</td>
+</tr>
+<tr>
+<td>**Joint**</td>
+<td>Discussed and aligned between product and engineering</td>
+</tr>
+<tr>
+<td>**AI/Eng**</td>
+<td>Engineering recommendation implemented (approved by shipping)</td>
+</tr>
+<tr>
+<td>**Team**</td>
+<td>Shipped by team member (e.g. Mudit) with product alignment</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>Table of Contents</h2>
+
+<p>1. [How to Read Each Entry](#how-to-read-each-entry)</p>
+<p>2. [Account, Profile, and Health](#1-account-profile-and-health)</p>
+<p>3. [Consent, Privacy, and Compliance](#2-consent-privacy-and-compliance-dpdp)</p>
+<p>4. [Authentication and Access](#3-authentication-and-access)</p>
+<p>5. [Booking, Payments, and Checkout](#4-booking-payments-and-checkout)</p>
+<p>6. [Flexi Mode](#5-flexi-mode)</p>
+<p>7. [Safety and Health Messaging](#6-safety-health-messaging-and-studio-policy)</p>
+<p>8. [Member Experience and IA](#7-member-experience-and-information-architecture)</p>
+<p>9. [Admin and Operations](#8-admin-and-operations)</p>
+<p>10. [On Hold or Not Built](#9-explicitly-on-hold-or-not-built)</p>
+<p>11. [AI/Engineering Decisions](#10-decisions-made-by-aiengineering-without-explicit-product-request)</p>
+<p>12. [Open Questions](#11-open-questions-for-product-owner)</p>
+
+<hr>
+
+<h2>How to Read Each Entry</h2>
+
+<table>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Existing / Enhancement / New / Deprecation / On hold / Partial</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>What forced a choice</td>
+</tr>
+<tr>
+<td>**Dependencies**</td>
+<td>What had to exist first</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>What was chosen</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Why</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Long term effect</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>1. Account, Profile, and Health</h2>
+
+<h3>1.1 Single profile completion rule everywhere</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Profile must be complete before booking</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement (was inconsistent)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (documented in `awy.md`, May 2026)</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Users saved health only; nav showed complete while phones were empty</td>
+</tr>
+<tr>
+<td>**Dependencies**</td>
+<td>`shared/profileCompleteness.ts`, server reconcile, booking API</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>One rule: verified email, name, primary and emergency mobile, valid secondary if filled, health disclosure complete</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Same truth in DB, API, nav, and booking. No contradictions</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Every gate (Book, Reserve, dashboard) uses one check. Support gives one checklist</td>
+</tr>
+</table>
+
+<h3>1.2 Order of Profile vs Health does not matter</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Completion order</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>User may fill Contact Info or Health in any order. Status updates when all pass</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Less friction. User chooses their path</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>My Account is section-based, not a forced wizard (except consent timing, see 2.1)</td>
+</tr>
+</table>
+
+<h3>1.3 Health text: &quot;No Health issues now&quot;</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Health disclosure quick option copy</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (10 Jul 2026, consent consolidation request)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Change from &quot;No health concerns.&quot; to **&quot;No Health issues now&quot;**</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Softer, more conversational member language</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Sets tone for health UX. Value in `shared/health-disclosure.ts`</td>
+</tr>
+</table>
+
+<h3>1.4 Health document uploads gated off</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>In-app health file upload</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>On hold (code exists, routes disabled)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You / Product (`awy.md`)</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Object storage cost, local dev breakage, low volume</td>
+</tr>
+<tr>
+<td>**Dependencies**</td>
+<td>S3 config, `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES = true`</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Upload UI off. Direct members to email support for large reports</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Email path works at current scale. Reduce infra risk</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Support handles documents manually until re-enabled. 5 MB limit defined for future</td>
+</tr>
+</table>
+
+<h3>1.5 SMS phone verification on Profile</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Per-number Verify via SMS</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>On hold (UI removed)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You / Product</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Collect and format-validate phones. No OTP verify in UI</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>SMS infra and product need not justified yet</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Verified mobile is format-only today. Real OTP is future backlog</td>
+</tr>
+</table>
+
+<h3>1.6 Credits, Preferences, Subscriptions tabs</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Account extras</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>On hold (placeholders)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (redesign)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Show Coming soon badges. No backend yet</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Ship core booking first. Avoid half-built features</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Account shell is ready. Backend can plug in later</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>2. Consent, Privacy, and Compliance (DPDP)</h2>
+
+<h3>2.1 Consent consolidation in My Account</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Where and when consent is collected</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (10 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Full-screen consent gate felt blocking. Flow should feel elegant</td>
+</tr>
+<tr>
+<td>**Dependencies**</td>
+<td>Consent APIs, profile sections, OAuth redirect</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Consolidate in My Account: **Contact Info first, then Health, then DPDPA consent**. WhatsApp consent stays near contact info. Marketing and newsletter in separate Privacy section</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Contextual consent after member understands what they are signing up for</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Onboarding is account-centric, not modal-centric</td>
+</tr>
+</table>
+
+<h3>2.2 OAuth signup lands on My Account (not Dashboard)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Post Google sign-in redirect</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (10 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>New or incomplete users go to `/my-account`. Complete users go to dashboard after profile done</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Start setup immediately. No extra hop</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>First-time member journey starts in account setup</td>
+</tr>
+</table>
+
+<h3>2.3 Adults only (18+)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Age gate</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New (compliance)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (DPDP policy)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Date of birth required. Under 18 cannot register or guest book</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>DPDPA adults-only policy for this platform</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Hard gate on signup, consent, and guest checkout</td>
+</tr>
+</table>
+
+<h3>2.4 Account erasure (type ERASE)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Right to erasure</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (legal and engineering)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Member types ERASE to confirm. Server runs erasure executor. 30 day processing per privacy notice</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>DPDP compliance</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Support must not delete manually without process</td>
+</tr>
+</table>
+
+<h3>2.5 Re-consent after policy version change</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Legal document updates</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>`documentVersion` in `LEGAL_CONFIG` triggers re-consent</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Lawful processing after policy updates</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Every legal change needs version bump and member re-acceptance</td>
+</tr>
+</table>
+
+<h3>2.6 Interim US hosting disclosure</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Data localisation messaging</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New (legal product)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You / Legal (`shared/legal-config.ts`)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Disclose Railway US hosting interim. Commit to India migration in privacy notice</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Honest DPDP subprocessor disclosure</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Migration to India infra is a stated milestone</td>
+</tr>
+</table>
+
+<h3>2.7 WhatsApp consent placement</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>WhatsApp opt-in</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>WhatsApp toggle near contact info, not only in legal section</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Tied to how studio will message members</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Maintenance and session comms can use WhatsApp when consented</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>3. Authentication and Access</h2>
+
+<h3>3.1 Google Sign-In as primary path</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Registration method</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Existing (email/password signup deprecated Sep 2025)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (early platform)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Google OAuth primary. Email/password login retained for existing accounts</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Lower friction. Google auto-verifies email</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>OAuth config (`ALLOWED_ORIGIN`) is critical ops dependency</td>
+</tr>
+</table>
+
+<h3>3.2 JWT in httpOnly cookies (not URL)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Session storage</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement (security)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>AI/Eng (security audit, shipped Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>No `?token=` in URL after OAuth. Cookie-based session</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Tokens in URLs leak via logs and history</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Standard secure web auth pattern</td>
+</tr>
+</table>
+
+<h3>3.3 Guest checkout (super admin toggle)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Book without full account</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Conversion vs compliance. Need controls</td>
+</tr>
+<tr>
+<td>**Dependencies**</td>
+<td>Guest consent schema, platform settings API</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Guest checkout **off by default**. Super admin enables via platform settings</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Studio controls when to allow low-friction booking</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Auth popup copy changes when on</td>
+</tr>
+</table>
+
+<h3>3.4 Nav CTA: Book / Signup</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Header call to action</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Rename to **Book/Signup** tied to session phase</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Action-oriented for conversion</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Public site leads with booking intent</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>4. Booking, Payments, and Checkout</h2>
+
+<h3>4.1 Razorpay integrated checkout</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Online payments</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (May to Jul 2026 platform build)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Razorpay Standard Checkout for cards, UPI, net banking</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Professional payments for Indian market</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Core revenue path</td>
+</tr>
+</table>
+
+<h3>4.2 Reserve and Pay with 14 minute hold</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Seat reservation during payment</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (Epic A-01)</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Razorpay window about 12 min. Need buffer</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>**14 minute hold** from booking creation. Pending booking counts toward capacity</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Prevent double booking while member pays</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Support must explain hold timer</td>
+</tr>
+</table>
+
+<h3>4.3 Back button releases spot (launch scale)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Checkout exit behavior</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New (documented policy)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (`docs/checkout-hold-ux-notes.md`)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Confirm dialog on back. Confirming **releases spot immediately**</td>
+</tr>
+<tr>
+<td>**Alternatives considered**</td>
+<td>Navigate-only back (hold continues until expiry)</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Explicit user intent. Accurate capacity at current volume</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Revisit at higher volume (documented as future A-02)</td>
+</tr>
+</table>
+
+<h3>4.4 QR / manual payment confirmation</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>UPI QR sessions</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Admin uploads QR. Admin confirms payment manually. Unified member confirmation UI</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Some sessions use QR not Razorpay</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Ops workflow for studio</td>
+</tr>
+</table>
+
+<h3>4.5 Session terms at checkout</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Per class type terms acceptance</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Show and require acceptance of session-specific terms at checkout</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Legal and studio policy per discipline</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Admin sets terms per class type</td>
+</tr>
+</table>
+
+<h3>4.6 Coupons at checkout</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Discount codes</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Super admin creates coupons. Member enters at checkout</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Promotions and campaigns</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Offers panel in admin</td>
+</tr>
+</table>
+
+<h3>4.7 Trial/drop-in: no mid-session booking</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Book window for trial and drop-in</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New (product rule)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (`shared/booking-eligibility.ts`)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Trial/drop-in only bookable **before start**. Mid-session blocked with calm studio message</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Protect in-session experience</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Different rules than recurring weekly sessions</td>
+</tr>
+</table>
+
+<h3>4.8 Book CTAs route to checkout; resume after signup</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Booking intent preservation</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Book buttons go to `/reserve`. After signup, return to intended session</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Do not lose booking intent across auth</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Conversion funnel is checkout-first</td>
+</tr>
+</table>
+
+<h3>4.9 All member-facing times in IST</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Timezone display</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement (bug fix became policy)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026, production bug)</td>
+</tr>
+<tr>
+<td>**Factors**</td>
+<td>Railway server UTC caused wrong times for Flexi path</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Render all session times in **IST (Asia/Kolkata)** on server and client</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Studio and members are India-based</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Permanent rule. No ambiguous server timezone</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>5. Flexi Mode</h2>
+
+<h3>5.1 Flexi Mode feature</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Pick weekly practice days from eligible pools</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (platform build)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Weekly packages can offer Flexi. Member selects slots at checkout. Selection locked after booking</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Flexibility without changing package price</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Major differentiator for recurring memberships</td>
+</tr>
+</table>
+
+<h3>5.2 No swap available: proactive message</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>When Flexi options equal fixed slots</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026, multiple iterations)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Do not wait for user to click Flexi. Show greyed Flexi button, keep Flexi row, tooltip still works. Show message immediately: **&quot;Oops, sorry. This one&#x27;s already dialed in (Mon-Wed 6:30 PM). No Flexi swaps available. Book Fixed Slots to continue.&quot;**</td>
+</tr>
+<tr>
+<td>**Rejected**</td>
+<td>Hiding Flexi row entirely</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Kind, on-brand copy. No dead-end click</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Sets voice for error and edge states</td>
+</tr>
+</table>
+
+<h3>5.3 Flexi badge with info tooltip on schedules</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Flexi visibility on carousel and weekly schedule</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Show Flexi badge with &quot;i&quot; tooltip on eligible sessions</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Educate before checkout</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Discovery-led Flexi adoption</td>
+</tr>
+</table>
+
+<h3>5.4 andWeWorkout: session list before checkout</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Book from class type catalogue</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Book on class type shows **list of scheduled sessions**. User picks one, then checkout</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Clear path from catalogue to specific session</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Catalogue is discovery, not direct checkout</td>
+</tr>
+</table>
+
+<h3>5.5 Per-day times in upcoming session header</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Flexi booking display after purchase</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>If Flexi selection has different times per day, header shows per-day schedule, not a single flat time</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Accurate representation of what member bought</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Trust in session history and dashboard</td>
+</tr>
+</table>
+
+<h3>5.6 Payment success screen: one fold</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Post payment confirmation layout</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Dashboard, Account, Logout actions visible without scrolling</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Mobile UX. Clear next steps</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Success moment is compact and actionable</td>
+</tr>
+</table>
+
+<h3>5.7 Flexi slot tap: select on first tap</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Slot selection interaction</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>First tap selects. Second tap deselects. Clearer loading spinner</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Obvious feedback during load</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Standard toggle pattern for slot picker</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>6. Safety, Health Messaging, and Studio Policy</h2>
+
+<h3>6.1 Not Suitable (strictNoTo) contraindications</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Class type health warnings</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Show collapsible Not Suitable tags on cards, reserve, checkout. Contact team button opens SMS to support</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Informed consent without medical advice in app</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Support and instructors handle edge cases</td>
+</tr>
+</table>
+
+<h3>6.2 No em/en dashes in user-facing copy</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Typography style</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement (style rule)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Remove em dashes and en dashes from member-facing text</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Brand voice and readability preference</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Ongoing copy rule for all new UI</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>7. Member Experience and Information Architecture</h2>
+
+<h3>7.1 Digital Zen home page redesign</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Public home visual redesign</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (Jun 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Full home redesign with hero carousel, hub schedules, Digital Zen design language</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Modern brand presentation</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Design system in `design prototypes/andWeYOGa_handoff/` drives UI</td>
+</tr>
+</table>
+
+<h3>7.2 Hub launcher and account redesign</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Signed-in navigation (Sessions, Calendar, Emojou, etc.)</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (Jun 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Hub as signed-in home. Section launcher strip. Account drawer deep-links to My Account sections</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>App-like navigation for members</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Multi-page member app, not single scroll site</td>
+</tr>
+</table>
+
+<h3>7.3 My Account: single scroll page with section rail</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Account layout</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement (in progress)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>No page-level tabs. Anchor sections: profile, health, sessions, payments, privacy. Credits/preferences marked soon</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>One URL, deep links from drawer</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Stable anchor IDs are a contract for navigation</td>
+</tr>
+</table>
+
+<h3>7.4 Maintenance window overlay</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Studio pause for deploys</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>New</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Super admin toggle. Friendly copy (short savasana). Admin routes still work. Email/WhatsApp notify consented members</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Graceful downtime</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Ops can ship during low traffic</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>8. Admin and Operations</h2>
+
+<h3>8.1 Admin auth from env bootstrap</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Admin login security</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint (`ADMIN-BUILD-PLAN` slice 1)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>`ADMIN_INITIAL_PASSWORD` syncs on boot. Remove admin123 backdoor and login page hints</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Production safety</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Ops must set env vars</td>
+</tr>
+</table>
+
+<h3>8.2 Incremental DB patches (not push on prod)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Database migrations</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>AI/Eng (adopted by product)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>`npm run db:patch` for production. `db:push` for dev</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Avoid Drizzle PK errors on live DB</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Every schema change ships as numbered SQL patch</td>
+</tr>
+</table>
+
+<h3>8.3 Admin test data tab (separate from production data)</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Test data management in admin</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Requested / not fully shipped</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>You (9 Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Separate tab with sub-tabs (users, session types, etc.). Paginate. Bulk delete. All QA fixtures created there</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Test and prod data mixed is hard for ops</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>**Backlog.** Today test data uses naming prefixes (`Smoke QA`, `Agent QA`) only</td>
+</tr>
+</table>
+
+<h3>8.4 Session pause / resume / delete / cancel</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Admin session lifecycle</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Enhancement</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Team (Jul 2026)</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Pause hides from public catalog. Resume syncs catalog. Super admin cancel/retire with placeholder notify</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Ops control without code changes</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Member cancel notify still placeholder</td>
+</tr>
+</table>
+
+<h3>8.5 Placeholder OTP for super admin session delete</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Destructive admin action guard</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Partial (interim)</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>AI/Eng</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Use `000000` placeholder until live SMS owner verification</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Guard rail without SMS infra</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>Must replace before real security</td>
+</tr>
+</table>
+
+<h3>8.6 Replit removal, Railway as host</h3>
+
+<table>
+<tr>
+<th>**Feature**</th>
+<th>Hosting platform</th>
+</tr>
+<tr>
+<td>**Type**</td>
+<td>Deprecation</td>
+</tr>
+<tr>
+<td>**Decided by**</td>
+<td>Joint</td>
+</tr>
+<tr>
+<td>**Decision**</td>
+<td>Remove Replit legacy. Railway for app and Postgres. GoDaddy DNS for andweyoga.com</td>
+</tr>
+<tr>
+<td>**Rationale**</td>
+<td>Production-grade deploy path</td>
+</tr>
+<tr>
+<td>**Shapes product**</td>
+<td>US interim hosting until India migration</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>9. Explicitly On Hold or Not Built</h2>
+
+<table>
+<tr>
+<th>Feature</th>
+<th>Type</th>
+<th>Decision</th>
+<th>Rationale</th>
+</tr>
+<tr>
+<td>SMS OTP verification</td>
+<td>On hold</td>
+<td>Defer until SMS provider</td>
+<td>Cost and complexity</td>
+</tr>
+<tr>
+<td>Google Meet auto-redirect after class</td>
+<td>On hold</td>
+<td>Not in Meet API</td>
+<td>Manual return or Workspace leave URL</td>
+</tr>
+<tr>
+<td>Push notifications</td>
+<td>On hold</td>
+<td>Email/WhatsApp first</td>
+<td>MVP scope</td>
+</tr>
+<tr>
+<td>Waitlist auto-notify</td>
+<td>Partial</td>
+<td>Schema exists, flow incomplete</td>
+<td>Ship booking first</td>
+</tr>
+<tr>
+<td>Bulk Excel user upload</td>
+<td>On hold</td>
+<td>API returns 501</td>
+<td>Needs parser and invites</td>
+</tr>
+<tr>
+<td>Instructor self-service portal</td>
+<td>On hold</td>
+<td>Admin-driven onboarding</td>
+<td>Phase 2</td>
+</tr>
+<tr>
+<td>Member self-service cancellation</td>
+<td>On hold</td>
+<td>Admin cancel exists</td>
+<td>v1.3 roadmap</td>
+</tr>
+<tr>
+<td>Commerce / merchandise</td>
+<td>On hold</td>
+<td>Phase 3</td>
+<td>Out of MVP</td>
+</tr>
+<tr>
+<td>Community feed</td>
+<td>On hold</td>
+<td>Phase 2</td>
+<td>Out of MVP</td>
+</tr>
+<tr>
+<td>Native mobile app</td>
+<td>On hold</td>
+<td>Responsive web</td>
+<td>Long term</td>
+</tr>
+<tr>
+<td>India data hosting</td>
+<td>Planned</td>
+<td>Disclosed interim US</td>
+<td>Legal commitment</td>
+</tr>
+<tr>
+<td>Health document in-app upload</td>
+<td>On hold</td>
+<td>Email path for now</td>
+<td>Infra and scale</td>
+</tr>
+<tr>
+<td>Admin test data tab</td>
+<td>On hold</td>
+<td>Requested Jul 2026</td>
+<td>Not fully built</td>
+</tr>
+<tr>
+<td>Credits and subscriptions</td>
+<td>On hold</td>
+<td>UI placeholder</td>
+<td>Future phase</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>10. Decisions Made by AI/Engineering (Without Explicit Product Request)</h2>
+
+<p>Approved by testing and shipping.</p>
+
+<table>
+<tr>
+<th>Decision</th>
+<th>Rationale</th>
+<th>Product impact</th>
+</tr>
+<tr>
+<td>Server crashes if JWT_SECRET missing</td>
+<td>Security</td>
+<td>No accidental weak deploy</td>
+</tr>
+<tr>
+<td>Rate limits on auth (10 per 15 min)</td>
+<td>Brute force protection</td>
+<td>Legitimate users rarely hit</td>
+</tr>
+<tr>
+<td>CORS fail closed to ALLOWED_ORIGIN</td>
+<td>Security</td>
+<td>Each environment needs correct origin</td>
+</tr>
+<tr>
+<td>Recompute profile status on every /api/auth/me</td>
+<td>Fix legacy bad rows</td>
+<td>Self-healing without migration</td>
+</tr>
+<tr>
+<td>DATABASE_PUBLIC_URL preferred on Railway</td>
+<td>Fix ENOTFOUND</td>
+<td>Production stability</td>
+</tr>
+<tr>
+<td>Clean-slate QA rule (Smoke QA fixtures deleted)</td>
+<td>Data hygiene</td>
+<td>Prod DB stays clean</td>
+</tr>
+<tr>
+<td>Input length limits in shared constants</td>
+<td>Prevent abuse</td>
+<td>Consistent validation</td>
+</tr>
+<tr>
+<td>JWT algorithm pinned to HS256</td>
+<td>Security hardening</td>
+<td>Prevents algorithm confusion</td>
+</tr>
+<tr>
+<td>Neutral response on forgot-password</td>
+<td>Prevent email enumeration</td>
+<td>Privacy</td>
+</tr>
+<tr>
+<td>Session join event logging on Meet click</td>
+<td>Attendance shadow data</td>
+<td>Future analytics</td>
+</tr>
+<tr>
+<td>Email verification token 24h expiry</td>
+<td>Security</td>
+<td>Forces timely verify</td>
+</tr>
+<tr>
+<td>bcrypt 12 rounds for passwords</td>
+<td>Industry standard</td>
+<td>Secure credential storage</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>11. Open Questions for Product Owner</h2>
+
+<p>1. Include pre-Cursor decisions (Sep to Oct 2025) in v1.1, or keep this log Apr 2026 onward only?</p>
+<p>2. Confirm consent consolidation (10 Jul) is deployed to production or still on branch.</p>
+<p>3. Mark Mudit commits as separate author, or fold into team decisions?</p>
+<p>4. Marketing newsletter consent: live in Privacy section or still planned?</p>
+<p>5. Add approved-by sign-off line and logo for external sharing?</p>
+
+<hr>
+
+<h2>Document Maintenance</h2>
+
+<table>
+<tr>
+<th>When</th>
+<th>Action</th>
+</tr>
+<tr>
+<td>New product decision in chat</td>
+<td>Add entry with date and decided-by</td>
+</tr>
+<tr>
+<td>Feature shipped from backlog</td>
+<td>Move from Section 9 to relevant section</td>
+</tr>
+<tr>
+<td>Feature deprecated</td>
+<td>Mark type Deprecation with date</td>
+</tr>
+<tr>
+<td>Policy change</td>
+<td>Update rationale and shapes product</td>
+</tr>
+</table>
+
+<p><strong>Export to PDF:</strong> Open the HTML file in a browser. File, Print, Save as PDF.</p>
+
+<hr>
+
+<p>*End of product decision log. Maintained by andWeYoga product and engineering.*</p>
+</body>
+</html>
