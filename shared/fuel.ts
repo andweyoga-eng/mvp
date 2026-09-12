@@ -39,7 +39,7 @@ export const FUEL_PEP_PHRASES: PepPhrase[] = [
 ];
 
 export const FUEL_MEDICAL_DISCLAIMER =
-  "andWeFuel is a self-awareness aid and not medical or nutritional advice.";
+  "andWeDiet is a self-awareness aid and not medical or nutritional advice.";
 
 export const FUEL_SUPPORT_COPY =
   "If tracking food feels stressful, here is support";

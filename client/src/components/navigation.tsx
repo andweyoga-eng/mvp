@@ -4,11 +4,11 @@ import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-pr
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
 import { AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { AccountDrawer } from "@/components/account-drawer";
@@ -20,6 +20,9 @@ import { navigateToHomeSection } from "@/lib/home-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountMenuDrawerButton } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
+import { QuitSetupDialog } from "@/components/quit-setup-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { clearMemberLandingCheck } from "@/lib/member-landing";
 
 interface NavigationProps {
   onBookingClick: () => void;
@@ -38,21 +41,72 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
-  const { user, isLoading: authLoading } = useAuth();
+  const [quitOpen, setQuitOpen] = useState(false);
+  const [quitSaving, setQuitSaving] = useState(false);
+  const { user, isLoading: authLoading, logout, updateProfile } = useAuth();
   const { celebrationCount, openCelebrationFromMenu } = usePaymentVerifiedCelebrations();
+  const { toast } = useToast();
 
   const isProfileComplete = isAuthUserProfileComplete(user);
+  const incompleteHref = user ? getIncompleteAccountHref(user) : null;
 
   const goToHomeSection = (sectionId: string) => {
+    if (user) {
+      window.location.href = "/dashboard";
+      setIsDrawerOpen(false);
+      return;
+    }
     navigateToHomeSection(sectionId);
     setIsDrawerOpen(false);
+  };
+
+  const finishQuitToMarketing = async () => {
+    clearMemberLandingCheck();
+    await logout();
+    window.location.assign("/");
+  };
+
+  const handleSaveAndQuit = async () => {
+    if (!user) return;
+    setQuitSaving(true);
+    try {
+      await updateProfile(
+        {
+          name: user.name,
+          primaryMobile: user.primaryMobile ?? "",
+          primaryMobileCountryCode: user.primaryMobileCountryCode ?? "+91",
+          secondaryMobile: user.secondaryMobile ?? undefined,
+          secondaryMobileCountryCode: user.secondaryMobileCountryCode ?? undefined,
+          emergencyMobile: user.emergencyMobile ?? "",
+          emergencyMobileCountryCode: user.emergencyMobileCountryCode ?? "+91",
+          dateOfBirth: user.dateOfBirth ?? undefined,
+          whatsappConsent: user.whatsappConsent,
+          addressStreet: user.addressStreet ?? undefined,
+          addressLine2: user.addressLine2 ?? undefined,
+          addressCity: user.addressCity ?? undefined,
+          addressCountry: user.addressCountry ?? undefined,
+          addressState: user.addressState ?? undefined,
+          addressPincode: user.addressPincode ?? undefined,
+        },
+        { silent: true },
+      );
+      toast({ title: "Contact info saved", description: "Signed out - finish setup anytime." });
+      await finishQuitToMarketing();
+    } catch (err) {
+      toast({
+        title: "Could not save",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+      setQuitSaving(false);
+    }
   };
 
   return (
     <>
       <header className="sticky top-0 z-50 border-b border-dz-glass-border bg-white/60 backdrop-blur-[20px]">
-        <PageContainer className="flex h-[76px] items-center justify-between gap-4">
-          <div className="relative flex-shrink-0">
+        <PageContainer className="grid h-[64px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:h-[76px] sm:gap-4">
+          <div className="relative z-10 flex-shrink-0">
             <Button
               className="h-9 w-9 rounded-full bg-primary p-0 text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:h-10 sm:w-10"
               onClick={() => setIsDrawerOpen(true)}
@@ -77,57 +131,71 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             )}
           </div>
 
-          <BrandLogo
-            className="absolute left-1/2 -translate-x-1/2"
-            imgClassName="h-[clamp(44px,7vw,58px)] w-auto"
-            testId="desktop-logo-link"
-          />
+          <div className="flex min-w-0 items-center justify-center px-1">
+            <BrandLogo
+              className="mx-auto"
+              imgClassName="h-[clamp(32px,8vw,52px)] w-auto max-h-[52px] max-w-full object-contain"
+              testId="desktop-logo-link"
+            />
+          </div>
 
-          <div className="relative flex flex-shrink-0 items-center">
+          <div className="relative z-10 flex flex-shrink-0 items-center justify-end">
             {authLoading ? (
-              // Hold the slot until auth resolves so we never flash the wrong CTA
-              // (e.g. "Book Session" before "My Account") on a cold load/refresh.
               <div
-                className="h-9 w-[118px] rounded-full bg-primary/10 sm:w-[136px]"
+                className="h-9 w-[96px] rounded-full bg-primary/10 sm:w-[136px]"
                 aria-hidden
                 data-testid="nav-auth-loading"
               />
             ) : user ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      className={`rounded-full px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary sm:px-3.5 sm:py-2 sm:text-sm ${
-                        !isProfileComplete
-                          ? "bg-orange-600 hover:bg-orange-700"
-                          : "bg-primary hover:bg-primary/90"
-                      }`}
-                      data-testid="nav-my-account"
-                      onClick={() => {
-                        const href = getIncompleteAccountHref(user);
-                        if (href) {
-                          window.location.href = href;
-                          return;
-                        }
-                        setAccountDrawerOpen(true);
-                      }}
-                    >
-                      {!isProfileComplete && <AlertTriangle className="mr-1 h-3 w-3" />}
-                      My Account
-                      <Menu className="ml-1.5 h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  {!isProfileComplete ? (
-                    <TooltipContent side="bottom" className="max-w-xs text-center">
-                      Complete your phone number and health note to book sessions.
-                    </TooltipContent>
-                  ) : null}
-                </Tooltip>
-              </TooltipProvider>
+              !isProfileComplete ? (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        className="rounded-full bg-orange-600 px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-dz-primary hover:bg-orange-700 sm:px-3.5 sm:py-2 sm:text-sm"
+                        data-testid="nav-my-account"
+                      >
+                        <AlertTriangle className="mr-1 h-3 w-3 shrink-0" />
+                        <span className="truncate">My Account</span>
+                        <Menu className="ml-1 h-3.5 w-3.5 shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          if (incompleteHref) window.location.href = incompleteHref;
+                          else setAccountDrawerOpen(true);
+                        }}
+                      >
+                        Continue with setup
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setQuitOpen(true)}>
+                        Quit setup
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <QuitSetupDialog
+                    open={quitOpen}
+                    onOpenChange={setQuitOpen}
+                    saving={quitSaving}
+                    onSaveAndQuit={handleSaveAndQuit}
+                    onQuitAnyway={finishQuitToMarketing}
+                  />
+                </>
+              ) : (
+                <Button
+                  className="rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
+                  data-testid="nav-my-account"
+                  onClick={() => setAccountDrawerOpen(true)}
+                >
+                  My Account
+                  <Menu className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              )
             ) : (
               <>
                 <Button
-                  className="rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
+                  className="rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
                   data-testid="nav-book-session"
                   onClick={() => setBookingAuthOpen(true)}
                 >

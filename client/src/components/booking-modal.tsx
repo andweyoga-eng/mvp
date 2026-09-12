@@ -45,7 +45,7 @@ import { AuthHoverPopup, AuthChoiceDialog } from "@/components/auth-hover-popup"
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import { isAuthUserReadyForPaidHealthBooking } from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, User, ExternalLink, CreditCard, Sparkles, Video, Download } from "lucide-react";
 import {
@@ -253,7 +253,7 @@ export default function BookingModal({
     clearGuestFormError();
     return true;
   };
-  const isProfileComplete = isAuthUserProfileComplete(user);
+  const isProfileComplete = isAuthUserReadyForPaidHealthBooking(user);
   const hasPreselectedSession = !!sessionId;
   const hasClassTypeFilter = !!filterClassTypeId && !sessionId;
 
@@ -827,15 +827,19 @@ export default function BookingModal({
       persistBookingIntentForProfile();
       onClose();
 
+      const issues = getProfileIssues();
+      const healthOnly =
+        issues.length === 1 && issues[0]?.includes("Health History");
       toast({
-        title: "Profile Incomplete",
-        description:
-          "Please complete your profile (name, mobiles, verified email, and Health History) before booking sessions.",
+        title: healthOnly ? "A quick health check-in" : "Almost there",
+        description: healthOnly
+          ? "Share a short Health History so we can keep your practice safe - viney and private - then continue booking."
+          : "Please finish your contact details and Health History before booking this session.",
         variant: "destructive",
       });
 
       setTimeout(() => {
-        setLocation("/my-account#profile");
+        setLocation(healthOnly ? "/my-account#health" : "/my-account#profile");
       }, 100);
 
       return;
@@ -1436,9 +1440,9 @@ export default function BookingModal({
             <AlertTriangle className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
               <div className="space-y-2">
-                <p className="font-medium">Profile Incomplete</p>
+                <p className="font-medium">A quick health check-in</p>
                 <div className="text-sm">
-                  <p>To book yoga sessions, please complete:</p>
+                  <p>Before you book this session, we need:</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
                     {getProfileIssues().map((issue, index) => (
                       <li key={index}>{issue}</li>
@@ -1452,7 +1456,7 @@ export default function BookingModal({
                   data-testid="button-go-to-profile"
                 >
                   <User className="w-4 h-4 mr-2" />
-                  Complete Profile
+                  Continue
                 </Button>
               </div>
             </AlertDescription>

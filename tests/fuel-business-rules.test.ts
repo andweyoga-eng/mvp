@@ -18,7 +18,7 @@ import {
   roundFuelCalories,
 } from "../shared/fuel.ts";
 
-describe("andWeFuel business rules", () => {
+describe("andWeDiet business rules", () => {
   it("matches meal slots by local time band", () => {
     assert.equal(matchMealSlot(DEFAULT_FUEL_MEAL_PLAN, "08:00")?.label, "Breakfast");
     assert.equal(matchMealSlot(DEFAULT_FUEL_MEAL_PLAN, "12:30")?.label, "Lunch");

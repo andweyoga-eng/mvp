@@ -29,7 +29,7 @@ import { GlassCard } from "@/components/digital-zen/glass-card";
 import { formatSessionPrice, isValidPaymentUrl } from "@/lib/booking-payment";
 import { filterBookableSessions, sessionDurationMinutes } from "@/lib/booking-flow";
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
-import { isAuthUserProfileComplete } from "@/lib/account-profile-complete";
+import { isAuthUserReadyForPaidHealthBooking, getIncompleteAccountHref } from "@/lib/account-profile-complete";
 import { isTrialOrDropIn } from "@shared/booking-eligibility";
 import {
   fetchMemberSessions,
@@ -37,7 +37,6 @@ import {
   findUpcomingMemberSessionForClass,
 } from "@/lib/member-sessions";
 import { setPendingBooking, clearPendingBooking } from "@/lib/pending-booking";
-import { navigateToHomeSection } from "@/lib/home-navigation";
 import { useBookingCheckout } from "@/hooks/use-booking-checkout";
 import { useCheckoutPrograms } from "@/hooks/use-checkout-programs";
 import {
@@ -297,7 +296,7 @@ export default function Reserve() {
     ? findUpcomingMemberSessionForClass(memberSessions, selected.id)
     : undefined;
 
-  const profileComplete = isAuthUserProfileComplete(user);
+  const profileComplete = isAuthUserReadyForPaidHealthBooking(user);
   const isTrialDrop = isTrialOrDropIn(selected?.sessionFrequency ?? null);
   const checkoutPrograms = useCheckoutPrograms({
     classTypeId: selected?.classType?.id ?? selected?.classTypeId,
@@ -328,11 +327,11 @@ export default function Reserve() {
   const leaveCheckout = (intent: "back" | "home") => {
     clearPendingBooking();
     if (intent === "home") {
-      navigateToHomeSection("home");
+      setLocation(user ? "/dashboard" : "/");
       return;
     }
     if (fromProfile || fromHome) {
-      navigateToHomeSection("schedule");
+      setLocation(user ? "/dashboard" : "/");
       return;
     }
     setLocation(exitPath);
@@ -342,12 +341,14 @@ export default function Reserve() {
     if (!selected) return;
     if (user && !profileComplete && !isTrialDrop) {
       persistReserveIntent(sessionId, classTypeId);
+      const href = getIncompleteAccountHref(user, { requireHealth: true }) ?? "/my-account#health";
       toast({
-        title: "Profile incomplete",
-        description: "Complete your profile and Health History before booking.",
+        title: "A quick health check-in",
+        description:
+          "Share a short Health History so we can keep your practice safe, then continue booking.",
         variant: "destructive",
       });
-      setLocation("/my-account#profile");
+      setLocation(href);
       return;
     }
     if (checkoutPrograms.empty) {

@@ -46,9 +46,14 @@ function optionalSecondaryOk(
 
 export type AccountOnboardingAnchor = "profile" | "health" | "privacy";
 
+/**
+ * First unfinished onboarding step for general signup / Book→Sign-in.
+ * Health History is NOT required here — it is gated when the member books a
+ * paid health session or uses WeDiet / weEmo (see isHealthSectionComplete).
+ */
 export function getFirstIncompleteAccountAnchor(
   u: AccountProfileCheckInput,
-  options?: { requiresConsent?: boolean },
+  options?: { requiresConsent?: boolean; requireHealth?: boolean },
 ): AccountOnboardingAnchor | null {
   if (!u.emailVerified) return "profile";
   if (!(u.name ?? "").trim()) return "profile";
@@ -61,7 +66,7 @@ export function getFirstIncompleteAccountAnchor(
   if (!optionalSecondaryOk(u.secondaryMobile, u.secondaryMobileCountryCode)) {
     return "profile";
   }
-  if (!isHealthDisclosureComplete(u.healthUpdateText)) {
+  if (options?.requireHealth && !isHealthDisclosureComplete(u.healthUpdateText)) {
     return "health";
   }
   if (options?.requiresConsent) {
@@ -85,14 +90,17 @@ export function isHealthSectionComplete(u: AccountProfileCheckInput): boolean {
   return isHealthDisclosureComplete(u.healthUpdateText);
 }
 
+/**
+ * Contact onboarding complete (email, name, mobiles). Health is intentional and
+ * separate — required for paid health sessions, not for finishing setup.
+ */
 export function isAccountProfileComplete(u: AccountProfileCheckInput): boolean {
-  if (!u.emailVerified) return false;
-  if (!(u.name ?? '').trim()) return false;
-  if (!requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) return false;
-  if (!requiredMobileOk(u.emergencyMobile, u.emergencyMobileCountryCode)) return false;
-  if (!optionalSecondaryOk(u.secondaryMobile, u.secondaryMobileCountryCode)) return false;
-  if (!isHealthDisclosureComplete(u.healthUpdateText)) return false;
-  return true;
+  return isProfileFieldsSectionComplete(u);
+}
+
+/** Paid / recurring health sessions need contact + Health History. */
+export function isReadyForPaidHealthBooking(u: AccountProfileCheckInput): boolean {
+  return isProfileFieldsSectionComplete(u) && isHealthSectionComplete(u);
 }
 
 export function computeProfileCompletionStatus(
@@ -102,7 +110,10 @@ export function computeProfileCompletionStatus(
 }
 
 /** Human-readable gaps for UI (e.g. booking modal). */
-export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput): string[] {
+export function getAccountProfileIncompleteReasons(
+  u: AccountProfileCheckInput,
+  options?: { requireHealth?: boolean },
+): string[] {
   const reasons: string[] = [];
   if (!u.emailVerified) reasons.push('Email not verified');
   if (!(u.name ?? '').trim()) reasons.push('Full name is required');
@@ -129,7 +140,7 @@ export function getAccountProfileIncompleteReasons(u: AccountProfileCheckInput):
     if (!sr.isValid) reasons.push(`Secondary mobile: ${sr.error ?? 'invalid'}`);
   }
 
-  if (!isHealthDisclosureComplete(u.healthUpdateText)) {
+  if (options?.requireHealth !== false && !isHealthDisclosureComplete(u.healthUpdateText)) {
     reasons.push(
       'Health History required. Add your latest update on the Health History tab.',
     );

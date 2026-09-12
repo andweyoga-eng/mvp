@@ -70,7 +70,7 @@ type ProgressComment = {
 type SectionKey = "health_history" | "calorie_statement";
 
 function formatWhen(iso: string | null | undefined) {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
     return new Date(iso).toLocaleString();
   } catch {
@@ -187,7 +187,7 @@ function SectionComments({
         Section notes (audit trail)
       </div>
       <p className="text-xs text-muted-foreground">
-        Comments apply to this whole section — not individual updates, meals, or weeks.
+        Comments apply to this whole section, not individual updates, meals, or weeks.
         Instructor acknowledgement is reserved for a future session-join gate.
       </p>
 

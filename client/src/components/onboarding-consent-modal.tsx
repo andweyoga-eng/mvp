@@ -192,20 +192,25 @@ export function OnboardingConsentPanel({
             </button>
           )}
           {hideLanguageToggle ? null : (
-            <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
-              {(["en", "kn"] as const).map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setLang(code)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 uppercase",
-                    lang === code ? "bg-primary text-white" : "text-dz-muted",
-                  )}
-                >
-                  {code === "en" ? "EN" : "ಕನ್ನಡ"}
-                </button>
-              ))}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-dz-muted">
+                {copy.chooseLanguage}
+              </span>
+              <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
+                {(["en", "kn"] as const).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setLang(code)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1",
+                      lang === code ? "bg-primary text-white" : "text-dz-muted",
+                    )}
+                  >
+                    {code === "en" ? copy.languageEnglish : copy.languageKannada}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

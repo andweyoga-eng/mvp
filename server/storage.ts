@@ -960,7 +960,7 @@ export interface IStorage {
     userAgent?: string | null;
   }): Promise<User | undefined>;
 
-  // andWeFuel
+  // andWeDiet
   setUserFuelConfig(
     userId: string,
     config: {

@@ -84,8 +84,8 @@ function statementDayHeaderTextClass(status: StatementDayVerdict) {
 
 function statementDayVerdictLabel(status: StatementDayVerdict): string {
   if (status === "on_track") return "Target Hit";
-  if (status === "over") return "Target missed — Over eating";
-  if (status === "under") return "Target missed — Under eating";
+  if (status === "over") return "Target missed - Over eating";
+  if (status === "under") return "Target missed - Under eating";
   return "In progress";
 }
 
@@ -767,7 +767,7 @@ function LogMealModal({
             )}
             {reviewState === "manual" && !photoPreviewUrl && (
               <p className="mt-3 text-xs font-medium text-muted-foreground">
-                Manual entry — nothing was estimated.
+                Manual entry - nothing was estimated.
               </p>
             )}
             <div className="mt-3 space-y-3">
@@ -1080,14 +1080,14 @@ function StatementView() {
         Your calorie <span className="font-accent italic font-normal text-dz-secondary">statement</span>
       </h1>
       <p className="inline-flex flex-wrap rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
-        Target set: {data.target} cal/day · maintain {floor}–{data.target} (band −{data.deficit})
+        Target set: {data.target} cal/day · maintain {floor}-{data.target} (band -{data.deficit})
       </p>
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> Target Hit
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Target missed — over / under eating
+          <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Target missed - over / under eating
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full border border-black bg-white" /> In progress
@@ -1156,7 +1156,7 @@ function StatementView() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-primary">{meal.name}</p>
                             <p className="font-mono text-xs text-muted-foreground">
-                              {meal.clientLocalTime || "—"}
+                              {meal.clientLocalTime || "-"}
                             </p>
                           </div>
                           <p className="font-mono text-sm font-semibold text-primary">{meal.calories}</p>
@@ -1229,7 +1229,7 @@ export default function FuelPage() {
           ))}
         </div>
 
-        {isLoading && <p className="text-sm text-muted-foreground">Loading andWeFuel…</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">Loading andWeDiet…</p>}
         {error && (
           <GlassCard className="p-5 text-sm text-destructive">
             {error instanceof Error ? error.message : "Failed to load"}
@@ -1242,14 +1242,14 @@ export default function FuelPage() {
         {data?.gate === "health_consent_required" && (
           <div className="space-y-6">
             <GlassCard className="space-y-3 p-6">
-              <h2 className="font-display text-2xl font-bold text-primary">Health data consent needed</h2>
+              <h2 className="font-display text-2xl font-bold text-primary">A quick health check-in</h2>
               <p className="text-sm text-muted-foreground">
-                andWeFuel uses your health-data consent to store meal names and calorie values. Photos are
-                never kept. Only the confirmed name and calories.
+              andWeDiet uses your health-data consent to store meal names and calorie values - viney and private.
+                Photos are never kept. Only the confirmed name and calories.
               </p>
               <p className="text-xs text-muted-foreground">{FUEL_MEDICAL_DISCLAIMER}</p>
               <Button onClick={() => setLocation("/my-account#privacy")}>
-                Review privacy & consent
+                Give consent & continue
               </Button>
             </GlassCard>
             <DailyInspirationCards recipe={data.recipe} practiceAlong={data.practiceAlong} />

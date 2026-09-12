@@ -129,3 +129,92 @@ export function formatMobileNumber(number: string): string {
   const cleanNumber = number.replace(/\D/g, '');
   return cleanNumber.slice(0, 10);
 }
+
+/** Country code + digits key for uniqueness checks across profile phone fields. */
+export function normalizeMobileKey(
+  digits: string | null | undefined,
+  countryCode: string | null | undefined,
+): string {
+  const d = (digits ?? '').replace(/\D/g, '');
+  if (!d) return '';
+  const cc = (countryCode ?? '+91').trim() || '+91';
+  return `${cc}:${d}`;
+}
+
+export type ProfileMobileFields = {
+  primaryMobile?: string | null;
+  primaryMobileCountryCode?: string | null;
+  emergencyMobile?: string | null;
+  emergencyMobileCountryCode?: string | null;
+  secondaryMobile?: string | null;
+  secondaryMobileCountryCode?: string | null;
+};
+
+export type ProfileMobileFieldName =
+  | 'primaryMobile'
+  | 'emergencyMobile'
+  | 'secondaryMobile';
+
+export const MOBILE_UNIQUENESS_MESSAGES = {
+  emergencyVsPrimary:
+    'Emergency number must be different from your mobile so we can reach someone else if needed.',
+  primaryVsEmergency:
+    'Mobile number must be different from your emergency contact.',
+  alternateVsPrimary:
+    'Alternate number must be different from your mobile number.',
+  alternateVsEmergency:
+    'Alternate number must be different from your emergency number.',
+} as const;
+
+/** Field-level uniqueness error, or null when the field is empty/unique. */
+export function getMobileUniquenessError(
+  field: ProfileMobileFieldName,
+  values: ProfileMobileFields,
+): string | null {
+  const primary = normalizeMobileKey(values.primaryMobile, values.primaryMobileCountryCode);
+  const emergency = normalizeMobileKey(
+    values.emergencyMobile,
+    values.emergencyMobileCountryCode,
+  );
+  const secondary = normalizeMobileKey(
+    values.secondaryMobile,
+    values.secondaryMobileCountryCode,
+  );
+
+  if (field === 'primaryMobile') {
+    if (!primary) return null;
+    if (emergency && primary === emergency) {
+      return MOBILE_UNIQUENESS_MESSAGES.primaryVsEmergency;
+    }
+    return null;
+  }
+
+  if (field === 'emergencyMobile') {
+    if (!emergency) return null;
+    if (primary && emergency === primary) {
+      return MOBILE_UNIQUENESS_MESSAGES.emergencyVsPrimary;
+    }
+    return null;
+  }
+
+  if (!secondary) return null;
+  if (primary && secondary === primary) {
+    return MOBILE_UNIQUENESS_MESSAGES.alternateVsPrimary;
+  }
+  if (emergency && secondary === emergency) {
+    return MOBILE_UNIQUENESS_MESSAGES.alternateVsEmergency;
+  }
+  return null;
+}
+
+/** First uniqueness conflict across the set (for server / submit blockers). */
+export function getFirstMobileUniquenessError(
+  values: ProfileMobileFields,
+): string | null {
+  return (
+    getMobileUniquenessError('emergencyMobile', values) ??
+    getMobileUniquenessError('primaryMobile', values) ??
+    getMobileUniquenessError('secondaryMobile', values)
+  );
+}
+

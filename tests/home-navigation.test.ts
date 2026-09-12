@@ -15,7 +15,7 @@ describe("home navigation", () => {
     assert.doesNotMatch(source, /alt=\{`Slide \$\{/);
   });
 
-  it("header logo links to home carousel from any page", () => {
+  it("header logo goes to dashboard when signed in, marketing home when guest", () => {
     const navSource = readFileSync(
       join(root, "client/src/components/navigation.tsx"),
       "utf8",
@@ -25,7 +25,7 @@ describe("home navigation", () => {
       "utf8",
     );
     assert.match(navSource, /BrandLogo/);
-    assert.match(logoSource, /href="\/"/);
+    assert.match(logoSource, /MEMBER_DASHBOARD_URL/);
     assert.match(logoSource, /navigateToHomeSection\("home"\)/);
   });
 

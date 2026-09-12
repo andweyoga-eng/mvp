@@ -105,7 +105,7 @@ async function fuelAccessGate(
   if (!user.dateOfBirth || !isAdult(user.dateOfBirth)) {
     res.status(403).json({
       code: "fuel_age_blocked",
-      message: "andWeFuel is available to adult members only.",
+      message: "andWeDiet is available to adult members only.",
     });
     return null;
   }
@@ -249,7 +249,7 @@ export function registerFuelRoutes(app: Express) {
       });
     } catch (error) {
       console.error("[fuel] dashboard error:", error);
-      res.status(500).json({ message: "Failed to load andWeFuel" });
+      res.status(500).json({ message: "Failed to load andWeDiet" });
     }
   });
 

@@ -134,8 +134,9 @@ import {
 } from "@shared/schema";
 import {
   computeProfileCompletionStatus,
-  isAccountProfileComplete,
+  isReadyForPaidHealthBooking,
 } from "@shared/profileCompleteness";
+import { getFirstMobileUniquenessError } from "@shared/mobile-validation";
 import {
   hashPassword, verifyPassword, generateToken,
   generateExpiringVerificationToken, isVerificationTokenExpired,
@@ -662,6 +663,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         addressCountry: user.addressCountry,
         addressState: user.addressState,
         addressPincode: user.addressPincode,
+        prefSessionReminders: user.prefSessionReminders ?? true,
+        prefEmailUpdates: user.prefEmailUpdates ?? true,
+        prefOffersPromos: user.prefOffersPromos ?? false,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to get user profile" });
@@ -679,6 +683,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validatedData = updateProfilePartialSchema.parse(req.body);
+
+      const uniquenessError = getFirstMobileUniquenessError({
+        primaryMobile: validatedData.primaryMobile ?? existing.primaryMobile,
+        primaryMobileCountryCode:
+          validatedData.primaryMobileCountryCode ?? existing.primaryMobileCountryCode,
+        emergencyMobile: validatedData.emergencyMobile ?? existing.emergencyMobile,
+        emergencyMobileCountryCode:
+          validatedData.emergencyMobileCountryCode ?? existing.emergencyMobileCountryCode,
+        secondaryMobile: validatedData.secondaryMobile ?? existing.secondaryMobile,
+        secondaryMobileCountryCode:
+          validatedData.secondaryMobileCountryCode ?? existing.secondaryMobileCountryCode,
+      });
+      if (uniquenessError) {
+        return res.status(400).json({ message: uniquenessError });
+      }
 
       if (validatedData.dateOfBirth) {
         const ageCheck = validateOnboardingDateOfBirth(validatedData.dateOfBirth);
@@ -755,6 +774,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           addressCountry: updatedUser.addressCountry,
           addressState: updatedUser.addressState,
           addressPincode: updatedUser.addressPincode,
+          prefSessionReminders: updatedUser.prefSessionReminders ?? true,
+          prefEmailUpdates: updatedUser.prefEmailUpdates ?? true,
+          prefOffersPromos: updatedUser.prefOffersPromos ?? false,
         }
       });
     } catch (error) {
@@ -2894,13 +2916,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return respondAccountDeactivated(res);
       }
 
-      if (mustBeSignedIn && !isAccountProfileComplete(user)) {
+      if (mustBeSignedIn && !isReadyForPaidHealthBooking(user)) {
+        const needsHealth = !user.healthUpdateText?.trim();
         return res.status(409).json({
-          message:
-            "Your profile is incomplete. Add your name, verified email, primary and emergency mobiles, and your Health History in My Account before booking.",
-          requiresHealthUpdate: true,
-          redirectTo: "/my-account#profile",
-          code: "profile_incomplete"
+          message: needsHealth
+            ? "Share a short Health History so instructors can adapt your practice safely, then continue booking."
+            : "Your profile is incomplete. Add your name, verified email, and primary and emergency mobiles in My Account before booking.",
+          requiresHealthUpdate: needsHealth,
+          redirectTo: needsHealth ? "/my-account#health" : "/my-account#profile",
+          code: "profile_incomplete",
         });
       }
 

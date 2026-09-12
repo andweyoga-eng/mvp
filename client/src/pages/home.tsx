@@ -110,8 +110,8 @@ export default function Home() {
     };
   }, [authLoading, user?.id]);
 
-  // A signed-in member who never finished onboarding (contact, health, or
-  // consent) shouldn't see the marketing home — send them straight to the exact
+  // A signed-in member who never finished onboarding (contact or consent)
+  // shouldn't see the marketing home — send them straight to the exact
   // My Account section they left off at.
   const incompleteAccountHref =
     !authLoading && user
@@ -126,11 +126,28 @@ export default function Home() {
     consentPending === null &&
     !getIncompleteAccountHref(user);
 
+  // Logged-in members with finished contact onboarding always use the dashboard —
+  // carousel / marketing home is for guests only (unless mood capture or resume).
+  const shouldRedirectLoggedInToDashboard =
+    !authLoading &&
+    !!user &&
+    !incompleteAccountHref &&
+    !awaitingConsentGate &&
+    !parseMoodCaptureFromUrl() &&
+    !new URLSearchParams(window.location.search).get("resumeBookingId") &&
+    !new URLSearchParams(window.location.search).get("openBooking");
+
   useEffect(() => {
     if (incompleteAccountHref) {
       setLocation(incompleteAccountHref);
     }
   }, [incompleteAccountHref, setLocation]);
+
+  useEffect(() => {
+    if (shouldRedirectLoggedInToDashboard) {
+      setLocation(resolveMemberLandingPath(user, { requiresConsent: consentPending === true }));
+    }
+  }, [shouldRedirectLoggedInToDashboard, user, consentPending, setLocation]);
 
   useEffect(() => {
     applyHomeHashScroll();
@@ -219,7 +236,7 @@ export default function Home() {
 
   // While the redirect above is in flight (or we're still confirming consent),
   // don't flash the carousel/home content.
-  if (incompleteAccountHref || awaitingConsentGate) {
+  if (incompleteAccountHref || awaitingConsentGate || shouldRedirectLoggedInToDashboard) {
     return null;
   }
 

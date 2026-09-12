@@ -197,7 +197,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const updateProfile = async (
     profileData: Partial<ProfileData>,
-    options?: { successTitle?: string; silent?: boolean },
+    options?: {
+      successTitle?: string;
+      successDescription?: string;
+      silent?: boolean;
+      duration?: number;
+    },
   ): Promise<User | null> => {
     try {
       const response = await apiRequest('PUT', '/api/auth/profile', profileData, getAuthHeaders());
@@ -213,7 +218,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!options?.silent) {
         toast({
           title: options?.successTitle ?? "Profile updated",
-          description: "Your profile has been updated successfully.",
+          description:
+            options?.successDescription ?? "Your profile has been updated successfully.",
+          duration: options?.duration,
         });
       }
       return data.user as User;

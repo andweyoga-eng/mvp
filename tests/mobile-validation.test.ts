@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { validateMobileNumber } from "../shared/mobile-validation.ts";
+import {
+  validateMobileNumber,
+  getMobileUniquenessError,
+  getFirstMobileUniquenessError,
+} from "../shared/mobile-validation.ts";
 
 describe("validateMobileNumber spam rules", () => {
   it("accepts real numbers with ascending/descending triplets", () => {
@@ -24,5 +28,45 @@ describe("validateMobileNumber spam rules", () => {
 
   it("rejects five or more leading 9s", () => {
     assert.equal(validateMobileNumber("9999912345", "+91").isValid, false);
+  });
+});
+
+describe("profile mobile uniqueness", () => {
+  const base = {
+    primaryMobile: "9988776655",
+    primaryMobileCountryCode: "+91",
+    emergencyMobile: "8877665544",
+    emergencyMobileCountryCode: "+91",
+    secondaryMobile: "",
+    secondaryMobileCountryCode: "+91",
+  };
+
+  it("allows distinct primary and emergency", () => {
+    assert.equal(getFirstMobileUniquenessError(base), null);
+  });
+
+  it("rejects emergency matching primary", () => {
+    const err = getMobileUniquenessError("emergencyMobile", {
+      ...base,
+      emergencyMobile: "9988776655",
+    });
+    assert.match(err ?? "", /different from your mobile/);
+  });
+
+  it("rejects alternate matching primary or emergency", () => {
+    assert.match(
+      getMobileUniquenessError("secondaryMobile", {
+        ...base,
+        secondaryMobile: "9988776655",
+      }) ?? "",
+      /different from your mobile number/,
+    );
+    assert.match(
+      getMobileUniquenessError("secondaryMobile", {
+        ...base,
+        secondaryMobile: "8877665544",
+      }) ?? "",
+      /different from your emergency/,
+    );
   });
 });

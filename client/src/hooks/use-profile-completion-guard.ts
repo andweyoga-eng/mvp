@@ -38,13 +38,11 @@ export function useProfileCompletionGuard() {
     });
     if (!anchor) return;
 
-    toast({
-      title: "Complete your profile",
-      description:
-        anchor === "profile"
-          ? "Add your mobile number and contact details so we can reach you."
-          : "Add your Health History so we can keep your practice safe.",
-    });
+      toast({
+          title: "Complete your profile",
+          description:
+            "Add your mobile number and contact details so we can reach you.",
+        });
     setLocation(myAccountHref(anchor));
   }, [user, location, setLocation, toast]);
 }

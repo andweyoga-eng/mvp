@@ -63,7 +63,7 @@ describe("account section completeness", () => {
     assert.equal(isHealthSectionComplete({ ...base, healthUpdateText: "" }), false);
   });
 
-  it("routes to privacy when profile and health are done but consent is pending", () => {
+  it("routes to privacy when contact is done but consent is pending (health not required)", () => {
     assert.equal(
       getFirstIncompleteAccountAnchor(
         {
@@ -73,11 +73,29 @@ describe("account section completeness", () => {
           primaryMobileCountryCode: "+91",
           emergencyMobile: "8877665544",
           emergencyMobileCountryCode: "+91",
-          healthUpdateText: HEALTH_NO_CONCERNS_TEXT,
+          healthUpdateText: "",
         },
         { requiresConsent: true },
       ),
       "privacy",
+    );
+  });
+
+  it("routes to health only when requireHealth is set", () => {
+    assert.equal(
+      getFirstIncompleteAccountAnchor(
+        {
+          emailVerified: true,
+          name: "Test User",
+          primaryMobile: "9988776655",
+          primaryMobileCountryCode: "+91",
+          emergencyMobile: "8877665544",
+          emergencyMobileCountryCode: "+91",
+          healthUpdateText: "",
+        },
+        { requireHealth: true },
+      ),
+      "health",
     );
   });
 });
@@ -94,20 +112,20 @@ describe("account migration — single page + one drawer", () => {
     assert.doesNotMatch(app, /MyAccountRedirect/);
   });
 
-  it("My Account page renders all seven section anchors including privacy", () => {
+  it("My Account page renders section anchors including privacy (credits hidden for MVP)", () => {
     const page = readFileSync(join(root, "client/src/pages/my-account.tsx"), "utf8");
     for (const id of [
       "profile",
       "health",
       "sessions",
       "payments",
-      "credits",
       "preferences",
       "security",
       "privacy",
     ]) {
       assert.match(page, new RegExp(`id="${id}"`), `missing #${id} section`);
     }
+    assert.doesNotMatch(page, /id="credits"/);
     assert.match(page, /PrivacyConsentSection/);
     assert.match(page, /AccountHealthNoteSection/);
     assert.match(page, /DateOfBirthField/);

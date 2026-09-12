@@ -1,6 +1,9 @@
 import logoPath from "@assets/Logo Transperent TM_1756454893432.png";
 import { navigateToHomeSection } from "@/lib/home-navigation";
+import { MEMBER_DASHBOARD_URL } from "@/lib/member-landing";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { navigate } from "wouter/use-browser-location";
 
 interface BrandLogoProps {
   className?: string;
@@ -19,6 +22,8 @@ export function BrandLogo({
   linked = true,
   onNavigate,
 }: BrandLogoProps) {
+  const { user } = useAuth();
+
   const img = (
     <img
       src={logoPath}
@@ -37,17 +42,21 @@ export function BrandLogo({
 
   return (
     <a
-      href="/"
+      href={user ? MEMBER_DASHBOARD_URL : "/"}
       onClick={(e) => {
         e.preventDefault();
         if (onNavigate) {
           onNavigate();
           return;
         }
+        if (user) {
+          navigate(MEMBER_DASHBOARD_URL);
+          return;
+        }
         navigateToHomeSection("home");
       }}
-      className={cn("inline-flex flex-shrink-0", className)}
-      aria-label="andWeYoga home"
+      className={cn("inline-flex flex-shrink-0 max-w-[min(42vw,200px)]", className)}
+      aria-label={user ? "andWeYoga dashboard" : "andWeYoga home"}
       data-testid={testId}
     >
       {img}

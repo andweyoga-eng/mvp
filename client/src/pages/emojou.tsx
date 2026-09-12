@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { cn } from "@/lib/utils";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
@@ -55,12 +56,42 @@ export default function Emojou() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [reflection, setReflection] = useState("");
+  const [healthConsented, setHealthConsented] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) setLocation("/");
   }, [authLoading, user, setLocation]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setHealthConsented(null);
+      return;
+    }
+    let cancelled = false;
+    fetchMyConsentStatus()
+      .then((status) => {
+        if (cancelled) return;
+        const health = status.categories.find((c) => c.consentType === "health_data");
+        setHealthConsented(health?.status === "active");
+      })
+      .catch(() => {
+        if (!cancelled) setHealthConsented(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   const saveMoment = () => {
+    if (healthConsented === false) {
+      toast({
+        title: "A quick health check-in",
+        description:
+          "Give health-data consent so weEmo can keep your journal private and purposeful.",
+      });
+      setLocation("/my-account#privacy");
+      return;
+    }
     if (!reflection.trim()) {
       toast({ title: "Nothing to save yet", description: "Write a few words about your day first." });
       return;
@@ -76,6 +107,16 @@ export default function Emojou() {
         <div aria-hidden className="pointer-events-none absolute -left-40 top-0 -z-10 h-[460px] w-[460px] rounded-full bg-primary/10 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -right-32 bottom-24 -z-10 h-96 w-96 rounded-full bg-dz-secondary/10 blur-3xl" />
 
+        {healthConsented === false ? (
+          <GlassCard className="mb-8 space-y-3 p-6">
+            <h2 className="font-display text-2xl font-bold text-primary">A quick health check-in</h2>
+            <p className="text-sm text-muted-foreground">
+              weEmo uses your health-data consent so journal notes stay private and only support your
+              practice - viney, calm, and optional until you write.
+            </p>
+            <Button onClick={() => setLocation("/my-account#privacy")}>Give consent & continue</Button>
+          </GlassCard>
+        ) : null}
         {/* ===== HERO ===== */}
         <section className="mb-8">
           <div className="group relative h-[420px] overflow-hidden rounded-3xl shadow-dz-hero sm:h-[480px]">

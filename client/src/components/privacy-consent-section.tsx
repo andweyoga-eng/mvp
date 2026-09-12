@@ -213,40 +213,50 @@ export function PrivacyConsentSection({
             <h2 className="font-display text-lg font-bold text-primary">{ui.sectionTitle}</h2>
             <p className="text-sm font-medium text-foreground/75">{ui.sectionSubtitle}</p>
           </div>
-          <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
-            {(["en", "kn"] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setLang(code)}
-                className={cn(
-                  "rounded-md px-2.5 py-1",
-                  lang === code ? "bg-primary text-white" : "text-dz-muted",
-                )}
-              >
-                {code === "en" ? "EN" : "ಕನ್ನಡ"}
-              </button>
-            ))}
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-dz-muted">
+              {consentCopy.chooseLanguage}
+            </span>
+            <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
+              {(["en", "kn"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setLang(code)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1",
+                    lang === code ? "bg-primary text-white" : "text-dz-muted",
+                  )}
+                >
+                  {code === "en" ? consentCopy.languageEnglish : consentCopy.languageKannada}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
       {hideTitle ? (
         <div className="flex justify-end">
-          <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
-            {(["en", "kn"] as const).map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setLang(code)}
-                className={cn(
-                  "rounded-md px-2.5 py-1",
-                  lang === code ? "bg-primary text-white" : "text-dz-muted",
-                )}
-              >
-                {code === "en" ? "EN" : "ಕನ್ನಡ"}
-              </button>
-            ))}
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-dz-muted">
+              {consentCopy.chooseLanguage}
+            </span>
+            <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
+              {(["en", "kn"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => setLang(code)}
+                  className={cn(
+                    "rounded-md px-2.5 py-1",
+                    lang === code ? "bg-primary text-white" : "text-dz-muted",
+                  )}
+                >
+                  {code === "en" ? consentCopy.languageEnglish : consentCopy.languageKannada}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}
@@ -286,8 +296,7 @@ export function PrivacyConsentSection({
                           💚
                         </span>
                         <span>
-                          {consentCopy.healthConsent} Uploaded files are stored securely; Google links
-                          are opened read-only and we never copy file contents from Drive.
+                          {consentCopy.healthConsent} {consentCopy.healthConsentDriveNote}
                         </span>
                       </span>
                     }

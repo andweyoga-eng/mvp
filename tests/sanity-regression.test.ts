@@ -86,17 +86,36 @@ describe("sanity: payment helpers", async () => {
 });
 
 describe("sanity: profile completeness", async () => {
-  const { isAccountProfileComplete } = await import("../shared/profileCompleteness.ts");
-  it("incomplete without health text", () => {
+  const {
+    isAccountProfileComplete,
+    isReadyForPaidHealthBooking,
+  } = await import("../shared/profileCompleteness.ts");
+  it("contact onboarding complete without health text", () => {
     assert.equal(
       isAccountProfileComplete({
         emailVerified: true,
         name: "Test",
-        primaryMobile: "9999999999",
+        primaryMobile: "9988776655",
         primaryMobileCountryCode: "+91",
         secondaryMobile: null,
         secondaryMobileCountryCode: "+91",
-        emergencyMobile: "8888888888",
+        emergencyMobile: "8877665544",
+        emergencyMobileCountryCode: "+91",
+        healthUpdateText: "",
+      }),
+      true,
+    );
+  });
+  it("paid health booking still requires health text", () => {
+    assert.equal(
+      isReadyForPaidHealthBooking({
+        emailVerified: true,
+        name: "Test",
+        primaryMobile: "9988776655",
+        primaryMobileCountryCode: "+91",
+        secondaryMobile: null,
+        secondaryMobileCountryCode: "+91",
+        emergencyMobile: "8877665544",
         emergencyMobileCountryCode: "+91",
         healthUpdateText: "",
       }),

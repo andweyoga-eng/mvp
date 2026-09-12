@@ -18,7 +18,9 @@ export function scrollToHomeSection(sectionId: string): boolean {
   return true;
 }
 
-/** Navigate to home carousel or a home section from any route. */
+/** Navigate to home carousel or a home section from any route.
+ * Logged-in members should prefer dashboard — BrandLogo handles that separately.
+ */
 export function navigateToHomeSection(sectionId: string): void {
   if (isOnHomePage() && scrollToHomeSection(sectionId)) {
     return;
@@ -29,6 +31,15 @@ export function navigateToHomeSection(sectionId: string): void {
   // effect reads the hash via applyHomeHashScroll() and scrolls to the section.
   const hash = sectionId === "home" ? "" : `#${sectionId}`;
   navigate(`/${hash}`);
+}
+
+/** Prefer dashboard when a member is signed in; otherwise marketing home. */
+export function navigateMemberHomeOrMarketing(isSignedIn: boolean): void {
+  if (isSignedIn) {
+    navigate("/dashboard");
+    return;
+  }
+  navigateToHomeSection("home");
 }
 
 /** Apply `/#section` scroll after home mounts (e.g. from AWY menu on another page). */

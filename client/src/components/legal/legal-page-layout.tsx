@@ -61,20 +61,25 @@ export function LegalPageLayout({
             ) : null}
           </div>
           {showLanguageToggle ? (
-            <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
-              {(["en", "kn"] as const).map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setLang(code)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1",
-                    lang === code ? "bg-primary text-white" : "text-dz-muted",
-                  )}
-                >
-                  {code === "en" ? "EN" : "ಕನ್ನಡ"}
-                </button>
-              ))}
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-dz-muted">
+                {lang === "kn" ? "ನಿಮ್ಮ ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ" : "Choose your language"}
+              </span>
+              <div className="flex rounded-lg border border-dz-glass-border bg-white/80 p-0.5 text-xs font-semibold">
+                {(["en", "kn"] as const).map((code) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => setLang(code)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1",
+                      lang === code ? "bg-primary text-white" : "text-dz-muted",
+                    )}
+                  >
+                    {code === "en" ? "English" : "ಕನ್ನಡ"}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>

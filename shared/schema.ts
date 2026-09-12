@@ -54,21 +54,27 @@ export const users = pgTable("users", {
   addressCountry: text("address_country").default("IN"),
   addressState: text("address_state"),
   addressPincode: text("address_pincode"),
-  /** andWeFuel: admin-set daily calorie target. Null = Fuel not configured. */
+  /** andWeDiet: admin-set daily calorie target. Null = WeDiet not configured. */
   dailyCalorieTargetCal: integer("daily_calorie_target_cal"),
-  /** andWeFuel: admin-set deficit tolerance. On-track band = [target − deficit, target]. */
+  /** andWeDiet: admin-set deficit tolerance. On-track band = [target − deficit, target]. */
   dailyDeficitCal: integer("daily_deficit_cal"),
-  /** andWeFuel: ordered meal slots with local time bands. */
+  /** andWeDiet: ordered meal slots with local time bands. */
   fuelMealPlan: jsonb("fuel_meal_plan").$type<import("./fuel").FuelMealPlan>(),
   calorieTargetSetBy: varchar("calorie_target_set_by"),
   calorieTargetSetAt: timestamp("calorie_target_set_at"),
   /** Optional admin override reason when effective floor is below the safety rail. */
   fuelFloorOverrideReason: text("fuel_floor_override_reason"),
+  /** Member Preferences — session reminders by email/push channel (MVP email). */
+  prefSessionReminders: boolean("pref_session_reminders").notNull().default(true),
+  /** Member Preferences — early access, workshops, tips. */
+  prefEmailUpdates: boolean("pref_email_updates").notNull().default(true),
+  /** Member Preferences — offers, promos, discounts. */
+  prefOffersPromos: boolean("pref_offers_promos").notNull().default(false),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-/** andWeFuel meal ledger — photo bytes are never stored. */
+/** andWeDiet meal ledger — photo bytes are never stored. */
 export const fuelMeals = pgTable("fuel_meals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id")
@@ -747,6 +753,9 @@ export const updateProfileSchema = createInsertSchema(users)
     addressCountry: true,
     addressState: true,
     addressPincode: true,
+    prefSessionReminders: true,
+    prefEmailUpdates: true,
+    prefOffersPromos: true,
   })
   .partial();
 

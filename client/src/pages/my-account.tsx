@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,14 +30,14 @@ import {
   Lightbulb,
   ArrowUp,
   Shield,
-  Coins,
 } from "lucide-react";
 import Navigation from "@/components/navigation";
 import { SessionHistory } from "@/components/session-history";
 import { PaymentHistory } from "@/components/payment-history";
 import { PrivacyConsentSection } from "@/components/privacy-consent-section";
 import { AccountHealthNoteSection } from "@/components/account-health-note-section";
-import { AccountComingSoonBadge, AccountFoldSection } from "@/components/account-fold-section";
+import { AccountFoldSection } from "@/components/account-fold-section";
+import { QuitSetupDialog } from "@/components/quit-setup-dialog";
 import { DateOfBirthField } from "@/components/date-of-birth-field";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import {
@@ -57,6 +57,9 @@ import {
   countryCodeOptions,
   validateMobileNumber,
   formatMobileNumber,
+  getMobileUniquenessError,
+  getFirstMobileUniquenessError,
+  type ProfileMobileFieldName,
 } from "@shared/mobile-validation";
 import {
   isHealthDisclosureComplete,
@@ -67,7 +70,7 @@ import {
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
 import { getPendingBooking } from "@/lib/pending-booking";
-import { redirectAfterProfileComplete } from "@/lib/member-landing";
+import { clearMemberLandingCheck, redirectAfterProfileComplete } from "@/lib/member-landing";
 import { parseHealthHistory, HEALTH_NO_CONCERNS_TEXT } from "@shared/health-disclosure";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 
@@ -109,8 +112,7 @@ const NAV: { id: AccountAnchor; label: string; icon: typeof User; soon?: boolean
   { id: "health", label: "Health History", icon: Heart },
   { id: "sessions", label: "Sessions", icon: CalendarClock },
   { id: "payments", label: "Payments", icon: CreditCard },
-  { id: "credits", label: "Credits", icon: Coins, soon: true },
-  { id: "preferences", label: "Preferences", icon: SlidersHorizontal, soon: true },
+  { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "security", label: "Account & security", icon: ShieldCheck },
   { id: "privacy", label: "Privacy & consent", icon: Shield },
 ];
@@ -120,12 +122,97 @@ const NAV: { id: AccountAnchor; label: string; icon: typeof User; soon?: boolean
 const DESKTOP_MQ = "(min-width: 900px)";
 /** Id of the internally-scrolling content panel (desktop/tablet). */
 const SCROLL_PANEL_ID = "account-scroll";
+/** Toast visible time before advancing to privacy after contact save. */
+const NUMBER_SAVED_TOAST_MS = 3200;
+/** Mobile sticky chrome: header (~64) + chip nav (~52). */
+const MOBILE_STICKY_OFFSET_PX = 116;
 
-function scrollToAccountSection(id: AccountAnchor) {
+function scrollToAccountSection(id: AccountAnchor, options?: { delayMs?: number }) {
   window.location.hash = id;
-  requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const run = () => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const isDesktop = window.matchMedia(DESKTOP_MQ).matches;
+    if (isDesktop) {
+      const panel = document.getElementById(SCROLL_PANEL_ID);
+      if (panel) {
+        const panelRect = panel.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        panel.scrollTo({
+          top: panel.scrollTop + (elRect.top - panelRect.top),
+          behavior: "smooth",
+        });
+        return;
+      }
+    }
+
+    const y = el.getBoundingClientRect().top + window.scrollY - MOBILE_STICKY_OFFSET_PX;
+    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  };
+
+  if (options?.delayMs && options.delayMs > 0) {
+    window.setTimeout(() => requestAnimationFrame(run), options.delayMs);
+    return;
+  }
+  requestAnimationFrame(run);
+}
+
+function validatePhoneField(
+  field: PhoneField,
+  digits: string,
+  countryCode: string,
+  all: {
+    primaryMobile: string;
+    primaryMobileCountryCode: string;
+    secondaryMobile: string;
+    secondaryMobileCountryCode: string;
+    emergencyMobile: string;
+    emergencyMobileCountryCode: string;
+  },
+): { isValid: boolean; error: string } {
+  const base = validateRequiredMobile(field, digits, countryCode);
+  if (!base.isValid) return base;
+  const uniqueness = getMobileUniquenessError(field as ProfileMobileFieldName, {
+    primaryMobile: all.primaryMobile,
+    primaryMobileCountryCode: all.primaryMobileCountryCode,
+    secondaryMobile: all.secondaryMobile,
+    secondaryMobileCountryCode: all.secondaryMobileCountryCode,
+    emergencyMobile: all.emergencyMobile,
+    emergencyMobileCountryCode: all.emergencyMobileCountryCode,
   });
+  if (uniqueness) return { isValid: false, error: uniqueness };
+  return { isValid: true, error: "" };
+}
+
+function revalidateAllPhones(all: {
+  primaryMobile: string;
+  primaryMobileCountryCode: string;
+  secondaryMobile: string;
+  secondaryMobileCountryCode: string;
+  emergencyMobile: string;
+  emergencyMobileCountryCode: string;
+}) {
+  return {
+    primaryMobile: validatePhoneField(
+      "primaryMobile",
+      formatMobileNumber(all.primaryMobile),
+      all.primaryMobileCountryCode,
+      all,
+    ),
+    secondaryMobile: validatePhoneField(
+      "secondaryMobile",
+      formatMobileNumber(all.secondaryMobile),
+      all.secondaryMobileCountryCode,
+      all,
+    ),
+    emergencyMobile: validatePhoneField(
+      "emergencyMobile",
+      formatMobileNumber(all.emergencyMobile),
+      all.emergencyMobileCountryCode,
+      all,
+    ),
+  };
 }
 
 function healthSectionSummary(text: string, lastModified: string | null | undefined): string {
@@ -174,8 +261,10 @@ export default function MyAccount() {
     secondaryMobile: { isValid: true, error: "" },
     emergencyMobile: { isValid: true, error: "" },
   });
-  // Preferences are UI-only placeholders until the notifications backend ships.
+  // Preferences persist via profile PATCH (session reminders, updates, offers).
   const [prefs, setPrefs] = useState({ reminders: true, updates: true, promos: false });
+  const [quitOpen, setQuitOpen] = useState(false);
+  const [quitSaving, setQuitSaving] = useState(false);
   // Fail-closed default: never assume health-data consent is already given until
   // the server confirms it. Assuming `true` here let onboarding skip recording it.
   const [healthConsentGiven, setHealthConsentGiven] = useState(false);
@@ -241,22 +330,30 @@ export default function MyAccount() {
       addressPincode: user.addressPincode || "",
     };
     setProfileData(next);
+    setPrefs({
+      reminders: user.prefSessionReminders ?? true,
+      updates: user.prefEmailUpdates ?? true,
+      promos: user.prefOffersPromos ?? false,
+    });
     setDobError("");
     setMobileValidation({
-      primaryMobile: validateRequiredMobile(
+      primaryMobile: validatePhoneField(
         "primaryMobile",
         formatMobileNumber(next.primaryMobile),
         next.primaryMobileCountryCode,
+        next,
       ),
-      secondaryMobile: validateRequiredMobile(
+      secondaryMobile: validatePhoneField(
         "secondaryMobile",
         formatMobileNumber(next.secondaryMobile),
         next.secondaryMobileCountryCode,
+        next,
       ),
-      emergencyMobile: validateRequiredMobile(
+      emergencyMobile: validatePhoneField(
         "emergencyMobile",
         formatMobileNumber(next.emergencyMobile),
         next.emergencyMobileCountryCode,
+        next,
       ),
     });
   }, [user]);
@@ -265,8 +362,13 @@ export default function MyAccount() {
   useEffect(() => {
     if (!user?.id) return;
     const digits = formatMobileNumber(profileData.primaryMobile);
-    const valid = validateMobileNumber(digits, profileData.primaryMobileCountryCode).isValid;
-    if (!valid || !digits.trim()) return;
+    const phoneCheck = validatePhoneField(
+      "primaryMobile",
+      digits,
+      profileData.primaryMobileCountryCode,
+      profileData,
+    );
+    if (!phoneCheck.isValid || !digits.trim()) return;
     const saved = formatMobileNumber(user.primaryMobile || "");
     if (digits === saved) return;
 
@@ -283,6 +385,10 @@ export default function MyAccount() {
   }, [
     profileData.primaryMobile,
     profileData.primaryMobileCountryCode,
+    profileData.emergencyMobile,
+    profileData.emergencyMobileCountryCode,
+    profileData.secondaryMobile,
+    profileData.secondaryMobileCountryCode,
     user?.id,
     user?.primaryMobile,
     updateProfile,
@@ -390,11 +496,7 @@ export default function MyAccount() {
         field === "secondaryMobile" ||
         field === "emergencyMobile"
       ) {
-        const ccKey = `${field}CountryCode` as keyof typeof next;
-        setMobileValidation((mv) => ({
-          ...mv,
-          [field]: validateRequiredMobile(field as PhoneField, nextValue, next[ccKey] as string),
-        }));
+        setMobileValidation(revalidateAllPhones(next));
       }
       return next;
     });
@@ -403,12 +505,7 @@ export default function MyAccount() {
   const handleCountryCodeChange = (field: string, value: string) => {
     setProfileData((prev) => {
       const next = { ...prev, [field]: value };
-      const mobileField = field.replace("CountryCode", "") as PhoneField;
-      const digits = formatMobileNumber((next[mobileField] as string) || "");
-      setMobileValidation((mv) => ({
-        ...mv,
-        [mobileField]: validateRequiredMobile(mobileField, digits, value),
-      }));
+      setMobileValidation(revalidateAllPhones(next));
       return next;
     });
   };
@@ -438,6 +535,43 @@ export default function MyAccount() {
       : {}),
   });
 
+  /** True when the contact form differs from the last saved user record. */
+  const isContactDirty = useMemo(() => {
+    if (!user) return false;
+    const t = (v: string | null | undefined) => (v ?? "").trim();
+    const phone = (v: string | null | undefined) => formatMobileNumber(v ?? "");
+    const cc = (v: string | null | undefined) => (v ?? "+91").trim() || "+91";
+    if (t(profileData.name) !== t(user.name)) return true;
+    if (!dobLocked && t(profileData.dateOfBirth) !== t(user.dateOfBirth)) return true;
+    if (phone(profileData.primaryMobile) !== phone(user.primaryMobile)) return true;
+    if (cc(profileData.primaryMobileCountryCode) !== cc(user.primaryMobileCountryCode)) return true;
+    if (phone(profileData.secondaryMobile) !== phone(user.secondaryMobile)) return true;
+    if (cc(profileData.secondaryMobileCountryCode) !== cc(user.secondaryMobileCountryCode)) {
+      return true;
+    }
+    if (phone(profileData.emergencyMobile) !== phone(user.emergencyMobile)) return true;
+    if (cc(profileData.emergencyMobileCountryCode) !== cc(user.emergencyMobileCountryCode)) {
+      return true;
+    }
+    if (Boolean(profileData.whatsappConsent) !== Boolean(user.whatsappConsent)) return true;
+    if (t(profileData.addressStreet) !== t(user.addressStreet)) return true;
+    if (t(profileData.addressLine2) !== t(user.addressLine2)) return true;
+    if (t(profileData.addressCity) !== t(user.addressCity)) return true;
+    if (t(profileData.addressCountry || DEFAULT_ADDRESS_COUNTRY) !== t(user.addressCountry || DEFAULT_ADDRESS_COUNTRY)) {
+      return true;
+    }
+    if (t(profileData.addressState) !== t(user.addressState)) return true;
+    if (t(profileData.addressPincode) !== t(user.addressPincode)) return true;
+    return false;
+  }, [user, profileData, dobLocked]);
+
+  const contactPhonesValid =
+    mobileValidation.primaryMobile.isValid &&
+    mobileValidation.emergencyMobile.isValid &&
+    (!profileData.secondaryMobile.trim() || mobileValidation.secondaryMobile.isValid);
+
+  const canSaveContact = isContactDirty && contactPhonesValid && Boolean(profileData.name.trim());
+
   const buildCheckFromUser = (u: AuthUser): AccountProfileCheckInput => ({
     emailVerified: Boolean(u.emailVerified),
     name: u.name,
@@ -450,10 +584,10 @@ export default function MyAccount() {
     healthUpdateText: u.healthUpdateText,
   });
 
-  const routeToAnchor = (anchor: AccountAnchor) => {
+  const routeToAnchor = (anchor: AccountAnchor, options?: { scrollDelayMs?: number }) => {
     setActiveSection(anchor);
     setOpenSections((current) => ({ ...current, [anchor]: true }));
-    scrollToAccountSection(anchor);
+    scrollToAccountSection(anchor, { delayMs: options?.scrollDelayMs });
   };
 
   /**
@@ -464,7 +598,9 @@ export default function MyAccount() {
    * redirects the member onward. Any failure keeps them in My Account.
    * Returns true only when it redirected away.
    */
-  const resolveNextStepAndRoute = async (): Promise<boolean> => {
+  const resolveNextStepAndRoute = async (options?: {
+    privacyScrollDelayMs?: number;
+  }): Promise<boolean> => {
     // Fail-closed: assume consent is still required until the server proves it isn't.
     let requiresConsent = true;
     let serverUser: AuthUser | null = null;
@@ -495,7 +631,9 @@ export default function MyAccount() {
       requiresConsent,
     });
     if (anchor) {
-      routeToAnchor(anchor);
+      const scrollDelayMs =
+        anchor === "privacy" ? options?.privacyScrollDelayMs : undefined;
+      routeToAnchor(anchor, { scrollDelayMs });
       return false;
     }
 
@@ -509,8 +647,57 @@ export default function MyAccount() {
     return true;
   };
 
+  const finishQuitToMarketing = async () => {
+    clearMemberLandingCheck();
+    await logout();
+    window.location.assign("/");
+  };
+
+  const handleSaveAndQuitSetup = async () => {
+    setQuitSaving(true);
+    try {
+      const digits = {
+        primary: formatMobileNumber(profileData.primaryMobile),
+        secondary: formatMobileNumber(profileData.secondaryMobile),
+        emergency: formatMobileNumber(profileData.emergencyMobile),
+      };
+      await updateProfile(
+        {
+          name: profileData.name.trim() || undefined,
+          primaryMobile: digits.primary || undefined,
+          primaryMobileCountryCode: profileData.primaryMobileCountryCode,
+          secondaryMobile: digits.secondary || undefined,
+          secondaryMobileCountryCode: profileData.secondaryMobileCountryCode,
+          emergencyMobile: digits.emergency || undefined,
+          emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
+          dateOfBirth: profileData.dateOfBirth || undefined,
+          whatsappConsent: profileData.whatsappConsent,
+          addressStreet: profileData.addressStreet || undefined,
+          addressLine2: profileData.addressLine2 || undefined,
+          addressCity: profileData.addressCity || undefined,
+          addressCountry: profileData.addressCountry || undefined,
+          addressState: profileData.addressState || undefined,
+          addressPincode: profileData.addressPincode || undefined,
+        },
+        { silent: true },
+      );
+      toast({ title: "Contact info saved", description: "Signed out - finish setup anytime." });
+      await finishQuitToMarketing();
+    } catch (err) {
+      toast({
+        title: "Could not save",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+      setQuitSaving(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isContactDirty) {
+      return;
+    }
     if (!profileData.name.trim())
       return toast({ title: "Name is required", variant: "destructive" });
     if (!dobLocked) {
@@ -550,32 +737,26 @@ export default function MyAccount() {
         title: `Alternate: ${mobileValidation.secondaryMobile.error}`,
         variant: "destructive",
       });
+    const uniquenessError = getFirstMobileUniquenessError(profileData);
+    if (uniquenessError) {
+      setMobileValidation(revalidateAllPhones(profileData));
+      return toast({ title: uniquenessError, variant: "destructive" });
+    }
     setIsLoading(true);
     const wasIncomplete = user?.profileCompletionStatus !== "complete";
     try {
       const contactPayload = buildContactPayload();
-      const checkAfterSave: AccountProfileCheckInput = {
-        emailVerified: Boolean(user?.emailVerified),
-        name: contactPayload.name,
-        primaryMobile: contactPayload.primaryMobile,
-        primaryMobileCountryCode: contactPayload.primaryMobileCountryCode,
-        secondaryMobile: contactPayload.secondaryMobile,
-        secondaryMobileCountryCode: contactPayload.secondaryMobileCountryCode,
-        emergencyMobile: contactPayload.emergencyMobile,
-        emergencyMobileCountryCode: contactPayload.emergencyMobileCountryCode,
-        healthUpdateText: profileData.healthUpdateText,
-      };
-      const completesProfile =
-        wasIncomplete && isAccountProfileComplete(checkAfterSave);
       await updateProfile(contactPayload, {
-        successTitle: completesProfile ? undefined : "Contact info saved",
-        silent: completesProfile,
+        successTitle: "Number saved",
+        successDescription: "Your contact numbers have been saved.",
+        duration: NUMBER_SAVED_TOAST_MS,
       });
       if (wasIncomplete) {
-        // Onboarding: let the fail-closed gate decide the next step (health →
-        // privacy) or redirect — it verifies consent fresh from the server, so a
-        // completed profile can never skip mandatory consent.
-        await resolveNextStepAndRoute();
+        // Wait for the "Number saved" toast to clear, then line privacy up under
+        // sticky chrome on mobile / scroll the content panel on tablet+desktop.
+        await resolveNextStepAndRoute({
+          privacyScrollDelayMs: NUMBER_SAVED_TOAST_MS + 200,
+        });
         return;
       }
       // A returning member simply edited their contact details — stay in place.
@@ -735,8 +916,7 @@ export default function MyAccount() {
   const showPrivacyOnboardingForm =
     needsPrivacyOnboarding ||
     (Boolean(consentRequirement?.requiresConsent) &&
-      isProfileFieldsSectionComplete(statusInput) &&
-      isHealthDisclosureComplete(profileData.healthUpdateText));
+      isProfileFieldsSectionComplete(statusInput));
 
   useEffect(() => {
     if (!user || !isSetupInProgress || !onboardingAnchor) return;
@@ -744,7 +924,7 @@ export default function MyAccount() {
     setOpenSections((current) => ({ ...current, [onboardingAnchor]: true }));
   }, [user?.id, onboardingAnchor, isSetupInProgress]);
 
-  // Completeness meter (5 signals) — a friendlier replacement for a binary badge.
+  // Completeness meter — contact + consent required; Health History is contextual.
   const checks = [
     { ok: Boolean(user?.emailVerified), hint: "verify your email" },
     { ok: profileData.name.trim().length > 0, hint: "add your name" },
@@ -764,10 +944,6 @@ export default function MyAccount() {
       ok:
         profileData.emergencyMobile.trim().length > 0 && mobileValidation.emergencyMobile.isValid,
       hint: "add an emergency contact",
-    },
-    {
-      ok: isHealthDisclosureComplete(profileData.healthUpdateText),
-      hint: "add your Health History",
     },
     {
       ok: !consentRequirement?.requiresConsent,
@@ -850,14 +1026,28 @@ export default function MyAccount() {
       <Navigation onBookingClick={scrollToSchedule} />
 
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:flex-col min-[900px]:pb-0 min-[900px]:pt-6">
-        <button
-          onClick={() => setLocation(isBookingReady ? "/dashboard" : "#profile")}
-          data-testid="back-to-dashboard"
-          className="mb-4 inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-        >
-          <ArrowLeft className="h-4 w-4" />{" "}
-          {isBookingReady ? "Back to dashboard" : "Finish setup to reach dashboard"}
-        </button>
+        <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <button
+            onClick={() => setLocation(isBookingReady ? "/dashboard" : "#profile")}
+            data-testid="back-to-dashboard"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+          >
+            <ArrowLeft className="h-4 w-4" />{" "}
+            {isBookingReady ? "Back to dashboard" : "Finish setup to reach dashboard"}
+          </button>
+          {isSetupInProgress ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              data-testid="quit-setup-account"
+              onClick={() => setQuitOpen(true)}
+            >
+              Quit setup
+            </Button>
+          ) : null}
+        </div>
 
         {/* Profile band + completeness meter */}
         <section className="mb-6 flex shrink-0 flex-wrap items-center gap-4 overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-dz-secondary p-5 text-white shadow-[0_12px_34px_rgba(52,25,106,0.22)] sm:gap-7 sm:p-7 min-[900px]:mb-4">
@@ -940,14 +1130,6 @@ export default function MyAccount() {
                 >
                   <n.icon className="h-5 w-5" />
                   <span className="flex-1">{n.label}</span>
-                  {n.soon && (
-                    <AccountComingSoonBadge
-                      className={cn(
-                        "px-1.5 py-0.5 text-[9px]",
-                        isActive && "bg-white/20 text-white",
-                      )}
-                    />
-                  )}
                 </a>
               );
             })}
@@ -1214,9 +1396,9 @@ export default function MyAccount() {
 
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !canSaveContact}
                   data-testid="update-profile-button"
-                  className="w-full rounded-full bg-primary py-6 font-bold text-white hover:bg-primary/90"
+                  className="w-full rounded-full bg-primary py-6 font-bold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:hover:bg-muted"
                 >
                   {isLoading ? "Saving…" : isSetupInProgress ? "Save & continue" : "Save changes"}
                 </Button>
@@ -1300,7 +1482,9 @@ export default function MyAccount() {
               ) : (
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <AccountComingSoonBadge />
+                    <span className="rounded-full bg-dz-secondary/10 px-2.5 py-1 text-[10px] font-bold tracking-wider text-dz-secondary">
+                      Coming Soon
+                    </span>
                     <span className="text-sm font-semibold text-foreground/80">
                       Saved cards for one-tap booking
                     </span>
@@ -1318,35 +1502,12 @@ export default function MyAccount() {
               )}
             </AccountFoldSection>
 
-            {/* CREDITS (placeholder) */}
-            <AccountFoldSection
-              id="credits"
-              icon={Coins}
-              title="Credits"
-              subtitle="Session credits for future bookings"
-              soon
-              open={isSectionOpen("credits")}
-              onOpenChange={(open) => setSectionOpen("credits", open)}
-              summary="View and apply session credits"
-              testId="credits-content"
-            >
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-primary/20 bg-primary/[0.02] px-6 py-10 text-center">
-                <Coins className="h-10 w-10 text-primary/35" />
-                <p className="font-display text-lg font-semibold text-primary">Credits retired</p>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Platform cancellations create a reschedulable entitlement, then a proportionate
-                  refund to source if unused by the deadline. There is no credit wallet.
-                </p>
-              </div>
-            </AccountFoldSection>
-
-            {/* PREFERENCES (placeholder) */}
+            {/* PREFERENCES */}
             <AccountFoldSection
               id="preferences"
               icon={SlidersHorizontal}
               title="Preferences"
               subtitle="How we reach you"
-              soon
               open={isSectionOpen("preferences")}
               onOpenChange={(open) => setSectionOpen("preferences", open)}
               summary="Reminders, updates, and offers"
@@ -1354,9 +1515,24 @@ export default function MyAccount() {
             >
               {(
                 [
-                  { key: "reminders", label: "Session reminders", desc: "A nudge before each booking" },
-                  { key: "updates", label: "Email updates", desc: "New classes, workshops & trips" },
-                  { key: "promos", label: "Offers & promos", desc: "Occasional deals" },
+                  {
+                    key: "reminders" as const,
+                    field: "prefSessionReminders" as const,
+                    label: "Session reminders",
+                    desc: "A nudge before each booking",
+                  },
+                  {
+                    key: "updates" as const,
+                    field: "prefEmailUpdates" as const,
+                    label: "Email updates",
+                    desc: "Early access, workshops, tips & discounts",
+                  },
+                  {
+                    key: "promos" as const,
+                    field: "prefOffersPromos" as const,
+                    label: "Offers & promos",
+                    desc: "Occasional deals and discounts",
+                  },
                 ] as const
               ).map((p) => (
                 <div
@@ -1369,7 +1545,16 @@ export default function MyAccount() {
                   </div>
                   <Switch
                     checked={prefs[p.key]}
-                    onCheckedChange={(v) => setPrefs((s) => ({ ...s, [p.key]: v }))}
+                    onCheckedChange={(v) => {
+                      setPrefs((s) => ({ ...s, [p.key]: v }));
+                      void updateProfile({ [p.field]: v }, { silent: true }).catch(() => {
+                        toast({
+                          title: "Could not save preference",
+                          variant: "destructive",
+                        });
+                        setPrefs((s) => ({ ...s, [p.key]: !v }));
+                      });
+                    }}
                   />
                 </div>
               ))}
@@ -1463,6 +1648,14 @@ export default function MyAccount() {
       >
         <ArrowUp className="h-5 w-5" />
       </button>
+
+      <QuitSetupDialog
+        open={quitOpen}
+        onOpenChange={setQuitOpen}
+        saving={quitSaving}
+        onSaveAndQuit={handleSaveAndQuitSetup}
+        onQuitAnyway={finishQuitToMarketing}
+      />
     </div>
   );
 }
