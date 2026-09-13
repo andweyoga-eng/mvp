@@ -61,11 +61,30 @@ export default {
           border: "var(--sidebar-border)",
           ring: "var(--sidebar-ring)",
         },
+        dz: {
+          surface: "var(--dz-surface)",
+          muted: "var(--dz-on-surface-variant)",
+          primary: "var(--dz-primary)",
+          secondary: "var(--dz-secondary)",
+          glass: "var(--dz-glass)",
+          "glass-border": "var(--dz-glass-border)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        display: ["var(--font-display)"],
+        body: ["var(--font-body)"],
+        accent: ["var(--font-accent)"],
+      },
+      maxWidth: {
+        dz: "1280px",
+      },
+      boxShadow: {
+        "dz-ambient": "0 8px 30px rgba(27, 28, 27, 0.04)",
+        "dz-primary": "0 4px 14px rgba(52, 25, 106, 0.22)",
+        "dz-hero": "0 10px 30px rgba(52, 25, 106, 0.4)",
       },
       keyframes: {
         "accordion-down": {

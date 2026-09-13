@@ -3,6 +3,13 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import type { Express } from 'express';
 import { storage } from './storage';
+import { ensureUserCanAuthenticate, isUserActive } from './account';
+import {
+  AUTH_COOKIE_NAME,
+  OAUTH_KEEP_COOKIE_NAME,
+  buildAuthCookieOptions,
+  keepSignedInFromValue,
+} from './auth-cookie';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -27,13 +34,15 @@ export function setupGoogleAuth(app: Express) {
   },
   async (accessToken, refreshToken, profile, done) => {
     try {
-      // Check if user already exists
-      let user = await storage.getUserByEmail(profile.emails?.[0]?.value || '');
+      const email = profile.emails?.[0]?.value || '';
+      let user = await storage.getUserByEmail(email);
+      let isNewGoogleUser = false;
       
       if (!user) {
+        isNewGoogleUser = true;
         // Create new user from Google profile
         const userData = {
-          email: profile.emails?.[0]?.value || '',
+          email,
           name: profile.displayName || '',
           password: '', // No password needed for OAuth users
           primaryMobile: '', // Will need to be filled later
@@ -49,7 +58,7 @@ export function setupGoogleAuth(app: Express) {
         await storage.verifyUserEmail(user.id);
       }
       
-      return done(null, user);
+      return done(null, { user, isNewGoogleUser } as any);
     } catch (error) {
       return done(error, undefined);
     }
@@ -61,15 +70,45 @@ export function setupGoogleAuth(app: Express) {
   );
 
   app.get('/api/auth/google/callback',
-    passport.authenticate('google', { session: false }),
-    (req, res) => {
-      // Generate JWT token for the authenticated user
+    passport.authenticate('google', { session: false, failureRedirect: '/?error=google_auth_failed' }),
+    async (req, res) => {
       const { generateToken } = require('./auth');
-      const user = req.user as any;
+      const payload = req.user as unknown as { user: { id: string; email?: string }; isNewGoogleUser?: boolean };
+      let user = payload.user as Awaited<ReturnType<typeof storage.getUser>>;
+      let isNewGoogleUser = Boolean(payload.isNewGoogleUser);
+
+      if (!user) {
+        return res.redirect('/?error=google_auth_failed');
+      }
+
+      const fullUser = await storage.getUser(user.id);
+      if (!fullUser) {
+        return res.redirect('/?error=google_auth_failed');
+      }
+      user = fullUser;
+
+      if (!isUserActive(user)) {
+        const eligibility = await ensureUserCanAuthenticate(storage, user);
+        if (!eligibility.ok) {
+          return res.redirect('/?error=account_deactivated');
+        }
+        user = eligibility.user;
+        if (eligibility.treatAsNewUser) {
+          isNewGoogleUser = true;
+        }
+      }
+
       const token = generateToken(user.id);
-      
-      // Redirect to frontend with token
-      res.redirect(`/?token=${token}&loginSuccess=true`);
+
+      // Honour the "Keep me signed in" preference captured at sign-in start:
+      // ON → persistent 7-day cookie; OFF → session cookie cleared on browser close.
+      const keepSignedIn = keepSignedInFromValue((req as any).cookies?.[OAUTH_KEEP_COOKIE_NAME]);
+      res.clearCookie(OAUTH_KEEP_COOKIE_NAME);
+      res.cookie(AUTH_COOKIE_NAME, token, buildAuthCookieOptions(keepSignedIn));
+
+      res.redirect(
+        `/my-account?loginSuccess=true${isNewGoogleUser ? "&newUser=true" : ""}`,
+      );
     }
   );
 }

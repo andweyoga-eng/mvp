@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#fbf9f7;font-family:'Onest',system-ui,sans-serif;color:#1b1c1b;-webkit-font-smoothing:antialiased;}
+[data-scroll]::-webkit-scrollbar{display:none;}
+[data-scroll]{scrollbar-width:none;-ms-overflow-style:none;}
+</style>
+</helmet>
+
+<div style="min-height:100vh;color:#1b1c1b;overflow-x:hidden;position:relative;">
+
+  <div style="position:fixed;top:-12%;right:-10%;width:600px;height:600px;border-radius:60% 40% 30% 70% / 60% 30% 70% 40%;background:rgba(52,25,106,0.06);filter:blur(80px);z-index:0;pointer-events:none;"></div>
+  <div style="position:fixed;bottom:-8%;left:-8%;width:460px;height:460px;border-radius:60% 40% 30% 70% / 60% 30% 70% 40%;background:rgba(154,70,18,0.05);filter:blur(80px);z-index:0;pointer-events:none;"></div>
+
+  <!-- HEADER -->
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,249,247,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(75,50,130,0.08);">
+    <div style="max-width:1100px;margin:0 auto;padding:0 clamp(16px,4vw,24px);height:76px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <a href="andWeYOGa%20Dashboard%20v2.dc.html" style="display:flex;align-items:center;gap:2px;text-decoration:none;font-family:'Bricolage Grotesque';font-weight:800;font-size:22px;letter-spacing:-0.01em;white-space:nowrap;">
+        <span style="color:#1b1c1b;font-weight:600;">andWe</span><span style="color:#34196a;">YOG</span><span style="color:#9a4612;">a</span>
+      </a>
+      <a href="andWeYOGa%20Dashboard%20v2.dc.html" style="display:flex;align-items:center;gap:8px;color:#494550;text-decoration:none;font-weight:600;font-size:14px;transition:color .2s;" style-hover="color:#34196a;">
+        <span style="font-family:'Material Symbols Outlined';font-size:20px;">arrow_back</span><span>Back to Sessions</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main style="position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:clamp(24px,4vw,44px) clamp(16px,4vw,24px) 80px;">
+
+    <div style="margin-bottom:28px;">
+      <span style="display:inline-block;padding:6px 14px;background:rgba(52,25,106,0.1);color:#34196a;border-radius:99px;font-size:12px;font-weight:600;margin-bottom:14px;">Confirm Your Booking</span>
+      <h1 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(28px,4vw,40px);letter-spacing:-0.02em;color:#34196a;">Reserve your <span style="font-family:'Instrument Serif';font-style:italic;font-size:1.1em;">spot</span></h1>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;">
+
+      <!-- LEFT -->
+      <div style="flex:3 1 480px;display:flex;flex-direction:column;gap:24px;">
+
+        <!-- session summary -->
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;overflow:hidden;box-shadow:0 8px 30px rgba(27,28,27,0.04);display:flex;flex-wrap:wrap;">
+          <div style="flex:1 1 200px;position:relative;min-height:180px;background:linear-gradient(135deg,#d7cfe6,#c8bdd9);display:flex;align-items:center;justify-content:center;">
+            <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:72px;color:rgba(52,25,106,0.22);">self_improvement</span>
+            <span style="position:absolute;left:12px;top:12px;background:#cfe9d1;color:#354c3a;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">Beginner Friendly</span>
+            <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(52,25,106,0.45);letter-spacing:0.04em;">/ photo: hatha flow</span>
+          </div>
+          <div style="flex:1 1 260px;padding:24px;display:flex;flex-direction:column;justify-content:center;">
+            <h2 style="margin:0 0 6px;font-family:'Bricolage Grotesque';font-weight:600;font-size:24px;color:#34196a;">Morning Hatha Flow</h2>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:#494550;">A gentle, grounding sequence to awaken the body and steady the breath. Suitable for all levels.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:14px 22px;">
+              <span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:#1b1c1b;"><span style="font-family:'Material Symbols Outlined';font-size:18px;color:#34196a;">schedule</span>60 min</span>
+              <span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:#1b1c1b;"><span style="font-family:'Material Symbols Outlined';font-size:18px;color:#34196a;">person</span>Arjun Patel</span>
+              <span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:#1b1c1b;"><span style="font-family:'Material Symbols Outlined';font-size:18px;color:#34196a;">location_on</span>Main Studio</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- date -->
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:24px;box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <h3 style="margin:0 0 16px;font-family:'Bricolage Grotesque';font-weight:600;font-size:18px;color:#1b1c1b;">Select a date</h3>
+          <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;" data-scroll>
+            <sc-for list="{{ dates }}" as="d" hint-placeholder-count="6">
+              <sc-if value="{{ d.active }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:0 0 auto;text-align:center;padding:12px 16px;border-radius:14px;cursor:pointer;background:#34196a;color:#fff;box-shadow:0 8px 20px rgba(52,25,106,0.25);min-width:64px;"><div style="font-size:11px;font-weight:600;opacity:0.85;">{{ d.dow }}</div><div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:20px;margin-top:2px;">{{ d.day }}</div></div>
+              </sc-if>
+              <sc-if value="{{ d.inactive }}" hint-placeholder-val="{{ true }}">
+                <div onClick="{{ d.onClick }}" style="flex:0 0 auto;text-align:center;padding:12px 16px;border-radius:14px;cursor:pointer;background:#f5f3f1;color:#1b1c1b;border:1px solid transparent;min-width:64px;transition:background .2s,border-color .2s;" style-hover="background:#fff;border-color:rgba(52,25,106,0.2);"><div style="font-size:11px;font-weight:600;color:#494550;">{{ d.dow }}</div><div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:20px;margin-top:2px;">{{ d.day }}</div></div>
+              </sc-if>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- time -->
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:24px;box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <h3 style="margin:0 0 16px;font-family:'Bricolage Grotesque';font-weight:600;font-size:18px;color:#1b1c1b;">Choose a time</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            <sc-for list="{{ times }}" as="t" hint-placeholder-count="4">
+              <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}">
+                <span style="padding:11px 20px;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;background:#34196a;color:#fff;box-shadow:0 6px 16px rgba(52,25,106,0.22);">{{ t.label }}</span>
+              </sc-if>
+              <sc-if value="{{ t.inactive }}" hint-placeholder-val="{{ true }}">
+                <span onClick="{{ t.onClick }}" style="padding:11px 20px;border-radius:12px;font-size:14px;font-weight:500;cursor:pointer;background:#f5f3f1;color:#494550;border:1px solid transparent;transition:background .2s,border-color .2s;" style-hover="background:#fff;border-color:rgba(52,25,106,0.2);">{{ t.label }}</span>
+              </sc-if>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT -->
+      <div style="flex:1 1 300px;position:sticky;top:96px;">
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:24px;box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <h3 style="margin:0 0 18px;font-family:'Bricolage Grotesque';font-weight:600;font-size:18px;color:#1b1c1b;">Booking summary</h3>
+          <div style="display:flex;flex-direction:column;gap:12px;padding-bottom:18px;border-bottom:1px solid rgba(52,25,106,0.08);">
+            <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:14px;color:#494550;">Session</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;text-align:right;">Morning Hatha Flow</span></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:14px;color:#494550;">Date</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">{{ summaryDate }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:14px;color:#494550;">Time</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">{{ summaryTime }}</span></div>
+            <div style="display:flex;justify-content:space-between;gap:10px;"><span style="font-size:14px;color:#494550;">Instructor</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">Arjun Patel</span></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding:18px 0;">
+            <span style="font-size:15px;font-weight:600;color:#1b1c1b;">Total</span>
+            <span style="font-family:'Bricolage Grotesque';font-weight:700;font-size:26px;color:#34196a;">$15</span>
+          </div>
+          <button onClick="{{ confirm }}" style="{{ confirmStyle }}">
+            <span style="font-family:'Material Symbols Outlined';font-size:20px;">{{ confirmIcon }}</span><span>{{ confirmLabel }}</span>
+          </button>
+          <p style="margin:14px 0 0;display:flex;align-items:center;gap:7px;font-size:12px;color:#494550;"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#354c3a;">verified_user</span>Free cancellation up to 12h before</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { dateIdx: 0, timeIdx: 0, confirmed: false };
+
+  renderVals() {
+    const dateData = [
+      { dow: 'MON', day: '9', full: 'Mon, Sep 9' },
+      { dow: 'WED', day: '11', full: 'Wed, Sep 11' },
+      { dow: 'FRI', day: '13', full: 'Fri, Sep 13' },
+      { dow: 'MON', day: '16', full: 'Mon, Sep 16' },
+      { dow: 'WED', day: '18', full: 'Wed, Sep 18' },
+      { dow: 'FRI', day: '20', full: 'Fri, Sep 20' },
+    ];
+    const timeData = ['8:00 AM', '10:30 AM', '5:30 PM', '7:00 PM'];
+
+    const dates = dateData.map((d, i) => ({
+      key: 'd' + i, dow: d.dow, day: d.day,
+      active: i === this.state.dateIdx,
+      inactive: i !== this.state.dateIdx,
+      onClick: () => this.setState({ dateIdx: i }),
+    }));
+    const times = timeData.map((t, i) => ({
+      key: 't' + i, label: t,
+      active: i === this.state.timeIdx,
+      inactive: i !== this.state.timeIdx,
+      onClick: () => this.setState({ timeIdx: i }),
+    }));
+
+    const done = this.state.confirmed;
+    const confirmBase = "width:100%;padding:15px;border:none;border-radius:14px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:9px;transition:transform .15s,box-shadow .2s;";
+    const confirmStyle = done
+      ? confirmBase + "background:#354c3a;color:#fff;box-shadow:0 6px 18px rgba(53,76,58,0.28);"
+      : confirmBase + "background:#34196a;color:#fff;box-shadow:0 6px 18px rgba(52,25,106,0.26);";
+
+    return {
+      dates, times,
+      summaryDate: dateData[this.state.dateIdx].full,
+      summaryTime: timeData[this.state.timeIdx],
+      confirmStyle,
+      confirmLabel: done ? 'Booking Confirmed' : 'Confirm & Reserve',
+      confirmIcon: done ? 'check_circle' : 'lock',
+      confirm: () => this.setState({ confirmed: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

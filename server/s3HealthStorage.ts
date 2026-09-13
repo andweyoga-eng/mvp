@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -21,7 +22,7 @@ function getS3Client(): S3Client {
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
   if (!accessKeyId || !secretAccessKey) {
     throw new Error(
-      "S3 mode: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (or use OBJECT_STORAGE=replit)."
+      "S3 mode: set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY."
     );
   }
   const region =
@@ -53,7 +54,6 @@ export function assertS3Configured(): void {
   getS3Client();
 }
 
-/** Presigned PUT for a private health document owned by userId. */
 export async function presignHealthDocumentPut(
   userId: string
 ): Promise<{ uploadUrl: string; key: string }> {
@@ -68,6 +68,28 @@ export async function presignHealthDocumentPut(
   });
   const uploadUrl = await getSignedUrl(client, command, { expiresIn: 900 });
   return { uploadUrl, key };
+}
+
+/** Server-side upload (avoids browser CORS issues with presigned PUT). */
+export async function putHealthDocumentBuffer(
+  userId: string,
+  body: Buffer,
+  contentType: string,
+): Promise<{ objectPath: string; key: string }> {
+  assertS3Configured();
+  const bucket = getS3Bucket();
+  const id = randomUUID();
+  const key = `health-documents/${userId}/${id}`;
+  const client = getS3Client();
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+  return { objectPath: `/objects/${key}`, key };
 }
 
 /**
@@ -132,6 +154,15 @@ export async function verifyS3HealthObjectExists(key: string): Promise<void> {
   await client.send(
     new HeadObjectCommand({ Bucket: getS3Bucket(), Key: key })
   );
+}
+
+export async function deleteS3HealthDocument(objectPathOrKey: string): Promise<boolean> {
+  const key = objectPathOrKey.replace(/^\/objects\//, "");
+  const client = getS3Client();
+  await client.send(
+    new DeleteObjectCommand({ Bucket: getS3Bucket(), Key: key })
+  );
+  return true;
 }
 
 export async function streamS3HealthDocument(
