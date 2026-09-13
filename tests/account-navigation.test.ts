@@ -128,6 +128,9 @@ describe("account migration — single page + one drawer", () => {
     assert.doesNotMatch(page, /id="credits"/);
     assert.match(page, /PrivacyConsentSection/);
     assert.match(page, /AccountHealthNoteSection/);
+    assert.match(page, /needsHealthConsent=\{needsHealthConsent\}/);
+    assert.match(page, /statusRevision=\{consentStatusRevision\}/);
+    assert.doesNotMatch(page, /needsHealthConsent=\{!healthConsentGiven/);
     assert.match(page, /DateOfBirthField/);
     assert.match(page, /testIdPrefix="profile-dob"/);
     assert.match(page, /payments-tab-methods/);

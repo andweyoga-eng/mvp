@@ -19,6 +19,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
+import { setAccountReturnIntent } from "@/lib/account-return-intent";
+import { CONSENT_COPY } from "@shared/consent";
+import { detectConsentLanguage } from "@/lib/consent-language";
 import { cn } from "@/lib/utils";
 import soundtherapyImg from "@assets/soundtherapy_1756809174781.jpg";
 import meditationImg from "@assets/meditation_1756809174781.jpg";
@@ -56,7 +59,20 @@ export default function Emojou() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [reflection, setReflection] = useState("");
-  const [healthConsented, setHealthConsented] = useState<boolean | null>(null);
+  const [healthConsentStatus, setHealthConsentStatus] = useState<
+    "active" | "withdrawn" | "not_given" | null
+  >(null);
+  const consentCopy = CONSENT_COPY[detectConsentLanguage()];
+  const healthGateCopy =
+    healthConsentStatus === "withdrawn"
+      ? {
+          title: consentCopy.healthReconsentTitle,
+          body: consentCopy.healthReconsentBody,
+        }
+      : {
+          title: consentCopy.healthPromptTitle,
+          body: consentCopy.healthPromptBody,
+        };
 
   useEffect(() => {
     if (!authLoading && !user) setLocation("/");
@@ -64,7 +80,7 @@ export default function Emojou() {
 
   useEffect(() => {
     if (!user?.id) {
-      setHealthConsented(null);
+      setHealthConsentStatus(null);
       return;
     }
     let cancelled = false;
@@ -72,24 +88,28 @@ export default function Emojou() {
       .then((status) => {
         if (cancelled) return;
         const health = status.categories.find((c) => c.consentType === "health_data");
-        setHealthConsented(health?.status === "active");
+        setHealthConsentStatus(health?.status ?? "not_given");
       })
       .catch(() => {
-        if (!cancelled) setHealthConsented(false);
+        if (!cancelled) setHealthConsentStatus("not_given");
       });
     return () => {
       cancelled = true;
     };
   }, [user?.id]);
 
+  const goToHealthConsent = () => {
+    setAccountReturnIntent("/emojou");
+    setLocation("/my-account#health");
+  };
+
   const saveMoment = () => {
-    if (healthConsented === false) {
+    if (healthConsentStatus !== "active") {
       toast({
-        title: "A quick health check-in",
-        description:
-          "Give health-data consent so weEmo can keep your journal private and purposeful.",
+        title: healthGateCopy.title,
+        description: healthGateCopy.body,
       });
-      setLocation("/my-account#privacy");
+      goToHealthConsent();
       return;
     }
     if (!reflection.trim()) {
@@ -107,14 +127,11 @@ export default function Emojou() {
         <div aria-hidden className="pointer-events-none absolute -left-40 top-0 -z-10 h-[460px] w-[460px] rounded-full bg-primary/10 blur-3xl" />
         <div aria-hidden className="pointer-events-none absolute -right-32 bottom-24 -z-10 h-96 w-96 rounded-full bg-dz-secondary/10 blur-3xl" />
 
-        {healthConsented === false ? (
+        {healthConsentStatus !== null && healthConsentStatus !== "active" ? (
           <GlassCard className="mb-8 space-y-3 p-6">
-            <h2 className="font-display text-2xl font-bold text-primary">A quick health check-in</h2>
-            <p className="text-sm text-muted-foreground">
-              weEmo uses your health-data consent so journal notes stay private and only support your
-              practice - viney, calm, and optional until you write.
-            </p>
-            <Button onClick={() => setLocation("/my-account#privacy")}>Give consent & continue</Button>
+            <h2 className="font-display text-2xl font-bold text-primary">{healthGateCopy.title}</h2>
+            <p className="text-sm text-muted-foreground">{healthGateCopy.body}</p>
+            <Button onClick={goToHealthConsent}>{consentCopy.healthPromptCta}</Button>
           </GlassCard>
         ) : null}
         {/* ===== HERO ===== */}

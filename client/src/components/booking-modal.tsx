@@ -833,7 +833,7 @@ export default function BookingModal({
       toast({
         title: healthOnly ? "A quick health check-in" : "Almost there",
         description: healthOnly
-          ? "Share a short Health History so we can keep your practice safe - viney and private - then continue booking."
+          ? "Share a short Health History and health-data consent so we can keep your practice safe - viney and private - then continue booking."
           : "Please finish your contact details and Health History before booking this session.",
         variant: "destructive",
       });

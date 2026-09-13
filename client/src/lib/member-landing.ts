@@ -2,6 +2,7 @@ import {
   getPendingBooking,
   type BookingIntent,
 } from "@/lib/pending-booking";
+import { consumeAccountReturnIntent } from "@/lib/account-return-intent";
 import { MY_SESSIONS_UPCOMING_URL, myAccountHref } from "@/lib/account-routes";
 import type { User } from "@/lib/auth";
 import { getFirstIncompleteAccountAnchor } from "@shared/profileCompleteness";
@@ -55,7 +56,8 @@ export function redirectToMemberDashboardAfterProfileComplete(): void {
 }
 
 /**
- * After onboarding, resume an in-progress booking on Reserve when intent was saved;
+ * After onboarding / health consent, resume paid booking on Reserve when intent
+ * was saved; otherwise return to WeDiet / weEmo if that tab sent them here;
  * otherwise land on the member dashboard.
  */
 export function redirectAfterProfileComplete(): void {
@@ -63,6 +65,11 @@ export function redirectAfterProfileComplete(): void {
   const reserveHref = reserveHrefFromIntent(getPendingBooking() ?? {}, "profile");
   if (reserveHref) {
     window.location.assign(reserveHref);
+    return;
+  }
+  const returnPath = consumeAccountReturnIntent();
+  if (returnPath) {
+    window.location.assign(returnPath);
     return;
   }
   window.location.assign(MEMBER_DASHBOARD_URL);

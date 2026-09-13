@@ -71,6 +71,7 @@ import {
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
 import { getPendingBooking } from "@/lib/pending-booking";
 import { clearMemberLandingCheck, redirectAfterProfileComplete } from "@/lib/member-landing";
+import { peekAccountReturnIntent } from "@/lib/account-return-intent";
 import { parseHealthHistory, HEALTH_NO_CONCERNS_TEXT } from "@shared/health-disclosure";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 
@@ -268,13 +269,12 @@ export default function MyAccount() {
   // Fail-closed default: never assume health-data consent is already given until
   // the server confirms it. Assuming `true` here let onboarding skip recording it.
   const [healthConsentGiven, setHealthConsentGiven] = useState(false);
+  const [healthConsentStatus, setHealthConsentStatus] = useState<
+    "active" | "withdrawn" | "not_given"
+  >("not_given");
   const [healthConsentChecked, setHealthConsentChecked] = useState(false);
   const [consentRequirement, setConsentRequirement] = useState<ConsentRequirement | null>(null);
-  const [pendingHealthSave, setPendingHealthSave] = useState<{
-    text: string;
-    documentUrls: string[];
-    mediaLinks: HealthMediaLink[];
-  } | null>(null);
+  const [consentStatusRevision, setConsentStatusRevision] = useState(0);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [consentLang, setConsentLang] = useState<ConsentLanguage>(detectConsentLanguage);
   const [dobError, setDobError] = useState("");
@@ -285,11 +285,14 @@ export default function MyAccount() {
     fetchMyConsentStatus()
       .then((data) => {
         const health = data.categories.find((c) => c.consentType === "health_data");
-        setHealthConsentGiven(health?.status === "active");
+        const status = health?.status ?? "not_given";
+        setHealthConsentStatus(status);
+        setHealthConsentGiven(status === "active");
         setConsentRequirement(data.requirement);
       })
       .catch(() => {
         setHealthConsentGiven(false);
+        setHealthConsentStatus("not_given");
         setConsentRequirement(null);
       });
   }, [user?.id]);
@@ -612,7 +615,10 @@ export default function MyAccount() {
       requiresConsent = Boolean(status.requirement?.requiresConsent);
       setConsentRequirement(status.requirement);
       const health = status.categories.find((c) => c.consentType === "health_data");
-      setHealthConsentGiven(health?.status === "active");
+      const healthStatus = health?.status ?? "not_given";
+      setHealthConsentStatus(healthStatus);
+      setHealthConsentGiven(healthStatus === "active");
+      setConsentStatusRevision((n) => n + 1);
       serverUser = refreshed;
     } catch {
       serverUser = null;
@@ -641,7 +647,9 @@ export default function MyAccount() {
       title: "You're all set",
       description: getPendingBooking()
         ? "Your profile is complete. Taking you to checkout."
-        : "Your profile is complete. Welcome to your dashboard.",
+        : peekAccountReturnIntent()
+          ? "Health check-in done. Taking you back."
+          : "Your profile is complete. Welcome to your dashboard.",
     });
     redirectAfterProfileComplete();
     return true;
@@ -799,12 +807,6 @@ export default function MyAccount() {
     return data;
   };
 
-  const advanceToPrivacyStep = () => {
-    setActiveSection("privacy");
-    setOpenSections((current) => ({ ...current, privacy: true }));
-    scrollToAccountSection("privacy");
-  };
-
   const handleHealthSave = async (payload: {
     text: string;
     documentUrls: string[];
@@ -820,6 +822,15 @@ export default function MyAccount() {
       return;
     }
 
+    if (!healthConsentGiven && !healthConsentChecked) {
+      toast({
+        title: CONSENT_COPY[consentLang].healthPromptTitle,
+        description: CONSENT_COPY[consentLang].healthConsentRequiredToast,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setProfileData((prev) => ({
       ...prev,
       healthUpdateText: payload.text,
@@ -827,25 +838,18 @@ export default function MyAccount() {
       healthMediaLinks: payload.mediaLinks,
     }));
 
-    if (!healthConsentGiven && consentRequirement?.requiresConsent) {
-      setPendingHealthSave(payload);
-      toast({
-        title: "Almost there",
-        description: "Review privacy & consent to save your Health History and finish setup.",
-      });
-      advanceToPrivacyStep();
-      return;
-    }
-
     setIsLoading(true);
     try {
       await persistHealthUpdate(payload);
-      setPendingHealthSave(null);
+      const grantedNow = !healthConsentGiven;
       setHealthConsentGiven(true);
-      const wasIncomplete = user?.profileCompletionStatus !== "complete";
-      if (wasIncomplete) {
-        // Fail-closed gate: routes to privacy when consent is still required and
-        // only redirects once profile + health + consent are all confirmed done.
+      setHealthConsentStatus("active");
+      setHealthConsentChecked(false);
+      setConsentStatusRevision((n) => n + 1);
+
+      // After first grant (or re-consent), finish remaining platform consent or
+      // return to WeDiet / weEmo / paid booking when nothing else is pending.
+      if (grantedNow || user?.profileCompletionStatus !== "complete" || peekAccountReturnIntent() || getPendingBooking()) {
         await resolveNextStepAndRoute();
         return;
       }
@@ -865,21 +869,11 @@ export default function MyAccount() {
   const handlePrivacyOnboardingComplete = async () => {
     setIsLoading(true);
     try {
-      // 1) Save the deferred Health History (if any) so health + consent land together.
-      if (pendingHealthSave) {
-        await persistHealthUpdate(pendingHealthSave);
-        setPendingHealthSave(null);
-        setHealthConsentGiven(true);
-      }
-
-      // 2) Persist the full Contact Info the member typed during onboarding.
-      //    Only the primary mobile is silently auto-saved; name/DOB/emergency/
-      //    address would otherwise be dropped on the post-consent navigation and
-      //    the member re-prompted for "mandatory" details they already entered.
+      // Persist contact details typed during onboarding (primary mobile may already
+      // be silently saved; name/DOB/emergency/address would otherwise be dropped).
       await updateProfile(buildContactPayload(), { silent: true });
 
-      // 3) Single fail-closed gate confirms profile + health + consent server-side
-      //    before redirecting; otherwise it stays in-page on the remaining step.
+      // Fail-closed gate: privacy done → return to booking / WeDiet / weEmo / dashboard.
       await resolveNextStepAndRoute();
     } catch (err) {
       toast({
@@ -910,19 +904,46 @@ export default function MyAccount() {
     requiresConsent: consentRequirement?.requiresConsent,
   });
   const needsProfileOnboarding = onboardingAnchor === "profile";
-  const needsHealthOnboarding = onboardingAnchor === "health";
+  const needsHealthConsent = !healthConsentGiven;
+  const healthIntentDeepLink =
+    typeof window !== "undefined" &&
+    (window.location.hash.replace("#", "") === "health" ||
+      Boolean(peekAccountReturnIntent()) ||
+      Boolean(getPendingBooking()));
+  const seekingHealthGate =
+    needsHealthConsent &&
+    isProfileFieldsSectionComplete(statusInput) &&
+    healthIntentDeepLink;
+  const needsHealthOnboarding = onboardingAnchor === "health" || seekingHealthGate;
   const needsPrivacyOnboarding = onboardingAnchor === "privacy";
-  const isSetupInProgress = Boolean(onboardingAnchor);
+  const isSetupInProgress = Boolean(onboardingAnchor) || seekingHealthGate;
   const showPrivacyOnboardingForm =
     needsPrivacyOnboarding ||
     (Boolean(consentRequirement?.requiresConsent) &&
       isProfileFieldsSectionComplete(statusInput));
 
   useEffect(() => {
-    if (!user || !isSetupInProgress || !onboardingAnchor) return;
+    if (!user) return;
+    if (needsProfileOnboarding) {
+      setActiveSection("profile");
+      setOpenSections((current) => ({ ...current, profile: true }));
+      return;
+    }
+    if (seekingHealthGate) {
+      setActiveSection("health");
+      setOpenSections((current) => ({ ...current, health: true }));
+      return;
+    }
+    if (!isSetupInProgress || !onboardingAnchor) return;
     setActiveSection(onboardingAnchor);
     setOpenSections((current) => ({ ...current, [onboardingAnchor]: true }));
-  }, [user?.id, onboardingAnchor, isSetupInProgress]);
+  }, [
+    user?.id,
+    onboardingAnchor,
+    isSetupInProgress,
+    seekingHealthGate,
+    needsProfileOnboarding,
+  ]);
 
   // Completeness meter — contact + consent required; Health History is contextual.
   const checks = [
@@ -1415,7 +1436,13 @@ export default function MyAccount() {
               forceOpen={needsHealthOnboarding}
               open={isSectionOpen("health")}
               onOpenChange={(open) => setSectionOpen("health", open)}
-              summary={healthSummary}
+              summary={
+                needsHealthConsent
+                  ? healthConsentStatus === "withdrawn"
+                    ? "Share Health History and renew consent"
+                    : "Share Health History and give consent"
+                  : healthSummary
+              }
               testId="health-content"
             >
               <AccountHealthNoteSection
@@ -1425,7 +1452,18 @@ export default function MyAccount() {
                 lastModified={user.healthUpdateLastModified ?? null}
                 history={healthHistory}
                 startInEditMode={needsHealthOnboarding}
-                continueLabel={isSetupInProgress ? "Save & continue" : "Save update"}
+                continueLabel={
+                  needsHealthConsent
+                    ? "Save & continue"
+                    : isSetupInProgress
+                      ? "Save & continue"
+                      : "Save update"
+                }
+                needsHealthConsent={needsHealthConsent}
+                healthConsentChecked={healthConsentChecked}
+                onHealthConsentCheckedChange={setHealthConsentChecked}
+                healthConsentWasWithdrawn={healthConsentStatus === "withdrawn"}
+                consentLanguage={consentLang}
                 onSave={async (payload) => {
                   await handleHealthSave(payload);
                 }}
@@ -1619,15 +1657,22 @@ export default function MyAccount() {
                 hideTitle
                 onboardingActive={showPrivacyOnboardingForm}
                 profileDateOfBirth={profileData.dateOfBirth || user.dateOfBirth || ""}
-                needsHealthConsent={!healthConsentGiven && isHealthDisclosureComplete(profileData.healthUpdateText)}
-                healthConsentChecked={healthConsentChecked}
-                onHealthConsentCheckedChange={setHealthConsentChecked}
                 marketingOptIn={marketingOptIn}
                 onMarketingOptInChange={setMarketingOptIn}
                 onOnboardingComplete={handlePrivacyOnboardingComplete}
+                statusRevision={consentStatusRevision}
                 onHealthWithdrawn={() => {
                   setHealthConsentGiven(false);
+                  setHealthConsentStatus("withdrawn");
                   setHealthConsentChecked(false);
+                  setConsentStatusRevision((n) => n + 1);
+                  setProfileData((prev) => ({
+                    ...prev,
+                    healthUpdateText: "",
+                    healthDocumentUrls: [],
+                    healthMediaLinks: [],
+                  }));
+                  void refreshUser();
                 }}
               />
             </AccountFoldSection>

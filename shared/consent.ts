@@ -205,6 +205,10 @@ export const CONSENT_COPY = {
     healthPromptBody:
       "Before we go further, share a short Health History and consent so we can keep your practice safe and personal. Takes a minute - viney, calm, and only used for your sessions and wellbeing tools.",
     healthPromptCta: "Share Health History",
+    healthReconsentTitle: "Welcome back to your soft landing",
+    healthReconsentBody:
+      "You stepped away from health-data consent - totally fine. When you are ready, share a short Health History and tick the box below. We will keep it viney, private, and only for your practice and wellbeing tools.",
+    healthConsentRequiredToast: "Tick the health-data consent box to save your Health History.",
     withdrawHealthConsent: "Withdraw health data consent",
     withdrawingHealth: "Withdrawing…",
   },
@@ -264,6 +268,10 @@ export const CONSENT_COPY = {
     healthPromptBody:
       "ಮುಂದುವರಿಯುವ ಮೊದಲು, ನಿಮ್ಮ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಇರಿಸಲು ಸಂಕ್ಷಿಪ್ತ ಆರೋಗ್ಯ ಇತಿಹಾಸ ಮತ್ತು ಸಮ್ಮತಿ ಹಂಚಿಕೊಳ್ಳಿ. ಒಂದು ನಿಮಿಷ - ಶಾಂತ, ಸ್ನೇಹಪರ, ಮತ್ತು ನಿಮ್ಮ ಸೆಷನ್‌ಗಳು ಹಾಗೂ ಕ್ಷೇಮ ಸಾಧನಗಳಿಗೆ ಮಾತ್ರ.",
     healthPromptCta: "ಆರೋಗ್ಯ ಇತಿಹಾಸ ಹಂಚಿಕೊಳ್ಳಿ",
+    healthReconsentTitle: "ಮತ್ತೆ ನಿಮ್ಮ ಮೃದು ಆರಂಭಕ್ಕೆ ಸ್ವಾಗತ",
+    healthReconsentBody:
+      "ನೀವು ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯಿಂದ ಹಿಂದೆ ಸರಿದಿದ್ದೀರಿ - ಅದು ಸರಿ. ಸಿದ್ಧರಾದಾಗ ಸಂಕ್ಷಿಪ್ತ ಆರೋಗ್ಯ ಇತಿಹಾಸ ಹಂಚಿ ಕೆಳಗಿನ ಪೆಟ್ಟಿಗೆಯನ್ನು ಗುರುತಿಸಿ. ನಾವು ಅದನ್ನು ಖಾಸಗಿ ಮತ್ತು ನಿಮ್ಮ ಅಭ್ಯಾಸ ಹಾಗೂ ಕ್ಷೇಮ ಸಾಧನಗಳಿಗೆ ಮಾತ್ರ ಇರಿಸುತ್ತೇವೆ.",
+    healthConsentRequiredToast: "ಆರೋಗ್ಯ ಇತಿಹಾಸವನ್ನು ಉಳಿಸಲು ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿ ಪೆಟ್ಟಿಗೆಯನ್ನು ಗುರುತಿಸಿ.",
     withdrawHealthConsent: "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿಯನ್ನು ಹಿಂತೆಗೆದುಕೊಳ್ಳಿ",
     withdrawingHealth: "ಹಿಂತೆಗೆದುಕೊಳ್ಳಲಾಗುತ್ತಿದೆ…",
   },

@@ -74,12 +74,11 @@ export type PrivacyConsentSectionProps = {
   /** When true, show the DPDPA onboarding form instead of read-only status. */
   onboardingActive?: boolean;
   profileDateOfBirth?: string;
-  needsHealthConsent?: boolean;
-  healthConsentChecked?: boolean;
-  onHealthConsentCheckedChange?: (checked: boolean) => void;
   marketingOptIn?: boolean;
   onMarketingOptInChange?: (checked: boolean) => void;
   onOnboardingComplete?: () => void | Promise<void>;
+  /** Bump when health consent changes elsewhere so status badges refresh. */
+  statusRevision?: number;
 };
 
 export function PrivacyConsentSection({
@@ -87,12 +86,10 @@ export function PrivacyConsentSection({
   onHealthWithdrawn,
   onboardingActive = false,
   profileDateOfBirth = "",
-  needsHealthConsent = false,
-  healthConsentChecked = false,
-  onHealthConsentCheckedChange,
   marketingOptIn = false,
   onMarketingOptInChange,
   onOnboardingComplete,
+  statusRevision = 0,
 }: PrivacyConsentSectionProps = {}) {
   const { toast } = useToast();
   const { logout, refreshUser } = useAuth();
@@ -120,7 +117,7 @@ export function PrivacyConsentSection({
 
   useEffect(() => {
     reload();
-  }, []);
+  }, [statusRevision]);
 
   const requirement = data?.requirement;
   const showOnboardingForm = onboardingActive && Boolean(requirement?.requiresConsent);
@@ -161,12 +158,6 @@ export function PrivacyConsentSection({
     consentTerms?: boolean;
     consentAge?: boolean;
   }) => {
-    if (needsHealthConsent && !healthConsentChecked) {
-      return {
-        ok: false,
-        message: "Please accept health data processing before continuing.",
-      };
-    }
     const policyVersion = data?.consentVersion ?? LEGAL_CONFIG.documentVersion;
     const result = await submitAuthenticatedConsent({
       ...payload,
@@ -282,39 +273,17 @@ export function PrivacyConsentSection({
             requireDateOfBirth={requirement.requireDateOfBirth && !profileDateOfBirth}
             prefilledDateOfBirth={profileDateOfBirth}
             beforeSubmit={
-              <>
-                {needsHealthConsent ? (
-                  <ConsentCheckbox
-                    checked={healthConsentChecked}
-                    onChange={(checked) => onHealthConsentCheckedChange?.(checked)}
-                    testId="health-consent-checkbox"
-                    variant="secondary"
-                    className="rounded-xl border-2 border-dz-secondary/50 bg-dz-secondary/10 p-4"
-                    label={
-                      <span className="flex items-start gap-2 text-sm font-medium leading-relaxed">
-                        <span className="mt-0.5 shrink-0" aria-hidden>
-                          💚
-                        </span>
-                        <span>
-                          {consentCopy.healthConsent} {consentCopy.healthConsentDriveNote}
-                        </span>
-                      </span>
-                    }
-                  />
-                ) : null}
-
-                <div className="rounded-xl border border-dz-glass-border bg-white/60 p-4">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                    Optional
-                  </p>
-                  <ConsentCheckbox
-                    checked={marketingOptIn}
-                    onChange={(checked) => onMarketingOptInChange?.(checked)}
-                    testId="marketing-consent-checkbox"
-                    label={consentCopy.marketingConsent}
-                  />
-                </div>
-              </>
+              <div className="rounded-xl border border-dz-glass-border bg-white/60 p-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                  Optional
+                </p>
+                <ConsentCheckbox
+                  checked={marketingOptIn}
+                  onChange={(checked) => onMarketingOptInChange?.(checked)}
+                  testId="marketing-consent-checkbox"
+                  label={consentCopy.marketingConsent}
+                />
+              </div>
             }
           />
         </div>

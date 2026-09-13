@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MousePointerClick, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AccountFoldSection } from "@/components/account-fold-section";
+import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { cn } from "@/lib/utils";
 import {
   HEALTH_NO_CONCERNS_TEXT,
@@ -25,6 +26,7 @@ import {
   HealthDocumentUploadField,
   HealthDocumentUploadSummary,
 } from "@/components/health-document-upload-field";
+import { CONSENT_COPY, type ConsentLanguage } from "@shared/consent";
 
 type HealthTab = "latest" | "recent";
 
@@ -38,6 +40,13 @@ export interface AccountHealthNoteSectionProps {
   isLoading: boolean;
   startInEditMode?: boolean;
   continueLabel?: string;
+  /** When true, member must tick health-data consent before save. */
+  needsHealthConsent?: boolean;
+  healthConsentChecked?: boolean;
+  onHealthConsentCheckedChange?: (checked: boolean) => void;
+  /** Prefer re-consent tone after a prior withdraw. */
+  healthConsentWasWithdrawn?: boolean;
+  consentLanguage?: ConsentLanguage;
 }
 
 function HealthHistoryList({ history }: { history: HealthHistoryEntry[] }) {
@@ -81,10 +90,18 @@ export function AccountHealthNoteSection({
   isLoading,
   startInEditMode = false,
   continueLabel = "Save update",
+  needsHealthConsent = false,
+  healthConsentChecked = false,
+  onHealthConsentCheckedChange,
+  healthConsentWasWithdrawn = false,
+  consentLanguage = "en",
 }: AccountHealthNoteSectionProps) {
   const { toast } = useToast();
+  const consentCopy = CONSENT_COPY[consentLanguage];
   const [tab, setTab] = useState<HealthTab>("latest");
-  const [isEditing, setIsEditing] = useState(() => startInEditMode && !isHealthDisclosureComplete(currentText));
+  const [isEditing, setIsEditing] = useState(
+    () => startInEditMode || needsHealthConsent || !isHealthDisclosureComplete(currentText),
+  );
   const [draftText, setDraftText] = useState("");
   const [draftMediaLinks, setDraftMediaLinks] = useState<HealthMediaLink[]>([]);
   const [draftDocumentUrls, setDraftDocumentUrls] = useState<string[]>([]);
@@ -95,13 +112,17 @@ export function AccountHealthNoteSection({
   const hasCurrentNote = isHealthDisclosureComplete(currentText);
 
   useEffect(() => {
-    if (startInEditMode && !hasCurrentNote) {
+    if (startInEditMode || needsHealthConsent || !hasCurrentNote) {
       setIsEditing(true);
       setTab("latest");
     }
-  }, [startInEditMode, hasCurrentNote]);
+  }, [startInEditMode, needsHealthConsent, hasCurrentNote]);
 
-  const saveDisabled = isLoading || isUploading || !isHealthDisclosureComplete(draftText);
+  const saveDisabled =
+    isLoading ||
+    isUploading ||
+    !isHealthDisclosureComplete(draftText) ||
+    (needsHealthConsent && !healthConsentChecked);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -138,13 +159,23 @@ export function AccountHealthNoteSection({
       });
       return;
     }
+    if (needsHealthConsent && !healthConsentChecked) {
+      toast({
+        title: consentCopy.healthPromptTitle,
+        description: consentCopy.healthConsentRequiredToast,
+        variant: "destructive",
+      });
+      return;
+    }
     await onSave({
       text: draftText.trim(),
       documentUrls: draftDocumentUrls,
       mediaLinks: draftMediaLinks,
     });
-    setIsEditing(false);
-    setTab("latest");
+    if (!needsHealthConsent) {
+      setIsEditing(false);
+      setTab("latest");
+    }
   };
 
   const subTabBtn = (active: boolean) =>
@@ -155,7 +186,23 @@ export function AccountHealthNoteSection({
 
   const editForm = (
     <div className="space-y-4">
-      {hasCurrentNote ? (
+      {needsHealthConsent ? (
+        <div
+          className="rounded-xl border border-dz-secondary/40 bg-dz-secondary/10 p-4"
+          data-testid="health-consent-prompt"
+        >
+          <p className="font-display text-lg font-bold text-primary">
+            {healthConsentWasWithdrawn
+              ? consentCopy.healthReconsentTitle
+              : consentCopy.healthPromptTitle}
+          </p>
+          <p className="mt-1 text-sm font-medium text-foreground/80">
+            {healthConsentWasWithdrawn
+              ? consentCopy.healthReconsentBody
+              : consentCopy.healthPromptBody}
+          </p>
+        </div>
+      ) : hasCurrentNote ? (
         <p className="text-sm font-medium text-foreground/75">
           Editing saves the current update to Recent History and starts a new one.
         </p>
@@ -216,6 +263,26 @@ export function AccountHealthNoteSection({
         </div>
       </AccountFoldSection>
 
+      {needsHealthConsent ? (
+        <ConsentCheckbox
+          checked={healthConsentChecked}
+          onChange={(checked) => onHealthConsentCheckedChange?.(checked)}
+          testId="health-consent-checkbox"
+          variant="secondary"
+          className="rounded-xl border-2 border-dz-secondary/50 bg-dz-secondary/10 p-4"
+          label={
+            <span className="flex items-start gap-2 text-sm font-medium leading-relaxed">
+              <span className="mt-0.5 shrink-0" aria-hidden>
+                💚
+              </span>
+              <span>
+                {consentCopy.healthConsent} {consentCopy.healthConsentDriveNote}
+              </span>
+            </span>
+          }
+        />
+      ) : null}
+
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
@@ -226,7 +293,7 @@ export function AccountHealthNoteSection({
         >
           {isLoading ? "Saving…" : continueLabel}
         </Button>
-        {hasCurrentNote ? (
+        {hasCurrentNote && !needsHealthConsent ? (
           <Button
             type="button"
             variant="outline"

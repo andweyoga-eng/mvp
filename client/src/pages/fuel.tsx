@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { setAccountReturnIntent } from "@/lib/account-return-intent";
 import { cn } from "@/lib/utils";
 import {
   deleteFuelMeal,
@@ -1245,11 +1246,16 @@ export default function FuelPage() {
               <h2 className="font-display text-2xl font-bold text-primary">A quick health check-in</h2>
               <p className="text-sm text-muted-foreground">
               andWeDiet uses your health-data consent to store meal names and calorie values - viney and private.
-                Photos are never kept. Only the confirmed name and calories.
+                Photos are never kept. Only the confirmed name and calories. Share a short Health History and tick consent to continue.
               </p>
               <p className="text-xs text-muted-foreground">{FUEL_MEDICAL_DISCLAIMER}</p>
-              <Button onClick={() => setLocation("/my-account#privacy")}>
-                Give consent & continue
+              <Button
+                onClick={() => {
+                  setAccountReturnIntent("/fuel");
+                  setLocation("/my-account#health");
+                }}
+              >
+                Share Health History
               </Button>
             </GlassCard>
             <DailyInspirationCards recipe={data.recipe} practiceAlong={data.practiceAlong} />
