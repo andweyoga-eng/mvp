@@ -49,6 +49,7 @@ export function AdminFuelContentPanel() {
     geminiKeyPresent: boolean;
     active: boolean;
     model: string;
+    fallbackModel?: string | null;
     statusLabel: string;
   } | null>(null);
 
@@ -199,6 +200,9 @@ export function AdminFuelContentPanel() {
                   Flag: {estimationStatus.estimationEnabled ? "on" : "off"} · API key:{" "}
                   {estimationStatus.geminiKeyPresent ? "present" : "missing"} · Model:{" "}
                   {estimationStatus.model}
+                  {estimationStatus.fallbackModel
+                    ? ` · Fallback: ${estimationStatus.fallbackModel}`
+                    : " · Fallback: none"}
                 </p>
               </div>
             </div>

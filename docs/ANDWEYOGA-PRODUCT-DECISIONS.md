@@ -34,6 +34,7 @@
 12. [SPEC-SESSIONS-01 MVP (Aug 2026)](#12-spec-sessions-01-mvp-aug-2026)
 13. [Open Questions](#11-open-questions-for-product-owner)
 14. [andWeProgress (Sep 2026)](#14-andweprogress-sep-2026)
+15. [Platform Feature Gates (Sep 2026)](#15-platform-feature-gates-sep-2026)
 
 ---
 
@@ -650,6 +651,8 @@
 | andWeProgress instructor ack before session join | On hold | Schema hooks only (Sep 2026) | Build admin threads first; gate later — see SPEC-ANDWEPROGRESS-01 §2 |
 | andWeProgress per-entry / per-week comments | On hold | Rejected for v1 | Section-level threads only |
 | andWeProgress inactive enrollment tree | On hold | Active only | Product decision 11 Sep 2026 |
+| Program feature-tab entitlement + upsell | On hold | Store checkboxes only (Sep 2026) | Enforce later — see SPEC-PLATFORM-FEATURE-GATES-01 |
+| Super-admin OTP mid-program tab edit | On hold | Policy locked; wire later | Rare commercial change |
 
 ---
 
@@ -695,6 +698,53 @@ Full tracker + **out-of-scope backlog**: [`docs/SPEC-ANDWEPROGRESS-01.md`](./SPE
 
 Shipped v1: admin tab accordion, APIs, section comment threads (soft-edit/delete), nullable instructor ack fields.  
 Deferred: instructor UI, force-ack before session join, per-line comments, inactive enrollments, program-scoped threads.
+
+---
+
+## 15. Platform Feature Gates (Sep 2026)
+
+Full spec: [`docs/SPEC-PLATFORM-FEATURE-GATES-01.md`](./SPEC-PLATFORM-FEATURE-GATES-01.md).
+
+### 15.1 Platform Controls for weDiet / weEmo / weBuild
+
+| | |
+|---|---|
+| **Feature** | Super-admin toggles: tab visible vs hidden; CTAs interactive vs frozen |
+| **Type** | New |
+| **Decided by** | You (21 Sep 2026) |
+| **Decision** | Two **independent** atomic booleans per tab (`feature_*_visible`, `feature_*_interactive`). Page stays open when frozen. Hide/unhide reflows launcher; one tab left → collapse strip. Soft-redirect unavailable deep links |
+| **Rationale** | Studio can ship or pause feature CTAs without redeploy; pages remain reachable for education / future upsell |
+| **Shapes product** | Platform Controls becomes home for product feature gates (alongside guest checkout / maintenance) |
+
+### 15.2 andWeYOGa always available
+
+| | |
+|---|---|
+| **Feature** | Sessions tab policy |
+| **Type** | New |
+| **Decided by** | You (21 Sep 2026) |
+| **Decision** | andWeYOGa always available by default. Program form greys that checkbox (always implied). Atomic platform toggle `feature_andweyoga_always_available` can change the policy later |
+| **Rationale** | Booking discovery must not disappear when gated wellness tabs are off or membership ends |
+| **Shapes product** | After program completion: gated tabs off; **My Account + andWeYOGa** remain |
+
+### 15.3 Program feature-tab checkboxes (store-only v1)
+
+| | |
+|---|---|
+| **Feature** | Which hub tabs a program unlocks |
+| **Type** | Partial (UI + persist; no gate yet) |
+| **Decided by** | You (21 Sep 2026) |
+| **Decision** | On create/edit: multi-select weDiet / weEmo / weBuild. Persist only in v1 — **no** member entitlement, freeze, or upsell. Mid-program change later: **Super admin only**, OTP + written reason; default locked for Admin/Instructor |
+| **Rationale** | Capture commercial intent on the program now; enforce when subscription entitlement is ready |
+| **Shapes product** | Later: trial/drop-in/recurring with checked tab → Visible+Live; multi-program = **union (OR)** of tabs |
+
+### 15.4 Deferred entitlement / upsell
+
+| Feature | Type | Decision | Rationale |
+|---------|------|----------|-----------|
+| Freeze CTAs until program signup (after account gate) | On hold | Defer past v1 store-only | Placeholders first |
+| Upsell prompt listing active programs for that tab | On hold | Generic programs page + booking deep-link when built | Needs entitlement |
+| Server reject writes when not entitled | On hold | Required when gating goes live | Integrity |
 
 ---
 

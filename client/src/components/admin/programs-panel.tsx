@@ -26,6 +26,7 @@ import {
   programRupeesToPaise,
   type ProgramKind,
 } from "@shared/programs";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 export interface ClassTypeOption {
   id: string;
@@ -45,6 +46,10 @@ type ProgramRow = {
   totalSessions: number;
   pricePaise: number;
   flexiAllowed: boolean;
+  featureWediet?: boolean;
+  featureWeemo?: boolean;
+  featureWebuild?: boolean;
+  featureAndweyoga?: boolean;
   status: string;
   subscriptionCount: number;
 };
@@ -56,6 +61,10 @@ type ProgramForm = {
   durationWeeks: string;
   priceRupees: string;
   flexiAllowed: boolean;
+  featureWediet: boolean;
+  featureWeemo: boolean;
+  featureWebuild: boolean;
+  featureAndweyoga: boolean;
   status: "draft" | "active" | "archived";
 };
 
@@ -66,6 +75,10 @@ const EMPTY_FORM: ProgramForm = {
   durationWeeks: "12",
   priceRupees: "",
   flexiAllowed: false,
+  featureWediet: false,
+  featureWeemo: false,
+  featureWebuild: false,
+  featureAndweyoga: true,
   status: "active",
 };
 
@@ -77,6 +90,10 @@ function programToForm(p: ProgramRow): ProgramForm {
     durationWeeks: String(p.durationWeeks),
     priceRupees: String(p.pricePaise / 100),
     flexiAllowed: p.flexiAllowed,
+    featureWediet: !!p.featureWediet,
+    featureWeemo: !!p.featureWeemo,
+    featureWebuild: !!p.featureWebuild,
+    featureAndweyoga: p.featureAndweyoga !== false,
     status: (p.status as ProgramForm["status"]) || "active",
   };
 }
@@ -92,6 +109,8 @@ function ProgramFormFields({
   classTypes: ClassTypeOption[];
   lockClassType?: boolean;
 }) {
+  const { featureAndweyogaAlwaysAvailable } = usePlatformConfig();
+  const andWeYogaLocked = featureAndweyogaAlwaysAvailable !== false;
   const isSingleSession = form.kind === "trial" || form.kind === "drop_in";
   const sessionsPerWeek = isSingleSession ? 1 : Math.max(1, Number(form.sessionsPerWeek) || 1);
   const durationWeeks = isSingleSession ? 1 : Math.max(1, Number(form.durationWeeks) || 1);
@@ -208,6 +227,57 @@ function ProgramFormFields({
           Flexi composition allowed (keep off until Flexi relaunch)
         </Label>
       </div>
+
+      <div className="rounded-lg border bg-slate-50 p-3 space-y-2">
+        <Label className="text-sm font-semibold text-gray-900">Hub feature tabs</Label>
+        <p className="text-xs text-muted-foreground">
+          Store only for now. Does not gate members yet. Select one or many (SPEC-PLATFORM-FEATURE-GATES-01).
+        </p>
+        <div className="flex flex-col gap-2">
+          {(
+            [
+              { id: "feature-wediet", key: "featureWediet" as const, label: "weDiet" },
+              { id: "feature-weemo", key: "featureWeemo" as const, label: "weEmo" },
+              { id: "feature-webuild", key: "featureWebuild" as const, label: "weBuild" },
+            ] as const
+          ).map((tab) => (
+            <label key={tab.id} className="flex items-center gap-2 text-sm">
+              <input
+                id={tab.id}
+                type="checkbox"
+                checked={form[tab.key]}
+                onChange={(e) => setForm((f) => ({ ...f, [tab.key]: e.target.checked }))}
+                data-testid={tab.id}
+              />
+              {tab.label}
+            </label>
+          ))}
+          <label
+            className={`flex items-center gap-2 text-sm ${andWeYogaLocked ? "opacity-70" : ""}`}
+            title={
+              andWeYogaLocked
+                ? "andWeYOGa is always implied while platform policy is on"
+                : undefined
+            }
+          >
+            <input
+              id="feature-andweyoga"
+              type="checkbox"
+              checked={andWeYogaLocked ? true : form.featureAndweyoga}
+              disabled={andWeYogaLocked}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, featureAndweyoga: e.target.checked }))
+              }
+              data-testid="feature-andweyoga"
+            />
+            andWeYOGa
+            {andWeYogaLocked ? (
+              <span className="text-xs text-muted-foreground">(always on)</span>
+            ) : null}
+          </label>
+        </div>
+      </div>
+
       <div>
         <Label>Status</Label>
         <select
@@ -250,6 +320,10 @@ function CreateProgramButton({
           durationWeeks: Number(form.durationWeeks),
           priceRupees: Number(form.priceRupees),
           flexiAllowed: form.flexiAllowed,
+          featureWediet: form.featureWediet,
+          featureWeemo: form.featureWeemo,
+          featureWebuild: form.featureWebuild,
+          featureAndweyoga: form.featureAndweyoga,
           status: form.status === "archived" ? "active" : form.status,
         }),
       });
@@ -324,6 +398,10 @@ function EditProgramButton({
           durationWeeks: Number(form.durationWeeks),
           priceRupees: Number(form.priceRupees),
           flexiAllowed: form.flexiAllowed,
+          featureWediet: form.featureWediet,
+          featureWeemo: form.featureWeemo,
+          featureWebuild: form.featureWebuild,
+          featureAndweyoga: form.featureAndweyoga,
           status: form.status,
         }),
       });
@@ -494,6 +572,12 @@ export function ProgramsPanel({ classTypes }: { classTypes: ClassTypeOption[] })
                       {p.status}
                     </Badge>
                     {p.flexiAllowed ? <Badge variant="outline">flexi</Badge> : null}
+                    {p.featureWediet ? <Badge variant="outline">weDiet</Badge> : null}
+                    {p.featureWeemo ? <Badge variant="outline">weEmo</Badge> : null}
+                    {p.featureWebuild ? <Badge variant="outline">weBuild</Badge> : null}
+                    {p.featureAndweyoga !== false ? (
+                      <Badge variant="outline">andWeYOGa</Badge>
+                    ) : null}
                   </div>
                   <p className="text-sm text-muted-foreground mt-1">
                     {p.sessionsPerWeek}/week × {p.durationWeeks} weeks = {p.totalSessions} sessions · ₹

@@ -20,6 +20,14 @@ import { FLEXI_ELIGIBILITY_BATCH_MAX } from "@shared/flexi-discovery";
 import {
   GUEST_CHECKOUT_SETTING_KEY,
   MAINTENANCE_WINDOW_SETTING_KEY,
+  PLATFORM_SETTING_KEYS,
+  FEATURE_WEDIET_VISIBLE_KEY,
+  FEATURE_WEDIET_INTERACTIVE_KEY,
+  FEATURE_WEEMO_VISIBLE_KEY,
+  FEATURE_WEEMO_INTERACTIVE_KEY,
+  FEATURE_WEBUILD_VISIBLE_KEY,
+  FEATURE_WEBUILD_INTERACTIVE_KEY,
+  FEATURE_ANDWEYOGA_ALWAYS_AVAILABLE_KEY,
 } from "@shared/platform-settings";
 import { storage, storageReady } from "./storage";
 import {
@@ -28,8 +36,9 @@ import {
   getMaintenanceWindowEnabled,
   setMaintenanceWindowEnabled,
   setPlatformSettingByKey,
-  ensureDefaultPlatformSettings,
+  getAllFeatureGates,
   listPlatformSettings,
+  ensureDefaultPlatformSettings,
 } from "./platform-settings";
 import { getAdminBootstrapConfig, normalizeAdminEmail, normalizeAdminPassword } from "./admin-bootstrap";
 import { checkDatabaseHealth } from "./db-health";
@@ -1159,6 +1168,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const program = await storage.createProgram({
         ...body,
         flexiAllowed: body.flexiAllowed ?? false,
+        featureWediet: body.featureWediet ?? false,
+        featureWeemo: body.featureWeemo ?? false,
+        featureWebuild: body.featureWebuild ?? false,
+        featureAndweyoga: body.featureAndweyoga !== false,
       });
       res.status(201).json(program);
     } catch (error) {
@@ -1191,6 +1204,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.updateProgram(req.params.id, {
         ...body,
         flexiAllowed: body.flexiAllowed ?? false,
+        featureWediet: body.featureWediet ?? false,
+        featureWeemo: body.featureWeemo ?? false,
+        featureWebuild: body.featureWebuild ?? false,
+        featureAndweyoga: body.featureAndweyoga !== false,
       });
       if (!result.ok) {
         return res.status(400).json({ message: result.message });
@@ -1452,7 +1469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/platform-settings", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
       const bodySchema = z.object({
-        key: z.enum([GUEST_CHECKOUT_SETTING_KEY, MAINTENANCE_WINDOW_SETTING_KEY]),
+        key: z.enum(PLATFORM_SETTING_KEYS),
         enabled: z.boolean(),
       });
       const { key, enabled } = bodySchema.parse(req.body);
@@ -1464,9 +1481,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userAgent: req.get("user-agent") ?? null,
       });
       if (key === GUEST_CHECKOUT_SETTING_KEY) {
-        return res.json({ key, guestCheckoutEnabled: value });
+        return res.json({ key, guestCheckoutEnabled: value, enabled: value });
       }
-      return res.json({ key, maintenanceWindowEnabled: value });
+      if (key === MAINTENANCE_WINDOW_SETTING_KEY) {
+        return res.json({ key, maintenanceWindowEnabled: value, enabled: value });
+      }
+      return res.json({ key, enabled: value });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -3866,9 +3886,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/platform/config", async (_req, res) => {
     try {
+      const gates = await getAllFeatureGates();
       res.json({
         guestCheckoutEnabled: await getGuestCheckoutEnabled(),
         maintenanceWindowEnabled: await getMaintenanceWindowEnabled(),
+        featureWedietVisible: gates[FEATURE_WEDIET_VISIBLE_KEY],
+        featureWedietInteractive: gates[FEATURE_WEDIET_INTERACTIVE_KEY],
+        featureWeemoVisible: gates[FEATURE_WEEMO_VISIBLE_KEY],
+        featureWeemoInteractive: gates[FEATURE_WEEMO_INTERACTIVE_KEY],
+        featureWebuildVisible: gates[FEATURE_WEBUILD_VISIBLE_KEY],
+        featureWebuildInteractive: gates[FEATURE_WEBUILD_INTERACTIVE_KEY],
+        featureAndweyogaAlwaysAvailable: gates[FEATURE_ANDWEYOGA_ALWAYS_AVAILABLE_KEY],
       });
     } catch {
       res.status(500).json({ message: "Failed to load platform config" });

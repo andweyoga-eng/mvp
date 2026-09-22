@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode, type SVGProps } from "react";
+import { useEffect, useMemo, type ComponentType, type ReactNode, type SVGProps } from "react";
 import { useLocation } from "wouter";
 import {
   Search,
@@ -14,6 +14,11 @@ import { AccountMenuControls } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
 import { useProfileCompletionGuard } from "@/hooks/use-profile-completion-guard";
 import { BrandLogo } from "@/components/brand-logo";
+import {
+  isFeatureTabVisible,
+  type FeatureTabId,
+  usePlatformConfig,
+} from "@/hooks/use-platform-config";
 
 export type DashboardSection =
   | "sessions"
@@ -48,6 +53,7 @@ function AndWeYogaIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
 
 interface LauncherItem {
   id: DashboardSection;
+  featureTab: FeatureTabId;
   label: string;
   icon: LauncherIcon;
   /** Internal route or hash this tab opens; omit for not-yet-built sections. */
@@ -55,11 +61,26 @@ interface LauncherItem {
 }
 
 const LAUNCHER_ITEMS: LauncherItem[] = [
-  { id: "fuel", label: "weDiet", icon: Apple, href: "/fuel" },
-  { id: "workshops", label: "weBuild", icon: Dumbbell, href: "/workshops" },
-  { id: "emojou", label: "weEmo", icon: Smile, href: "/emojou" },
-  { id: "sessions", label: "andWeYOGa", icon: AndWeYogaIcon, href: "/dashboard" },
+  { id: "fuel", featureTab: "wediet", label: "weDiet", icon: Apple, href: "/fuel" },
+  { id: "workshops", featureTab: "webuild", label: "weBuild", icon: Dumbbell, href: "/workshops" },
+  { id: "emojou", featureTab: "weemo", label: "weEmo", icon: Smile, href: "/emojou" },
+  { id: "sessions", featureTab: "andweyoga", label: "andWeYOGa", icon: AndWeYogaIcon, href: "/dashboard" },
 ];
+
+function sectionToFeatureTab(active: DashboardSection): FeatureTabId | null {
+  switch (active) {
+    case "fuel":
+      return "wediet";
+    case "workshops":
+      return "webuild";
+    case "emojou":
+      return "weemo";
+    case "sessions":
+      return "andweyoga";
+    default:
+      return null;
+  }
+}
 
 interface DashboardShellProps {
   active: DashboardSection;
@@ -69,7 +90,53 @@ interface DashboardShellProps {
 export function DashboardShell({ active, children }: DashboardShellProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const platform = usePlatformConfig();
   useProfileCompletionGuard();
+
+  const visibleItems = useMemo(
+    () =>
+      LAUNCHER_ITEMS.filter((item) =>
+        isFeatureTabVisible(item.featureTab, {
+          featureWedietVisible: platform.featureWedietVisible,
+          featureWeemoVisible: platform.featureWeemoVisible,
+          featureWebuildVisible: platform.featureWebuildVisible,
+          featureAndweyogaAlwaysAvailable: platform.featureAndweyogaAlwaysAvailable,
+        }),
+      ),
+    [
+      platform.featureWedietVisible,
+      platform.featureWeemoVisible,
+      platform.featureWebuildVisible,
+      platform.featureAndweyogaAlwaysAvailable,
+    ],
+  );
+
+  const showLauncher = visibleItems.length > 1;
+
+  // Soft redirect when the active section is platform-hidden.
+  useEffect(() => {
+    if (platform.isLoading) return;
+    const tab = sectionToFeatureTab(active);
+    if (!tab) return;
+    if (
+      !isFeatureTabVisible(tab, {
+        featureWedietVisible: platform.featureWedietVisible,
+        featureWeemoVisible: platform.featureWeemoVisible,
+        featureWebuildVisible: platform.featureWebuildVisible,
+        featureAndweyogaAlwaysAvailable: platform.featureAndweyogaAlwaysAvailable,
+      })
+    ) {
+      setLocation("/dashboard", { replace: true });
+    }
+  }, [
+    active,
+    platform.isLoading,
+    platform.featureWedietVisible,
+    platform.featureWeemoVisible,
+    platform.featureWebuildVisible,
+    platform.featureAndweyogaAlwaysAvailable,
+    setLocation,
+  ]);
 
   const go = (href?: string) => {
     if (!href) {
@@ -82,6 +149,15 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
     }
     setLocation(href);
   };
+
+  const colClass =
+    visibleItems.length === 4
+      ? "grid-cols-4"
+      : visibleItems.length === 3
+        ? "grid-cols-3"
+        : visibleItems.length === 2
+          ? "grid-cols-2"
+          : "grid-cols-1";
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-dz-surface text-foreground">
@@ -134,49 +210,51 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
           </div>
         </PageContainer>
 
-        {/* ===== SECTION LAUNCHER ===== */}
-        <div className="border-t border-dz-glass-border/60 bg-dz-surface/55">
-          <PageContainer>
-            <nav className="grid grid-cols-4 gap-1 py-2 sm:gap-2 sm:py-3">
-              {LAUNCHER_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = item.id === active;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => go(item.href)}
-                    title={item.href ? item.label : `${item.label} (coming soon)`}
-                    className={cn(
-                      "group flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-1 text-center transition-transform sm:gap-2 sm:px-1 sm:py-1.5",
-                      item.href ? "hover:-translate-y-0.5" : "cursor-default opacity-70",
-                    )}
-                    data-testid={`launcher-${item.id}`}
-                  >
-                    <span
+        {/* ===== SECTION LAUNCHER (hidden when ≤1 visible tab) ===== */}
+        {showLauncher ? (
+          <div className="border-t border-dz-glass-border/60 bg-dz-surface/55">
+            <PageContainer>
+              <nav className={cn("grid gap-1 py-2 sm:gap-2 sm:py-3", colClass)}>
+                {visibleItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.id === active;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => go(item.href)}
+                      title={item.href ? item.label : `${item.label} (coming soon)`}
                       className={cn(
-                        "inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#8159c4] via-[#4b3282] to-dz-secondary text-white sm:h-11 sm:w-11 sm:rounded-[14px]",
-                        isActive
-                          ? "shadow-[0_16px_30px_rgba(52,25,106,0.5),0_0_0_5px_rgba(52,25,106,0.12)]"
-                          : "shadow-[0_14px_26px_rgba(52,25,106,0.4)]",
+                        "group flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-1 text-center transition-transform sm:gap-2 sm:px-1 sm:py-1.5",
+                        item.href ? "hover:-translate-y-0.5" : "cursor-default opacity-70",
                       )}
+                      data-testid={`launcher-${item.id}`}
                     >
-                      <Icon className="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px]" />
-                    </span>
-                    <span
-                      className={cn(
-                        "max-w-full text-[10px] leading-tight sm:text-[13px] sm:leading-none sm:whitespace-nowrap",
-                        isActive ? "font-bold text-primary" : "font-semibold text-muted-foreground",
-                      )}
-                    >
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </nav>
-          </PageContainer>
-        </div>
+                      <span
+                        className={cn(
+                          "inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#8159c4] via-[#4b3282] to-dz-secondary text-white sm:h-11 sm:w-11 sm:rounded-[14px]",
+                          isActive
+                            ? "shadow-[0_16px_30px_rgba(52,25,106,0.5),0_0_0_5px_rgba(52,25,106,0.12)]"
+                            : "shadow-[0_14px_26px_rgba(52,25,106,0.4)]",
+                        )}
+                      >
+                        <Icon className="h-[18px] w-[18px] sm:h-[22px] sm:w-[22px]" />
+                      </span>
+                      <span
+                        className={cn(
+                          "max-w-full text-[10px] leading-tight sm:text-[13px] sm:leading-none sm:whitespace-nowrap",
+                          isActive ? "font-bold text-primary" : "font-semibold text-muted-foreground",
+                        )}
+                      >
+                        {item.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </PageContainer>
+          </div>
+        ) : null}
       </header>
 
       {/* ===== MAIN ===== */}

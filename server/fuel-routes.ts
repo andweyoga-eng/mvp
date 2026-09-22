@@ -14,7 +14,9 @@ import {
   FUEL_ESTIMATE_ALLOWED_MIMES,
   FUEL_ESTIMATE_MAX_BYTES,
   FUEL_PEP_PHRASES,
+  fuelLogMealBatchSchema,
   fuelLogMealSchema,
+  fuelAppendMealItemSchema,
   formatSignedDelta,
   matchMealSlot,
   shouldShowDayVerdict,
@@ -26,12 +28,15 @@ import { isAdult } from "@shared/consent";
 import { storage } from "./storage";
 import {
   estimateMealCalories,
+  estimateMealFromWeight,
   FuelEstimationError,
+  getFuelEstimationFallbackModel,
   getFuelEstimationModel,
   isFuelEstimationEnabled,
   isFuelEstimationFlagOn,
   sniffImageMime,
 } from "./fuel-estimation";
+import { searchFuelFoodCatalog } from "./fuel-food-catalog";
 import type { AuthRequest } from "./auth";
 import { requireAuth } from "./auth";
 import type { AdminAuthRequest } from "./adminAuth";
@@ -123,6 +128,13 @@ function publicMeal(row: Awaited<ReturnType<typeof storage.listFuelMealsForUser>
     targetAtLogCal: row.targetAtLogCal,
     mealSlotIndex: row.mealSlotIndex,
     clientLocalTime: row.clientLocalTime,
+    mealGroupId: row.mealGroupId ?? null,
+    mealTitle: row.mealTitle ?? null,
+    weightG: row.weightG ?? null,
+    captureMethod: row.captureMethod ?? null,
+    confidence: row.confidence ?? null,
+    macros: row.macros ?? null,
+    eatenLocalTime: row.eatenLocalTime ?? null,
   };
 }
 
@@ -365,6 +377,137 @@ export function registerFuelRoutes(app: Express) {
     }
   });
 
+  app.post("/api/fuel/meals/batch", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const gate = await fuelAccessGate(req.user!.id, res);
+      if (!gate) return;
+      const { user, healthConsented } = gate;
+      if (!healthConsented) {
+        return res.status(403).json({ code: "fuel_consent_required", message: "Health data consent required." });
+      }
+      if (user.dailyCalorieTargetCal == null || user.dailyDeficitCal == null) {
+        return res.status(400).json({ code: "fuel_not_configured", message: "Your coach has not set a target yet." });
+      }
+      const body = fuelLogMealBatchSchema.parse(req.body);
+      const rows = await storage.createFuelMealsBatch(
+        body.items.map((item) => ({
+          userId: user.id,
+          loggedDate: body.clientLocalDate,
+          name: item.name,
+          calories: item.calories,
+          targetAtLogCal: user.dailyCalorieTargetCal!,
+          mealSlotIndex: body.mealSlotIndex,
+          clientLocalTime: body.clientLocalTime,
+          clientTimeZone: body.clientTimeZone ?? null,
+          mealGroupId: body.mealGroupId,
+          mealTitle: body.mealTitle,
+          weightG: item.weightG ?? null,
+          captureMethod: item.captureMethod,
+          confidence: item.confidence ?? null,
+          macros: item.macros ?? null,
+          eatenLocalTime: item.eatenLocalTime ?? null,
+        })),
+      );
+      res.status(201).json({
+        mealGroupId: body.mealGroupId,
+        mealTitle: body.mealTitle,
+        items: rows.map(publicMeal),
+        totalCalories: rows.reduce((s, r) => s + r.calories, 0),
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid meal batch", errors: error.flatten() });
+      }
+      console.error("[fuel] create meal batch error:", error);
+      res.status(500).json({ message: "Failed to log meal" });
+    }
+  });
+
+  app.post("/api/fuel/meals/group/:groupId/items", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const gate = await fuelAccessGate(req.user!.id, res);
+      if (!gate) return;
+      const { user, healthConsented } = gate;
+      if (!healthConsented) {
+        return res.status(403).json({ code: "fuel_consent_required", message: "Health data consent required." });
+      }
+      if (user.dailyCalorieTargetCal == null || user.dailyDeficitCal == null) {
+        return res.status(400).json({ code: "fuel_not_configured", message: "Your coach has not set a target yet." });
+      }
+      const groupId = req.params.groupId;
+      const existing = await storage.getFuelMealGroupForUser(groupId, user.id);
+      if (!existing.length) {
+        return res.status(404).json({ message: "Meal group not found" });
+      }
+      const body = fuelAppendMealItemSchema.parse(req.body);
+      const head = existing[0];
+      const row = await storage.createFuelMeal({
+        userId: user.id,
+        loggedDate: body.clientLocalDate,
+        name: body.name,
+        calories: body.calories,
+        targetAtLogCal: user.dailyCalorieTargetCal,
+        mealSlotIndex: head.mealSlotIndex,
+        clientLocalTime: body.clientLocalTime,
+        clientTimeZone: body.clientTimeZone ?? null,
+        mealGroupId: groupId,
+        mealTitle: head.mealTitle ?? head.name,
+        weightG: body.weightG ?? null,
+        captureMethod: body.captureMethod,
+        confidence: body.confidence ?? null,
+        macros: body.macros ?? null,
+        eatenLocalTime: body.eatenLocalTime ?? null,
+      });
+      res.status(201).json(publicMeal(row));
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid item", errors: error.flatten() });
+      }
+      console.error("[fuel] append meal item error:", error);
+      res.status(500).json({ message: "Failed to add item" });
+    }
+  });
+
+  app.get("/api/fuel/meal-name-suggestions", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const gate = await fuelAccessGate(req.user!.id, res);
+      if (!gate) return;
+      if (!gate.healthConsented) {
+        return res.status(403).json({ code: "fuel_consent_required" });
+      }
+      const q = typeof req.query.q === "string" ? req.query.q : "";
+      const personal = await storage.listFuelMealNameSuggestions(req.user!.id, q, 8);
+      const personalKeys = new Set(personal.map((n) => n.toLowerCase()));
+      const catalog = searchFuelFoodCatalog(q, 8).filter(
+        (h) => !personalKeys.has(h.name.toLowerCase()),
+      );
+      const suggestions = [
+        ...personal.map((name) => ({ name, source: "personal" as const })),
+        ...catalog.map((h) => ({ name: h.name, source: "catalog" as const })),
+      ].slice(0, 12);
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("[fuel] name suggestions error:", error);
+      res.status(500).json({ message: "Failed to load suggestions" });
+    }
+  });
+
+  app.delete("/api/fuel/meals/group/:groupId", requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const gate = await fuelAccessGate(req.user!.id, res);
+      if (!gate) return;
+      if (!gate.healthConsented) {
+        return res.status(403).json({ code: "fuel_consent_required" });
+      }
+      const deleted = await storage.deleteFuelMealGroup(req.params.groupId, req.user!.id);
+      if (!deleted) return res.status(404).json({ message: "Meal group not found" });
+      res.json({ ok: true, deleted });
+    } catch (error) {
+      console.error("[fuel] delete meal group error:", error);
+      res.status(500).json({ message: "Failed to delete meal group" });
+    }
+  });
+
   app.delete("/api/fuel/meals/:id", requireAuth, async (req: AuthRequest, res) => {
     try {
       const gate = await fuelAccessGate(req.user!.id, res);
@@ -385,6 +528,10 @@ export function registerFuelRoutes(app: Express) {
     "/api/fuel/estimate",
     requireAuth,
     (req, res, next) => {
+      const contentType = String(req.headers["content-type"] || "");
+      if (!contentType.includes("multipart/form-data")) {
+        return next();
+      }
       fuelPhotoUpload.single("photo")(req, res, (err) => {
         if (err) {
           if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
@@ -417,10 +564,42 @@ export function registerFuelRoutes(app: Express) {
         }
 
         const file = req.file;
+        const bodyName =
+          typeof req.body?.name === "string"
+            ? req.body.name
+            : typeof (req.body as { foodName?: string })?.foodName === "string"
+              ? (req.body as { foodName: string }).foodName
+              : "";
+        const weightRaw = req.body?.weightGrams ?? req.body?.weight_g;
+        const weightGrams = weightRaw != null && weightRaw !== "" ? Number(weightRaw) : NaN;
+
+        // Weight-only path (no photo)
         if (!file?.buffer?.length) {
-          return res.status(422).json({
-            error: "unreadable",
-            message: "Could not read this photo.",
+          const name = bodyName.trim();
+          if (!name) {
+            return res.status(400).json({
+              error: "schema",
+              message: "Add a food name first…",
+            });
+          }
+          if (!Number.isFinite(weightGrams) || weightGrams < 1) {
+            return res.status(400).json({
+              error: "schema",
+              message: "Weight in grams is required when no photo is sent.",
+            });
+          }
+
+          const result = await estimateMealFromWeight({ name, weightGrams: Math.round(weightGrams) });
+          return res.json({
+            name: result.name,
+            calories: result.calories,
+            confidence: result.confidence,
+            items: result.items,
+            macros: result.macros,
+            latency_ms: result.latencyMs,
+            reviewState: result.reviewState,
+            advisory: true as const,
+            fromWeight: true as const,
           });
         }
 
@@ -433,7 +612,7 @@ export function registerFuelRoutes(app: Express) {
         ) {
           return res.status(422).json({
             error: "unreadable",
-            message: "Use a JPG, PNG, or WebP photo.",
+            message: "Use a JPG, PNG, or WebP photo. HEIC is not supported. Save as JPG first.",
           });
         }
 
@@ -455,7 +634,7 @@ export function registerFuelRoutes(app: Express) {
           calories: result.calories,
           confidence: result.confidence,
           items: result.items,
-          model: result.model,
+          macros: result.macros,
           latency_ms: result.latencyMs,
           reviewState: result.reviewState,
           advisory: true as const,
@@ -603,13 +782,17 @@ export function registerFuelRoutes(app: Express) {
     const keyPresent = Boolean(process.env.GEMINI_API_KEY?.trim());
     const active = isFuelEstimationEnabled();
     const model = getFuelEstimationModel();
+    const fallbackModel = getFuelEstimationFallbackModel();
     res.json({
       estimationEnabled: flagOn,
       geminiKeyPresent: keyPresent,
       active,
       model,
+      fallbackModel,
       statusLabel: active
-        ? `Live · ${model}`
+        ? fallbackModel
+          ? `Live · ${model} (fallback ${fallbackModel})`
+          : `Live · ${model}`
         : flagOn
           ? "Enabled, key missing"
           : "Disabled, manual only",

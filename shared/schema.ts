@@ -8,6 +8,7 @@ import {
   decimal,
   boolean,
   jsonb,
+  real,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -74,7 +75,7 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-/** andWeDiet meal ledger — photo bytes are never stored. */
+/** andWeDiet meal ledger — photo bytes are never stored. One row = one item; items share meal_group_id. */
 export const fuelMeals = pgTable("fuel_meals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id")
@@ -88,6 +89,15 @@ export const fuelMeals = pgTable("fuel_meals", {
   mealSlotIndex: integer("meal_slot_index"),
   clientLocalTime: text("client_local_time"),
   clientTimeZone: text("client_time_zone"),
+  /** Shared UUID for multi-item Track Diet meals; legacy rows may be null. */
+  mealGroupId: varchar("meal_group_id"),
+  mealTitle: text("meal_title"),
+  weightG: integer("weight_g"),
+  captureMethod: varchar("capture_method", { length: 16 }),
+  confidence: real("confidence"),
+  macros: jsonb("macros").$type<{ protein: number; carbs: number; fat: number; fiber: number }>(),
+  /** Member-local HH:mm when food was eaten (set when logged late into a slot). */
+  eatenLocalTime: text("eaten_local_time"),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -176,6 +186,12 @@ export const programs = pgTable(
     pricePaise: integer("price_paise").notNull(),
     /** Whether this program may be composed via Flexi (mix-and-match slots across batches). */
     flexiAllowed: boolean("flexi_allowed").notNull().default(false),
+    /** Hub feature tabs this program unlocks (store-only until entitlement — SPEC-PLATFORM-FEATURE-GATES-01). */
+    featureWediet: boolean("feature_wediet").notNull().default(false),
+    featureWeemo: boolean("feature_weemo").notNull().default(false),
+    featureWebuild: boolean("feature_webuild").notNull().default(false),
+    /** Always implied / greyed when platform andWeYOGa-always-available is on. */
+    featureAndweyoga: boolean("feature_andweyoga").notNull().default(true),
     /** draft | active | archived. Only one active version per (class_type, kind, per_week, duration). */
     status: varchar("status", { length: 16 }).notNull().default("draft"),
     createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),

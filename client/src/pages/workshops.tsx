@@ -10,6 +10,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { FeatureInteractionFreeze } from "@/components/feature-interaction-freeze";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
@@ -132,6 +133,7 @@ export default function Workshops() {
 
   return (
     <DashboardShell active="workshops">
+      <FeatureInteractionFreeze feature="webuild">
       <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
         {/* ===== HERO ===== */}
         <section className="relative mb-8 flex min-h-[300px] items-end overflow-hidden rounded-3xl sm:min-h-[360px] lg:items-center">
@@ -288,6 +290,7 @@ export default function Workshops() {
           </form>
         </GlassCard>
       </PageContainer>
+      </FeatureInteractionFreeze>
     </DashboardShell>
   );
 }

@@ -145,7 +145,8 @@ describe("resolveMaintenanceChannels", () => {
 describe("maintenance window UI and routes", () => {
   it("unified PATCH validates key and enabled", () => {
     const source = readFileSync(join(root, "server/routes.ts"), "utf8");
-    assert.match(source, /z\.enum\(\[GUEST_CHECKOUT_SETTING_KEY, MAINTENANCE_WINDOW_SETTING_KEY\]\)/);
+    assert.match(source, /z\.enum\(PLATFORM_SETTING_KEYS\)/);
+    assert.match(source, /PLATFORM_SETTING_KEYS/);
     assert.match(source, /setPlatformSettingByKey/);
   });
 

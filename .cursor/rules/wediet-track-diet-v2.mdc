@@ -1,0 +1,26 @@
+---
+description: Locked weDiet Track Diet v2 product/API decisions — follow SPEC-WEDIET-TRACK-DIET-V2
+globs: "{client/src/pages/fuel.tsx,client/src/lib/fuel-api.ts,server/fuel-*.ts,shared/fuel.ts,shared/schema.ts,docs/**/*FUEL*,docs/**/*WEDIET*,docs/**/*Diet*}"
+alwaysApply: false
+---
+
+# weDiet Track Diet v2 — locked decisions
+
+When changing Track your Diet / fuel estimate / fuel meals, treat **`docs/SPEC-WEDIET-TRACK-DIET-V2.md`** as the source of truth. Do not reopen D1–D9 / F1–F9 without an explicit product change.
+
+## Must follow
+
+- **Multi-item meal**: slot (+ optional custom name) → items list → photo/upload/manual → item confirm → review → batch save.
+- **Persist**: N `fuel_meals` rows sharing `meal_group_id` + `meal_title`; save via **`POST /api/fuel/meals/batch`** (atomic).
+- **Estimate**: extend **`POST /api/fuel/estimate`** — photo optional; weight-only requires **name + weightGrams**; both paths return **macros** (protein/carbs/fat/fiber); keep `no_food` / Retake.
+- **Model**: `GEMINI_FUEL_MODEL` prefer `gemini-3.1-flash-lite`; optional `GEMINI_FUEL_FALLBACK_MODEL` only (no hardcoded dead models). Flag still exact `FUEL_ESTIMATION_ENABLED=true`. Member UI: never show model IDs; `model_unavailable` uses soft studio-hint copy.
+- **Autocomplete**: personal meal history first → `data/nutrition/fuel-food-catalog-v1.json` catalog; logging feeds history.
+- **Slots**: prefer admin `fuelMealPlan`; else B/L/S/D; custom name always.
+- **UI lists**: group row (custom title wins) → expand items; delete **group** and **item**.
+- **Drafts**: localStorage, clear at member-local EOD; soft note: *“We’ll keep a draft on this device while you build this meal. It clears on its own at the end of the day.”*
+- **HEIC**: reject with reason copy (no convert this ship).
+- **Non-goals**: full clinical Gemini dossier UI; meal-total override; server drafts v1; photos persisted.
+
+## Read first
+
+`docs/SPEC-WEDIET-TRACK-DIET-V2.md`

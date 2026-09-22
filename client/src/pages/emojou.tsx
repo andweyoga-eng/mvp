@@ -11,6 +11,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { FeatureInteractionFreeze } from "@/components/feature-interaction-freeze";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
@@ -122,6 +123,7 @@ export default function Emojou() {
 
   return (
     <DashboardShell active="emojou">
+      <FeatureInteractionFreeze feature="weemo">
       <PageContainer className="relative py-[clamp(20px,4vw,40px)] pb-24">
         {/* Ambient blobs */}
         <div aria-hidden className="pointer-events-none absolute -left-40 top-0 -z-10 h-[460px] w-[460px] rounded-full bg-primary/10 blur-3xl" />
@@ -286,6 +288,7 @@ export default function Emojou() {
           </div>
         </section>
       </PageContainer>
+      </FeatureInteractionFreeze>
     </DashboardShell>
   );
 }

@@ -2,8 +2,14 @@ import { storage } from "./storage";
 import {
   GUEST_CHECKOUT_SETTING_KEY,
   MAINTENANCE_WINDOW_SETTING_KEY,
+  FEATURE_GATE_SETTING_KEYS,
+  FEATURE_GATE_DEFAULTS,
+  type FeatureGateSettingKey,
+  type PlatformSettingKey,
   parseGuestCheckoutEnabled,
   parseMaintenanceWindowEnabled,
+  parseFeatureGateEnabled,
+  isFeatureGateSettingKey,
 } from "@shared/platform-settings";
 import { notifyMaintenanceWindowEnabled } from "./maintenance-notify-service";
 
@@ -11,6 +17,7 @@ const CACHE_TTL_MS = 30_000;
 
 let guestCheckoutCache: { value: boolean; expiresAt: number } | null = null;
 let maintenanceWindowCache: { value: boolean; expiresAt: number } | null = null;
+const featureGateCache = new Map<FeatureGateSettingKey, { value: boolean; expiresAt: number }>();
 
 /** Bust in-memory cache (writes and tests). */
 export function bustGuestCheckoutCache(): void {
@@ -20,6 +27,11 @@ export function bustGuestCheckoutCache(): void {
 /** Bust in-memory cache (writes and tests). */
 export function bustMaintenanceWindowCache(): void {
   maintenanceWindowCache = null;
+}
+
+export function bustFeatureGateCache(key?: FeatureGateSettingKey): void {
+  if (key) featureGateCache.delete(key);
+  else featureGateCache.clear();
 }
 
 /**
@@ -116,6 +128,63 @@ export async function setMaintenanceWindowEnabled(
   return enabled;
 }
 
+/**
+ * Product feature gate. Missing row fails open to the documented default (usually true)
+ * so a missing seed does not blank the launcher.
+ */
+export async function getFeatureGateEnabled(key: FeatureGateSettingKey): Promise<boolean> {
+  const now = Date.now();
+  const cached = featureGateCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const row = await storage.getPlatformSetting(key);
+  const fallback = FEATURE_GATE_DEFAULTS[key];
+  const value = row ? parseFeatureGateEnabled(row.value) : fallback;
+
+  featureGateCache.set(key, { value, expiresAt: now + CACHE_TTL_MS });
+  return value;
+}
+
+export async function setFeatureGateEnabled(
+  key: FeatureGateSettingKey,
+  enabled: boolean,
+  adminId: string,
+  meta?: { ipAddress?: string | null; userAgent?: string | null },
+): Promise<boolean> {
+  const previous = await getFeatureGateEnabled(key);
+  await storage.upsertPlatformSetting(key, enabled, adminId);
+  bustFeatureGateCache(key);
+
+  await storage.insertAuditLog({
+    userId: adminId,
+    action: "platform_setting_changed",
+    resourceType: "platform_setting",
+    resourceId: key,
+    metadata: JSON.stringify({
+      key,
+      oldValue: previous,
+      newValue: enabled,
+      adminId,
+    }),
+    ipAddress: meta?.ipAddress ?? null,
+    userAgent: meta?.userAgent ?? null,
+  });
+
+  return enabled;
+}
+
+export async function getAllFeatureGates(): Promise<Record<FeatureGateSettingKey, boolean>> {
+  const out = { ...FEATURE_GATE_DEFAULTS };
+  await Promise.all(
+    FEATURE_GATE_SETTING_KEYS.map(async (key) => {
+      out[key] = await getFeatureGateEnabled(key);
+    }),
+  );
+  return out;
+}
+
 export async function listPlatformSettings() {
   return storage.getAllPlatformSettings();
 }
@@ -125,6 +194,10 @@ export async function ensureDefaultPlatformSettings(): Promise<void> {
   const defaults: Array<{ key: string; value: boolean }> = [
     { key: GUEST_CHECKOUT_SETTING_KEY, value: false },
     { key: MAINTENANCE_WINDOW_SETTING_KEY, value: false },
+    ...FEATURE_GATE_SETTING_KEYS.map((key) => ({
+      key,
+      value: FEATURE_GATE_DEFAULTS[key],
+    })),
   ];
 
   for (const { key, value } of defaults) {
@@ -147,5 +220,10 @@ export async function setPlatformSettingByKey(
   if (key === MAINTENANCE_WINDOW_SETTING_KEY) {
     return setMaintenanceWindowEnabled(enabled, adminId, meta);
   }
+  if (isFeatureGateSettingKey(key)) {
+    return setFeatureGateEnabled(key, enabled, adminId, meta);
+  }
   throw new Error(`Unknown platform setting key: ${key}`);
 }
+
+export type { PlatformSettingKey, FeatureGateSettingKey };

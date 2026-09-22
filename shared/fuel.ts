@@ -151,11 +151,74 @@ export const fuelLogMealSchema = z.object({
   clientTimeZone: z.string().trim().max(64).optional(),
 });
 
+export const fuelMacrosSchema = z.object({
+  protein: z.number().min(0).max(500),
+  carbs: z.number().min(0).max(1000),
+  fat: z.number().min(0).max(500),
+  fiber: z.number().min(0).max(200),
+});
+
+export type FuelMacros = z.infer<typeof fuelMacrosSchema>;
+
+export const fuelCaptureMethodSchema = z.enum(["capture", "upload", "manual"]);
+export type FuelCaptureMethod = z.infer<typeof fuelCaptureMethodSchema>;
+
+export const fuelLogMealBatchItemSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  calories: z.number().int().min(0).max(20000),
+  weightG: z.number().int().min(1).max(50000).nullable().optional(),
+  captureMethod: fuelCaptureMethodSchema,
+  confidence: z.number().min(0).max(1).nullable().optional(),
+  macros: fuelMacrosSchema.nullable().optional(),
+  /** When logging late into a slot: member-local HH:mm they actually ate. */
+  eatenLocalTime: z.string().regex(hhmmRegex).nullable().optional(),
+});
+
+export const fuelLogMealBatchSchema = z.object({
+  mealGroupId: z.string().trim().min(8).max(64),
+  mealTitle: z.string().trim().min(1).max(200),
+  mealSlotIndex: z.number().int().min(0).max(20).nullable(),
+  clientLocalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  clientLocalTime: z.string().regex(hhmmRegex),
+  clientTimeZone: z.string().trim().max(64).optional(),
+  items: z.array(fuelLogMealBatchItemSchema).min(1).max(40),
+});
+
+export const fuelAppendMealItemSchema = fuelLogMealBatchItemSchema.extend({
+  clientLocalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  clientLocalTime: z.string().regex(hhmmRegex),
+  clientTimeZone: z.string().trim().max(64).optional(),
+  /** When appending outside the slot window into the group, pass eaten time in-window. */
+  eatenLocalTime: z.string().regex(hhmmRegex).nullable().optional(),
+});
+
 export const fuelEstimateSchema = z.object({
   /** base64 data URL or raw base64 — transit only, never persisted. */
-  imageBase64: z.string().min(1).max(8_000_000),
+  imageBase64: z.string().min(1).max(8_000_000).optional(),
   mimeType: z.string().trim().max(64).optional(),
+  /** Weight-only path (no photo). */
+  name: z.string().trim().min(1).max(200).optional(),
+  weightGrams: z.number().int().min(1).max(50000).optional(),
 });
+
+/** Grams ↔ oz for Track Diet confirm UI (canonical store is grams). */
+export const FUEL_OZ_TO_G = 28.3495;
+
+export function gramsToOz(grams: number): number {
+  return grams / FUEL_OZ_TO_G;
+}
+
+export function ozToGrams(oz: number): number {
+  return oz * FUEL_OZ_TO_G;
+}
+
+export const FUEL_DRAFT_UNDER_NOTE =
+  "We’ll keep a draft on this device while you build this meal. It clears on its own at the end of the day.";
+
+/** Fallback meal plan when admin plan is missing (Track Diet select step). */
+export function resolveFuelMealPlanForTracking(plan: FuelMealPlan | null | undefined): FuelMealPlan {
+  return plan?.length ? plan : DEFAULT_FUEL_MEAL_PLAN;
+}
 
 /** Empty / whitespace → null; optional absolute http(s) URL for pasted recipe images. */
 const optionalHttpUrl = z.preprocess(
@@ -379,12 +442,57 @@ export const FUEL_ESTIMATE_LOW_COPY =
 export const FUEL_ESTIMATE_FAILURE_COPY =
   "We could not read this photo well enough to guess. Enter your meal manually.";
 export const FUEL_ESTIMATE_TRANSIENT_COPY =
-  "Photo estimate did not work this time. Try again or enter manually.";
+  "Couldn’t reach estimate just now. No stress. Retry later, or type name and weight.";
+export const FUEL_ESTIMATE_NETWORK_COPY =
+  "Couldn’t reach estimate just now. No stress. Retry later, or type name and weight.";
+export const FUEL_ESTIMATE_QUOTA_COPY =
+  "Estimate is busy right now. No stress. Try again shortly, or type name and weight.";
 export const FUEL_ESTIMATE_NO_FOOD_COPY =
   "No food detected in this photo. Retake a clearer shot of your meal.";
+/** Photo of a screen / secondary photo of food (not the plate in front of you). */
+export const FUEL_ESTIMATE_SCREEN_FOOD_COPY =
+  "Cute try. That looks like food on a screen, not on a plate. Snap the real meal when you can, or type it in by hand.";
+/** Member-facing; hints studio/admin without naming models. */
+export const FUEL_ESTIMATE_MODEL_UNAVAILABLE_COPY =
+  "Estimate isn’t available right now. No stress. Enter name and weight. If this keeps happening, ask your studio to check estimate setup.";
 export const FUEL_ESTIMATE_PHOTO_FORMATS_COPY = "JPG, PNG, or WebP only · max 4 MB";
 export const FUEL_ESTIMATE_PHOTO_HEIC_COPY =
   "iPhone HEIC photos are not supported. Save as JPG first.";
+
+export const FUEL_OUTSIDE_SLOTS_TITLE = "Outside slots";
+export const FUEL_CUSTOM_MEAL_NAME_PLACEHOLDER =
+  "Eg Late Lunch, Early Dinner, Chilling with Bro ..";
+
+/** Whether local HH:mm falls in [start, end). Overnight bands supported. */
+export function isLocalTimeInSlot(localTime: string, startTime: string, endTime: string): boolean {
+  const t = hhmmToMinutes(localTime);
+  const start = hhmmToMinutes(startTime);
+  const end = hhmmToMinutes(endTime);
+  if (start === end) return true;
+  if (start < end) return t >= start && t < end;
+  return t >= start || t < end;
+}
+
+export function midpointHhmm(startTime: string, endTime: string): string {
+  const start = hhmmToMinutes(startTime);
+  let end = hhmmToMinutes(endTime);
+  if (end <= start) end += 24 * 60;
+  const mid = Math.round((start + end) / 2) % (24 * 60);
+  const h = Math.floor(mid / 60);
+  const m = mid % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+export function estimateErrorCopy(code: string | null | undefined): string {
+  if (code === "no_food") return FUEL_ESTIMATE_NO_FOOD_COPY;
+  if (code === "screen_food") return FUEL_ESTIMATE_SCREEN_FOOD_COPY;
+  if (code === "quota") return FUEL_ESTIMATE_QUOTA_COPY;
+  if (code === "model_unavailable") return FUEL_ESTIMATE_MODEL_UNAVAILABLE_COPY;
+  if (code === "provider_down" || code === "unreadable" || code === "schema") {
+    return FUEL_ESTIMATE_NETWORK_COPY;
+  }
+  return FUEL_ESTIMATE_TRANSIENT_COPY;
+}
 
 /** Client-side guard before upload; server still validates MIME and magic bytes. */
 export function fuelEstimatePhotoFileError(file: File): string | null {

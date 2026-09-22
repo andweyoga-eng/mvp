@@ -469,6 +469,10 @@ export interface IStorage {
     priceRupees: number;
     flexiAllowed?: boolean;
     status?: string;
+    featureWediet?: boolean;
+    featureWeemo?: boolean;
+    featureWebuild?: boolean;
+    featureAndweyoga?: boolean;
   }): Promise<Program>;
   updateProgram(
     id: string,
@@ -480,6 +484,10 @@ export interface IStorage {
       priceRupees: number;
       flexiAllowed?: boolean;
       status?: string;
+      featureWediet?: boolean;
+      featureWeemo?: boolean;
+      featureWebuild?: boolean;
+      featureAndweyoga?: boolean;
     },
   ): Promise<
     | { ok: true; program: Program; versioned: boolean }
@@ -985,8 +993,40 @@ export interface IStorage {
     mealSlotIndex: number | null;
     clientLocalTime: string | null;
     clientTimeZone: string | null;
+    mealGroupId?: string | null;
+    mealTitle?: string | null;
+    weightG?: number | null;
+    captureMethod?: string | null;
+    confidence?: number | null;
+    macros?: { protein: number; carbs: number; fat: number; fiber: number } | null;
+    eatenLocalTime?: string | null;
   }): Promise<FuelMeal>;
+  createFuelMealsBatch(
+    inputs: Array<{
+      userId: string;
+      loggedDate: string;
+      name: string;
+      calories: number;
+      targetAtLogCal: number;
+      mealSlotIndex: number | null;
+      clientLocalTime: string | null;
+      clientTimeZone: string | null;
+      mealGroupId: string;
+      mealTitle: string;
+      weightG?: number | null;
+      captureMethod?: string | null;
+      confidence?: number | null;
+      macros?: { protein: number; carbs: number; fat: number; fiber: number } | null;
+      eatenLocalTime?: string | null;
+    }>,
+  ): Promise<FuelMeal[]>;
   deleteFuelMeal(id: string, userId: string): Promise<boolean>;
+  deleteFuelMealGroup(mealGroupId: string, userId: string): Promise<number>;
+  listFuelMealNameSuggestions(userId: string, query: string, limit?: number): Promise<string[]>;
+  getFuelMealGroupForUser(
+    mealGroupId: string,
+    userId: string,
+  ): Promise<FuelMeal[]>;
   getFuelRecipeForDate(forDate: string): Promise<FuelRecipe | undefined>;
   upsertFuelRecipe(input: {
     forDate: string;
@@ -1547,6 +1587,10 @@ export class DatabaseStorage implements IStorage {
     priceRupees: number;
     flexiAllowed?: boolean;
     status?: string;
+    featureWediet?: boolean;
+    featureWeemo?: boolean;
+    featureWebuild?: boolean;
+    featureAndweyoga?: boolean;
   }): Promise<Program> {
     const shapeError = validateProgramShape(input);
     if (shapeError) {
@@ -1568,6 +1612,10 @@ export class DatabaseStorage implements IStorage {
     );
     const pricePaise = programRupeesToPaise(input.priceRupees);
     const flexiAllowed = input.flexiAllowed ?? false;
+    const featureWediet = input.featureWediet ?? false;
+    const featureWeemo = input.featureWeemo ?? false;
+    const featureWebuild = input.featureWebuild ?? false;
+    const featureAndweyoga = input.featureAndweyoga !== false;
 
     if (status === "active") {
       const clash = await this.assertActiveProgramShapeAvailable({
@@ -1593,6 +1641,10 @@ export class DatabaseStorage implements IStorage {
         totalSessions,
         pricePaise,
         flexiAllowed,
+        featureWediet,
+        featureWeemo,
+        featureWebuild,
+        featureAndweyoga,
         status,
         version: 1,
       })
@@ -1610,6 +1662,10 @@ export class DatabaseStorage implements IStorage {
       priceRupees: number;
       flexiAllowed?: boolean;
       status?: string;
+      featureWediet?: boolean;
+      featureWeemo?: boolean;
+      featureWebuild?: boolean;
+      featureAndweyoga?: boolean;
     },
   ): Promise<
     | { ok: true; program: Program; versioned: boolean }
@@ -1631,6 +1687,13 @@ export class DatabaseStorage implements IStorage {
     );
     const pricePaise = programRupeesToPaise(input.priceRupees);
     const flexiAllowed = input.flexiAllowed ?? false;
+    const featureWediet = input.featureWediet ?? existing.featureWediet ?? false;
+    const featureWeemo = input.featureWeemo ?? existing.featureWeemo ?? false;
+    const featureWebuild = input.featureWebuild ?? existing.featureWebuild ?? false;
+    const featureAndweyoga =
+      input.featureAndweyoga !== undefined
+        ? input.featureAndweyoga !== false
+        : existing.featureAndweyoga !== false;
     const subscriptionCount = await this.countSubscriptionsForProgram(id);
 
     // FR-02: any subscription → version n+1 active, archive n. Else edit in place.
@@ -1666,6 +1729,10 @@ export class DatabaseStorage implements IStorage {
             totalSessions,
             pricePaise,
             flexiAllowed,
+            featureWediet,
+            featureWeemo,
+            featureWebuild,
+            featureAndweyoga,
             status: "active",
             version: existing.version + 1,
           })
@@ -1695,6 +1762,10 @@ export class DatabaseStorage implements IStorage {
         totalSessions,
         pricePaise,
         flexiAllowed,
+        featureWediet,
+        featureWeemo,
+        featureWebuild,
+        featureAndweyoga,
         status,
         updatedAt: new Date(),
       })
@@ -6283,6 +6354,13 @@ export class DatabaseStorage implements IStorage {
     mealSlotIndex: number | null;
     clientLocalTime: string | null;
     clientTimeZone: string | null;
+    mealGroupId?: string | null;
+    mealTitle?: string | null;
+    weightG?: number | null;
+    captureMethod?: string | null;
+    confidence?: number | null;
+    macros?: { protein: number; carbs: number; fat: number; fiber: number } | null;
+    eatenLocalTime?: string | null;
   }): Promise<FuelMeal> {
     const [row] = await db
       .insert(fuelMeals)
@@ -6295,9 +6373,65 @@ export class DatabaseStorage implements IStorage {
         mealSlotIndex: input.mealSlotIndex,
         clientLocalTime: input.clientLocalTime,
         clientTimeZone: input.clientTimeZone,
+        mealGroupId: input.mealGroupId ?? null,
+        mealTitle: input.mealTitle ?? null,
+        weightG: input.weightG ?? null,
+        captureMethod: input.captureMethod ?? null,
+        confidence: input.confidence ?? null,
+        macros: input.macros ?? null,
+        eatenLocalTime: input.eatenLocalTime ?? null,
       })
       .returning();
     return row;
+  }
+
+  async createFuelMealsBatch(
+    inputs: Array<{
+      userId: string;
+      loggedDate: string;
+      name: string;
+      calories: number;
+      targetAtLogCal: number;
+      mealSlotIndex: number | null;
+      clientLocalTime: string | null;
+      clientTimeZone: string | null;
+      mealGroupId: string;
+      mealTitle: string;
+      weightG?: number | null;
+      captureMethod?: string | null;
+      confidence?: number | null;
+      macros?: { protein: number; carbs: number; fat: number; fiber: number } | null;
+      eatenLocalTime?: string | null;
+    }>,
+  ): Promise<FuelMeal[]> {
+    if (!inputs.length) return [];
+    return await db.transaction(async (tx) => {
+      const rows: FuelMeal[] = [];
+      for (const input of inputs) {
+        const [row] = await tx
+          .insert(fuelMeals)
+          .values({
+            userId: input.userId,
+            loggedDate: input.loggedDate,
+            name: input.name,
+            calories: input.calories,
+            targetAtLogCal: input.targetAtLogCal,
+            mealSlotIndex: input.mealSlotIndex,
+            clientLocalTime: input.clientLocalTime,
+            clientTimeZone: input.clientTimeZone,
+            mealGroupId: input.mealGroupId,
+            mealTitle: input.mealTitle,
+            weightG: input.weightG ?? null,
+            captureMethod: input.captureMethod ?? null,
+            confidence: input.confidence ?? null,
+            macros: input.macros ?? null,
+            eatenLocalTime: input.eatenLocalTime ?? null,
+          })
+          .returning();
+        rows.push(row);
+      }
+      return rows;
+    });
   }
 
   async deleteFuelMeal(id: string, userId: string): Promise<boolean> {
@@ -6306,6 +6440,53 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(fuelMeals.id, id), eq(fuelMeals.userId, userId)))
       .returning({ id: fuelMeals.id });
     return result.length > 0;
+  }
+
+  async deleteFuelMealGroup(mealGroupId: string, userId: string): Promise<number> {
+    const result = await db
+      .delete(fuelMeals)
+      .where(and(eq(fuelMeals.mealGroupId, mealGroupId), eq(fuelMeals.userId, userId)))
+      .returning({ id: fuelMeals.id });
+    return result.length;
+  }
+
+  async getFuelMealGroupForUser(mealGroupId: string, userId: string): Promise<FuelMeal[]> {
+    return await db
+      .select()
+      .from(fuelMeals)
+      .where(and(eq(fuelMeals.mealGroupId, mealGroupId), eq(fuelMeals.userId, userId)))
+      .orderBy(fuelMeals.createdAt);
+  }
+
+  async listFuelMealNameSuggestions(
+    userId: string,
+    query: string,
+    limit = 8,
+  ): Promise<string[]> {
+    const q = query.trim().toLowerCase();
+    if (q.length < 1) return [];
+    try {
+      const rows = await db
+        .select({ name: fuelMeals.name })
+        .from(fuelMeals)
+        .where(eq(fuelMeals.userId, userId))
+        .orderBy(desc(fuelMeals.loggedAt))
+        .limit(200);
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const row of rows) {
+        const name = row.name.trim();
+        const key = name.toLowerCase();
+        if (!key.includes(q) || seen.has(key)) continue;
+        seen.add(key);
+        out.push(name);
+        if (out.length >= limit) break;
+      }
+      return out;
+    } catch (error) {
+      console.error("[DB] Error listing fuel name suggestions:", error);
+      return [];
+    }
   }
 
   async getFuelRecipeForDate(forDate: string): Promise<FuelRecipe | undefined> {

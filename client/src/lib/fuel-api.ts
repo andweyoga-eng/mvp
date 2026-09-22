@@ -1,5 +1,9 @@
 import { getAuthHeaders } from "@/lib/auth";
-import type { FuelEstimateReviewState } from "@shared/fuel";
+import type {
+  FuelCaptureMethod,
+  FuelEstimateReviewState,
+  FuelMacros,
+} from "@shared/fuel";
 
 export type FuelDailyContent = {
   recipe: {
@@ -65,6 +69,13 @@ export type FuelMealRow = {
   targetAtLogCal: number;
   mealSlotIndex: number | null;
   clientLocalTime: string | null;
+  mealGroupId: string | null;
+  mealTitle: string | null;
+  weightG: number | null;
+  captureMethod: string | null;
+  confidence: number | null;
+  macros: FuelMacros | null;
+  eatenLocalTime: string | null;
 };
 
 export type FuelStatementResponse = {
@@ -87,14 +98,24 @@ export type FuelEstimateResponse = {
   calories: number;
   confidence: number;
   items?: string[];
+  macros?: FuelMacros | null;
   model?: string;
   latency_ms?: number;
   reviewState: FuelEstimateReviewState;
   advisory: true;
+  fromWeight?: boolean;
 };
 
 export type FuelEstimateErrorBody = {
-  error: "disabled" | "unreadable" | "quota" | "provider_down" | "schema" | "no_food";
+  error:
+    | "disabled"
+    | "unreadable"
+    | "quota"
+    | "provider_down"
+    | "schema"
+    | "no_food"
+    | "screen_food"
+    | "model_unavailable";
   message: string;
   retry_after?: number;
 };
@@ -104,14 +125,15 @@ export class FuelEstimateRequestError extends Error {
   readonly body: FuelEstimateErrorBody;
 
   constructor(status: number, body: FuelEstimateErrorBody) {
-    super(body.message || "Photo estimate failed");
+    super(body.message || "Estimate failed");
     this.name = "FuelEstimateRequestError";
     this.status = status;
     this.body = body;
   }
 }
 
-export function clientLocalDateTime(now = new Date()) {
+function localParts(): { localDate: string; localTime: string; tz: string } {
+  const now = new Date();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
@@ -125,42 +147,32 @@ export function clientLocalDateTime(now = new Date()) {
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const hour = get("hour") === "24" ? "00" : get("hour");
   return {
-    clientLocalDate: `${get("year")}-${get("month")}-${get("day")}`,
-    clientLocalTime: `${hour}:${get("minute")}`,
-    clientTimeZone: tz,
+    localDate: `${get("year")}-${get("month")}-${get("day")}`,
+    localTime: `${hour}:${get("minute")}`,
+    tz,
   };
 }
 
-async function parseJson<T>(res: Response): Promise<T> {
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message =
-      typeof (data as { message?: string }).message === "string"
-        ? (data as { message: string }).message
-        : "Request failed";
-    throw new Error(message);
-  }
-  return data as T;
-}
-
 export async function fetchFuelDashboard(): Promise<FuelDashboardResponse> {
-  const { clientLocalDate, clientTimeZone } = clientLocalDateTime();
-  const qs = new URLSearchParams({ localDate: clientLocalDate, tz: clientTimeZone });
+  const { localDate, tz } = localParts();
+  const qs = new URLSearchParams({ localDate, tz });
   const res = await fetch(`/api/fuel/dashboard?${qs}`, {
     credentials: "include",
     headers: getAuthHeaders(),
   });
-  return parseJson(res);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load");
+  return res.json();
 }
 
 export async function fetchFuelStatement(): Promise<FuelStatementResponse> {
-  const { clientLocalDate, clientTimeZone } = clientLocalDateTime();
-  const qs = new URLSearchParams({ localDate: clientLocalDate, tz: clientTimeZone });
+  const { localDate, tz } = localParts();
+  const qs = new URLSearchParams({ localDate, tz });
   const res = await fetch(`/api/fuel/statement?${qs}`, {
     credentials: "include",
     headers: getAuthHeaders(),
   });
-  return parseJson(res);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to load statement");
+  return res.json();
 }
 
 export async function logFuelMeal(input: {
@@ -168,14 +180,101 @@ export async function logFuelMeal(input: {
   calories: number;
   mealSlotIndex?: number | null;
 }): Promise<FuelMealRow> {
-  const local = clientLocalDateTime();
+  const { localDate, localTime, tz } = localParts();
   const res = await fetch("/api/fuel/meals", {
     method: "POST",
     credentials: "include",
     headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ ...input, ...local }),
+    body: JSON.stringify({
+      name: input.name,
+      calories: input.calories,
+      mealSlotIndex: input.mealSlotIndex,
+      clientLocalDate: localDate,
+      clientLocalTime: localTime,
+      clientTimeZone: tz,
+    }),
   });
-  return parseJson(res);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to log meal");
+  return res.json();
+}
+
+export async function logFuelMealBatch(input: {
+  mealGroupId: string;
+  mealTitle: string;
+  mealSlotIndex: number | null;
+  items: Array<{
+    name: string;
+    calories: number;
+    weightG?: number | null;
+    captureMethod: FuelCaptureMethod;
+    confidence?: number | null;
+    macros?: FuelMacros | null;
+    eatenLocalTime?: string | null;
+  }>;
+}): Promise<{ mealGroupId: string; mealTitle: string; items: FuelMealRow[]; totalCalories: number }> {
+  const { localDate, localTime, tz } = localParts();
+  const res = await fetch("/api/fuel/meals/batch", {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...input,
+      clientLocalDate: localDate,
+      clientLocalTime: localTime,
+      clientTimeZone: tz,
+    }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to log meal");
+  return res.json();
+}
+
+export async function appendFuelMealItem(
+  groupId: string,
+  input: {
+    name: string;
+    calories: number;
+    weightG?: number | null;
+    captureMethod: FuelCaptureMethod;
+    confidence?: number | null;
+    macros?: FuelMacros | null;
+    eatenLocalTime?: string | null;
+  },
+): Promise<FuelMealRow> {
+  const { localDate, localTime, tz } = localParts();
+  const res = await fetch(`/api/fuel/meals/group/${encodeURIComponent(groupId)}/items`, {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...input,
+      clientLocalDate: localDate,
+      clientLocalTime: localTime,
+      clientTimeZone: tz,
+    }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to add item");
+  return res.json();
+}
+
+export async function fetchFuelMealNameSuggestions(
+  q: string,
+): Promise<Array<{ name: string; source: "personal" | "catalog" }>> {
+  if (!q.trim()) return [];
+  const res = await fetch(`/api/fuel/meal-name-suggestions?q=${encodeURIComponent(q.trim())}`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    suggestions?: Array<string | { name: string; source?: string }>;
+  };
+  return (data.suggestions ?? []).map((s) => {
+    if (typeof s === "string") return { name: s, source: "personal" as const };
+    return {
+      name: s.name,
+      source: s.source === "catalog" ? ("catalog" as const) : ("personal" as const),
+    };
+  });
 }
 
 export async function deleteFuelMeal(id: string): Promise<void> {
@@ -184,37 +283,97 @@ export async function deleteFuelMeal(id: string): Promise<void> {
     credentials: "include",
     headers: getAuthHeaders(),
   });
-  await parseJson(res);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to delete");
+}
+
+export async function deleteFuelMealGroup(groupId: string): Promise<void> {
+  const res = await fetch(`/api/fuel/meals/group/${encodeURIComponent(groupId)}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || "Failed to delete meal");
 }
 
 export async function estimateFuelMeal(
   file: File,
-  opts?: { slotIndex?: number | null },
+  opts?: { signal?: AbortSignal },
 ): Promise<FuelEstimateResponse> {
   const form = new FormData();
   form.append("photo", file);
-  if (opts?.slotIndex != null) {
-    form.append("slot_index", String(opts.slotIndex));
-  }
-  form.append("client_ts", new Date().toISOString());
-
   const res = await fetch("/api/fuel/estimate", {
     method: "POST",
     credentials: "include",
     headers: getAuthHeaders(),
     body: form,
+    signal: opts?.signal,
   });
-
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new FuelEstimateRequestError(res.status, {
       error: (data as FuelEstimateErrorBody).error ?? "provider_down",
-      message:
-        typeof (data as { message?: string }).message === "string"
-          ? (data as { message: string }).message
-          : "Photo estimate failed",
+      message: (data as FuelEstimateErrorBody).message || "Estimate failed",
       retry_after: (data as FuelEstimateErrorBody).retry_after,
     });
   }
   return data as FuelEstimateResponse;
+}
+
+export async function estimateFuelMealFromWeight(
+  input: { name: string; weightGrams: number },
+  opts?: { signal?: AbortSignal },
+): Promise<FuelEstimateResponse> {
+  const res = await fetch("/api/fuel/estimate", {
+    method: "POST",
+    credentials: "include",
+    headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: input.name,
+      weightGrams: input.weightGrams,
+    }),
+    signal: opts?.signal,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new FuelEstimateRequestError(res.status, {
+      error: (data as FuelEstimateErrorBody).error ?? "provider_down",
+      message: (data as FuelEstimateErrorBody).message || "Estimate failed",
+      retry_after: (data as FuelEstimateErrorBody).retry_after,
+    });
+  }
+  return data as FuelEstimateResponse;
+}
+
+/** Group meal rows for Today / Statement (legacy rows without group id = solo group). */
+export function groupFuelMeals<T extends FuelMealRow>(meals: T[]): Array<{
+  groupKey: string;
+  mealGroupId: string | null;
+  title: string;
+  loggedDate: string;
+  mealSlotIndex: number | null;
+  totalCalories: number;
+  items: T[];
+}> {
+  const map = new Map<string, T[]>();
+  for (const m of meals) {
+    const key = m.mealGroupId || m.id;
+    const list = map.get(key) ?? [];
+    list.push(m);
+    map.set(key, list);
+  }
+  return [...map.entries()].map(([groupKey, items]) => {
+    const first = items[0];
+    const title =
+      first.mealTitle?.trim() ||
+      (items.length > 1 ? first.name : first.name);
+    return {
+      groupKey,
+      mealGroupId: first.mealGroupId,
+      title,
+      loggedDate: first.loggedDate,
+      mealSlotIndex: first.mealSlotIndex,
+      totalCalories: items.reduce((s, i) => s + i.calories, 0),
+      items,
+    };
+  });
 }
