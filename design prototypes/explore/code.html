@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Explore - andWeYOGa</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(75, 50, 130, 0.1);
+        }
+        .organic-clip {
+            clip-path: ellipse(50% 50% at 50% 50%);
+        }
+        .scroll-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scroll-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .animated-gradient {
+            background: linear-gradient(135deg, #fbf9f7 0%, #eaddff 50%, #fbf9f7 100%);
+            background-size: 200% 200%;
+            animation: gradientMove 15s ease infinite;
+        }
+        @keyframes gradientMove {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary": "#ffffff",
+                        "on-background": "#1b1c1b",
+                        "surface-variant": "#e4e2e0",
+                        "surface-container": "#efedec",
+                        "on-primary-fixed-variant": "#503787",
+                        "secondary-fixed": "#ffdbcb",
+                        "surface-container-low": "#f5f3f1",
+                        "tertiary-fixed-dim": "#b3cdb6",
+                        "inverse-surface": "#30302f",
+                        "background": "#fbf9f7",
+                        "secondary-fixed-dim": "#ffb692",
+                        "secondary": "#9a4612",
+                        "tertiary-container": "#314736",
+                        "on-primary-fixed": "#24015a",
+                        "on-error": "#ffffff",
+                        "primary-container": "#4b3282",
+                        "secondary-container": "#fd9259",
+                        "on-secondary-fixed": "#341100",
+                        "on-tertiary-fixed-variant": "#354c3a",
+                        "on-secondary-fixed-variant": "#793000",
+                        "outline": "#7a7581",
+                        "on-secondary": "#ffffff",
+                        "outline-variant": "#cbc4d2",
+                        "surface-container-high": "#eae8e6",
+                        "surface-bright": "#fbf9f7",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-primary": "#d1bcff",
+                        "surface-tint": "#6850a1",
+                        "surface": "#fbf9f7",
+                        "on-tertiary-container": "#9cb59e",
+                        "surface-container-highest": "#e4e2e0",
+                        "error-container": "#ffdad6",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1c1b",
+                        "surface-dim": "#dbdad8",
+                        "on-secondary-container": "#712d00",
+                        "on-surface-variant": "#494550",
+                        "primary-fixed-dim": "#d1bcff",
+                        "on-primary-container": "#baa0f8",
+                        "tertiary": "#1b3120",
+                        "primary-fixed": "#eaddff",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed": "#cfe9d1",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#34196a",
+                        "on-tertiary-fixed": "#0a2011",
+                        "inverse-on-surface": "#f2f0ee"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "64px",
+                        "md": "16px",
+                        "xl": "40px",
+                        "gutter": "24px",
+                        "sm": "8px",
+                        "unit": "4px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "container-max": "1280px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "label-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-fixed-dim selection:text-primary min-h-screen pb-xxl">
+<!-- Top Navigation -->
+<header class="fixed top-0 w-full z-50 bg-surface/70 backdrop-blur-xl border-b border-primary/10 shadow-sm transition-all duration-300 ease-in-out">
+<div class="flex justify-between items-center px-gutter py-md max-w-container-max mx-auto h-20">
+<h1 class="font-display-lg text-primary tracking-tighter cursor-pointer">andWeYOGa</h1>
+<nav class="hidden md:flex items-center gap-xl font-body-md text-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Sessions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Calendar</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Emojou</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Workshops</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Trips</a>
+<a class="text-primary border-b-2 border-primary pb-1 font-semibold" href="#">Explore</a>
+</nav>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="bg-surface-container-low border-none rounded-full pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary w-64 transition-all" placeholder="Search classes, instructors..." type="text"/>
+</div>
+<button class="p-2 rounded-full hover:bg-surface-container-high/50 transition-all">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<main class="pt-24 px-gutter max-w-container-max mx-auto">
+<!-- Hero Section / Discovery Search -->
+<section class="py-xl relative overflow-hidden rounded-3xl mb-xl">
+<div class="absolute inset-0 z-0">
+
+</div>
+<div class="relative z-10 p-xl lg:p-xxl flex flex-col items-center text-center max-w-3xl mx-auto">
+<h2 class="font-display-lg text-display-lg text-primary mb-md">Find your flow.</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-xl">Discover curated wellness journeys designed for your unique path. From deep meditation to high-energy flow.</p>
+<div class="flex flex-wrap justify-center gap-sm">
+<span class="px-lg py-2 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-md cursor-pointer hover:bg-secondary-fixed-dim transition-colors">Vinyasa</span>
+<span class="px-lg py-2 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-label-md cursor-pointer hover:bg-tertiary-fixed-dim transition-colors">Hatha</span>
+<span class="px-lg py-2 rounded-full bg-primary-fixed text-on-primary-fixed font-label-md cursor-pointer hover:bg-primary-fixed-dim transition-colors">Mindfulness</span>
+<span class="px-lg py-2 rounded-full bg-surface-container-highest text-on-surface font-label-md cursor-pointer hover:bg-surface-variant transition-colors">Yoga Therapy</span>
+</div>
+</div>
+</section>
+<!-- Bento Grid: Trending & Featured -->
+<section class="mb-xxl">
+<div class="flex justify-between items-end mb-lg">
+<h3 class="font-headline-lg text-headline-lg text-primary">Trending Now</h3>
+<a class="text-primary font-label-md hover:underline" href="#">View All</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-lg">
+<!-- Large Feature -->
+<div class="md:col-span-2 md:row-span-2 glass-card rounded-xl overflow-hidden group cursor-pointer shadow-sm hover:shadow-xl transition-all duration-500">
+<div class="h-64 md:h-[480px] w-full relative">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A serene wide-angle photograph of a professional yoga instructor performing a complex asana against a soft-focus sunset backdrop in a minimalist studio. The lighting is warm and golden, reflecting the digital zen aesthetic with a palette of soft terracottas and deep purples. High-quality editorial style, serene atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAqPtw2ujmAY5UneqZcj-cemuU6XcXcYtHxYNpjiwyfdNRxs8-yZx39kdsizwsZlQRtwCYjZV4bEoAGPfgjDJEZ-YVvRlEbWc8JlfUHjUtYVkpkpUu01rzru1AGjxAF0F0TzltyshQHBe07Jl95Uz8OAqXpFMO96UpqINRo-3oabEbosURX4x1Pjh8UkZ77T_30ffwsN8fEU_2axEoUDaZY7-XDnx50cibbSrptraRjmsOhNnirSwdQA6oNNWh-hOBrssr044"/>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/80 to-transparent"></div>
+<div class="absolute bottom-0 left-0 p-lg text-on-primary">
+<span class="bg-secondary-container text-on-secondary-container px-sm py-1 rounded-md text-xs font-bold mb-md inline-block uppercase tracking-wider">Masterclass</span>
+<h4 class="font-headline-lg text-headline-lg mb-xs">Lunar Awakening Flow</h4>
+<p class="font-body-md opacity-90 max-w-md">Join Elena Rose for a transformative 75-minute session focused on fluid movement and breath connection.</p>
+<div class="mt-lg flex items-center gap-md">
+<button class="bg-on-primary text-primary px-lg py-3 rounded-lg font-bold flex items-center gap-2 hover:bg-primary-fixed transition-all">
+<span class="material-symbols-outlined">play_circle</span>
+                                    Watch Now
+                                </button>
+<span class="font-label-md">1.2k attending</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Trend 1 -->
+<div class="glass-card rounded-xl overflow-hidden group cursor-pointer shadow-sm hover:translate-y-[-4px] transition-all duration-300">
+<div class="aspect-video relative">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A close-up shot of a person's hands resting in a mudra position on their knees, dressed in sage green yoga wear. The background is a clean, bright, white-walled meditation room with soft shadows. The overall mood is peaceful and balanced, emphasizing professional wellness and digital minimalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsD3Ij1UBFWXaC2X2mlCiry-9N_80RPoBRsRZy79ggVVyKcAwjhnXEiBX5Az6ibdcb-JS2ZIyTT2x3YEpi0RXW1FSAVBsXgMk4KTYwpwoPwO5RQTeRdJ3P_QgOgYfwNHX_ii_AG9FY6mwuF4ouxIr1mAcmVJOqjIwBohpVrTiueu12hQu1wkYIXbgS9yohtrtKAMG6biw4TnfIWS3ooQjOxayrFP-MUNoogds8fQZwRG3cqR8kt3OefILqhmDdNoTaZg9UO40"/>
+<div class="absolute top-2 right-2 px-2 py-1 bg-surface/80 backdrop-blur rounded text-[10px] font-bold">15 MIN</div>
+</div>
+<div class="p-md">
+<p class="text-secondary font-label-sm uppercase mb-1">Meditation</p>
+<h4 class="font-headline-md text-headline-md mb-2">Daily Centering</h4>
+<p class="text-on-surface-variant text-sm line-clamp-2">A quick session to find focus amidst a busy digital day.</p>
+</div>
+</div>
+<!-- Secondary Trend 2 -->
+<div class="glass-card rounded-xl overflow-hidden group cursor-pointer shadow-sm hover:translate-y-[-4px] transition-all duration-300">
+<div class="aspect-video relative">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="Two people practicing partner yoga in a modern, glass-walled studio overlooking a lush green forest. The sunlight filters through the trees creating organic dappled light patterns. Soft beige and sage green tones dominate the scene, evoking a professional yet natural wellness feeling." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZwN-fn68njO0PKI2oOvABZcvJBD2uulOPprl9N8AFkDDooevqFoYwPTkfCkTBH7PFzsfAjlbsH7OndkxFIc1gqv5AxFMVs90QdJRNGo5mifHuuYCyOrcQPju04gQk0hoanoV_zzntUN_s4LCPdTDTbQJeb54FOkNpBdITut1LTy5_RfWIUHLmtZCLaNIy4qfhRMNCeXrvv8RTaqho5BSUF2Pbb5PUtQyxdH_97qeCJ3J8Y1KuPS929STQT7wjf7HTouYEEpM"/>
+<div class="absolute top-2 right-2 px-2 py-1 bg-surface/80 backdrop-blur rounded text-[10px] font-bold">NEW</div>
+</div>
+<div class="p-md">
+<p class="text-secondary font-label-sm uppercase mb-1">Workshop</p>
+<h4 class="font-headline-md text-headline-md mb-2">Connection Asanas</h4>
+<p class="text-on-surface-variant text-sm line-clamp-2">Explore the geometry of balance in this intermediate partner flow.</p>
+</div>
+</div>
+<!-- Column Card -->
+<div class="lg:col-span-2 glass-card rounded-xl p-lg flex flex-col justify-center items-center text-center animated-gradient shadow-sm">
+<span class="material-symbols-outlined text-primary text-[48px] mb-md" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<h4 class="font-headline-lg text-headline-lg text-primary mb-sm">Custom Practice?</h4>
+<p class="text-on-surface-variant mb-lg">Let our AI guide build a sequence based on your current energy levels.</p>
+<button class="bg-primary text-on-primary px-xl py-3 rounded-lg font-bold hover:shadow-lg transition-all">Start Assessment</button>
+</div>
+</div>
+</section>
+<!-- Top Rated Instructors -->
+<section class="mb-xxl overflow-hidden">
+<div class="flex justify-between items-end mb-lg">
+<h3 class="font-headline-lg text-headline-lg text-primary">Instructor Spotlights</h3>
+<div class="flex gap-2">
+<button class="p-2 rounded-full border border-outline/20 hover:bg-surface-container transition-all" id="prevInstructor">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="p-2 rounded-full border border-outline/20 hover:bg-surface-container transition-all" id="nextInstructor">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="flex gap-lg overflow-x-auto scroll-hide pb-md px-2 -mx-2" id="instructorSlider">
+<!-- Instructor 1 -->
+<div class="flex-shrink-0 w-72 glass-card rounded-3xl p-lg flex flex-col items-center text-center transition-all hover:translate-y-[-8px]">
+<div class="w-32 h-32 organic-clip mb-md overflow-hidden ring-4 ring-primary-fixed">
+<img class="w-full h-full object-cover" data-alt="A professional portrait of a male yoga instructor with a serene expression, wearing high-performance athletic gear in deep purple. The lighting is crisp and studio-quality, with a soft off-white background that follows the brand's minimal aesthetic. Professional, approachable, and calm-tech vibes." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCd7sPabii-zryMn88LbJEkp_wAXmQbNouJl5gbk3-zL5mdcT_VLPz2a9KEHbM85EB1-3tsi5H1-gxdTj-LcT649d0YM0sQNxFVZ-kjswun6MDA3DMIvlTzyGvaC7tKgSxrHEp5loNqTsZd50CkjsPmZKYlOo9--7Kw6WSzXtcsTXoAGylQ6KeY9oq3RciqqAKVCi9W8sbAJDXRPqfL7XZdyzNSQZMXU_7y_gSICLIpqjlobrV9nec9zZD4vsdvU-IMWRhxkz4"/>
+</div>
+<h5 class="font-headline-md text-headline-md text-primary">Marcus Thorne</h5>
+<p class="text-secondary font-label-md mb-md">Vinyasa Specialist</p>
+<div class="flex gap-xl mb-lg">
+<div>
+<p class="font-bold text-primary">4.9</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Rating</p>
+</div>
+<div class="w-[1px] bg-outline-variant h-full"></div>
+<div>
+<p class="font-bold text-primary">2k+</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Students</p>
+</div>
+</div>
+<button class="w-full py-2 border border-primary text-primary rounded-lg font-label-md hover:bg-primary hover:text-on-primary transition-all">View Profile</button>
+</div>
+<!-- Instructor 2 -->
+<div class="flex-shrink-0 w-72 glass-card rounded-3xl p-lg flex flex-col items-center text-center transition-all hover:translate-y-[-8px]">
+<div class="w-32 h-32 organic-clip mb-md overflow-hidden ring-4 ring-secondary-fixed">
+<img class="w-full h-full object-cover" data-alt="A professional portrait of a female yoga teacher with long dark hair, smiling warmly. She is wearing sage green yoga attire against a minimalist studio background with soft bokeh. The image composition is clean, airy, and high-end, aligning with the Digital Zen brand philosophy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8SNdiBYCcLN2Rpp6XyQ_vaGy6YOTZ2Hia7cpdX__pya3fbgyixAY25Ik_QS2g32GRAg6RUIMUYBeM3Kr7q497urBRfnNxkwxEnP6LZgCLXaU7wLXXFgIMOh8KDce-wdixAc3jKu_PYfwRcaT5f8g1iqbO7XQZkcYabfZ7gBPfwm1wbBZcaxNuWp8OLmaq2ls41Wr_HIVE0qS5QiS0Ml7QFDFpjtlQxFPvGMCEMAdgYOpazJ3EGjlvBrNflaglTkLogoCOfTM"/>
+</div>
+<h5 class="font-headline-md text-headline-md text-primary">Maya Chen</h5>
+<p class="text-secondary font-label-md mb-md">Yin Yoga &amp; Breathwork</p>
+<div class="flex gap-xl mb-lg">
+<div>
+<p class="font-bold text-primary">5.0</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Rating</p>
+</div>
+<div class="w-[1px] bg-outline-variant h-full"></div>
+<div>
+<p class="font-bold text-primary">1.5k</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Students</p>
+</div>
+</div>
+<button class="w-full py-2 border border-primary text-primary rounded-lg font-label-md hover:bg-primary hover:text-on-primary transition-all">View Profile</button>
+</div>
+<!-- Instructor 3 -->
+<div class="flex-shrink-0 w-72 glass-card rounded-3xl p-lg flex flex-col items-center text-center transition-all hover:translate-y-[-8px]">
+<div class="w-32 h-32 organic-clip mb-md overflow-hidden ring-4 ring-tertiary-fixed">
+<img class="w-full h-full object-cover" data-alt="A portrait of an older yoga instructor with silver hair, exhibiting strength and calmness. Dressed in white minimalist yoga wear. The lighting is soft and natural, emphasizing texture and a sense of lifelong wellness. High-key light-mode aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCznMjqv9lpI4fuWsWpUnNz2XPLNTmyQTC2drBMza2OFRp4DGeC4RhMZ9KNZuY60fZy7Mt0IXmKnwImnlqhhqB-nu9RRZzinzg8CNR4GvipukoUhXBX3bJc4fX5vZ65NifpgiM94i99AZFm785A-aRcRDdc2AprPTbNTI61PzWP-03l_UVAA4T_wU2nnB3MWVMhfn5Pga4OEnh_fg5yNqsiO7DYY1uECrnx8sCySrhh35dipyX8_SLJoVlNcA9jUJptyGF-faA"/>
+</div>
+<h5 class="font-headline-md text-headline-md text-primary">David Stern</h5>
+<p class="text-secondary font-label-md mb-md">Hatha &amp; Alignment</p>
+<div class="flex gap-xl mb-lg">
+<div>
+<p class="font-bold text-primary">4.8</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Rating</p>
+</div>
+<div class="w-[1px] bg-outline-variant h-full"></div>
+<div>
+<p class="font-bold text-primary">4k</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Students</p>
+</div>
+</div>
+<button class="w-full py-2 border border-primary text-primary rounded-lg font-label-md hover:bg-primary hover:text-on-primary transition-all">View Profile</button>
+</div>
+<!-- Instructor 4 -->
+<div class="flex-shrink-0 w-72 glass-card rounded-3xl p-lg flex flex-col items-center text-center transition-all hover:translate-y-[-8px]">
+<div class="w-32 h-32 organic-clip mb-md overflow-hidden ring-4 ring-primary-fixed-dim">
+<img class="w-full h-full object-cover" data-alt="A dynamic portrait of a diverse yoga teacher in a modern loft studio. Artistic lighting with soft purples and oranges. The instructor is in mid-motion, showing flexibility and grace. The visual style is premium, airy, and focused on high-performance wellness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAMtyLVSYJ7N2zdsa3qhEbevPFmMMTc3cFEdq2rDgYR9tkLwprMbeBEwMOgD5FaHddIZViriWK_MX8Yi3uoCWgMypIBdUAKh7OzTeom1qreOlbzvG4gxYlZl5SwzxHWRCvw4N8FT_bqvCQpsnDI_e2VeOGfQI9UytMar6QCbX838u2webtU6o0RG9l58JY06MJkIAdJGMtZ5FUwjdIbqMzzLajOxhSExQ6cLe0udr9BZndQQO8eXIM2LvHCYBlnG8iZSxWkL4"/>
+</div>
+<h5 class="font-headline-md text-headline-md text-primary">Sasha Lopez</h5>
+<p class="text-secondary font-label-md mb-md">Power Flow</p>
+<div class="flex gap-xl mb-lg">
+<div>
+<p class="font-bold text-primary">4.9</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Rating</p>
+</div>
+<div class="w-[1px] bg-outline-variant h-full"></div>
+<div>
+<p class="font-bold text-primary">800</p>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-tighter">Students</p>
+</div>
+</div>
+<button class="w-full py-2 border border-primary text-primary rounded-lg font-label-md hover:bg-primary hover:text-on-primary transition-all">View Profile</button>
+</div>
+</div>
+</section>
+<!-- Wellness Articles: Magazine Style -->
+<section class="mb-xxl">
+<h3 class="font-headline-lg text-headline-lg text-primary mb-lg">The Wellness Journal</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-xl">
+<!-- Featured Article -->
+<div class="flex flex-col md:flex-row gap-lg group cursor-pointer">
+<div class="md:w-1/2 aspect-[4/3] overflow-hidden rounded-2xl">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A minimalist and aesthetic arrangement of wellness items: a ceramic tea cup, a small succulent, and a stack of linen-bound books on a light wooden table. Soft natural light streams in from the side. The color palette is composed of neutrals, soft beiges, and muted greens. Calm, professional, and lifestyle-oriented." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNEFlQZjZDFgDd0r0nKcfmQy7NLZrJLSzKiJNU92EhAW4yeh8doY88dEuysyXV9zs3_HT5LYCiHqIQieWr9n6ScInpd2GLunq910PQOEBpmCVCioIeI7vq5WfYkKK0dgAa7j-fGr9tViLRAfMczttJSr_pm-rCUrvt1kSoaW_B-NHRHBImo6wZptfzVX3EgQWpdboEIaAL72isUxlnAW0-iyKfyGFeDZfhKU3MRaK15fvHawOqlFttH3Z6O6ZHPF1GlhnzcOs"/>
+</div>
+<div class="md:w-1/2 flex flex-col justify-center">
+<span class="text-secondary font-label-sm uppercase tracking-widest mb-sm">Mindfulness</span>
+<h4 class="font-headline-lg text-headline-lg text-primary mb-md group-hover:text-secondary transition-colors">Morning Rituals: Beyond the Mat</h4>
+<p class="text-on-surface-variant mb-md">Discover how to integrate yoga philosophy into your daily routine for better mental clarity...</p>
+<p class="text-on-surface-variant font-label-sm">5 min read • by Sarah Miller</p>
+</div>
+</div>
+<!-- Featured Article 2 -->
+<div class="flex flex-col md:flex-row gap-lg group cursor-pointer">
+<div class="md:w-1/2 aspect-[4/3] overflow-hidden rounded-2xl">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A top-down view of a beautifully arranged bowl of fresh, colorful fruits and nuts, styled with edible flowers on a pristine white marble surface. The lighting is high-key and bright, evoking health, energy, and purity. Minimalist editorial photography style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXynmPe-ZCFpgbtHfqEJ4PZ6gbbawg201e3__pUwjlpxlWz8Y8GR13dtgTzVttZLOaqqH0U-qzg6y7wzYl2ygpB22MvxiX5SgipJRnoUEWvdOf9KQ0x5dijoV0vpF4CYoQfKjS_ndNLt_-6EivF2L6EO4LAG8doB3SgNZEdTistGbhjm2KEo6Y_xo2hTGZLi6GrJjmznamXyVtenBJRVOi3dMDvNxdN8PWvHJDgXsvW7TSParLWZ0gxmQCAXiwciVXdsc46e0"/>
+</div>
+<div class="md:w-1/2 flex flex-col justify-center">
+<span class="text-secondary font-label-sm uppercase tracking-widest mb-sm">Nutrition</span>
+<h4 class="font-headline-lg text-headline-lg text-primary mb-md group-hover:text-secondary transition-colors">Fueling Flow: Post-Practice Meals</h4>
+<p class="text-on-surface-variant mb-md">Why protein timing matters and three simple recipes that take less than ten minutes to prep...</p>
+<p class="text-on-surface-variant font-label-sm">8 min read • by Dr. James Kahn</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Recommended for You -->
+<section class="mb-xl">
+<h3 class="font-headline-lg text-headline-lg text-primary mb-lg">Personalized Picks</h3>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md">
+<div class="glass-card rounded-xl p-sm group cursor-pointer">
+<div class="aspect-square rounded-lg overflow-hidden mb-md">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="A serene landscape of mountains reflected in a still lake at dawn, with a person sitting in a quiet meditation pose on the shore. Soft blue and purple hues. The lighting is tranquil and expansive, capturing the essence of spiritual connection and digital zen." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7jyPyvNNdZaS6KSPuIWJEi7upueJp0x9WbIXcJa0OCSfznc0rs3HcgqseVx00J6xh6w8Tr0ROTN5odpFHMYhRilkNPkLL9EVy-oq69VEEr21f6H-j_7Y8ZDEvlAEd5WCFv_gkQeLlkVf9fjpw6SDfg_QNsrgdr0Z4NOrk87GmH3gesE2ILatd8PKpfEaP6A1n2wd79g9It4TYgueL5WtKntPP3ApX0FBWItzE-JYh1R4oiP8f-NxERwv3olIZin38MoCgWe4"/>
+</div>
+<h6 class="font-label-md text-primary line-clamp-1">Restorative Nighttime Yoga</h6>
+<p class="text-[10px] text-on-surface-variant">Recommended based on your sleep logs</p>
+</div>
+<div class="glass-card rounded-xl p-sm group cursor-pointer">
+<div class="aspect-square rounded-lg overflow-hidden mb-md">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="A close-up shot of a modern digital watch showing heart rate and activity metrics, styled alongside a yoga mat and a reusable water bottle in a sleek gym environment. High-contrast, clean, and focus-driven." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDeL4gjqpSvHvuE4-Fa-3npZTdIT0meydVoKM3fY0YCBCyy_Xm_Zepi__9guLeC1jM1RjfVJVGoKbjZZxrMnJAvTVzFeqv-1r71kQ8CRPCpK28gKZDrbygs7MXdwBJAPSk5aATJynbr1I9Mk9R6Bn21oQ6StH9mwTGr3WgQed_hBAuCWidntP49nJ9B21vznAr8cJLrxusbtvZH2Tif8OYQ4eIrorJRGmfa2NjXq8Ntj7xmQb9yC14CKLNvGidE_I7J2R9d_eg"/>
+</div>
+<h6 class="font-label-md text-primary line-clamp-1">Core Integrity Bootcamp</h6>
+<p class="text-[10px] text-on-surface-variant">Matches your goal: Core Strength</p>
+</div>
+<div class="glass-card rounded-xl p-sm group cursor-pointer">
+<div class="aspect-square rounded-lg overflow-hidden mb-md">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Vibrant abstract swirls of soft sage green and terracotta colors, looking like smoke or flowing water. An artistic representation of breath and energy flow. Minimalist, artistic, and calming." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARsJi2wMbr143UgaEdCWZEhzsk9OlHbZKJWvuDwr7tI6VaaAmZUbX-mS4WKLa6q_YfSSkoV4Hf6zel_jb9lWeC19mPAuPhPc9thL1RdD8q0hN-mJiTR5ogWGPRJc_7vycS-yp_pyLTit-Nh9XPeWDlOjDUFo2zGVNNKbH2UvGdzwuRLMpIXxhk7_JA9X41sYGOFRrKhSjL3xJ_chdjOTBy4Z-6R8aDQNsWwNFmikphmWTxuIMjSBjAry5rkYQBSVRgGmMxJiI"/>
+</div>
+<h6 class="font-label-md text-primary line-clamp-1">Pranayama for Stress</h6>
+<p class="text-[10px] text-on-surface-variant">Popular in your location</p>
+</div>
+<div class="glass-card rounded-xl p-sm group cursor-pointer">
+<div class="aspect-square rounded-lg overflow-hidden mb-md">
+<img class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="An open notebook with handwritten notes and sketches of yoga poses next to a lit candle on a desk. The lighting is warm and intimate, focusing on self-reflection and learning." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBQ9EOe5CQevxs3dgiSFqpj29O7HTpQlYZyaNGLL96ULIIGW68M3JZHHdmSZp0aiqIujlW1Nza3G366IzU_m7NGBZooMVJkykuIK2njOI-bTgNsPgnBNI3ZmKxAbsNZiZaPM0Tm2EQujryKKRp6yRwbz1FvB1u6SZhQJHOGvlRaGH_vDUZ62TRbXIecptZYLvAxZ74bmwZrenaX1i6gCkEzlzBCrXW7H-jKKZO4OuFoR0T5pzsYK7w5OINcCNn2nBBPLU6r2gs"/>
+</div>
+<h6 class="font-label-md text-primary line-clamp-1">Yoga Sutras Study</h6>
+<p class="text-[10px] text-on-surface-variant">Because you liked Workshop: Origins</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Nav for Mobile -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 bg-surface/80 backdrop-blur-xl border-t border-primary/10 px-gutter py-md flex justify-around items-center z-50">
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] font-label-md">Home</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="text-[10px] font-label-md">Explore</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[10px] font-label-md">Schedule</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-label-md">Profile</span>
+</button>
+</nav>
+<!-- Side NavBar (Settings) -->
+<aside class="fixed right-0 h-full w-80 z-[60] bg-surface-container-lowest/80 backdrop-blur-2xl border-l border-primary/5 shadow-xl transform translate-x-full transition-transform duration-500 ease-out flex flex-col p-lg gap-md" id="sideNav">
+<div class="flex justify-between items-center mb-xl">
+<div>
+<h2 class="font-headline-md text-primary">My Account</h2>
+<p class="text-on-surface-variant text-xs">Manage your wellness journey</p>
+</div>
+<button class="p-2 hover:bg-surface-variant/30 rounded-full" onclick="toggleSideNav()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="space-y-sm">
+<div class="flex items-center gap-md p-md bg-primary-container text-on-primary-container rounded-lg font-bold">
+<span class="material-symbols-outlined">person_edit</span>
+<span>Profile Settings</span>
+</div>
+<div class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-all cursor-pointer">
+<span class="material-symbols-outlined">history</span>
+<span>Booking History</span>
+</div>
+<div class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-all cursor-pointer">
+<span class="material-symbols-outlined">payments</span>
+<span>Payment Methods</span>
+</div>
+<div class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-all cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+<span>Preferences</span>
+</div>
+<div class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-all cursor-pointer">
+<span class="material-symbols-outlined">help_outline</span>
+<span>Help Center</span>
+</div>
+</div>
+<div class="mt-auto pt-xl border-t border-primary/5">
+<button class="w-full py-3 bg-error-container text-on-error-container rounded-xl font-bold flex justify-center items-center gap-2 hover:opacity-90 transition-all">
+<span class="material-symbols-outlined">logout</span>
+                Sign Out
+            </button>
+</div>
+</aside>
+<script>
+        const sideNav = document.getElementById('sideNav');
+        const instructorSlider = document.getElementById('instructorSlider');
+
+        function toggleSideNav() {
+            sideNav.classList.toggle('translate-x-full');
+        }
+
+        // Attach event to account button
+        document.querySelector('button[class*="account_circle"]').onclick = toggleSideNav;
+
+        // Simple Slider Logic
+        document.getElementById('nextInstructor').onclick = () => {
+            instructorSlider.scrollBy({ left: 300, behavior: 'smooth' });
+        };
+        document.getElementById('prevInstructor').onclick = () => {
+            instructorSlider.scrollBy({ left: -300, behavior: 'smooth' });
+        };
+
+        // Scroll shadow for header
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 20) {
+                header.classList.add('shadow-md', 'bg-surface/90');
+            } else {
+                header.classList.remove('shadow-md', 'bg-surface/90');
+            }
+        });
+    </script>
+</body></html>

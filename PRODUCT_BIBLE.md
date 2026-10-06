@@ -39,7 +39,7 @@ Full authenticated booking flow. Login check, profile completeness check, class 
 
 Files: client/src/components/booking-modal.tsx, server/routes.ts POST /api/bookings
 
-### 1.4 Class Type Catalogue — and We Teach
+### 1.4 Class Type Catalogue — and We Workout
 Browsable grid of all yoga disciplines with photo, description, price and Book Now. Current disciplines: Hatha Yoga, Hyyocross, Meditation, Sound Therapy.
 
 Files: client/src/components/classes-section.tsx

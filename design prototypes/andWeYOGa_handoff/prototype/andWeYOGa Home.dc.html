@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#fbf9f7;font-family:'Onest',system-ui,sans-serif;color:#1b1c1b;-webkit-font-smoothing:antialiased;}
+[data-scroll]::-webkit-scrollbar{display:none;}
+[data-scroll]{scrollbar-width:none;-ms-overflow-style:none;}
+@media (max-width:980px){ [data-r="desktop-nav"]{display:none!important;} [data-r="acct-text"]{display:none!important;} }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#fbf9f7;color:#1b1c1b;overflow-x:hidden;position:relative;">
+
+  <!-- ====== HEADER ====== -->
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,249,247,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(75,50,130,0.08);">
+    <div style="max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,24px);height:76px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <button onClick="{{ toggleNav }}" aria-label="Open menu" style="display:flex;align-items:center;gap:7px;background:#34196a;color:#fff;border:none;padding:8px 14px;border-radius:99px;font-family:'Onest';font-weight:700;font-size:13px;letter-spacing:0.04em;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 14px rgba(52,25,106,0.22);" style-hover="box-shadow:0 6px 20px rgba(52,25,106,0.3);" style-active="transform:scale(0.96);"><span style="font-family:'Material Symbols Outlined';font-size:18px;">menu</span><span>aWY</span></button>
+
+      <a href="#" style="display:flex;align-items:center;text-decoration:none;white-space:nowrap;position:absolute;left:50%;transform:translateX(-50%);">
+        <img src="assets/awy-logo.png" alt="andWeYoga" style="height:clamp(38px,5.5vw,56px);width:auto;display:block;">
+      </a>
+
+      <div style="position:relative;">
+        <button onClick="{{ openSignIn }}" style="display:{{ bookDisplay }};align-items:center;gap:8px;background:#34196a;color:#fff;border:none;padding:9px 17px;border-radius:99px;font-family:'Onest';font-weight:700;font-size:13px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 14px rgba(52,25,106,0.22);" style-hover="box-shadow:0 6px 20px rgba(52,25,106,0.3);" style-active="transform:scale(0.96);">Book Session</button>
+
+        <button onClick="{{ toggleAcct }}" style="display:{{ acctBtnDisplay }};align-items:center;gap:8px;background:#34196a;color:#fff;border:none;padding:9px 16px;border-radius:99px;font-family:'Onest';font-weight:600;font-size:13px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 14px rgba(52,25,106,0.22);" style-hover="box-shadow:0 6px 20px rgba(52,25,106,0.3);" style-active="transform:scale(0.96);">
+          <span>My Account</span>
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;transition:transform .2s;transform:{{ acctChevron }};">expand_more</span>
+        </button>
+        <div style="position:absolute;right:0;top:54px;width:210px;background:rgba(251,249,247,0.97);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.12);border-radius:16px;box-shadow:0 14px 40px rgba(27,28,27,0.16);padding:8px;display:flex;flex-direction:column;gap:2px;transition:opacity .2s,transform .2s;opacity:{{ acctOpacity }};transform:{{ acctTransform }};pointer-events:{{ acctPointer }};">
+          <a href="andWeYOGa%20Hub.dc.html" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-decoration:none;color:#34196a;font-weight:500;font-size:14px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">grid_view</span>My Hub</a>
+          <a href="andWeYOGa%20Dashboard%20v2.dc.html" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-decoration:none;color:#494550;font-weight:500;font-size:14px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:20px;">settings</span>My Account</a>
+          <a href="#" onClick="{{ signOut }}" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:10px;text-decoration:none;color:#ba1a1a;font-weight:500;font-size:14px;transition:background .18s;" style-hover="background:rgba(186,26,26,0.07);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">logout</span>Sign Out</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====== SECTION DRAWER ====== -->
+  <div onClick="{{ closeNav }}" style="position:fixed;inset:0;z-index:55;background:rgba(27,28,27,0.28);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);transition:opacity .3s;opacity:{{ overlayOpacity }};pointer-events:{{ overlayPointer }};"></div>
+  <aside style="position:fixed;top:0;left:0;height:100vh;width:min(320px,86vw);z-index:60;background:rgba(251,249,247,0.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-right:1px solid rgba(75,50,130,0.1);box-shadow:12px 0 40px rgba(27,28,27,0.12);padding:20px;display:flex;flex-direction:column;gap:6px;transition:transform .32s cubic-bezier(.4,0,.2,1);transform:{{ drawerTransform }};overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <span style="font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;color:#34196a;">Explore</span>
+      <button onClick="{{ closeNav }}" style="display:flex;align-items:center;gap:7px;background:#34196a;color:#fff;border:none;padding:8px 16px;border-radius:99px;font-weight:700;font-size:13px;cursor:pointer;">Close</button>
+    </div>
+    <a href="#care" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We <span style="color:#9a4612;">Care</span></a>
+    <a href="#vibe" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We <span style="color:#9a4612;">Vibe</span></a>
+    <a href="#teach" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We <span style="color:#9a4612;">Teach</span></a>
+    <a href="#story" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and Our <span style="color:#9a4612;">Story</span></a>
+    <a href="#believe" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We <span style="color:#9a4612;">Believe</span></a>
+    <a href="#connect" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We <span style="color:#9a4612;">Connect</span></a>
+    <a href="#yogis" onClick="{{ closeNav }}" style="padding:13px 14px;border-radius:12px;text-decoration:none;color:#34196a;font-family:'Bricolage Grotesque';font-weight:600;font-size:17px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.07);">and We Meet <span style="color:#9a4612;">Yogis</span></a>
+  </aside>
+
+  <!-- ====== SIGN-IN MODAL ====== -->
+  <div onClick="{{ closeSignIn }}" style="position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(27,28,27,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:opacity .25s;opacity:{{ signInOpacity }};pointer-events:{{ signInPointer }};">
+    <div onClick="{{ stop }}" style="width:min(440px,100%);background:#fbf9f7;border:1px solid rgba(75,50,130,0.12);border-radius:24px;box-shadow:0 30px 80px rgba(27,28,27,0.3);padding:32px;transition:transform .28s cubic-bezier(.4,0,.2,1);transform:{{ signInScale }};">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px;">
+        <h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;color:#34196a;">Book a <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">session</span></h3>
+        <button onClick="{{ closeSignIn }}" style="border:none;background:transparent;color:#494550;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:10px;transition:background .18s;" style-hover="background:rgba(52,25,106,0.06);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">close</span></button>
+      </div>
+      <p style="margin:0 0 24px;font-size:14px;line-height:1.55;color:#494550;">Sign in with Google or continue as a guest for trial and drop-in sessions.</p>
+      <button onClick="{{ doSignIn }}" style="width:100%;display:flex;align-items:center;justify-content:center;gap:12px;padding:15px;background:#fff;border:1px solid rgba(75,50,130,0.18);border-radius:14px;font-family:'Onest';font-weight:600;font-size:15px;color:#1b1c1b;cursor:pointer;margin-bottom:12px;transition:box-shadow .2s,transform .15s;" style-hover="box-shadow:0 8px 22px rgba(27,28,27,0.08);" style-active="transform:scale(0.98);">
+        <span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:conic-gradient(from -45deg,#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0);"></span>Continue with Google
+      </button>
+      <label style="display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 14px;cursor:pointer;user-select:none;">
+        <span onClick="{{ toggleKeep }}" style="{{ keepBoxStyle }}"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#fff;display:{{ keepTickDisplay }};">check</span></span>
+        <span onClick="{{ toggleKeep }}" style="font-size:13px;font-weight:500;color:#494550;">Keep me signed in</span>
+      </label>
+      <button onClick="{{ doSignIn }}" style="width:100%;padding:15px;background:#34196a;color:#fff;border:1.5px solid #34196a;border-radius:14px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;transition:box-shadow .2s,transform .15s;box-shadow:0 6px 18px rgba(52,25,106,0.24);" style-hover="box-shadow:0 10px 26px rgba(52,25,106,0.32);" style-active="transform:scale(0.98);">Continue as Guest</button>
+      <p style="margin:18px 0 0;text-align:center;font-size:12px;color:#494550;">By continuing, you agree to our Terms of Service and Privacy Policy.</p>
+    </div>
+  </div>
+
+  <!-- ====== HERO ====== -->
+  <section style="position:relative;height:clamp(520px,82vh,760px);overflow:hidden;">
+    <sc-for list="{{ slides }}" as="s" hint-placeholder-count="3">
+      <div style="{{ s.slideStyle }}">
+        <div style="position:absolute;inset:0;background:{{ s.gradient }};"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.16);"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:clamp(220px,34vw,420px);">{{ s.icon }}</span></div>
+        <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(27,28,27,0.12),rgba(27,28,27,0.46));"></div>
+      </div>
+    </sc-for>
+
+    <div style="position:relative;z-index:3;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:0 24px 72px;">
+      <h1 style="margin:0 0 22px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(52px,9vw,104px);line-height:0.98;letter-spacing:-0.03em;color:#fff;text-shadow:0 4px 30px rgba(27,28,27,0.3);">To <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;">{{ heroWord }}</span></h1>
+      <a href="#schedule" style="display:inline-flex;align-items:center;gap:10px;padding:17px 38px;background:linear-gradient(120deg,#4b3282,#9a4612);color:#fff;border:none;border-radius:99px;font-family:'Onest';font-weight:700;font-size:clamp(16px,1.6vw,19px);cursor:pointer;text-decoration:none;box-shadow:0 10px 30px rgba(52,25,106,0.4);transition:transform .18s,box-shadow .2s;" style-hover="transform:translateY(-3px);box-shadow:0 16px 40px rgba(52,25,106,0.5);">{{ heroCta }}</a>
+
+      <div style="display:flex;gap:10px;margin-top:34px;">
+        <sc-for list="{{ dots }}" as="d" hint-placeholder-count="3">
+          <span onClick="{{ d.onClick }}" style="{{ d.style }}"></span>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== SCHEDULE (Calendar treatment) ====== -->
+  <section id="schedule" style="position:relative;padding:clamp(48px,7vw,88px) 0;background:#fbf9f7;">
+    <div style="position:absolute;top:6%;right:-8%;width:520px;height:520px;border-radius:60% 40% 30% 70%/60% 30% 70% 40%;background:rgba(52,25,106,0.05);filter:blur(80px);pointer-events:none;"></div>
+    <div style="max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,24px);position:relative;">
+
+      <div style="text-align:center;margin-bottom:40px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">Week 26 <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Schedule</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;">Find the perfect time for your practice — 23 Jun &ndash; 29 Jun</p>
+      </div>
+
+      <!-- Available Today carousel -->
+      <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:24px;box-shadow:0 8px 30px rgba(27,28,27,0.04);margin-bottom:24px;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+          <div style="display:flex;align-items:baseline;gap:10px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:20px;color:#1b1c1b;">Available Today</h3><span style="font-size:13px;font-weight:500;color:#494550;">Mon, 23 Jun</span></div>
+          <span style="font-size:13px;font-weight:600;color:#34196a;">3 live sessions</span>
+        </div>
+        <div style="position:relative;padding:0 34px;">
+          <button onClick="{{ availPrev }}" aria-label="Previous sessions" style="position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:5;width:34px;height:34px;border-radius:50%;border:1px solid rgba(52,25,106,0.12);background:rgba(255,255,255,0.95);color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(27,28,27,0.12);transition:background .2s,transform .15s;" style-hover="background:#34196a;color:#fff;" style-active="transform:translateY(-50%) scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_left</span></button>
+          <button onClick="{{ availNext }}" aria-label="Next sessions" style="position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:5;width:34px;height:34px;border-radius:50%;border:1px solid rgba(52,25,106,0.12);background:rgba(255,255,255,0.95);color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(27,28,27,0.12);transition:background .2s,transform .15s;" style-hover="background:#34196a;color:#fff;" style-active="transform:translateY(-50%) scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_right</span></button>
+          <div data-carousel="avail" data-scroll style="display:flex;gap:16px;overflow-x:auto;scroll-behavior:smooth;scroll-snap-type:x proximity;padding:0 2px 4px;">
+            <sc-for list="{{ availCards }}" as="ac" hint-placeholder-count="4">
+              <div style="flex:0 0 286px;scroll-snap-align:start;background:#f5f3f1;border:1px solid transparent;border-radius:16px;overflow:hidden;transition:background .25s,border-color .25s,box-shadow .25s;" style-hover="background:#fff;border-color:rgba(52,25,106,0.18);box-shadow:0 10px 26px rgba(27,28,27,0.06);">
+                <div style="{{ ac.imgStyle }}">
+                  <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:46px;color:{{ ac.iconColor }};">{{ ac.icon }}</span>
+                  <span style="{{ ac.tagStyle }}">{{ ac.tag }}</span>
+                </div>
+                <div style="padding:16px;">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;">
+                    <div><div style="display:flex;align-items:center;gap:5px;color:#9a4612;margin-bottom:5px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">schedule</span><span style="font-size:12px;font-weight:600;">{{ ac.time }}</span></div><h4 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:18px;color:#1b1c1b;">{{ ac.title }}</h4></div>
+                    <span style="color:#34196a;font-weight:700;font-size:15px;white-space:nowrap;">{{ ac.price }}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                    <div style="{{ ac.avatarStyle }}">{{ ac.initials }}</div><span style="font-size:14px;color:#494550;">{{ ac.instructor }}</span>
+                  </div>
+                  <button style="width:100%;padding:11px;background:#34196a;color:#fff;border:none;border-radius:12px;font-family:'Onest';font-weight:600;font-size:14px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 14px rgba(52,25,106,0.2);" style-hover="transform:translateY(-2px);box-shadow:0 8px 22px rgba(52,25,106,0.3);" style-active="transform:scale(0.97);">Book Now</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar + Weekly side by side -->
+      <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:stretch;">
+
+        <!-- compact calendar -->
+        <div style="flex:1 1 400px;display:flex;flex-direction:column;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:clamp(16px,2vw,22px);box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:12px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#1b1c1b;">June 2026</h3>
+              <div style="display:flex;gap:2px;"><button style="width:32px;height:32px;border:none;background:transparent;border-radius:50%;color:#494550;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" style-hover="background:rgba(52,25,106,0.08);color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_left</span></button><button style="width:32px;height:32px;border:none;background:transparent;border-radius:50%;color:#494550;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;" style-hover="background:rgba(52,25,106,0.08);color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_right</span></button></div>
+            </div>
+            <button style="padding:7px 16px;border:1px solid rgba(52,25,106,0.2);background:transparent;border-radius:99px;font-family:'Onest';font-weight:600;font-size:13px;color:#34196a;cursor:pointer;transition:background .2s;" style-hover="background:rgba(52,25,106,0.06);">Today</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid rgba(52,25,106,0.07);">
+            <div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#494550;">MON</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#494550;">TUE</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#494550;">WED</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#494550;">THU</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#494550;">FRI</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#9a4612;">SAT</div><div style="font-size:10px;font-weight:600;letter-spacing:0.08em;color:#9a4612;">SUN</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);">
+            <sc-for list="{{ days }}" as="d" hint-placeholder-count="35">
+              <div style="{{ d.wrapStyle }}">
+                <sc-if value="{{ d.active }}" hint-placeholder-val="{{ false }}"><span style="{{ d.activeStyle }}">{{ d.label }}</span></sc-if>
+                <sc-if value="{{ d.inactive }}" hint-placeholder-val="{{ true }}"><span style="{{ d.numStyle }}" onClick="{{ d.onClick }}">{{ d.label }}</span></sc-if>
+                <sc-if value="{{ d.hasDot }}" hint-placeholder-val="{{ false }}"><span style="{{ d.dotStyle }}"></span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:18px;margin-top:14px;padding-top:13px;border-top:1px solid rgba(52,25,106,0.07);">
+            <span style="display:flex;align-items:center;gap:7px;font-size:12px;color:#494550;"><span style="width:6px;height:6px;border-radius:50%;background:#34196a;"></span>Sessions available</span>
+            <span style="display:flex;align-items:center;gap:7px;font-size:12px;color:#494550;"><span style="width:6px;height:6px;border-radius:50%;background:#ba1a1a;"></span>Sold out</span>
+          </div>
+        </div>
+
+        <!-- weekly schedule w/ vertical scroll -->
+        <div style="flex:1 1 400px;display:flex;flex-direction:column;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:clamp(18px,2.2vw,24px);box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#1b1c1b;">Weekly Schedule</h3>
+            <span style="font-size:12px;font-weight:500;color:#494550;">All classes this week</span>
+          </div>
+          <button onClick="{{ weeklyUp }}" aria-label="Scroll up" style="width:100%;display:flex;align-items:center;justify-content:center;padding:6px;margin-bottom:8px;border:1px solid rgba(52,25,106,0.1);background:#f5f3f1;border-radius:10px;color:#34196a;cursor:pointer;transition:background .2s;" style-hover="background:#34196a;color:#fff;"><span style="font-family:'Material Symbols Outlined';font-size:22px;">keyboard_arrow_up</span></button>
+          <div data-weekly data-scroll style="flex:1;max-height:300px;overflow-y:auto;display:flex;flex-direction:column;">
+            <sc-for list="{{ weekly }}" as="w" hint-placeholder-count="10">
+              <sc-if value="{{ w.isHeader }}" hint-placeholder-val="{{ false }}">
+                <div style="position:sticky;top:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:8px 0 6px;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#34196a;border-bottom:1px solid rgba(52,25,106,0.08);z-index:1;">{{ w.label }}</div>
+              </sc-if>
+              <sc-if value="{{ w.isSession }}" hint-placeholder-val="{{ true }}">
+                <div style="{{ w.rowStyle }}">
+                  <div style="{{ w.avatarStyle }}">{{ w.initials }}</div>
+                  <div style="flex:1;min-width:0;"><div style="font-family:'Bricolage Grotesque';font-weight:600;font-size:14px;color:{{ w.titleColor }};">{{ w.title }}</div><div style="font-size:12px;color:#494550;">{{ w.meta }}</div></div>
+                  <span style="{{ w.badgeStyle }}">{{ w.badge }}</span>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+          <button onClick="{{ weeklyDown }}" aria-label="Scroll down" style="width:100%;display:flex;align-items:center;justify-content:center;padding:6px;margin-top:8px;border:1px solid rgba(52,25,106,0.1);background:#f5f3f1;border-radius:10px;color:#34196a;cursor:pointer;transition:background .2s;" style-hover="background:#34196a;color:#fff;"><span style="font-family:'Material Symbols Outlined';font-size:22px;">keyboard_arrow_down</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== AND WE TEACH ====== -->
+  <section id="teach" style="padding:clamp(48px,7vw,88px) 0;background:#f4f1f8;">
+    <div style="max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="text-align:center;margin-bottom:48px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and We <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Teach</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;">Discover the perfect class for your practice level and goals</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px;">
+        <sc-for list="{{ classes }}" as="c" hint-placeholder-count="3">
+          <div style="background:#fff;border:1px solid rgba(75,50,130,0.1);border-radius:22px;overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .3s,transform .3s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="{{ c.imgStyle }}">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(255,255,255,0.5);">{{ c.icon }}</span>
+              <sc-if value="{{ c.soon }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;left:14px;top:14px;background:#9a4612;color:#fff;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;">Coming Soon</span></sc-if>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.04em;">{{ c.photo }}</span>
+            </div>
+            <div style="padding:24px;display:flex;flex-direction:column;flex:1;">
+              <h3 style="margin:0 0 12px;font-family:'Bricolage Grotesque';font-weight:700;font-size:23px;color:#34196a;">{{ c.title }}</h3>
+              <p style="margin:0 0 20px;color:#494550;font-size:14px;line-height:1.6;flex:1;">{{ c.desc }}</p>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <span style="font-weight:700;font-size:15px;color:#9a4612;">{{ c.price }}</span>
+                <button style="{{ c.btnStyle }}">{{ c.btn }}</button>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== AND WE CARE ====== -->
+  <section id="care" style="padding:clamp(48px,7vw,88px) 0;background:linear-gradient(180deg,#fbf9f7,#f4f1f8);">
+    <div style="max-width:1100px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="text-align:center;margin-bottom:48px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and We <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Care</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;max-width:640px;margin-left:auto;margin-right:auto;">Our commitment extends beyond the studio through meaningful community partnerships and inclusive wellness initiatives.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px;">
+        <div style="background:#fff;border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:32px;text-align:center;box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <div style="width:64px;height:64px;border-radius:50%;background:rgba(52,25,106,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:30px;">volunteer_activism</span></div>
+          <h3 style="margin:0 0 12px;font-family:'Bricolage Grotesque';font-weight:600;font-size:21px;color:#34196a;">Blind School Partnership</h3>
+          <p style="margin:0 0 18px;color:#494550;font-size:14px;line-height:1.65;">We conduct weekly adaptive yoga sessions at the Mumbai Association for the Blind, creating accessible wellness programs focused on spatial awareness, balance, and mindful movement.</p>
+          <p style="margin:0;font-weight:700;font-size:13px;color:#9a4612;">Every Tuesday &middot; 3:00 PM &middot; Free of Charge</p>
+        </div>
+        <div style="background:#fff;border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:32px;text-align:center;box-shadow:0 8px 30px rgba(27,28,27,0.04);">
+          <div style="width:64px;height:64px;border-radius:50%;background:rgba(154,70,18,0.1);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;color:#9a4612;"><span style="font-family:'Material Symbols Outlined';font-size:30px;">accessible</span></div>
+          <h3 style="margin:0 0 12px;font-family:'Bricolage Grotesque';font-weight:600;font-size:21px;color:#34196a;">Paraplegic Institute Sessions</h3>
+          <p style="margin:0 0 18px;color:#494550;font-size:14px;line-height:1.65;">At the Indian Spinal Injuries Centre, we offer specialized chair yoga and upper-body strength programs to improve flexibility, respiratory function, and mental wellness.</p>
+          <p style="margin:0;font-weight:700;font-size:13px;color:#9a4612;">Every Friday &middot; 4:00 PM &middot; Community Service</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== AND WE VIBE ====== -->
+  <section id="vibe" style="padding:clamp(48px,7vw,88px) 0;background:#fbf9f7;">
+    <div style="max-width:1100px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="text-align:center;margin-bottom:48px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and We <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Vibe</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;">Connect with our vibrant community sharing their wellness journeys.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:26px 18px;max-width:920px;margin:0 auto;">
+        <sc-for list="{{ vibes }}" as="v" hint-placeholder-count="10">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;">
+            <div style="{{ v.ringStyle }}"><div style="width:100%;height:100%;border-radius:50%;background:#f4f1f8;display:flex;align-items:center;justify-content:center;color:#34196a;border:3px solid #fbf9f7;"><span style="font-family:'Material Symbols Outlined';font-size:30px;">person</span></div></div>
+            <span style="font-size:13px;font-weight:500;color:#34196a;">{{ v.handle }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== AND WE BELIEVE ====== -->
+  <section id="believe" style="padding:clamp(56px,8vw,100px) 0;background:#f4f1f8;">
+    <div style="max-width:920px;margin:0 auto;padding:0 clamp(16px,4vw,24px);text-align:center;">
+      <h2 style="margin:0 0 28px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and We <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Believe</span></h2>
+      <p style="margin:0;font-size:clamp(17px,2vw,24px);line-height:1.65;color:#4b3282;font-family:'Instrument Serif';font-style:italic;">&ldquo;We believe you don't have to win to win in life. It's about progress and not perfection. Connection and not competition. Learning and not losing. Go with the flow. Inside out, outside in. And that is yoga.&rdquo;</p>
+    </div>
+  </section>
+
+  <!-- ====== AND WE CONNECT ====== -->
+  <section id="connect" style="padding:clamp(48px,7vw,88px) 0;background:#fbf9f7;">
+    <div style="max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="display:flex;flex-wrap:wrap;gap:48px;align-items:center;">
+        <div style="flex:1 1 420px;">
+          <h2 style="margin:0 0 20px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,48px);letter-spacing:-0.02em;color:#34196a;">and We <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Connect</span></h2>
+          <p style="margin:0 0 16px;color:#494550;font-size:16px;line-height:1.7;">True wellness happens in connection &mdash; with yourself, with others, and with the world around you. We foster meaningful relationships that support your growth and enrich your life.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;">
+            <div style="background:#fff;border:1px solid rgba(75,50,130,0.1);border-radius:16px;padding:18px;text-align:center;"><h4 style="margin:0 0 6px;font-family:'Bricolage Grotesque';font-weight:600;font-size:16px;color:#34196a;">Weekly Circles</h4><p style="margin:0;font-size:12px;color:#494550;">Community discussions &amp; shared journeys</p></div>
+            <div style="background:#fff;border:1px solid rgba(75,50,130,0.1);border-radius:16px;padding:18px;text-align:center;"><h4 style="margin:0 0 6px;font-family:'Bricolage Grotesque';font-weight:600;font-size:16px;color:#34196a;">Yoga Retreats</h4><p style="margin:0;font-size:12px;color:#494550;">Deep connections through immersive experiences</p></div>
+          </div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <button style="padding:13px 28px;background:#34196a;color:#fff;border:none;border-radius:99px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 5px 16px rgba(52,25,106,0.24);transition:transform .15s;" style-hover="transform:translateY(-2px);">Join Events</button>
+            <button style="padding:13px 28px;background:transparent;color:#34196a;border:1.5px solid rgba(52,25,106,0.3);border-radius:99px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;transition:background .2s;" style-hover="background:rgba(52,25,106,0.06);">Community Hub</button>
+          </div>
+        </div>
+        <div style="flex:1 1 380px;position:relative;">
+          <div style="position:relative;border-radius:24px;overflow:hidden;min-height:340px;background:linear-gradient(135deg,#d7cfe6,#c8bdd9);display:flex;align-items:center;justify-content:center;">
+            <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:90px;color:rgba(52,25,106,0.2);">fitness_center</span>
+            <span style="position:absolute;right:14px;bottom:12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(52,25,106,0.5);letter-spacing:0.04em;">/ photo: connect</span>
+          </div>
+          <div style="position:absolute;right:-12px;bottom:-12px;background:#9a4612;color:#fff;border-radius:18px;padding:18px 24px;box-shadow:0 10px 30px rgba(154,70,18,0.3);"><div style="font-family:'Bricolage Grotesque';font-weight:700;font-size:32px;line-height:1;">365</div><div style="font-size:12px;opacity:0.9;margin-top:4px;">Days Connected</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== ABOUT + STORY ====== -->
+  <section id="about" style="padding:clamp(48px,7vw,88px) 0;background:#f4f1f8;">
+    <div style="max-width:920px;margin:0 auto;padding:0 clamp(16px,4vw,24px);text-align:center;">
+      <h2 style="margin:0 0 24px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;">About <span style="display:inline-flex;align-items:center;gap:2px;"><span style="color:#1b1c1b;font-weight:600;">andWe</span><span style="color:#34196a;">YO</span><span style="color:#9a4612;">^</span><span style="color:#34196a;">ga</span></span></h2>
+      <p style="margin:0 0 18px;color:#494550;font-size:clamp(15px,1.6vw,18px);line-height:1.7;">Founded in 2018, andWeYoga has been a sanctuary for wellness seekers and yoga practitioners of all levels. Our mission is to create a welcoming space where everyone can discover the transformative power of yoga.</p>
+      <p style="margin:0 0 28px;color:#494550;font-size:clamp(15px,1.6vw,18px);line-height:1.7;">With certified instructors and a variety of class styles, we're committed to helping you find balance, strength, and inner peace through the ancient practice of yoga.</p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+        <a href="#yogis" style="padding:13px 28px;background:#34196a;color:#fff;border:none;border-radius:99px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;box-shadow:0 5px 16px rgba(52,25,106,0.24);transition:transform .15s;" style-hover="transform:translateY(-2px);">and We Meet Yogis</a>
+        <a href="#story" style="padding:13px 28px;background:transparent;color:#34196a;border:1.5px solid rgba(52,25,106,0.3);border-radius:99px;font-family:'Onest';font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;transition:background .2s;" style-hover="background:rgba(52,25,106,0.06);">and Our Story</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="story" style="padding:clamp(48px,7vw,88px) 0;background:#fbf9f7;">
+    <div style="max-width:820px;margin:0 auto;padding:0 clamp(16px,4vw,24px);text-align:center;">
+      <h2 style="margin:0 0 32px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and Our <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Story</span></h2>
+      <p style="margin:0 0 20px;color:#494550;font-size:16px;line-height:1.75;">Our story begins with the transformative power of yoga and the belief that personal healing can create ripples of positive change in the world. What started as one person's journey of recovery has blossomed into a vibrant community.</p>
+      <p style="margin:0 0 20px;color:#494550;font-size:16px;line-height:1.75;">In April 2023, andWeYoga was born in Bengaluru with a simple yet powerful philosophy: <span style="font-family:'Instrument Serif';font-style:italic;color:#4b3282;">&ldquo;We meet, we greet, we do whatever we like &mdash; we play, we paint, we run, we picnic &mdash; and we yoga too.&rdquo;</span></p>
+      <p style="margin:0;color:#494550;font-size:16px;line-height:1.75;">Today, andWeYoga continues to grow stronger every day. We've built more than a yoga studio &mdash; we've created a family where transformation is celebrated and every individual's journey is honored.</p>
+    </div>
+  </section>
+
+  <!-- ====== AND WE MEET YOGIS ====== -->
+  <section id="yogis" style="padding:clamp(48px,7vw,88px) 0;background:linear-gradient(180deg,#f4f1f8,#fbf9f7);">
+    <div style="max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="text-align:center;margin-bottom:48px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">and We Meet <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Yogis</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;max-width:640px;margin-left:auto;margin-right:auto;">Meet our diverse community of certified instructors who bring authentic expertise and inclusive teaching to every session.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:30px;">
+        <sc-for list="{{ yogis }}" as="y" hint-placeholder-count="3">
+          <div style="text-align:center;">
+            <div style="{{ y.ringStyle }}"><div style="width:100%;height:100%;border-radius:50%;background:#f4f1f8;display:flex;align-items:center;justify-content:center;color:#34196a;border:4px solid #fbf9f7;"><span style="font-family:'Material Symbols Outlined';font-size:54px;">person</span></div></div>
+            <h3 style="margin:18px 0 6px;font-family:'Bricolage Grotesque';font-weight:700;font-size:21px;color:#34196a;">{{ y.name }}</h3>
+            <p style="margin:0 0 12px;font-weight:600;font-size:14px;color:#9a4612;">{{ y.role }}</p>
+            <p style="margin:0;font-size:13px;line-height:1.6;color:#494550;">{{ y.bio }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== CONTACT ====== -->
+  <section id="contact" style="padding:clamp(48px,7vw,88px) 0;background:#fbf9f7;">
+    <div style="max-width:1100px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="text-align:center;margin-bottom:48px;">
+        <h2 style="margin:0 0 10px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5vw,52px);letter-spacing:-0.02em;color:#34196a;">Let's <span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;color:#9a4612;">Connect</span></h2>
+        <p style="margin:0;font-size:clamp(15px,1.5vw,19px);color:#494550;">Ready to begin your journey? Reach out for group sessions, personal training, or corporate bookings.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:26px;">
+        <sc-for list="{{ contacts }}" as="ct" hint-placeholder-count="4">
+          <div style="text-align:center;">
+            <div style="width:64px;height:64px;border-radius:50%;background:#34196a;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:#fff;box-shadow:0 6px 18px rgba(52,25,106,0.24);"><span style="font-family:'Material Symbols Outlined';font-size:28px;">{{ ct.icon }}</span></div>
+            <h4 style="margin:0 0 6px;font-family:'Bricolage Grotesque';font-weight:600;font-size:18px;color:#34196a;">{{ ct.label }}</h4>
+            <p style="margin:0;font-size:14px;color:#494550;">{{ ct.value }}</p>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====== FOOTER ====== -->
+  <footer style="background:#34196a;color:#fff;padding:clamp(40px,6vw,64px) 0 28px;">
+    <div style="max-width:1180px;margin:0 auto;padding:0 clamp(16px,4vw,24px);">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px;padding-bottom:32px;border-bottom:1px solid rgba(255,255,255,0.15);">
+        <div>
+          <div style="font-family:'Bricolage Grotesque';font-weight:800;font-size:22px;margin-bottom:14px;"><span style="color:#fff;">andWe</span><span style="color:#cbb6ff;">YO</span><span style="color:#fdb98a;">^</span><span style="color:#cbb6ff;">ga</span></div>
+          <p style="margin:0;font-size:14px;line-height:1.6;color:rgba(255,255,255,0.72);">Transform your life through the power of yoga. Join our community today.</p>
+        </div>
+        <div>
+          <h5 style="margin:0 0 14px;font-family:'Bricolage Grotesque';font-weight:600;font-size:15px;color:#fff;">Quick Links</h5>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <a href="#" style="color:rgba(255,255,255,0.72);text-decoration:none;font-size:14px;transition:color .18s;" style-hover="color:#fff;">Home</a>
+            <a href="#teach" style="color:rgba(255,255,255,0.72);text-decoration:none;font-size:14px;transition:color .18s;" style-hover="color:#fff;">Classes</a>
+            <a href="#schedule" style="color:rgba(255,255,255,0.72);text-decoration:none;font-size:14px;transition:color .18s;" style-hover="color:#fff;">Schedule</a>
+            <a href="#about" style="color:rgba(255,255,255,0.72);text-decoration:none;font-size:14px;transition:color .18s;" style-hover="color:#fff;">About</a>
+          </div>
+        </div>
+        <div>
+          <h5 style="margin:0 0 14px;font-family:'Bricolage Grotesque';font-weight:600;font-size:15px;color:#fff;">Classes</h5>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <span style="color:rgba(255,255,255,0.72);font-size:14px;">Hatha Yoga</span>
+            <span style="color:rgba(255,255,255,0.72);font-size:14px;">Vinyasa Flow</span>
+            <span style="color:rgba(255,255,255,0.72);font-size:14px;">Power Yoga</span>
+            <span style="color:rgba(255,255,255,0.72);font-size:14px;">Meditation</span>
+          </div>
+        </div>
+        <div>
+          <h5 style="margin:0 0 14px;font-family:'Bricolage Grotesque';font-weight:600;font-size:15px;color:#fff;">Follow Us</h5>
+          <div style="display:flex;gap:14px;">
+            <span style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s;" style-hover="background:rgba(255,255,255,0.24);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">photo_camera</span></span>
+            <span style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s;" style-hover="background:rgba(255,255,255,0.24);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">thumb_up</span></span>
+            <span style="width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .2s;" style-hover="background:rgba(255,255,255,0.24);"><span style="font-family:'Material Symbols Outlined';font-size:20px;">smart_display</span></span>
+          </div>
+        </div>
+      </div>
+      <p style="margin:24px 0 0;text-align:center;font-size:13px;color:rgba(255,255,255,0.6);">andWeYO^ga, a brand of Ashtanga Welltech OPC Pvt Ltd. All rights reserved. &middot; Privacy Policy &middot; Terms of Service</p>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { navOpen: false, acctOpen: false, heroIdx: 0, selectedDay: 23, filter: 'All', authed: false, signInOpen: false, keepSignedIn: true };
+
+  componentDidMount() {
+    try { if (localStorage.getItem('awy_auth') === '1') this.setState({ authed: true }); } catch(e){}
+    this._timer = setInterval(() => {
+      this.setState(s => ({ heroIdx: (s.heroIdx + 1) % 3 }));
+    }, 5000);
+  }
+  componentWillUnmount() { clearInterval(this._timer); }
+
+  scrollAvail(dir) {
+    const el = document.querySelector('[data-carousel="avail"]');
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.8, 306), behavior: 'smooth' });
+  }
+  scrollWeekly(dir) {
+    const el = document.querySelector('[data-weekly]');
+    if (!el) return;
+    el.scrollBy({ top: dir * 180, behavior: 'smooth' });
+  }
+
+  renderVals() {
+    const open = this.state.navOpen;
+    const acct = this.state.acctOpen;
+    const idx = this.state.heroIdx;
+    const authed = this.state.authed;
+    const signIn = this.state.signInOpen;
+
+    const heroData = [
+      { word: 'Evolve', cta: 'To learn and grow', icon: 'self_improvement', gradient: 'linear-gradient(120deg,#6a4a9e,#9a6a5a 60%,#c98a4e)' },
+      { word: 'Embrace', cta: 'Begin your journey', icon: 'spa', gradient: 'linear-gradient(120deg,#7a5aa6,#a86a72 55%,#d9925a)' },
+      { word: 'Flow', cta: 'Find your practice', icon: 'air', gradient: 'linear-gradient(120deg,#4b3282,#8a5266 60%,#b87a4a)' },
+    ];
+    const slides = heroData.map((h, i) => ({
+      key: 'h' + i,
+      gradient: h.gradient,
+      icon: h.icon,
+      slideStyle: 'position:absolute;inset:0;transition:opacity 1s ease;opacity:' + (i === idx ? '1' : '0') + ';',
+    }));
+    const dots = heroData.map((h, i) => ({
+      key: 'd' + i,
+      onClick: () => this.setState({ heroIdx: i }),
+      style: 'width:' + (i === idx ? '30px' : '10px') + ';height:10px;border-radius:99px;cursor:pointer;transition:all .3s;background:' + (i === idx ? '#fff' : 'rgba(255,255,255,0.5)') + ';',
+    }));
+
+    // ---- Available Today cards ----
+    const g1 = 'linear-gradient(115deg,#34196a 0%,#4b3282 64%,#8a4f63 84%,#d98a4e 100%)';
+    const g2 = 'linear-gradient(300deg,#d98a4e 0%,#8a4f63 16%,#5a3f86 44%,#34196a 100%)';
+    const g3 = 'linear-gradient(150deg,#6850a1 0%,#4b3282 66%,#8a5266 85%,#dd8a52 100%)';
+    const avBase = 'width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:\'Bricolage Grotesque\';font-weight:700;font-size:12px;flex-shrink:0;background:';
+    const imgBase = 'position:relative;height:118px;display:flex;align-items:center;justify-content:center;background:';
+    const tagBase = 'position:absolute;left:10px;top:10px;padding:4px 9px;border-radius:7px;font-size:11px;font-weight:600;';
+    const availData = [
+      { title: 'Morning Hatha Flow', time: '8:00 AM', price: '\u20b91', instructor: 'Deepti Kukreja', initials: 'DK', icon: 'self_improvement', iconColor: 'rgba(52,25,106,0.22)', img: 'linear-gradient(135deg,#d7cfe6,#c8bdd9)', tag: 'Online Drop In', tagBg: '#cfe9d1', tagColor: '#354c3a', av: g1 },
+      { title: 'Just Be', time: '4:00 PM', price: '\u20b91', instructor: 'Mudit Arun', initials: 'MA', icon: 'spa', iconColor: 'rgba(154,70,18,0.24)', img: 'linear-gradient(135deg,#e3d3c8,#d6c2b4)', tag: 'Regular batch', tagBg: '#ffdbcb', tagColor: '#793000', av: g2 },
+      { title: 'Flow and Glow', time: '5:00 PM', price: '\u20b91', instructor: 'Deepanshi', initials: 'DP', icon: 'auto_awesome', iconColor: 'rgba(53,76,58,0.28)', img: 'linear-gradient(135deg,#cdd9d0,#bcc9be)', tag: 'Regular batch', tagBg: '#cfe9d1', tagColor: '#354c3a', av: g3 },
+      { title: 'Evening Drop-In', time: '9:00 PM', price: '\u20b91', instructor: 'gdga', initials: 'GD', icon: 'nights_stay', iconColor: 'rgba(52,25,106,0.22)', img: 'linear-gradient(135deg,#d2c7e0,#bcaed6)', tag: 'Online Drop In', tagBg: '#cfe9d1', tagColor: '#354c3a', av: g1 },
+    ];
+    const availCards = availData.map((a, i) => ({
+      key: 'a' + i, title: a.title, time: a.time, price: a.price, instructor: a.instructor, initials: a.initials,
+      icon: a.icon, iconColor: a.iconColor, tag: a.tag,
+      imgStyle: imgBase + a.img + ';',
+      tagStyle: tagBase + 'background:' + a.tagBg + ';color:' + a.tagColor + ';',
+      avatarStyle: avBase + a.av + ';',
+    }));
+
+    // ---- Calendar (June 2026, week of 23 highlighted) ----
+    const prev = [26, 27, 28, 29, 30, 31];
+    const jun = []; for (let i = 1; i <= 30; i++) jun.push(i);
+    const availDots = { 24: 1, 25: 1, 28: 1, 29: 1 };
+    const soldOut = { 26: 1, 27: 1 };
+    const sel = this.state.selectedDay;
+    const wrap = 'height:38px;display:flex;align-items:center;justify-content:center;position:relative;';
+    const mk = (num, kind) => {
+      const muted = kind !== 'jun';
+      const active = kind === 'jun' && num === sel;
+      const sold = kind === 'jun' && !!soldOut[num];
+      let numStyle;
+      if (muted) numStyle = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;font-weight:400;color:#494550;opacity:0.3;background:transparent;box-shadow:none;text-decoration:none;cursor:default;';
+      else if (sold) numStyle = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;font-weight:400;color:#ba1a1a;background:transparent;box-shadow:none;text-decoration:line-through;cursor:pointer;transition:background .2s;';
+      else numStyle = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;font-weight:400;color:#1b1c1b;background:transparent;box-shadow:none;text-decoration:none;cursor:pointer;transition:background .2s;';
+      const hasDot = !active && (sold || (kind === 'jun' && !!availDots[num]));
+      const dotStyle = hasDot ? ('position:absolute;bottom:3px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:' + (sold ? '#ba1a1a' : '#34196a') + ';') : '';
+      const activeStyle = 'width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;font-weight:600;background:#34196a;color:#fff;box-shadow:0 8px 20px rgba(52,25,106,0.25);cursor:pointer;';
+      return { key: kind + num, label: String(num), wrapStyle: wrap, active, inactive: !active, activeStyle, numStyle, hasDot, dotStyle, onClick: muted ? (() => {}) : (() => this.setState({ selectedDay: num })) };
+    };
+    const days = [].concat(prev.map(n => mk(n, 'prev')), jun.map(n => mk(n, 'jun')));
+
+    // ---- Weekly schedule (grouped by day, many sessions) ----
+    const wd = [
+      { d: 'TUESDAY \u00b7 23 JUN', s: [['test Session', 'gdga', 'GD', '9:00 PM \u00b7 Online Drop In', g1, '20 open', false]] },
+      { d: 'WEDNESDAY \u00b7 24 JUN', s: [['test Session', 'Deepti Kukreja', 'DK', '3:14 PM \u00b7 Online', g2, '20 open', false], ['test Session', 'gdga', 'GD', '9:00 PM \u00b7 Online', g1, '20 open', false]] },
+      { d: 'THURSDAY \u00b7 25 JUN', s: [['test Session', 'Deepti Kukreja', 'DK', '3:14 PM \u00b7 Online', g2, '20 open', false], ['test Session', 'Mudit Arun', 'MA', '4:00 PM \u00b7 Regular', g1, 'Sold out', true], ['Buddy Up with Athlete', 'Mudit Arun', 'MA', '4:00 PM \u00b7 Regular', g3, '1 open', false], ['Just Be', 'Mudit Arun', 'MA', '4:00 PM \u00b7 Regular', g2, '1 open', false], ['Flow and Glow', 'Mudit Arun', 'MA', '5:00 PM \u00b7 Regular', g1, '20 open', false], ['test Session', 'gdga', 'GD', '9:00 PM \u00b7 Online', g3, '20 open', false]] },
+      { d: 'SUNDAY \u00b7 28 JUN', s: [['test Session', 'Deepti Kukreja', 'DK', '3:14 PM \u00b7 Online', g2, '20 open', false], ['test Session', 'David Kumar', 'DK', '4:00 PM \u00b7 Online', g1, '20 open', false]] },
+      { d: 'MONDAY \u00b7 29 JUN', s: [['test Session', 'Deepti Kukreja', 'DK', '3:14 PM \u00b7 Online', g3, '20 open', false], ['test Session', 'gdga', 'GD', '9:00 PM \u00b7 Online', g2, '20 open', false]] },
+    ];
+    const wAv = 'width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:\'Bricolage Grotesque\';font-weight:700;font-size:11px;flex-shrink:0;background:';
+    const weekly = [];
+    wd.forEach((day, di) => {
+      weekly.push({ key: 'h' + di, isHeader: true, isSession: false, label: day.d });
+      day.s.forEach((s, si) => {
+        const sold = s[6];
+        weekly.push({
+          key: 'h' + di + 's' + si, isHeader: false, isSession: true,
+          title: s[0], meta: s[3] + ' \u00b7 ' + s[1], initials: s[2],
+          titleColor: sold ? '#494550' : '#1b1c1b',
+          rowStyle: 'display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid rgba(52,25,106,0.06);' + (sold ? 'opacity:0.7;' : ''),
+          avatarStyle: wAv + (sold ? '#e4e2e0' : s[4]) + ';' + (sold ? 'color:#7a7581;' : ''),
+          badge: s[5],
+          badgeStyle: sold
+            ? 'font-size:11px;font-weight:700;color:#ba1a1a;background:rgba(186,26,26,0.08);padding:4px 10px;border-radius:99px;white-space:nowrap;'
+            : 'font-size:11px;font-weight:600;color:#354c3a;background:rgba(53,76,58,0.1);padding:4px 10px;border-radius:99px;white-space:nowrap;',
+        });
+      });
+    });
+
+    // ---- Classes (and We Teach) ----
+    const classData = [
+      { title: 'Hatha Yoga', icon: 'self_improvement', img: 'linear-gradient(135deg,#6a4a9e,#8a6aa6)', photo: '/ photo: hatha', desc: 'Perfect for beginners, Hatha Yoga focuses on basic postures and breathing techniques. This gentle practice emphasizes alignment, flexibility, and mindfulness.', price: '\u20b9500/session', soon: true, btn: 'Notify me', primary: false },
+      { title: 'Hyyocross', icon: 'sports_gymnastics', img: 'linear-gradient(135deg,#9a6a5a,#c98a4e)', photo: '/ photo: hyyocross', desc: 'A dynamic hybrid fitness experience combining yoga with cross-training elements including weights, aerobics, Zumba, and Bhangra. High energy, full body.', price: '\u20b9600/session', soon: true, btn: 'Notify me', primary: false },
+      { title: 'Meditation', icon: 'spa', img: 'linear-gradient(135deg,#4b3282,#7a5266)', photo: '/ photo: meditation', desc: 'Find inner peace and mental clarity through guided meditation practices focusing on mindfulness, breathwork, and visualization to reduce stress.', price: '\u20b9400/session', soon: true, btn: 'Notify me', primary: false },
+      { title: 'Buddy Up with Athlete', icon: 'fitness_center', img: 'linear-gradient(135deg,#34196a,#6850a1)', photo: '/ photo: buddy up', desc: 'One-on-one coaching for physical, mental and athletic excellence. Train with a dedicated mentor tailored to your personal goals.', price: '\u20b92000/session', soon: false, btn: 'Book Now', primary: true },
+    ];
+    const teachImg = 'position:relative;height:200px;display:flex;align-items:center;justify-content:center;background:';
+    const teachBtnP = 'padding:11px 22px;background:#34196a;color:#fff;border:none;border-radius:99px;font-family:\'Onest\';font-weight:700;font-size:14px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 5px 16px rgba(52,25,106,0.24);';
+    const teachBtnS = 'padding:11px 22px;background:#9a4612;color:#fff;border:none;border-radius:99px;font-family:\'Onest\';font-weight:700;font-size:14px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 5px 16px rgba(154,70,18,0.24);';
+    const classes = classData.map((c, i) => ({
+      key: 'c' + i, title: c.title, icon: c.icon, desc: c.desc, price: c.price, photo: c.photo, soon: c.soon,
+      imgStyle: teachImg + c.img + ';',
+      btn: c.btn,
+      btnStyle: c.primary ? teachBtnP : teachBtnS,
+    }));
+
+    // ---- Vibe handles ----
+    const vibeRings = ['linear-gradient(135deg,#9a4612,#34196a)', 'linear-gradient(135deg,#34196a,#6850a1)', 'linear-gradient(135deg,#6850a1,#9a4612)', 'linear-gradient(135deg,#4b3282,#8a5266)', 'linear-gradient(135deg,#8a5266,#d98a4e)'];
+    const vibeData = ['@yogini_priya', '@arjun_flows', '@mindful_maya', '@zen_rohit', '@flex_kavya', '@namaste_dev', '@warrior_anaya', '@breath_kiran', '@strong_meera', '@balance_raj'];
+    const vibes = vibeData.map((h, i) => ({
+      key: 'v' + i, handle: h,
+      ringStyle: 'width:84px;height:84px;border-radius:50%;padding:3px;background:' + vibeRings[i % vibeRings.length] + ';',
+    }));
+
+    // ---- Yogis ----
+    const yogiData = [
+      { name: 'Arjun Patel', role: 'Certified Hatha Yoga Instructor', bio: '500-hour RYT \u00b7 YCB Level 2 \u00b7 Specializes in Hatha & Vinyasa Flow \u00b7 8+ years teaching experience', ring: 'linear-gradient(135deg,#34196a,#8a5266)' },
+      { name: 'Priya Sharma', role: 'Certified Vinyasa Flow Teacher', bio: '200-hour RYT \u00b7 YCB Level 2 \u00b7 Power Yoga Specialist \u00b7 Trauma-Informed Yoga \u00b7 5+ years experience', ring: 'linear-gradient(135deg,#6850a1,#9a4612)' },
+      { name: 'Alice Kumari', role: 'Certified Wellness Coach', bio: '300-hour RYT \u00b7 YCB Level 2 \u00b7 Yin Yoga & Restorative \u00b7 Meditation Guide \u00b7 6+ years experience', ring: 'linear-gradient(135deg,#9a4612,#4b3282)' },
+    ];
+    const yogis = yogiData.map((y, i) => ({
+      key: 'y' + i, name: y.name, role: y.role, bio: y.bio,
+      ringStyle: 'width:150px;height:150px;border-radius:50%;padding:4px;margin:0 auto;background:' + y.ring + ';',
+    }));
+
+    // ---- Contacts ----
+    const contacts = [
+      { key: 'em', icon: 'mail', label: 'Email Us', value: 'mudit@andweyoga.com' },
+      { key: 'ph', icon: 'call', label: 'Call Us', value: '+91 9513022331' },
+      { key: 'hr', icon: 'schedule', label: 'Business Hours', value: '9 AM \u2013 5 PM IST' },
+      { key: 'ig', icon: 'photo_camera', label: 'Follow Us', value: '@andweyoga' },
+    ];
+
+    return {
+      availCards, days, weekly, classes, vibes, yogis, contacts,
+      toggleNav: () => this.setState(s => ({ navOpen: !s.navOpen })),
+      closeNav: () => this.setState({ navOpen: false }),
+      toggleAcct: () => this.setState(s => ({ acctOpen: !s.acctOpen })),
+      drawerTransform: open ? 'translateX(0)' : 'translateX(-100%)',
+      overlayOpacity: open ? '1' : '0',
+      overlayPointer: open ? 'auto' : 'none',
+      acctOpacity: acct ? '1' : '0',
+      acctTransform: acct ? 'translateY(0)' : 'translateY(-8px)',
+      acctPointer: acct ? 'auto' : 'none',
+      acctChevron: acct ? 'rotate(180deg)' : 'rotate(0deg)',
+      slides, dots,
+      heroWord: heroData[idx].word,
+      heroCta: heroData[idx].cta,
+      availPrev: () => this.scrollAvail(-1),
+      availNext: () => this.scrollAvail(1),
+      weeklyUp: () => this.scrollWeekly(-1),
+      weeklyDown: () => this.scrollWeekly(1),
+      bookDisplay: authed ? 'none' : 'inline-flex',
+      acctBtnDisplay: authed ? 'inline-flex' : 'none',
+      openSignIn: () => this.setState({ signInOpen: true, acctOpen: false }),
+      closeSignIn: () => this.setState({ signInOpen: false }),
+      stop: (e) => { if (e && e.stopPropagation) e.stopPropagation(); },
+      doSignIn: () => { try { localStorage.setItem('awy_auth', '1'); } catch(e){} window.location.href = 'andWeYOGa Hub.dc.html'; },
+      signOut: () => { try { localStorage.removeItem('awy_auth'); } catch(e){} this.setState({ authed: false, acctOpen: false }); },
+      toggleKeep: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.setState(s => ({ keepSignedIn: !s.keepSignedIn })); },
+      keepBoxStyle: 'flex-shrink:0;width:20px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,border-color .15s;border:1.5px solid ' + (this.state.keepSignedIn ? '#34196a' : 'rgba(75,50,130,0.3)') + ';background:' + (this.state.keepSignedIn ? '#34196a' : 'transparent') + ';',
+      keepTickDisplay: this.state.keepSignedIn ? 'inline' : 'none',
+      signInOpacity: signIn ? '1' : '0',
+      signInPointer: signIn ? 'auto' : 'none',
+      signInScale: signIn ? 'scale(1)' : 'scale(0.94)',
+    };
+  }
+}
+</script>
+</body>
+</html>

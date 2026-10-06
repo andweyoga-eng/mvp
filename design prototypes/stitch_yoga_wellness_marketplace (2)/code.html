@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>andWeYOGa - Digital Zen Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "inverse-surface": "#30302f",
+            "on-tertiary-fixed-variant": "#354c3a",
+            "tertiary-fixed-dim": "#b3cdb6",
+            "background": "#fbf9f7",
+            "outline": "#7a7581",
+            "on-primary-fixed-variant": "#503787",
+            "on-error-container": "#93000a",
+            "on-secondary-fixed": "#341100",
+            "tertiary-fixed": "#cfe9d1",
+            "primary": "#34196a",
+            "surface": "#fbf9f7",
+            "on-primary-fixed": "#24015a",
+            "secondary-fixed-dim": "#ffb692",
+            "tertiary-container": "#314736",
+            "surface-bright": "#fbf9f7",
+            "surface-container-high": "#eae8e6",
+            "surface-container-highest": "#e4e2e0",
+            "on-primary": "#ffffff",
+            "secondary": "#9a4612",
+            "surface-container-lowest": "#ffffff",
+            "on-tertiary-fixed": "#0a2011",
+            "primary-container": "#4b3282",
+            "primary-fixed": "#eaddff",
+            "inverse-on-surface": "#f2f0ee",
+            "error-container": "#ffdad6",
+            "surface-container": "#efedec",
+            "outline-variant": "#cbc4d2",
+            "error": "#ba1a1a",
+            "primary-fixed-dim": "#d1bcff",
+            "surface-variant": "#e4e2e0",
+            "surface-tint": "#6850a1",
+            "on-primary-container": "#baa0f8",
+            "on-surface-variant": "#494550",
+            "inverse-primary": "#d1bcff",
+            "secondary-container": "#fd9259",
+            "on-secondary-fixed-variant": "#793000",
+            "on-background": "#1b1c1b",
+            "surface-dim": "#dbdad8",
+            "surface-container-low": "#f5f3f1",
+            "on-surface": "#1b1c1b",
+            "on-error": "#ffffff",
+            "secondary-fixed": "#ffdbcb",
+            "on-secondary": "#ffffff",
+            "tertiary": "#1b3120",
+            "on-tertiary": "#ffffff",
+            "on-tertiary-container": "#9cb59e",
+            "on-secondary-container": "#712d00"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "xs": "4px",
+            "lg": "24px",
+            "container-max": "1280px",
+            "xxl": "64px",
+            "sm": "8px",
+            "xl": "40px",
+            "gutter": "24px",
+            "md": "16px",
+            "unit": "4px"
+          },
+          "fontFamily": {
+            "headline-lg": ["Plus Jakarta Sans"],
+            "headline-lg-mobile": ["Plus Jakarta Sans"],
+            "label-md": ["Inter"],
+            "display-lg": ["Plus Jakarta Sans"],
+            "label-sm": ["Inter"],
+            "body-md": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "body-lg": ["Inter"]
+          },
+          "fontSize": {
+            "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+            "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+            "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+            "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+            "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+            "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+            "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
+            "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(75, 50, 130, 0.1);
+    }
+    .scroll-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scroll-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .active-nav-border {
+      position: relative;
+    }
+    .active-nav-border::after {
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background-color: #34196a;
+      border-radius: 99px;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .animate-blink {
+      animation: blink 1.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen" style="overflow-x: hidden;">
+<!-- Top Navigation Shell -->
+<header class="sticky top-0 z-50 flex flex-col w-full bg-surface/70 backdrop-blur-xl px-gutter border-b border-primary/10 shadow-sm">
+<div class="flex items-center justify-between h-20 max-w-container-max mx-auto w-full">
+<div class="flex items-center gap-md">
+<img alt="andWeYOGa" class="h-10 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLtCBW2cMx5pyfSOJ1HQoKZsbmOJdnX4HNSGEuVwf2jP9F3L6M-q7M2icHFwsB_j2ljb9zj5-psNSr6R5jYQFIkwnSPrDhqJupfXDBdho-QoBXviWzONPQc2G71xf0JKM8CCSyRgAUQkoswfASXHSsdCZjNjsFXxNY9gh1Jwrp4NLSS9GJguUfKj1Tjnv-wGc91mgADp-_WWjZCgNS2MKYjT_yZdtFcfhYgH01YwA__eFR8lUK6Rbg"/>
+</div>
+<div class="hidden md:flex items-center space-x-lg">
+<nav class="flex items-center space-x-md">
+<a class="font-headline-md text-headline-md text-primary font-bold active-nav-border pb-1" href="#">Upcoming Sessions</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Calendar</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">My Emojou</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Workshops</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Trips</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Explore</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">search</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">notifications</button>
+<button class="flex items-center gap-sm bg-primary text-on-primary px-md py-sm rounded-lg font-label-md text-label-md hover:opacity-90 transition-transform active:scale-95" onclick="toggleSideNav()">
+<span class="">My Account</span>
+<span class="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+</button>
+</div>
+</div>
+<!-- Scrollable Carousel for Mobile Tabs -->
+<div class="md:hidden overflow-x-auto scroll-hide pb-sm flex space-x-lg whitespace-nowrap">
+<a class="font-label-md text-label-md text-primary font-bold border-b-2 border-primary pb-2 px-sm" href="#">Upcoming Sessions</a>
+<a class="font-label-md text-label-md text-on-surface-variant pb-2 px-sm" href="#">Calendar</a>
+<a class="font-label-md text-label-md text-on-surface-variant pb-2 px-sm" href="#">My Emojou</a>
+<a class="font-label-md text-label-md text-on-surface-variant pb-2 px-sm" href="#">Workshops &amp; Events</a>
+<a class="font-label-md text-label-md text-on-surface-variant pb-2 px-sm" href="#">Trips &amp; Treks</a>
+<a class="font-label-md text-label-md text-on-surface-variant pb-2 px-sm" href="#">Explore More</a>
+</div>
+</header>
+<!-- Side Navigation Overlay -->
+<div class="fixed inset-0 bg-black/20 backdrop-blur-sm z-[55] hidden transition-opacity duration-300" id="sidenav-overlay" onclick="toggleSideNav()"></div>
+<!-- SideNavBar -->
+<aside class="fixed right-0 top-0 h-full w-80 z-[60] p-md flex flex-col justify-between bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-2xl border-l border-primary/10 shadow-2xl transition-transform duration-300 ease-in-out translate-x-full" id="side-nav">
+<div class="flex flex-col gap-lg">
+<div class="flex items-center justify-between pb-md border-b border-primary/10">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+<img alt="andWeYOGa Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AP1WRLsBSCUUC_ue01NzYe3T5hTuZi0vpISVnsDCpg6kuZ-28UL6pmxA0TPFLeCAMr4Kn8kv4T3qrzusz7MkLOXLtXMYH1JGipGsbkJp_wZPZvxEBR_3IsRd1GyLeWy7n1_bNE_jmh4N5_nKAUqJ8xZ4bHr63NdMrAV8rIPZn9eW_SubA9RrfDnAOW5FmyC3itksKVrwpOyuk6YoITWDY_K6yARQwxrInAhAiqVRyLLRtOLCa87HSNaurA"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-md text-primary">My Account</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Manage your wellness journey</p>
+</div>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant" onclick="toggleSideNav()">arrow_forward</button>
+</div>
+<nav class="flex flex-col gap-sm">
+<a class="flex items-center gap-md p-md bg-primary-container text-on-primary-container rounded-lg font-bold" href="#">
+<span class="material-symbols-outlined">calendar_add_on</span>
+<span class="font-label-md text-label-md">Book sessions</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">monitor_heart</span>
+<span class="font-label-md text-label-md">Health Updates</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">card_membership</span>
+<span class="font-label-md text-label-md">My Subscriptions</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Payment history</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">devices</span>
+<span class="font-label-md text-label-md">Link Devices</span>
+<span class="ml-auto text-[10px] uppercase font-bold text-secondary">Soon</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-container rounded-lg transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-md text-label-md">Session History</span>
+</a>
+</nav>
+</div>
+<div class="flex flex-col gap-md pt-lg border-t border-primary/10">
+<button class="w-full flex items-center justify-center gap-sm bg-secondary text-on-secondary py-md rounded-lg font-bold hover:bg-on-secondary-container transition-colors">
+<span class="material-symbols-outlined">school</span>
+<span>Switch to Instructor</span>
+</button>
+<div class="flex flex-col gap-xs px-sm">
+<a class="flex items-center gap-sm text-on-surface-variant hover:text-primary py-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">help</span>
+<span class="font-label-sm text-label-sm">Help Center</span>
+</a>
+<a class="flex items-center gap-sm text-on-surface-variant hover:text-primary py-xs transition-colors" href="#">
+<span class="material-symbols-outlined text-[18px]">security</span>
+<span class="font-label-sm text-label-sm">Privacy</span>
+</a>
+<a class="flex items-center gap-sm text-error hover:opacity-80 py-xs transition-colors mt-md" href="#">
+<span class="material-symbols-outlined text-[18px]">logout</span>
+<span class="font-label-sm text-label-sm">Sign out</span>
+</a>
+</div>
+</div>
+</aside>
+<main class="max-w-container-max mx-auto px-gutter py-xl">
+<!-- Hero Personalization -->
+<section class="mb-lg">
+<div class="relative overflow-hidden rounded-xxl min-h-[400px] flex items-center glass-card p-xl shadow-sm">
+<div class="absolute inset-0 z-0">
+<img alt="Welcome back hero" class="w-full h-full object-cover opacity-90 scale-105 transition-transform duration-1000" src="https://lh3.googleusercontent.com/aida/AP1WRLvgn-WgrZgOrZfFssBrLiUawe6VWaAbfD0O5ti1T90LKFpu1J3vaq5KBv3UuCom4ZfO2fT_q9L-HnhiGwVQtFTJMRZ5a9fkuMk78VP1GTI3Gdns9fsYvHcRstWE1NV_7kXkW0xYUJjFZWzcuFU7qTA4a48AyFmr97mMX36AJb0khlmQRVGXsIfbStm1UbPlgNRAU3pWiGmeOEWOLDSSIMM96vD39dBCzN10j3S_UxCPwZwRRzhBJQ"/>
+<div class="absolute inset-0 bg-gradient-to-r from-background via-background/40 to-transparent"></div>
+</div>
+<div class="relative z-10 max-w-xl">
+<span class="inline-block px-md py-sm bg-primary/10 text-primary rounded-full font-label-md text-label-md mb-md">Good Morning, Priya</span>
+<h1 class="font-display-lg text-display-lg text-primary mb-md leading-tight">Your sanctuary for <br/>mindful movement.</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-lg max-w-md">Continue your path to inner balance with your scheduled Hatha session today at 10:00 AM.</p>
+<!-- Enhanced Session Detail Card -->
+<div class="bg-surface/80 backdrop-blur-md border border-primary/10 rounded-xl p-lg mb-lg shadow-sm">
+<div class="flex flex-wrap items-center gap-lg mb-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">timer</span>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant">Time</span>
+<span class="font-label-md text-on-surface">10:00 AM</span>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">person</span>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant">Instructor</span>
+<span class="font-label-md text-on-surface">Arjun Patel</span>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">self_improvement</span>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant">Type</span>
+<span class="font-label-md text-on-surface">Hatha Yoga</span>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">schedule</span>
+<div class="flex flex-col">
+<span class="text-[10px] uppercase font-bold text-on-surface-variant">Duration</span>
+<span class="font-label-md text-on-surface">60 min</span>
+</div>
+</div>
+</div>
+<div class="flex gap-md">
+<button class="relative flex-1 px-lg py-md bg-primary text-on-primary rounded-lg font-bold shadow-lg hover:translate-y-[-2px] transition-all flex items-center justify-center gap-sm overflow-hidden group">
+<span class="relative z-10">Join Today's Session</span>
+<span class="w-2 h-2 rounded-full bg-error animate-blink relative z-10"></span>
+<span class="text-[10px] uppercase tracking-tighter relative z-10">Live</span>
+</button>
+<button class="px-lg py-md bg-white/50 backdrop-blur-md border border-primary/20 text-primary rounded-lg font-bold hover:bg-white/80 transition-all">Explore Sessions</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Wellness Highlights Section -->
+<section class="mb-xxl">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+<div class="glass-card p-lg rounded-xl flex items-center gap-lg border-l-4 border-l-primary shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[28px]">local_fire_department</span>
+</div>
+<div>
+<p class="text-label-sm text-on-surface-variant uppercase font-bold tracking-wider">Calories Burnt</p>
+<h3 class="text-headline-md text-primary">1,240 <span class="text-body-md font-normal text-on-surface-variant">kcal</span></h3>
+</div>
+</div>
+<div class="glass-card p-lg rounded-xl flex items-center gap-lg border-l-4 border-l-secondary shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[28px]">calendar_month</span>
+</div>
+<div>
+<p class="text-label-sm text-on-surface-variant uppercase font-bold tracking-wider">Sessions Attended</p>
+<h3 class="text-headline-md text-primary">18 <span class="text-body-md font-normal text-on-surface-variant">this month</span></h3>
+</div>
+</div>
+<div class="glass-card p-lg rounded-xl flex items-center gap-lg border-l-4 border-l-tertiary-container shadow-sm hover:shadow-md transition-shadow">
+<div class="w-12 h-12 bg-tertiary-fixed rounded-full flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined text-[28px]">stars</span>
+</div>
+<div>
+<p class="text-label-sm text-on-surface-variant uppercase font-bold tracking-wider">Wellness Streak</p>
+<h3 class="text-headline-md text-primary">4 <span class="text-body-md font-normal text-on-surface-variant">days</span></h3>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Grid Section: Upcoming & Instructors -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-lg mb-xxl">
+<!-- Main Content Area: Upcoming Sessions (8 columns) -->
+<div class="lg:col-span-8 flex flex-col gap-lg">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<h2 class="font-headline-lg text-headline-lg text-primary">Upcoming Sessions</h2>
+<p class="text-label-md text-on-surface-variant">Handpicked sessions to match your progress</p>
+</div>
+<div class="flex gap-md">
+<button class="flex items-center gap-sm text-primary font-bold hover:underline">
+<span class="material-symbols-outlined text-[18px]">event_available</span>
+<span>View All Booked Sessions</span>
+</button>
+<button class="flex items-center gap-sm text-primary font-bold">
+<span>Explore All</span>
+<span class="material-symbols-outlined">arrow_right_alt</span>
+</button>
+</div>
+</div>
+<!-- Session Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Session Card 1 -->
+<div class="glass-card rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-500">
+<div class="relative h-48 overflow-hidden">
+<img alt="Hatha Yoga Session" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida/AP1WRLvp0B4xDWoIffkkCxA43BtCgI6Rs9uiyNlSM4p4SiO7hPLfPmCH_dao0wUOxtJmtQ-xfVOCR0W2DewwYTElWnncWD12gLGDG4egf5wcXtrAheK0qXgFi6nbiTZr7eDnPozdogQfb-f3j3nbeNTdVoQo-b7qlDnCQjnwPvj9u3uM7AIxROOReQH4sQ0h_qxUsj9MBvglOQ89zTFcz-wYbqTvhQzp7zJuz1csDmW_mPEHwW5edZgBaQ"/>
+<div class="absolute top-md left-md bg-tertiary-fixed text-on-tertiary-fixed-variant px-sm py-xs rounded font-label-sm text-label-sm">Beginner Friendly</div>
+</div>
+<div class="p-lg">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary">Morning Hatha flow</h3>
+<span class="text-primary font-bold">$15</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant mb-lg">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span class="text-label-md">60 min</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">person</span>
+<span class="text-label-md">Arjun P.</span>
+</div>
+</div>
+<button class="w-full py-sm border-2 border-primary/20 text-primary rounded-lg font-bold hover:bg-primary hover:text-white transition-all">Book Spot</button>
+</div>
+</div>
+<!-- Session Card 2 -->
+<div class="glass-card rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-500">
+<div class="relative h-48 overflow-hidden">
+<img alt="Hydrocross Session" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida/AP1WRLvkewJKdKn6mIzO7UFK2uYQNUpssy6kxQeSYLe_qWY9lQSlL4NOOYg-HPDE-yVs1szvWudPKJfHYLtbG6jSDbecxL3BZU7nzSCnkxo8TpCJTNyEHlfOZ-KJR8No7V16tpmYkywviMhu-hixRXr9oWvAouCmAaQjGCZjkO8B_eakW2Z4H-Z3VRPAOn5sBcmnKO_jYeFmtPfsBbCDruJ7Jzh-N208Y28rSsQHTDeNFOK6r-Cw0S_kuQ"/>
+<div class="absolute top-md left-md bg-secondary-fixed text-on-secondary-fixed-variant px-sm py-xs rounded font-label-sm text-label-sm">High Intensity</div>
+</div>
+<div class="p-lg">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary">Deep Core Hydro</h3>
+<span class="text-primary font-bold">$22</span>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant mb-lg">
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span class="text-label-md">45 min</span>
+</div>
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">person</span>
+<span class="text-label-md">Alice K.</span>
+</div>
+</div>
+<button class="w-full py-sm border-2 border-primary/20 text-primary rounded-lg font-bold hover:bg-primary hover:text-white transition-all">Book Spot</button>
+</div>
+</div>
+<!-- Session Card 3 (Promoted Event) -->
+<div class="glass-card rounded-xl overflow-hidden group hover:shadow-xl transition-all duration-500 md:col-span-2">
+<div class="flex flex-col md:flex-row h-full">
+<div class="md:w-1/2 relative h-48 md:h-auto overflow-hidden">
+<img alt="Sound Therapy Session" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" src="https://lh3.googleusercontent.com/aida/AP1WRLtNZBXoWc2Sx8qI9oBLG0stu4FJ7GikjfKTGrvlldgC_tmibQu5f95V7P4sxHUsTA66Dw-cSX1Wjn2D3yt8Is0vp1LWmnMjAsG40XoriQgEqSbKXEvVQI3Q5ypTsa_wXupcJb4P-rep-zhIzeUGn8Av63VnumDM5cavHjDskYGASTi2KrDpDZoqkzm65g4oCTFCfj3_Q6ocJgxBIWnYN2vOEi3Lp6rtkZkkkSsx-LlwmTE8OF0l"/>
+</div>
+<div class="md:w-1/2 p-lg flex flex-col justify-center">
+<span class="text-secondary font-bold text-label-sm mb-xs">POPULAR EVENT</span>
+<h3 class="font-headline-md text-headline-md text-primary mb-sm">Tibetan Sound Bath</h3>
+<p class="text-on-surface-variant mb-lg line-clamp-2">A profound meditative experience using resonance to restore harmony to your nervous system. Limited spots available.</p>
+<div class="flex items-center gap-lg mb-lg">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+<span class="font-label-md">This Saturday</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">location_on</span>
+<span class="font-label-md">Main Studio</span>
+</div>
+</div>
+<button class="px-xl py-md bg-primary text-on-primary rounded-lg font-bold hover:shadow-lg transition-all w-fit">Reserve Private Experience</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar Area: Featured Instructors (4 columns) -->
+<div class="lg:col-span-4 flex flex-col gap-lg">
+<h2 class="font-headline-lg text-headline-lg text-primary">Your Mentors</h2>
+<div class="flex flex-col gap-md">
+<!-- Instructor Card 1 -->
+<div class="glass-card p-md rounded-xl flex items-center gap-md hover:translate-x-2 transition-transform duration-300 cursor-pointer">
+<div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/20">
+<img alt="Priya Sharma" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AP1WRLsBSCUUC_ue01NzYe3T5hTuZi0vpISVnsDCpg6kuZ-28UL6pmxA0TPFLeCAMr4Kn8kv4T3qrzusz7MkLOXLtXMYH1JGipGsbkJp_wZPZvxEBR_3IsRd1GyLeWy7n1_bNE_jmh4N5_nKAUqJ8xZ4bHr63NdMrAV8rIPZn9eW_SubA9RrfDnAOW5FmyC3itksKVrwpOyuk6YoITWDY_K6yARQwxrInAhAiqVRyLLRtOLCa87HSNaurA"/>
+</div>
+<div class="flex-1">
+<h4 class="font-headline-md text-headline-md text-primary !text-[18px]">Priya Sharma</h4>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Advanced Vinyasa Specialist</p>
+</div>
+<div class="px-sm py-xs bg-tertiary-fixed rounded-full text-on-tertiary-fixed-variant text-[10px] font-bold">4.9 ★</div>
+</div>
+<!-- Instructor Card 2 -->
+<div class="glass-card p-md rounded-xl flex items-center gap-md hover:translate-x-2 transition-transform duration-300 cursor-pointer">
+<div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/20">
+<img alt="Arjun Patel" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AP1WRLvWSg5O0PFWRFD2w1Af0yEqbHRWz-kJWq5z22gqZ3NANak3v3T57pRDbfgykLYViB1X_GFRI_jW-tiWRv7ozGFYSP5EexVL5RtyTF1aVmBAg4SZAoJV8Haqgj0UOTPedJKAbHRramLEvUdUsQ37R7be4eEZesJbPEdgTPT9vFeAzwojPWnnKznajl6626hxL47nIIe3Qij1QwuQO6BzUIjO5sco_bp_t9leeWqo2BVijGFwVwBcpQ"/>
+</div>
+<div class="flex-1">
+<h4 class="font-headline-md text-headline-md text-primary !text-[18px]">Arjun Patel</h4>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Breathwork &amp; Meditation</p>
+</div>
+<div class="px-sm py-xs bg-tertiary-fixed rounded-full text-on-tertiary-fixed-variant text-[10px] font-bold">5.0 ★</div>
+</div>
+<!-- Instructor Card 3 -->
+<div class="glass-card p-md rounded-xl flex items-center gap-md hover:translate-x-2 transition-transform duration-300 cursor-pointer">
+<div class="w-16 h-16 rounded-full overflow-hidden border-2 border-primary/20">
+<img alt="Allice Kumari" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AP1WRLsAIzyvUbtd15dGd5Xw3vzYYybqdq5nHe5k4ox1N1Zo7gTVPMGkzvFacsDhcLM5CEcEiGmPSY5gEGI3CpNXiTj7PfBqQuDoy65bvfGFWkiNJpzLO_IhDIRIcBs4_6-tfstZsNnbLUr3Yfq5l3xAFw-ENGZvNJyWbJwpjHG2EyMb4r3faQfkejfRINuC1PoDLDa4lp9laKXX9T73rIAwqnEgSMJnUKoLmMRpNm-yAReYkT-35CJ39Q"/>
+</div>
+<div class="flex-1">
+<h4 class="font-headline-md text-headline-md text-primary !text-[18px]">Allice Kumari</h4>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Hatha &amp; Wellness Coach</p>
+</div>
+<div class="px-sm py-xs bg-tertiary-fixed rounded-full text-on-tertiary-fixed-variant text-[10px] font-bold">4.8 ★</div>
+</div>
+</div>
+<!-- Booked Sessions Quick View -->
+<div class="mt-lg p-xl rounded-xxl bg-primary-container text-on-primary-container relative overflow-hidden">
+<div class="relative z-10">
+<h3 class="font-headline-md text-headline-md mb-sm">Your Booked Sessions</h3>
+<p class="font-body-md text-body-md opacity-80 mb-lg">You have 2 sessions scheduled for later this week.</p>
+<div class="flex flex-col gap-sm">
+<div class="flex items-center justify-between p-sm bg-white/10 rounded-lg border border-white/10">
+<div class="flex flex-col">
+<span class="text-label-sm font-bold">Vinyasa Flow</span>
+<span class="text-[10px] opacity-70">Thu, 6:00 PM</span>
+</div>
+<button class="material-symbols-outlined text-[18px]">arrow_forward</button>
+</div>
+<div class="flex items-center justify-between p-sm bg-white/10 rounded-lg border border-white/10">
+<div class="flex flex-col">
+<span class="text-label-sm font-bold">Kundalini Awakening</span>
+<span class="text-[10px] opacity-70">Sat, 11:30 AM</span>
+</div>
+<button class="material-symbols-outlined text-[18px]">arrow_forward</button>
+</div>
+</div>
+</div>
+<div class="absolute -right-8 -bottom-8 opacity-20 transform rotate-12">
+<span class="material-symbols-outlined text-[160px]" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Action: Workshops & Explorations (Coming Soon Sections) -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-lg pb-xxl">
+<div class="glass-card p-xl rounded-xxl flex flex-col justify-between group">
+<div>
+<div class="flex items-center justify-between mb-lg">
+<div class="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">explore</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary bg-secondary/10 px-sm py-xs rounded uppercase tracking-widest font-bold">Coming Soon</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-primary mb-md">Workshops &amp; Events</h3>
+<p class="text-on-surface-variant font-body-md">Curated intensive sessions for deep technical mastery and spiritual growth. Stay tuned for our inaugural schedule.</p>
+</div>
+<button class="mt-xl text-primary font-bold flex items-center gap-sm group-hover:gap-md transition-all">
+<span>Get Notified</span>
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<div class="glass-card p-xl rounded-xxl flex flex-col justify-between group">
+<div>
+<div class="flex items-center justify-between mb-lg">
+<div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">hiking</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary bg-primary/10 px-sm py-xs rounded uppercase tracking-widest font-bold">Coming Soon</span>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-primary mb-md">Trips &amp; Treks</h3>
+<p class="text-on-surface-variant font-body-md">Immersive wellness retreats in the world's most serene natural landscapes. Launching this summer.</p>
+</div>
+<button class="mt-xl text-primary font-bold flex items-center gap-sm group-hover:gap-md transition-all">
+<span>Early Access</span>
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Floating Action for Quick Book -->
+<button class="fixed bottom-lg right-lg w-16 h-16 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-transform z-40">
+<span class="material-symbols-outlined text-[32px]">add</span>
+</button>
+<script>
+    function toggleSideNav() {
+      const sideNav = document.getElementById('side-nav');
+      const overlay = document.getElementById('sidenav-overlay');
+      const isOpen = !sideNav.classList.contains('translate-x-full');
+
+      if (isOpen) {
+        sideNav.classList.add('translate-x-full');
+        overlay.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+      } else {
+        sideNav.classList.remove('translate-x-full');
+        overlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+
+    // Interactive Hover effect for glass cards
+    document.querySelectorAll('.glass-card').forEach(card => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        card.style.setProperty('--mouse-x', `${x}px`);
+        card.style.setProperty('--mouse-y', `${y}px`);
+      });
+    });
+  </script>
+</body></html>
