@@ -12,7 +12,7 @@ import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
   Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
-  GalleryHorizontalEnd, Apple, Package, Activity
+  GalleryHorizontalEnd, Apple, Package, Activity, Megaphone, IndianRupee, Calculator
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { waitlistMarketingLabel } from "@shared/waitlist";
@@ -64,6 +64,10 @@ import { AdminHealthMaterialsPanel } from "@/components/admin/health-materials-p
 import { AdminFuelMemberDialog } from "@/components/admin/fuel-member-dialog";
 import { AdminFuelContentPanel } from "@/components/admin/fuel-content-panel";
 import { AndWeProgressPanel } from "@/components/admin/andwe-progress-panel";
+import {
+  ComingSoonPanel,
+  GtmOperationsPanel,
+} from "@/components/admin/gtm-operations-panel";
 import { resolveHealthMediaLinks, type HealthMediaLink } from "@shared/health-media-links";
 import {
   getInstructorStatusLabel,
@@ -686,6 +690,15 @@ export default function AdminDashboard() {
             </TabsTrigger>
             <TabsTrigger value="admin-profile" className={adminNavTabTrigger}>
               <Shield className="w-4 h-4 mr-2 shrink-0" /> Admin Profile
+            </TabsTrigger>
+            <TabsTrigger value="gtm-operations" className={adminNavTabTrigger}>
+              <Megaphone className="w-4 h-4 mr-2 shrink-0" /> GTM Operations
+            </TabsTrigger>
+            <TabsTrigger value="sales-revenue" className={adminNavTabTrigger}>
+              <IndianRupee className="w-4 h-4 mr-2 shrink-0" /> Sales and Revenue Management
+            </TabsTrigger>
+            <TabsTrigger value="ca-corner" className={adminNavTabTrigger}>
+              <Calculator className="w-4 h-4 mr-2 shrink-0" /> CA Corner
             </TabsTrigger>
           </TabsList>
 
@@ -1449,6 +1462,24 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="gtm-operations">
+            <GtmOperationsPanel />
+          </TabsContent>
+
+          <TabsContent value="sales-revenue">
+            <ComingSoonPanel
+              title="Sales and Revenue Management"
+              description="Sales pipelines, revenue dashboards, and related operations."
+            />
+          </TabsContent>
+
+          <TabsContent value="ca-corner">
+            <ComingSoonPanel
+              title="CA Corner"
+              description="Chartered accountant tools and financial reporting."
+            />
           </TabsContent>
         </Tabs>
       </main>

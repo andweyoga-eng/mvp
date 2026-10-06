@@ -128,6 +128,8 @@ app.use((req, res, next) => {
     try {
       const { ensureDefaultPlatformSettings } = await import("./platform-settings");
       await ensureDefaultPlatformSettings();
+      const { ensureDefaultHeroCtaConfig } = await import("./hero-cta");
+      await ensureDefaultHeroCtaConfig();
     } catch (err) {
       console.error("[startup] Could not seed default platform settings:", err);
     }

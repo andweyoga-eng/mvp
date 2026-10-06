@@ -40,6 +40,7 @@ import {
   listPlatformSettings,
   ensureDefaultPlatformSettings,
 } from "./platform-settings";
+import { getHeroCtaConfig, setHeroCtaConfig } from "./hero-cta";
 import { getAdminBootstrapConfig, normalizeAdminEmail, normalizeAdminPassword } from "./admin-bootstrap";
 import { checkDatabaseHealth } from "./db-health";
 import {
@@ -1456,6 +1457,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : null,
     };
   }
+
+  // Public hero CTA config for the marketing home carousel
+  app.get("/api/hero-cta", async (_req, res) => {
+    try {
+      const config = await getHeroCtaConfig();
+      res.json(config);
+    } catch (error) {
+      console.error("[hero-cta] GET public failed:", error);
+      res.status(500).json({ message: "Failed to load hero CTA config" });
+    }
+  });
+
+  app.get("/api/admin/gtm/hero-cta", requireAdminAuth, async (_req, res) => {
+    try {
+      const config = await getHeroCtaConfig();
+      res.json(config);
+    } catch (error) {
+      console.error("[hero-cta] GET admin failed:", error);
+      res.status(500).json({ message: "Failed to load hero CTA config" });
+    }
+  });
+
+  app.put("/api/admin/gtm/hero-cta", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+    try {
+      if (!req.admin?.id) {
+        return res.status(401).json({ message: "Admin authentication required" });
+      }
+      const config = await setHeroCtaConfig(req.body, req.admin.id, {
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null,
+      });
+      res.json(config);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid hero CTA config",
+          errors: error.errors,
+        });
+      }
+      console.error("[hero-cta] PUT admin failed:", error);
+      res.status(500).json({ message: "Failed to save hero CTA config" });
+    }
+  });
 
   app.get("/api/admin/platform-settings", requireSuperAdminAuth, async (_req, res) => {
     try {

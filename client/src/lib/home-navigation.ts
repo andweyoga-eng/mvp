@@ -1,4 +1,6 @@
 import { navigate } from "wouter/use-browser-location";
+import type { HeroSlideCta } from "@shared/hero-cta";
+import { DEFAULT_HERO_CTA_SECTION } from "@shared/hero-cta";
 
 const HEADER_HEIGHT = 76;
 
@@ -40,6 +42,37 @@ export function navigateMemberHomeOrMarketing(isSignedIn: boolean): void {
     return;
   }
   navigateToHomeSection("home");
+}
+
+/** Activate a hero CTA (home section or custom URL/path). */
+export function activateHeroCta(cta: HeroSlideCta): void {
+  if (cta.mode === "section") {
+    navigateToHomeSection(cta.sectionId || DEFAULT_HERO_CTA_SECTION);
+    return;
+  }
+
+  const url = (cta.customUrl || "").trim();
+  if (!url) {
+    navigateToHomeSection(DEFAULT_HERO_CTA_SECTION);
+    return;
+  }
+
+  if (/^https?:\/\//i.test(url)) {
+    window.location.assign(url);
+    return;
+  }
+
+  if (url.startsWith("#")) {
+    navigateToHomeSection(url.slice(1) || DEFAULT_HERO_CTA_SECTION);
+    return;
+  }
+
+  if (url.startsWith("/")) {
+    navigate(url);
+    return;
+  }
+
+  navigateToHomeSection(url);
 }
 
 /** Apply `/#section` scroll after home mounts (e.g. from AWY menu on another page). */

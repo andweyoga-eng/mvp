@@ -1,12 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import embraceImage from "@assets/embrace-carousel.png";
 import experienceImage from "@assets/experience_1756460037530.jpg";
 import expressImage from "@assets/express_1756460037530.jpg";
 import evolveImage from "@assets/evolve-carousel.png";
 import elevateImage from "@assets/elevate-carousel.png"; // To Elevate — image behind gradient
 import becomeImage from "@assets/become-carousel.png"; // To Become — full color, image behind gradient
-import { navigateToHomeSection } from "@/lib/home-navigation";
+import { activateHeroCta } from "@/lib/home-navigation";
 import { cn } from "@/lib/utils";
+import {
+  defaultHeroCtaConfig,
+  resolveHeroSlideCta,
+  type HeroCtaConfig,
+} from "@shared/hero-cta";
 
 /**
  * Each slide plays a 3-phrase word-trail. The first phrase is always
@@ -52,12 +58,31 @@ const slides = [
 const PHRASE_DURATION_MS = 2200;
 const TRAIL_HOLD_MS = 1000;
 const PHRASES_PER_SLIDE = 3;
+const SWIPE_THRESHOLD_PX = 48;
+const DEFAULT_CTA_CONFIG = defaultHeroCtaConfig();
 
 export default function HeroCarousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [phraseStep, setPhraseStep] = useState(0);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const didSwipe = useRef(false);
+
+  const { data: ctaConfig } = useQuery<HeroCtaConfig>({
+    queryKey: ["/api/hero-cta"],
+    queryFn: async () => {
+      const res = await fetch("/api/hero-cta");
+      if (!res.ok) throw new Error("Failed to load hero CTA");
+      return res.json();
+    },
+    staleTime: 60_000,
+    placeholderData: DEFAULT_CTA_CONFIG,
+  });
+
+  const config = ctaConfig ?? DEFAULT_CTA_CONFIG;
+  const activeCta = resolveHeroSlideCta(config, currentSlide);
 
   // Auto-advance — each slide stays long enough to play its full word-trail.
+  // Restarted whenever currentSlide changes (including swipe / dots).
   useEffect(() => {
     const duration = PHRASE_DURATION_MS * PHRASES_PER_SLIDE + TRAIL_HOLD_MS;
     const timeout = setTimeout(() => {
@@ -78,8 +103,61 @@ export default function HeroCarousel() {
 
   const slide = slides[currentSlide];
 
+  function goToSlide(index: number) {
+    setCurrentSlide(((index % slides.length) + slides.length) % slides.length);
+  }
+
+  function goNext() {
+    goToSlide(currentSlide + 1);
+  }
+
+  function goPrev() {
+    goToSlide(currentSlide - 1);
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+    didSwipe.current = false;
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    const start = pointerStart.current;
+    pointerStart.current = null;
+    if (!start) return;
+
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+
+    if (Math.abs(dx) >= SWIPE_THRESHOLD_PX && Math.abs(dx) > Math.abs(dy)) {
+      didSwipe.current = true;
+      if (dx < 0) goNext();
+      else goPrev();
+    }
+  }
+
+  function onHeroActivate(e: MouseEvent) {
+    if (didSwipe.current) {
+      didSwipe.current = false;
+      return;
+    }
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("[data-hero-no-navigate]")) return;
+    activateHeroCta(activeCta);
+  }
+
   return (
-    <section id="home" className="relative h-[clamp(520px,82vh,760px)] overflow-hidden">
+    <section
+      id="home"
+      className="relative h-[clamp(520px,82vh,760px)] cursor-pointer overflow-hidden touch-pan-y"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        pointerStart.current = null;
+      }}
+      onClick={onHeroActivate}
+      data-testid="hero-carousel"
+    >
       {slides.map((s, index) => (
         <div
           key={s.word}
@@ -93,6 +171,7 @@ export default function HeroCarousel() {
             role="presentation"
             className="h-full w-full object-cover"
             data-testid={`carousel-image-${index}`}
+            draggable={false}
           />
           <div className="absolute inset-0 gradient-overlay" />
         </div>
@@ -123,20 +202,24 @@ export default function HeroCarousel() {
         </h1>
         <button
           type="button"
-          onClick={() => navigateToHomeSection("teach")}
+          data-hero-no-navigate
+          onClick={(e) => {
+            e.stopPropagation();
+            activateHeroCta(activeCta);
+          }}
           className="inline-flex items-center gap-2.5 rounded-full px-9 py-4 text-[clamp(1rem,1.6vw,1.1875rem)] font-bold text-white shadow-dz-hero transition hover:-translate-y-0.5"
           style={{ background: "var(--gradient-cta)" }}
           data-testid="hero-cta-schedule"
         >
-          Find Your Flow
+          {activeCta.label}
         </button>
 
-        <div className="mt-8 flex gap-2.5">
+        <div className="mt-8 flex gap-2.5" data-hero-no-navigate onClick={(e) => e.stopPropagation()}>
           {slides.map((_, index) => (
             <button
               key={index}
               type="button"
-              onClick={() => setCurrentSlide(index)}
+              onClick={() => goToSlide(index)}
               className={`h-2.5 w-2.5 rounded-full transition-colors ${
                 index === currentSlide ? "bg-white" : "bg-white/50 hover:bg-white/75"
               }`}
