@@ -6,7 +6,7 @@ import expressImage from "@assets/express_1756460037530.jpg";
 import evolveImage from "@assets/evolve-carousel.png";
 import elevateImage from "@assets/elevate-carousel.png"; // To Elevate — image behind gradient
 import becomeImage from "@assets/become-carousel.png"; // To Become — full color, image behind gradient
-import { activateHeroCta } from "@/lib/home-navigation";
+import { activateHeroCta, heroCtaTargetsSchedule } from "@/lib/home-navigation";
 import { cn } from "@/lib/utils";
 import {
   defaultHeroCtaConfig,
@@ -61,7 +61,12 @@ const PHRASES_PER_SLIDE = 3;
 const SWIPE_THRESHOLD_PX = 48;
 const DEFAULT_CTA_CONFIG = defaultHeroCtaConfig();
 
-export default function HeroCarousel() {
+interface HeroCarouselProps {
+  /** Opens sign-in when the active slide's button is set to Schedule. */
+  onScheduleSignIn?: () => void;
+}
+
+export default function HeroCarousel({ onScheduleSignIn }: HeroCarouselProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [phraseStep, setPhraseStep] = useState(0);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -136,6 +141,14 @@ export default function HeroCarousel() {
     }
   }
 
+  function runActiveCta() {
+    if (heroCtaTargetsSchedule(activeCta)) {
+      onScheduleSignIn?.();
+      return;
+    }
+    activateHeroCta(activeCta);
+  }
+
   function onHeroActivate(e: MouseEvent) {
     if (didSwipe.current) {
       didSwipe.current = false;
@@ -143,7 +156,7 @@ export default function HeroCarousel() {
     }
     const target = e.target as HTMLElement | null;
     if (target?.closest("[data-hero-no-navigate]")) return;
-    activateHeroCta(activeCta);
+    runActiveCta();
   }
 
   return (
@@ -205,7 +218,7 @@ export default function HeroCarousel() {
           data-hero-no-navigate
           onClick={(e) => {
             e.stopPropagation();
-            activateHeroCta(activeCta);
+            runActiveCta();
           }}
           className="inline-flex items-center gap-2.5 rounded-full px-9 py-4 text-[clamp(1rem,1.6vw,1.1875rem)] font-bold text-white shadow-dz-hero transition hover:-translate-y-0.5"
           style={{ background: "var(--gradient-cta)" }}

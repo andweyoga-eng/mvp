@@ -11,6 +11,7 @@ import {
   parseHeroCtaConfig,
   resolveHeroSlideCta,
 } from "../shared/hero-cta.ts";
+import { heroCtaTargetsSchedule } from "../client/src/lib/home-navigation.ts";
 
 const root = join(import.meta.dirname, "..");
 
@@ -85,6 +86,36 @@ describe("hero CTA wiring", () => {
     assert.doesNotMatch(
       source,
       /isSuperAdmin \? \(\s*<TabsTrigger value="gtm-operations"/,
+    );
+  });
+
+  it("schedule section CTA is the sign-in path, other sections still navigate", () => {
+    assert.equal(
+      heroCtaTargetsSchedule({
+        label: "Schedule",
+        mode: "section",
+        sectionId: "schedule",
+        customUrl: "",
+      }),
+      true,
+    );
+    assert.equal(
+      heroCtaTargetsSchedule({
+        label: "Find Your Flow",
+        mode: "section",
+        sectionId: "teach",
+        customUrl: "",
+      }),
+      false,
+    );
+    assert.equal(
+      heroCtaTargetsSchedule({
+        label: "Site",
+        mode: "url",
+        sectionId: "schedule",
+        customUrl: "https://example.com",
+      }),
+      false,
     );
   });
 

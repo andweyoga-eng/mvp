@@ -26,6 +26,9 @@ import { clearMemberLandingCheck } from "@/lib/member-landing";
 
 interface NavigationProps {
   onBookingClick: () => void;
+  /** Lets the home page open the same Book/Signup dialog from other buttons. */
+  signInOpen?: boolean;
+  onSignInOpenChange?: (open: boolean) => void;
 }
 
 const DRAWER_LINKS = [
@@ -37,10 +40,16 @@ const DRAWER_LINKS = [
   { id: "ally", label: "and We Meet", accent: "Coach" },
 ] as const;
 
-export default function Navigation({ onBookingClick }: NavigationProps) {
+export default function Navigation({
+  onBookingClick,
+  signInOpen: signInOpenProp,
+  onSignInOpenChange,
+}: NavigationProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
-  const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
+  const [signInOpenInternal, setSignInOpenInternal] = useState(false);
+  const signInOpen = onSignInOpenChange ? Boolean(signInOpenProp) : signInOpenInternal;
+  const setSignInOpen = onSignInOpenChange ?? setSignInOpenInternal;
   const [quitOpen, setQuitOpen] = useState(false);
   const [quitSaving, setQuitSaving] = useState(false);
   const { user, isLoading: authLoading, logout, updateProfile } = useAuth();
@@ -197,13 +206,13 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
                 <Button
                   className="rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
                   data-testid="nav-book-session"
-                  onClick={() => setBookingAuthOpen(true)}
+                  onClick={() => setSignInOpen(true)}
                 >
                   Book/Signup
                 </Button>
                 <AuthChoiceDialog
-                  open={bookingAuthOpen}
-                  onOpenChange={setBookingAuthOpen}
+                  open={signInOpen}
+                  onOpenChange={setSignInOpen}
                   onContinueAsGuest={onBookingClick}
                 />
               </>
@@ -256,7 +265,7 @@ export default function Navigation({ onBookingClick }: NavigationProps) {
             <Button
               className="w-full rounded-full bg-primary font-bold text-primary-foreground"
               onClick={() => {
-                setBookingAuthOpen(true);
+                setSignInOpen(true);
                 setIsDrawerOpen(false);
               }}
               data-testid="mobile-nav-book-signup"

@@ -59,6 +59,7 @@ export default function Home() {
   const [bookingIntent, setBookingIntent] = useState<BookingIntent>({});
   const [resumeBookingId, setResumeBookingId] = useState<string | null>(null);
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
+  const [signInOpen, setSignInOpen] = useState(false);
   // null = consent status not yet known; enforced as a first-class Home gate.
   const [consentPending, setConsentPending] = useState<boolean | null>(null);
   const resumedBookingRef = useRef(false);
@@ -242,10 +243,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-dz-surface pb-24 md:pb-0">
-      <Navigation onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })} />
-      <HeroCarousel />
+      <Navigation
+        onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })}
+        signInOpen={signInOpen}
+        onSignInOpenChange={setSignInOpen}
+      />
+      <HeroCarousel onScheduleSignIn={() => setSignInOpen(true)} />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
-      <ClassesSection onBookingClick={(intent) => handleBookingOpen(intent)} />
+      <ClassesSection
+        onBookingClick={(intent) => handleBookingOpen(intent)}
+        onSignInRequest={() => setSignInOpen(true)}
+      />
       <CareSection />
       <VibeSection />
       <BelieveSection />

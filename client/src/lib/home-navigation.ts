@@ -44,6 +44,11 @@ export function navigateMemberHomeOrMarketing(isSignedIn: boolean): void {
   navigateToHomeSection("home");
 }
 
+/** True when the hero button is set to the home Schedule section. */
+export function heroCtaTargetsSchedule(cta: HeroSlideCta): boolean {
+  return cta.mode === "section" && (cta.sectionId || DEFAULT_HERO_CTA_SECTION) === "schedule";
+}
+
 /** Activate a hero CTA (home section or custom URL/path). */
 export function activateHeroCta(cta: HeroSlideCta): void {
   if (cta.mode === "section") {

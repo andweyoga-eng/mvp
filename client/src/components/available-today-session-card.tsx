@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
 import { FlexiInfoBadge } from "@/components/flexi-info-badge";
 
+export type AvailableTodayLayout = "carousel" | "feature" | "pair";
+
 export interface AvailableTodaySessionCardProps {
   sessionId: string;
   className: string;
@@ -15,6 +17,8 @@ export interface AvailableTodaySessionCardProps {
   intensityLabel?: string;
   strictNoTo?: string | null;
   flexiEnabled?: boolean;
+  /** carousel: fixed card in a sideways row. feature: one session fills the row. pair: two sessions share the row. */
+  layout?: AvailableTodayLayout;
   onBook: (sessionId: string) => void;
 }
 
@@ -37,19 +41,28 @@ export function AvailableTodaySessionCard({
   intensityLabel,
   strictNoTo,
   flexiEnabled,
+  layout = "carousel",
   onBook,
 }: AvailableTodaySessionCardProps) {
+  const feature = layout === "feature";
   return (
     <div
+      data-layout={layout}
       className={cn(
-        "flex w-[286px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-transparent bg-muted transition",
+        "overflow-hidden rounded-2xl border border-transparent bg-muted transition",
+        layout === "carousel" && "flex w-[286px] shrink-0 snap-start flex-col",
+        feature && "flex w-full flex-col md:flex-row",
+        layout === "pair" && "flex w-full min-w-0 flex-1 flex-col",
         soldOut
           ? "opacity-80 saturate-[0.85]"
           : "hover:border-primary/15 hover:bg-white hover:shadow-dz-ambient",
       )}
     >
       <div
-        className="relative flex h-32 shrink-0 items-center justify-center bg-gradient-to-br from-primary/20 to-dz-secondary/30"
+        className={cn(
+          "relative flex shrink-0 items-center justify-center bg-gradient-to-br from-primary/20 to-dz-secondary/30",
+          feature ? "h-44 md:h-auto md:min-h-[240px] md:w-[min(42%,360px)]" : "h-32",
+        )}
         style={
           imageUrl
             ? {
@@ -93,7 +106,8 @@ export function AvailableTodaySessionCard({
         />
         <Button
           className={cn(
-            "mt-auto w-full rounded-xl font-semibold",
+            "mt-auto rounded-xl font-semibold",
+            feature ? "w-full md:w-fit md:min-w-[10rem] md:px-8" : "w-full",
             soldOut
               ? "cursor-not-allowed bg-muted text-muted-foreground shadow-none hover:bg-muted"
               : "bg-primary text-white shadow-dz-primary hover:bg-primary/90",

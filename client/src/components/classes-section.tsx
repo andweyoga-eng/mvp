@@ -27,13 +27,15 @@ import { formatProfileWhatsapp } from "@shared/waitlist";
 
 interface ClassesSectionProps {
   onBookingClick: (intent?: BookingIntent) => void;
+  /** Guests choosing Book Now open sign-in instead of the schedule. */
+  onSignInRequest?: () => void;
 }
 
 type ListingClassType = ClassType & {
   listingPrice?: ProgramListingPrice | null;
 };
 
-export default function ClassesSection({ onBookingClick }: ClassesSectionProps) {
+export default function ClassesSection({ onBookingClick, onSignInRequest }: ClassesSectionProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [waitlistType, setWaitlistType] = useState<ClassType | null>(null);
@@ -73,6 +75,10 @@ export default function ClassesSection({ onBookingClick }: ClassesSectionProps) 
   }, [availability?.classTypeIds, upcomingClasses]);
 
   const handleClassBooking = (classTypeId: string) => {
+    if (!user && onSignInRequest) {
+      onSignInRequest();
+      return;
+    }
     onBookingClick({ classTypeId, scrollTo: "schedule" });
   };
 
