@@ -15,12 +15,15 @@ import { GoogleLogo } from "@/components/google-logo";
 interface AuthChoiceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Header sign-in hides guest checkout. Booking entry points keep today's dialog. */
+  intent?: "signin" | "booking";
   onContinueAsGuest?: () => void;
 }
 
 export function AuthChoiceDialog({
   open,
   onOpenChange,
+  intent = "booking",
   onContinueAsGuest,
 }: AuthChoiceDialogProps) {
   const { guestCheckoutEnabled } = usePlatformConfig();
@@ -45,6 +48,7 @@ export function AuthChoiceDialog({
     window.location.href = `/api/auth/google?keep=${keepSignedIn ? "1" : "0"}`;
   };
 
+  const showGuest = intent === "booking" && guestCheckoutEnabled;
   const handleContinueAsGuest = () => {
     resetAndClose(false);
     onContinueAsGuest?.();
@@ -55,16 +59,25 @@ export function AuthChoiceDialog({
       <DialogContent
         className="max-w-md rounded-3xl border-dz-glass-border bg-dz-surface p-8"
         data-testid="booking-auth-dialog"
+        data-auth-intent={intent}
       >
         <DialogHeader>
           <DialogTitle className="font-display text-2xl font-bold text-primary">
-            Book a{" "}
-            <span className="font-accent italic font-normal text-dz-secondary">session</span>
+            {intent === "signin" ? (
+              "Welcome to andWeYoga"
+            ) : (
+              <>
+                Book a{" "}
+                <span className="font-accent italic font-normal text-dz-secondary">session</span>
+              </>
+            )}
           </DialogTitle>
           <DialogDescription className="text-sm text-dz-muted">
-            {guestCheckoutEnabled
-              ? "Sign in with Google or continue as a guest for trial and drop-in sessions."
-              : "Sign in with Google to book your session."}
+            {intent === "signin"
+              ? "Sign in with Google to explore classes and manage your practice."
+              : guestCheckoutEnabled
+                ? "Sign in with Google or continue as a guest for trial and drop-in sessions."
+                : "Sign in with Google to book your session."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 pt-2">
@@ -104,7 +117,7 @@ export function AuthChoiceDialog({
             </span>
           </label>
 
-          {guestCheckoutEnabled ? (
+          {showGuest ? (
             <Button
               type="button"
               onClick={handleContinueAsGuest}

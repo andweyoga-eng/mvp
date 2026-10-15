@@ -29,7 +29,11 @@ import { GlassCard } from "@/components/digital-zen/glass-card";
 import { formatSessionPrice, isValidPaymentUrl } from "@/lib/booking-payment";
 import { filterBookableSessions, sessionDurationMinutes } from "@/lib/booking-flow";
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
-import { isAuthUserReadyForPaidHealthBooking, getIncompleteAccountHref } from "@/lib/account-profile-complete";
+import {
+  getIncompleteBookingHref,
+  isAuthUserProfileComplete,
+  isAuthUserReadyForPaidHealthBooking,
+} from "@/lib/account-profile-complete";
 import { isTrialOrDropIn } from "@shared/booking-eligibility";
 import {
   fetchMemberSessions,
@@ -339,9 +343,20 @@ export default function Reserve() {
 
   const handleConfirm = () => {
     if (!selected) return;
+    if (user && !isAuthUserProfileComplete(user)) {
+      persistReserveIntent(sessionId, classTypeId);
+      const href = getIncompleteBookingHref(user, { requireHealth: false }) ?? "/my-account#profile";
+      toast({
+        title: "Before your first class",
+        description:
+          "Add your mobile and an emergency contact so your instructor can reach you. We will bring you straight back to checkout.",
+      });
+      setLocation(href);
+      return;
+    }
     if (user && !profileComplete && !isTrialDrop) {
       persistReserveIntent(sessionId, classTypeId);
-      const href = getIncompleteAccountHref(user, { requireHealth: true }) ?? "/my-account#health";
+      const href = getIncompleteBookingHref(user, { requireHealth: true }) ?? "/my-account#health";
       toast({
         title: "A quick health check-in",
         description:

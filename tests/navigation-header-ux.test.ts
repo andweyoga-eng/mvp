@@ -19,15 +19,15 @@ describe("navigation header UX", () => {
 
   it("documents logged-out booking CTA behavior", () => {
     const loggedOutHeader = {
-      primaryCta: "Book/Signup",
+      primaryCta: "Sign in",
       authDialog: "centered-modal",
-      authOptions: ["Continue with Google", "Continue as Guest"],
-      guestOpensBookingModal: true,
+      authOptions: ["Continue with Google", "Keep me signed in"],
+      guestInHeaderDialog: false,
     };
-    assert.equal(loggedOutHeader.primaryCta, "Book/Signup");
+    assert.equal(loggedOutHeader.primaryCta, "Sign in");
     assert.equal(loggedOutHeader.authDialog, "centered-modal");
-    assert.deepEqual(loggedOutHeader.authOptions, ["Continue with Google", "Continue as Guest"]);
-    assert.equal(loggedOutHeader.guestOpensBookingModal, true);
+    assert.deepEqual(loggedOutHeader.authOptions, ["Continue with Google", "Keep me signed in"]);
+    assert.equal(loggedOutHeader.guestInHeaderDialog, false);
   });
 });
 

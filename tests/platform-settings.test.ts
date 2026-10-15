@@ -24,9 +24,9 @@ describe("shared/platform-settings", () => {
 });
 
 describe("platform-settings service source", () => {
-  it("fail open when row missing is documented in getGuestCheckoutEnabled", () => {
+  it("fails closed when the guest checkout row is missing", () => {
     const source = readFileSync(join(root, "server/platform-settings.ts"), "utf8");
-    assert.match(source, /row \? parseGuestCheckoutEnabled\(row\.value\) : true/);
+    assert.match(source, /row \? parseGuestCheckoutEnabled\(row\.value\) : false/);
     assert.match(source, /CACHE_TTL_MS = 30_000/);
     assert.match(source, /bustGuestCheckoutCache/);
   });

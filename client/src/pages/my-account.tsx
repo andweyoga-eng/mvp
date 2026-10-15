@@ -63,9 +63,9 @@ import {
 } from "@shared/mobile-validation";
 import {
   isHealthDisclosureComplete,
-  isAccountProfileComplete,
   isProfileFieldsSectionComplete,
   getFirstIncompleteAccountAnchor,
+  getFirstIncompleteBookingAnchor,
   type AccountProfileCheckInput,
 } from "@shared/profileCompleteness";
 import { anchorFromLegacyTab, type AccountAnchor } from "@/lib/account-routes";
@@ -594,11 +594,10 @@ export default function MyAccount() {
   };
 
   /**
-   * The single, fail-closed exit gate for onboarding. Re-fetches the member AND
-   * their consent requirement FRESH from the server, then either routes to the
-   * first still-incomplete My Account step (profile → health → privacy) or, only
-   * when profile + health + mandatory consent are ALL confirmed complete,
-   * redirects the member onward. Any failure keeps them in My Account.
+   * Exit gate. Consent still pending stays on Privacy. A saved booking asks for
+   * contact details before Reserve (Health History is checked again there).
+   * A WeDiet / weEmo return asks for Health History. With neither, consent
+   * alone is enough to open the dashboard.
    * Returns true only when it redirected away.
    */
   const resolveNextStepAndRoute = async (options?: {
@@ -643,13 +642,26 @@ export default function MyAccount() {
       return false;
     }
 
+    const pending = getPendingBooking();
+    const hasCheckout = Boolean(pending?.sessionId || pending?.classTypeId);
+    const returnPath = peekAccountReturnIntent();
+    if (hasCheckout || returnPath) {
+      const bookingAnchor = getFirstIncompleteBookingAnchor(buildCheckFromUser(serverUser), {
+        requireHealth: !hasCheckout && Boolean(returnPath),
+      });
+      if (bookingAnchor) {
+        routeToAnchor(bookingAnchor);
+        return false;
+      }
+    }
+
     toast({
       title: "You're all set",
-      description: getPendingBooking()
-        ? "Your profile is complete. Taking you to checkout."
-        : peekAccountReturnIntent()
+      description: hasCheckout
+        ? "Taking you to checkout."
+        : returnPath
           ? "Health check-in done. Taking you back."
-          : "Your profile is complete. Welcome to your dashboard.",
+          : "Welcome to your dashboard.",
     });
     redirectAfterProfileComplete();
     return true;
@@ -897,8 +909,7 @@ export default function MyAccount() {
     emergencyMobileCountryCode: profileData.emergencyMobileCountryCode,
     healthUpdateText: profileData.healthUpdateText,
   };
-  const isBookingReady =
-    isAccountProfileComplete(statusInput) && !consentRequirement?.requiresConsent;
+  const canBrowse = !consentRequirement?.requiresConsent;
   const healthHistory = parseHealthHistory(user?.healthUpdateHistory);
   const onboardingAnchor = getFirstIncompleteAccountAnchor(statusInput, {
     requiresConsent: consentRequirement?.requiresConsent,
@@ -916,7 +927,8 @@ export default function MyAccount() {
     healthIntentDeepLink;
   const needsHealthOnboarding = onboardingAnchor === "health" || seekingHealthGate;
   const needsPrivacyOnboarding = onboardingAnchor === "privacy";
-  const isSetupInProgress = Boolean(onboardingAnchor) || seekingHealthGate;
+  const consentSetupPending = Boolean(consentRequirement?.requiresConsent);
+  const isSetupInProgress = consentSetupPending || seekingHealthGate;
   const showPrivacyOnboardingForm =
     needsPrivacyOnboarding ||
     (Boolean(consentRequirement?.requiresConsent) &&
@@ -945,40 +957,41 @@ export default function MyAccount() {
     needsProfileOnboarding,
   ]);
 
-  // Completeness meter — contact + consent required; Health History is contextual.
-  const checks = [
-    { ok: Boolean(user?.emailVerified), hint: "verify your email" },
-    { ok: profileData.name.trim().length > 0, hint: "add your name" },
+  const accountChecks = [
+    { ok: Boolean(user?.emailVerified) },
+    { ok: profileData.name.trim().length > 0 },
     {
       ok:
         dobLocked ||
         (profileData.dateOfBirth.trim().length > 0 &&
           isValidDateOfBirth(profileData.dateOfBirth) &&
           isAdult(profileData.dateOfBirth)),
-      hint: "add your date of birth",
     },
+    { ok: !consentRequirement?.requiresConsent },
+  ];
+  const bookChecks = [
     {
       ok: profileData.primaryMobile.trim().length > 0 && mobileValidation.primaryMobile.isValid,
-      hint: "add your mobile",
     },
     {
       ok:
         profileData.emergencyMobile.trim().length > 0 && mobileValidation.emergencyMobile.isValid,
-      hint: "add an emergency contact",
-    },
-    {
-      ok: !consentRequirement?.requiresConsent,
-      hint: "review privacy & consent",
     },
   ];
-  const pct = Math.round((checks.filter((c) => c.ok).length / checks.length) * 100);
-  const firstGap = checks.find((c) => !c.ok);
-  const pctHint =
-    pct === 100
-      ? "All set. You're ready to book."
-      : onboardingAnchor === "privacy"
-        ? "Next: review privacy & consent."
-        : `Next: ${firstGap?.hint}.`;
+  const accountPct = Math.round(
+    (accountChecks.filter((c) => c.ok).length / accountChecks.length) * 100,
+  );
+  const bookPct = Math.round((bookChecks.filter((c) => c.ok).length / bookChecks.length) * 100);
+  const accountComplete = accountChecks.every((c) => c.ok);
+  const bookComplete = bookChecks.every((c) => c.ok);
+  const consentDone = !consentRequirement?.requiresConsent;
+  const pctHint = !consentDone
+    ? "Next: review privacy & consent."
+    : !accountComplete
+      ? "Finish your account details."
+      : !bookComplete
+        ? "Add your mobile and emergency contact before your first booking."
+        : "All set. You're ready to book.";
   const consentCopy = CONSENT_COPY[consentLang];
 
   const isSectionOpen = (id: AccountAnchor) => {
@@ -1049,14 +1062,14 @@ export default function MyAccount() {
       <main className="relative z-10 mx-auto w-full max-w-5xl px-4 pb-24 pt-24 sm:px-6 min-[900px]:flex min-[900px]:min-h-0 min-[900px]:flex-1 min-[900px]:flex-col min-[900px]:pb-0 min-[900px]:pt-6">
         <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <button
-            onClick={() => setLocation(isBookingReady ? "/dashboard" : "#profile")}
+            onClick={() => setLocation(canBrowse ? "/dashboard" : "#profile")}
             data-testid="back-to-dashboard"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
           >
             <ArrowLeft className="h-4 w-4" />{" "}
-            {isBookingReady ? "Back to dashboard" : "Finish setup to reach dashboard"}
+            {canBrowse ? "Back to dashboard" : "Finish setup to reach dashboard"}
           </button>
-          {isSetupInProgress ? (
+          {consentSetupPending ? (
             <Button
               type="button"
               variant="outline"
@@ -1092,20 +1105,32 @@ export default function MyAccount() {
               )}
             </div>
           </div>
-          <div className="basis-56 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur">
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-xs text-white/85">
-                {isBookingReady ? "Profile complete" : "Profile"}
-              </span>
-              <span className="font-display text-lg font-bold">{pct}%</span>
+          <div className="basis-56 space-y-3 rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur" data-testid="account-readiness-meter">
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-xs text-white/85">Account</span>
+                <span className="font-display text-sm font-bold">{accountPct}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-orange-200 to-white transition-[width] duration-500"
+                  style={{ width: `${accountPct}%` }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-orange-200 to-white transition-[width] duration-500"
-                style={{ width: `${pct}%` }}
-              />
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-xs text-white/85">Ready to book</span>
+                <span className="font-display text-sm font-bold">{bookPct}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/20">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-orange-200 to-white transition-[width] duration-500"
+                  style={{ width: `${bookPct}%` }}
+                />
+              </div>
             </div>
-            <p className="mt-2 flex items-center gap-1.5 text-xs text-white/80">
+            <p className="flex items-center gap-1.5 text-xs text-white/80">
               <Lightbulb className="h-3.5 w-3.5 text-orange-200" />
               {pctHint}
             </p>

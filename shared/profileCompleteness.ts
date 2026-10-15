@@ -46,15 +46,34 @@ function optionalSecondaryOk(
 
 export type AccountOnboardingAnchor = "profile" | "health" | "privacy";
 
+export type MemberReadiness = "none" | "account" | "bookable" | "practice_ready";
+
 /**
- * First unfinished onboarding step for general signup / Book→Sign-in.
- * Health History is NOT required here — it is gated when the member books a
- * paid health session or uses WeDiet / weEmo (see isHealthSectionComplete).
+ * L1 Account through L3 Practice ready.
+ * `requiresConsent` means the consent gate is still open (date of birth and the
+ * three consents are not done). `healthConsentActive` false keeps a member at
+ * bookable even when Health History text is saved.
  */
-export function getFirstIncompleteAccountAnchor(
+export function getMemberReadiness(
   u: AccountProfileCheckInput,
-  options?: { requiresConsent?: boolean; requireHealth?: boolean },
-): AccountOnboardingAnchor | null {
+  options?: { requiresConsent?: boolean; healthConsentActive?: boolean },
+): MemberReadiness {
+  const identityOk = Boolean(u.emailVerified) && Boolean((u.name ?? "").trim());
+  if (!identityOk || options?.requiresConsent) return "none";
+  if (!isAccountProfileComplete(u)) return "account";
+  const practiceReady =
+    isHealthSectionComplete(u) && options?.healthConsentActive !== false;
+  return practiceReady ? "practice_ready" : "bookable";
+}
+
+/**
+ * Contact and Health History still required before a booking. Consent is not
+ * part of this anchor — browsing uses getFirstIncompleteAccountAnchor.
+ */
+export function getFirstIncompleteBookingAnchor(
+  u: AccountProfileCheckInput,
+  options?: { requireHealth?: boolean },
+): "profile" | "health" | null {
   if (!u.emailVerified) return "profile";
   if (!(u.name ?? "").trim()) return "profile";
   if (!requiredMobileOk(u.primaryMobile, u.primaryMobileCountryCode)) {
@@ -69,8 +88,60 @@ export function getFirstIncompleteAccountAnchor(
   if (options?.requireHealth && !isHealthDisclosureComplete(u.healthUpdateText)) {
     return "health";
   }
-  if (options?.requiresConsent) {
-    return "privacy";
+  return null;
+}
+
+/**
+ * Browsing gate. Consent pending sends the member to Privacy. Name, mobile,
+ * and emergency contact no longer block the dashboard.
+ * `requireHealth` is ignored — paid-session health lives on the booking anchor.
+ */
+export function getFirstIncompleteAccountAnchor(
+  _u: AccountProfileCheckInput,
+  options?: { requiresConsent?: boolean; requireHealth?: boolean },
+): AccountOnboardingAnchor | null {
+  void options?.requireHealth;
+  if (options?.requiresConsent) return "privacy";
+  return null;
+}
+
+const CONTACT_INCOMPLETE_MESSAGE =
+  "Your profile is incomplete. Add your name, verified email, and primary and emergency mobiles in My Account before booking.";
+
+const HEALTH_INCOMPLETE_MESSAGE =
+  "Share a short Health History so instructors can adapt your practice safely, then continue booking.";
+
+export type SignedInBookingProfileBlock = {
+  message: string;
+  requiresHealthUpdate: boolean;
+  redirectTo: string;
+  code: "profile_incomplete";
+};
+
+/**
+ * Server booking gate. Contact (L2) applies to every signed-in session type.
+ * Health History applies only when the session cannot be booked as a guest
+ * (`mustBeSignedIn`), which is paid / recurring.
+ */
+export function signedInBookingProfileBlock(
+  user: AccountProfileCheckInput,
+  options: { mustBeSignedIn: boolean },
+): SignedInBookingProfileBlock | null {
+  if (!isAccountProfileComplete(user)) {
+    return {
+      message: CONTACT_INCOMPLETE_MESSAGE,
+      requiresHealthUpdate: false,
+      redirectTo: "/my-account#profile",
+      code: "profile_incomplete",
+    };
+  }
+  if (options.mustBeSignedIn && !isReadyForPaidHealthBooking(user)) {
+    return {
+      message: HEALTH_INCOMPLETE_MESSAGE,
+      requiresHealthUpdate: true,
+      redirectTo: "/my-account#health",
+      code: "profile_incomplete",
+    };
   }
   return null;
 }

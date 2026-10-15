@@ -5,7 +5,7 @@ import {
 import { consumeAccountReturnIntent } from "@/lib/account-return-intent";
 import { MY_SESSIONS_UPCOMING_URL, myAccountHref } from "@/lib/account-routes";
 import type { User } from "@/lib/auth";
-import { getFirstIncompleteAccountAnchor } from "@shared/profileCompleteness";
+import { getFirstIncompleteBookingAnchor } from "@shared/profileCompleteness";
 
 export { MY_SESSIONS_UPCOMING_URL };
 export const CLASS_SCHEDULE_URL = "/?openBooking=true";
@@ -94,9 +94,13 @@ export function parseMyAccountTabFromSearch(search: string): {
   };
 }
 
-/** After sign-in, incomplete members finish setup on My Account; complete members use the dashboard. */
+/**
+ * After sign-in, consent pending goes to Privacy. Contact details do not
+ * block the dashboard. A saved booking uses the booking anchor instead
+ * (see applyPostLoginLandingIfNeeded).
+ */
 export function resolveMemberLandingPath(
-  user?: Pick<
+  _user?: Pick<
     User,
     | "profileCompletionStatus"
     | "emailVerified"
@@ -109,7 +113,14 @@ export function resolveMemberLandingPath(
   > | null,
   options?: { requiresConsent?: boolean },
 ): string {
-  const anchor = getFirstIncompleteAccountAnchor(
+  if (options?.requiresConsent) return myAccountHref("privacy");
+  return MEMBER_DASHBOARD_URL;
+}
+
+function bookingAnchorHref(
+  user?: Parameters<typeof resolveMemberLandingPath>[0],
+): string | null {
+  const anchor = getFirstIncompleteBookingAnchor(
     {
       emailVerified: Boolean(user?.emailVerified),
       name: user?.name,
@@ -119,15 +130,9 @@ export function resolveMemberLandingPath(
       emergencyMobileCountryCode: user?.emergencyMobileCountryCode,
       healthUpdateText: user?.healthUpdateText,
     },
-    { requiresConsent: options?.requiresConsent },
+    { requireHealth: false },
   );
-  if (anchor) {
-    return myAccountHref(anchor);
-  }
-  if (user?.profileCompletionStatus === "incomplete") {
-    return MY_ACCOUNT_PROFILE_URL;
-  }
-  return MEMBER_DASHBOARD_URL;
+  return anchor ? myAccountHref(anchor) : null;
 }
 
 /** Routes that represent "just signed in" and may be auto-redirected once. */
@@ -161,14 +166,8 @@ export async function applyPostLoginLandingIfNeeded(
   markMemberLandingChecked();
 
   if (reserveHref) {
-    if (user?.profileCompletionStatus === "complete") {
-      setLocation(reserveHref);
-      return;
-    }
-    const onboarding = resolveMemberLandingPath(user);
-    if (onboarding !== pathname) {
-      setLocation(onboarding);
-    }
+    const bookingHref = bookingAnchorHref(user);
+    setLocation(bookingHref ?? reserveHref);
     return;
   }
 

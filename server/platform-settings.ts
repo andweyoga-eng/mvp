@@ -35,8 +35,8 @@ export function bustFeatureGateCache(key?: FeatureGateSettingKey): void {
 }
 
 /**
- * Whether guest checkout is enabled. Missing row fails open (true) so a patch
- * not yet applied does not silently disable revenue.
+ * Whether guest checkout is enabled. A missing settings row fails closed
+ * (off) so guests cannot book before the emergency-contact field exists.
  */
 export async function getGuestCheckoutEnabled(): Promise<boolean> {
   const now = Date.now();
@@ -45,7 +45,7 @@ export async function getGuestCheckoutEnabled(): Promise<boolean> {
   }
 
   const row = await storage.getPlatformSetting(GUEST_CHECKOUT_SETTING_KEY);
-  const value = row ? parseGuestCheckoutEnabled(row.value) : true;
+  const value = row ? parseGuestCheckoutEnabled(row.value) : false;
 
   guestCheckoutCache = { value, expiresAt: now + CACHE_TTL_MS };
   return value;

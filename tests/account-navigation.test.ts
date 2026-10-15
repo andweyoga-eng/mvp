@@ -12,6 +12,7 @@ import {
   isProfileFieldsSectionComplete,
   isHealthSectionComplete,
   getFirstIncompleteAccountAnchor,
+  getFirstIncompleteBookingAnchor,
 } from "../shared/profileCompleteness.ts";
 import { HEALTH_NO_CONCERNS_TEXT } from "../shared/health-disclosure.ts";
 
@@ -81,9 +82,27 @@ describe("account section completeness", () => {
     );
   });
 
-  it("routes to health only when requireHealth is set", () => {
+  it("does not block browsing on a missing mobile once consent is done", () => {
     assert.equal(
       getFirstIncompleteAccountAnchor(
+        {
+          emailVerified: true,
+          name: "Test User",
+          primaryMobile: "",
+          primaryMobileCountryCode: "+91",
+          emergencyMobile: "",
+          emergencyMobileCountryCode: "+91",
+          healthUpdateText: "",
+        },
+        { requiresConsent: false },
+      ),
+      null,
+    );
+  });
+
+  it("routes booking health only when requireHealth is set", () => {
+    assert.equal(
+      getFirstIncompleteBookingAnchor(
         {
           emailVerified: true,
           name: "Test User",

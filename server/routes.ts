@@ -144,7 +144,8 @@ import {
 } from "@shared/schema";
 import {
   computeProfileCompletionStatus,
-  isReadyForPaidHealthBooking,
+  isAccountProfileComplete,
+  signedInBookingProfileBlock,
 } from "@shared/profileCompleteness";
 import { getFirstMobileUniquenessError } from "@shared/mobile-validation";
 import {
@@ -2980,16 +2981,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return respondAccountDeactivated(res);
       }
 
-      if (mustBeSignedIn && !isReadyForPaidHealthBooking(user)) {
-        const needsHealth = !user.healthUpdateText?.trim();
-        return res.status(409).json({
-          message: needsHealth
-            ? "Share a short Health History so instructors can adapt your practice safely, then continue booking."
-            : "Your profile is incomplete. Add your name, verified email, and primary and emergency mobiles in My Account before booking.",
-          requiresHealthUpdate: needsHealth,
-          redirectTo: needsHealth ? "/my-account#health" : "/my-account#profile",
-          code: "profile_incomplete",
-        });
+      // L2 contact for every signed-in booking (trial, drop-in, flexi, program).
+      // L3 Health History only when the session requires a signed-in member.
+      // Guest bookings never reach this block. Reschedule uses the same contact
+      // check on POST /api/subscriptions/:id/reschedule. There is no separate
+      // workshop checkout route.
+      const profileBlock = signedInBookingProfileBlock(user, { mustBeSignedIn });
+      if (profileBlock) {
+        return res.status(409).json(profileBlock);
       }
 
       const resumableBooking = await storage.findResumableBookingForClass(user.id, classId);
@@ -4128,12 +4127,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { page, pageSize } = paginationQuerySchema.parse(req.query);
       const { rows, total } = await storage.getUsersWithCompletenessPaginated(page, pageSize);
       const allForStats = await storage.getUsersWithCompleteness();
-      const completeProfiles = allForStats.filter((u) => u.completeness.isComplete).length;
+      let account = 0;
+      let readyToBook = 0;
+      let practiceReady = 0;
+      for (const member of allForStats) {
+        const level = member.completeness.readiness;
+        if (level === "practice_ready") practiceReady += 1;
+        else if (level === "bookable") readyToBook += 1;
+        else account += 1;
+      }
       res.json({
         ...buildPaginatedResponse(rows, total, page, pageSize),
         stats: {
-          completeProfiles,
-          incompleteProfiles: allForStats.length - completeProfiles,
+          account,
+          readyToBook,
+          practiceReady,
+          completeProfiles: readyToBook + practiceReady,
+          incompleteProfiles: account,
         },
       });
     } catch (error) {
@@ -5074,6 +5084,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .safeParse(req.body);
       if (!body.success) {
         return res.status(400).json({ message: "targetClassId is required" });
+      }
+      const rescheduleMember = await storage.getUser(req.user.id);
+      if (!rescheduleMember || !isAccountProfileComplete(rescheduleMember)) {
+        return res.status(409).json(
+          signedInBookingProfileBlock(
+            rescheduleMember ?? {
+              emailVerified: false,
+              name: "",
+              primaryMobile: "",
+              primaryMobileCountryCode: "+91",
+              emergencyMobile: "",
+              emergencyMobileCountryCode: "+91",
+            },
+            { mustBeSignedIn: false },
+          ) ?? {
+            message:
+              "Your profile is incomplete. Add your name, verified email, and primary and emergency mobiles in My Account before booking.",
+            requiresHealthUpdate: false,
+            redirectTo: "/my-account#profile",
+            code: "profile_incomplete",
+          },
+        );
       }
       const result = await confirmReschedule({
         userId: req.user.id,

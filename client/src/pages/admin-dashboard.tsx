@@ -85,12 +85,20 @@ interface User {
   healthUpdateText: string | null; healthDocumentUrls: string[] | null;
   healthMediaLinks?: HealthMediaLink[] | null;
   completeness: {
-    isComplete: boolean; healthUpdateComplete: boolean; documentsComplete: boolean;
+    isComplete: boolean;
+    readiness?: "none" | "account" | "bookable" | "practice_ready";
+    healthUpdateComplete: boolean; documentsComplete: boolean;
     emailVerified: boolean; completionPercentage: number; flags: string[];
   };
 }
 interface AdminUsersResponse extends PaginatedResponse<User> {
-  stats?: { completeProfiles: number; incompleteProfiles: number };
+  stats?: {
+    account?: number;
+    readyToBook?: number;
+    practiceReady?: number;
+    completeProfiles: number;
+    incompleteProfiles: number;
+  };
 }
 interface ClassType {
   id: string; name: string; description: string; price: string; duration: number; imageUrl: string | null; intensity: string;
@@ -706,8 +714,9 @@ export default function AdminDashboard() {
             <AdminDataInsightsPanel
               stats={{
                 totalUsers: usersData?.total ?? 0,
-                completeProfiles: usersData?.stats?.completeProfiles ?? 0,
-                incompleteProfiles: usersData?.stats?.incompleteProfiles ?? 0,
+                account: usersData?.stats?.account ?? usersData?.stats?.incompleteProfiles ?? 0,
+                readyToBook: usersData?.stats?.readyToBook ?? 0,
+                practiceReady: usersData?.stats?.practiceReady ?? 0,
                 upcomingSessions: upcomingSessions.length,
               }}
             />
@@ -721,7 +730,7 @@ export default function AdminDashboard() {
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="w-5 h-5 text-[#3d1b80]" /> User Management
                   </CardTitle>
-                  <CardDescription>Profile completeness and health data compliance</CardDescription>
+                  <CardDescription>Account, ready to book, and practice ready</CardDescription>
                 </div>
                 {isSuperAdmin ? (
                   <div className="flex flex-wrap items-center gap-2">
@@ -749,6 +758,17 @@ export default function AdminDashboard() {
                   </Alert>
                 ) : (
                   <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2 text-sm" data-testid="member-readiness-counts">
+                      <span className="rounded-full border bg-slate-50 px-3 py-1">
+                        Account {usersData?.stats?.account ?? 0}
+                      </span>
+                      <span className="rounded-full border bg-amber-50 px-3 py-1">
+                        Ready to book {usersData?.stats?.readyToBook ?? 0}
+                      </span>
+                      <span className="rounded-full border bg-green-50 px-3 py-1">
+                        Practice ready {usersData?.stats?.practiceReady ?? 0}
+                      </span>
+                    </div>
                     {isSuperAdmin && usersData?.data.length ? (
                       <div className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 text-sm">
                         <Checkbox
@@ -782,18 +802,18 @@ export default function AdminDashboard() {
                             </div>
                             {user.completeness.isComplete ? (
                               <Badge className="bg-green-100 text-green-800 border-green-200">
-                                <CheckCircle className="w-3 h-3 mr-1" /> Complete
+                                <CheckCircle className="w-3 h-3 mr-1" /> Ready to book
                               </Badge>
                             ) : (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                                <Clock className="w-3 h-3 mr-1" /> Incomplete
+                              <Badge className="bg-slate-100 text-slate-700 border-slate-200">
+                                <Clock className="w-3 h-3 mr-1" /> Account
                               </Badge>
                             )}
                           </div>
                           {user.completeness.flags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               {user.completeness.flags.map((flag, i) => (
-                                <Badge key={i} variant="destructive" className="text-xs">
+                                <Badge key={i} variant="outline" className="text-xs">
                                   <X className="w-2 h-2 mr-1" />{flag}
                                 </Badge>
                               ))}

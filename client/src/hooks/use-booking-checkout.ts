@@ -264,10 +264,13 @@ export function useBookingCheckout({
       const result = await readResponseJson<Record<string, unknown>>(response);
 
       if (!response.ok) {
-        if (response.status === 409 && result.requiresHealthUpdate) {
+        if (
+          response.status === 409 &&
+          (result.requiresHealthUpdate || result.code === "profile_incomplete")
+        ) {
           throw {
             status: 409,
-            requiresHealthUpdate: true,
+            requiresHealthUpdate: Boolean(result.requiresHealthUpdate),
             redirectTo: (result.redirectTo as string) || "/my-account#profile",
             message: (result.message as string) || "Health profile required",
             code: (result.code as string) || "profile_incomplete",
@@ -356,12 +359,13 @@ export function useBookingCheckout({
       });
     },
     onError: (error) => {
-      if (error.status === 409 && error.requiresHealthUpdate) {
+      if (error.status === 409 && error.code === "profile_incomplete") {
         toast({
-          title: "Profile incomplete",
-          description:
-            "Please complete your profile (name, mobiles, verified email, and Health History) to book sessions.",
-          variant: "destructive",
+          title: error.requiresHealthUpdate ? "A quick health check-in" : "Before your first class",
+          description: error.requiresHealthUpdate
+            ? "Share a short Health History so we can keep your practice safe, then continue booking."
+            : "Add your mobile and an emergency contact so your instructor can reach you. We will bring you straight back to checkout.",
+          variant: error.requiresHealthUpdate ? "destructive" : "default",
         });
         onProfileRequired?.(error.redirectTo || "/my-account#profile");
         return;

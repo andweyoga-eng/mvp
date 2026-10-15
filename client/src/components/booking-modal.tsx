@@ -45,7 +45,10 @@ import { AuthHoverPopup, AuthChoiceDialog } from "@/components/auth-hover-popup"
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ConsentCheckbox } from "@/components/consent-checkbox";
 import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-clickwrap";
-import { isAuthUserReadyForPaidHealthBooking } from "@/lib/account-profile-complete";
+import {
+  isAuthUserProfileComplete,
+  isAuthUserReadyForPaidHealthBooking,
+} from "@/lib/account-profile-complete";
 import { getAccountProfileIncompleteReasons } from "@shared/profileCompleteness";
 import { AlertTriangle, User, ExternalLink, CreditCard, Sparkles, Video, Download } from "lucide-react";
 import {
@@ -523,10 +526,13 @@ export default function BookingModal({
       const result = await readResponseJson<Record<string, unknown>>(response);
 
       if (!response.ok) {
-        if (response.status === 409 && result.requiresHealthUpdate) {
+        if (
+          response.status === 409 &&
+          (result.requiresHealthUpdate || result.code === "profile_incomplete")
+        ) {
           throw {
             status: 409,
-            requiresHealthUpdate: true,
+            requiresHealthUpdate: Boolean(result.requiresHealthUpdate),
             redirectTo: (result.redirectTo as string) || "/my-account#profile",
             message: (result.message as string) || "Health profile required",
             code: (result.code as string) || "profile_incomplete",
@@ -683,15 +689,16 @@ export default function BookingModal({
       nextBatch?: { id?: string; date?: string } | null;
       resumeCheckout?: MemberBookingResult | null;
     }) => {
-      if (error.status === 409 && error.requiresHealthUpdate) {
+      if (error.status === 409 && error.code === "profile_incomplete") {
         persistBookingIntentForProfile();
         onClose();
 
         toast({
-          title: "Profile Incomplete",
-          description:
-            "Please complete your profile (name, mobiles, verified email, and Health History) to book sessions.",
-          variant: "destructive",
+          title: error.requiresHealthUpdate ? "A quick health check-in" : "Before your first class",
+          description: error.requiresHealthUpdate
+            ? "Share a short Health History so we can keep your practice safe, then continue booking."
+            : "Add your mobile and an emergency contact so your instructor can reach you. We will bring you straight back to checkout.",
+          variant: error.requiresHealthUpdate ? "destructive" : "default",
         });
 
         setTimeout(() => {
@@ -823,25 +830,32 @@ export default function BookingModal({
       }
     }
 
+    if (user && !isAuthUserProfileComplete(user)) {
+      persistBookingIntentForProfile();
+      onClose();
+      toast({
+        title: "Before your first class",
+        description:
+          "Add your mobile and an emergency contact so your instructor can reach you. We will bring you straight back to checkout.",
+      });
+      setTimeout(() => {
+        setLocation("/my-account#profile");
+      }, 100);
+      return;
+    }
+
     if (user && !isProfileComplete && !bookingSessionIsTrialDropIn) {
       persistBookingIntentForProfile();
       onClose();
-
-      const issues = getProfileIssues();
-      const healthOnly =
-        issues.length === 1 && issues[0]?.includes("Health History");
       toast({
-        title: healthOnly ? "A quick health check-in" : "Almost there",
-        description: healthOnly
-          ? "Share a short Health History and health-data consent so we can keep your practice safe - viney and private - then continue booking."
-          : "Please finish your contact details and Health History before booking this session.",
+        title: "A quick health check-in",
+        description:
+          "Share a short Health History so we can keep your practice safe, then continue booking.",
         variant: "destructive",
       });
-
       setTimeout(() => {
-        setLocation(healthOnly ? "/my-account#health" : "/my-account#profile");
+        setLocation("/my-account#health");
       }, 100);
-
       return;
     }
 
@@ -1435,7 +1449,30 @@ export default function BookingModal({
             description={processingCopy?.description}
           />
         ) : null}
-        {!paymentResult && user && !isProfileComplete && !bookingSessionIsTrialDropIn && (
+        {!paymentResult && user && !isAuthUserProfileComplete(user) && (
+          <Alert className="mb-4 border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <div className="space-y-2">
+                <p className="font-medium">Before your first class</p>
+                <p className="text-sm">
+                  Add your mobile and an emergency contact so your instructor can reach you. We
+                  will bring you straight back to checkout.
+                </p>
+                <Button
+                  onClick={handleGoToProfile}
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 !text-white"
+                  data-testid="button-go-to-profile"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Continue
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        {!paymentResult && user && isAuthUserProfileComplete(user) && !isProfileComplete && !bookingSessionIsTrialDropIn && (
           <Alert className="mb-4 border-orange-200 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
@@ -1450,7 +1487,11 @@ export default function BookingModal({
                   </ul>
                 </div>
                 <Button
-                  onClick={handleGoToProfile}
+                  onClick={() => {
+                    persistBookingIntentForProfile();
+                    onClose();
+                    setLocation("/my-account#health");
+                  }}
                   size="sm"
                   className="bg-orange-600 hover:bg-orange-700 !text-white"
                   data-testid="button-go-to-profile"

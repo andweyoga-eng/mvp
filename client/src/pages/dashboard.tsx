@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import {
   CalendarDays,
   ArrowRight,
 } from "lucide-react";
+import { ClampedDescription } from "@/components/clamped-description";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -35,6 +36,8 @@ import {
   type MemberSession,
 } from "@/lib/member-sessions";
 import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { profileCheckFromUser } from "@/lib/account-profile-complete";
+import { getMemberReadiness } from "@shared/profileCompleteness";
 import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { consumeSpotReleasedFlag } from "@/lib/spot-release-navigation";
 import { ReleaseSpotToast } from "@/components/release-spot-toast";
@@ -165,12 +168,20 @@ function ClassTypeCard({
             <span className="whitespace-nowrap text-base font-bold text-primary">{price}</span>
           ) : null}
         </div>
-        <div className="mb-[18px] flex gap-4 text-[13px] text-muted-foreground">
+        <div className="mb-3 flex gap-4 text-[13px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Timer className="h-[17px] w-[17px]" />
             {classType.duration} min
           </span>
         </div>
+        <ClampedDescription
+          text={classType.description ?? ""}
+          className="mb-3"
+          clampClassName="line-clamp-2"
+          moreLabel="...more"
+          lessLabel="less"
+          testId={`hub-workout-description-${classType.id}`}
+        />
         <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-3 border-none pt-0" />
         <button
           type="button"
@@ -201,6 +212,13 @@ export default function Dashboard() {
   });
   const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
   const [calendarFocusKey, setCalendarFocusKey] = useState<string | null>(null);
+  const [bookableNudgeDismissed, setBookableNudgeDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("awy_ready_to_book_nudge_dismissed_v1") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const dailyQuote = useMemo(() => {
     const dayIndex = Math.floor(Date.now() / 86_400_000);
@@ -217,12 +235,26 @@ export default function Dashboard() {
     if (!authLoading && !user) setLocation("/");
   }, [authLoading, user, setLocation]);
 
-  useEffect(() => {
-    if (authLoading || !user) return;
-    if (user.profileCompletionStatus === "incomplete") {
-      setLocation(MY_ACCOUNT_PROFILE_URL);
+  // Consent can leave the window scrolled into the hero. Open the dashboard at
+  // the top so the header is the first thing on screen.
+  useLayoutEffect(() => {
+    const previous = window.history.scrollRestoration;
+    try {
+      window.history.scrollRestoration = "manual";
+    } catch {
+      /* ignore */
     }
-  }, [authLoading, user, setLocation]);
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    return () => {
+      try {
+        window.history.scrollRestoration = previous;
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const id = window.setInterval(
@@ -652,65 +684,87 @@ export default function Dashboard() {
           onScrollToMentors={scrollToMentors}
         />
 
-        {/* ===== YOUR SCHEDULE ===== */}
-        <section className="mb-14">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
-            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
-              Your Schedule
-            </h2>
-            <button
-              type="button"
-              onClick={() => setLocation("/my-account#sessions")}
-              disabled={upcomingBooked.length === 0}
-              aria-disabled={upcomingBooked.length === 0}
-              className={cn(
-                "flex items-center gap-1.5 text-sm font-semibold text-primary transition-colors hover:underline",
-                upcomingBooked.length === 0 && "pointer-events-none opacity-50",
-              )}
-            >
-              <CalendarCheck className="h-[18px] w-[18px]" />
-              View All bookings
-            </button>
-          </div>
-          <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
-            <div className="relative z-[1]">
-              <p className="mb-5 text-sm leading-relaxed text-white/80">
-                {sessionsLoading
-                  ? "Loading your booked sessions…"
-                  : upcomingBooked.length === 0
-                    ? "You have no upcoming booked sessions yet."
-                    : `You have ${upcomingBooked.length} session${upcomingBooked.length === 1 ? "" : "s"} scheduled.`}
-              </p>
-              <div className="flex flex-col gap-2.5">
-                {upcomingBooked.slice(0, 4).map((s) => (
-                  <button
-                    key={s.bookingId}
-                    type="button"
-                    onClick={() => setLocation("/my-account#sessions")}
-                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.18]"
-                  >
-                    <div>
-                      <div className="text-sm font-bold text-white">{s.className}</div>
-                      <div className="text-[11px] text-white/70">{formatDayTime(s.date)}</div>
-                    </div>
-                    <ArrowRight className="h-5 w-5 text-white" />
-                  </button>
-                ))}
-                {!sessionsLoading && upcomingBooked.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => document.getElementById("weekly-schedule")?.scrollIntoView({ behavior: "smooth" })}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/20"
-                  >
-                    Find a session
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+        {/* Your Schedule only after the member has a booked class. */}
+        {!sessionsLoading && upcomingBooked.length > 0 ? (
+          <section className="mb-14" data-testid="your-schedule">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
+              <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+                Your Schedule
+              </h2>
+              <button
+                type="button"
+                onClick={() => setLocation("/my-account#sessions")}
+                className="flex items-center gap-1.5 text-sm font-semibold text-primary transition-colors hover:underline"
+              >
+                <CalendarCheck className="h-[18px] w-[18px]" />
+                View All bookings
+              </button>
             </div>
-            <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
-          </div>
-        </section>
+            <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
+              <div className="relative z-[1]">
+                <p className="mb-5 text-sm leading-relaxed text-white/80">
+                  {`You have ${upcomingBooked.length} session${upcomingBooked.length === 1 ? "" : "s"} scheduled.`}
+                </p>
+                <div className="flex flex-col gap-2.5">
+                  {upcomingBooked.slice(0, 4).map((s) => (
+                    <button
+                      key={s.bookingId}
+                      type="button"
+                      onClick={() => setLocation("/my-account#sessions")}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.18]"
+                    >
+                      <div>
+                        <div className="text-sm font-bold text-white">{s.className}</div>
+                        <div className="text-[11px] text-white/70">{formatDayTime(s.date)}</div>
+                      </div>
+                      <ArrowRight className="h-5 w-5 text-white" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
+            </div>
+          </section>
+        ) : null}
+
+        {user &&
+        !sessionsLoading &&
+        upcomingBooked.length === 0 &&
+        !bookableNudgeDismissed &&
+        getMemberReadiness(profileCheckFromUser(user)) === "account" ? (
+          <GlassCard
+            className="mb-8 flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="ready-to-book-nudge"
+          >
+            <p className="text-sm text-foreground">
+              Ready for your first class? Add your mobile and an emergency contact so your
+              instructor can reach you.
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                onClick={() => setLocation(MY_ACCOUNT_PROFILE_URL)}
+              >
+                Add contact details
+              </button>
+              <button
+                type="button"
+                className="rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("awy_ready_to_book_nudge_dismissed_v1", "1");
+                  } catch {
+                    /* ignore */
+                  }
+                  setBookableNudgeDismissed(true);
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </GlassCard>
+        ) : null}
 
         {/* ===== AND WE WORKOUT CAROUSEL ===== */}
         <section className="mb-14">

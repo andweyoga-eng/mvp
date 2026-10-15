@@ -1,6 +1,7 @@
 import type { User } from "@/lib/auth";
 import {
   getFirstIncompleteAccountAnchor,
+  getFirstIncompleteBookingAnchor,
   isAccountProfileComplete,
   isReadyForPaidHealthBooking,
   type AccountProfileCheckInput,
@@ -34,18 +35,27 @@ export function profileCheckFromUser(user: User): AccountProfileCheckInput {
 }
 
 /**
- * The My Account section a member must still complete before they can browse.
- * Consent is a first-class gate: pass `requiresConsent` to route them to
- * `#privacy` even when their contact details are already done.
- * Pass `requireHealth` when gating a paid health session checkout.
+ * My Account section still required before browsing. Only consent pending
+ * returns a href. Contact details do not block the dashboard.
  */
 export function getIncompleteAccountHref(
   user: User | null | undefined,
-  options?: { requiresConsent?: boolean; requireHealth?: boolean },
+  options?: { requiresConsent?: boolean },
 ): string | null {
   if (!user) return null;
   const anchor = getFirstIncompleteAccountAnchor(profileCheckFromUser(user), {
     requiresConsent: options?.requiresConsent,
+  });
+  return anchor ? myAccountHref(anchor) : null;
+}
+
+/** My Account section still required before checkout. */
+export function getIncompleteBookingHref(
+  user: User | null | undefined,
+  options?: { requireHealth?: boolean },
+): string | null {
+  if (!user) return null;
+  const anchor = getFirstIncompleteBookingAnchor(profileCheckFromUser(user), {
     requireHealth: options?.requireHealth,
   });
   return anchor ? myAccountHref(anchor) : null;

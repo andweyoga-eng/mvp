@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { focusSessionsSearch } from "@/lib/practice-schedule";
 import { AccountMenuControls } from "@/components/account-menu-controls";
 import { PageContainer } from "@/components/digital-zen/page-container";
-import { useProfileCompletionGuard } from "@/hooks/use-profile-completion-guard";
 import { BrandLogo } from "@/components/brand-logo";
 import {
   isFeatureTabVisible,
@@ -91,7 +90,6 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const platform = usePlatformConfig();
-  useProfileCompletionGuard();
 
   const visibleItems = useMemo(
     () =>

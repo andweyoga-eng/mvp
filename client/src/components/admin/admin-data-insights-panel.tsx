@@ -3,8 +3,9 @@ import { BarChart3, Calendar, UserCheck, Users, UserX } from "lucide-react";
 
 export interface AdminInsightsStats {
   totalUsers: number;
-  completeProfiles: number;
-  incompleteProfiles: number;
+  account: number;
+  readyToBook: number;
+  practiceReady: number;
   upcomingSessions: number;
 }
 
@@ -12,16 +13,22 @@ export function AdminDataInsightsPanel({ stats }: { stats: AdminInsightsStats })
   const cards = [
     { label: "Total Users", value: stats.totalUsers, icon: Users, color: "text-[#3d1b80]" },
     {
-      label: "Complete Profiles",
-      value: stats.completeProfiles,
-      icon: UserCheck,
-      color: "text-green-600",
+      label: "Account",
+      value: stats.account,
+      icon: UserX,
+      color: "text-slate-600",
     },
     {
-      label: "Incomplete Profiles",
-      value: stats.incompleteProfiles,
-      icon: UserX,
-      color: "text-orange-500",
+      label: "Ready to book",
+      value: stats.readyToBook,
+      icon: UserCheck,
+      color: "text-amber-600",
+    },
+    {
+      label: "Practice ready",
+      value: stats.practiceReady,
+      icon: UserCheck,
+      color: "text-green-600",
     },
     {
       label: "Upcoming Sessions",
@@ -44,7 +51,7 @@ export function AdminDataInsightsPanel({ stats }: { stats: AdminInsightsStats })
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {cards.map(({ label, value, icon: Icon, color }) => (
             <Card key={label} className="border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">

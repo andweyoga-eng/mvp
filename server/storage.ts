@@ -110,6 +110,7 @@ import { BOOKING_PAYMENT_STATUS, canResumePaymentCheckout, bookingCountsTowardCa
 import { paginationOffset } from "@shared/admin-pagination";
 import {
   computeProfileCompletionStatus,
+  getMemberReadiness,
   isAccountProfileComplete,
   getAccountProfileIncompleteReasons,
   isHealthDisclosureComplete,
@@ -387,6 +388,8 @@ export interface AdminWaitlistRow {
 
 export interface ProfileCompleteness {
   isComplete: boolean;
+  /** L1–L3 ladder. "account" includes members who have not reached L2. */
+  readiness: "none" | "account" | "bookable" | "practice_ready";
   healthUpdateComplete: boolean;  // ≥10 characters
   documentsComplete: boolean;     // Valid uploaded files
   emailVerified: boolean;
@@ -6801,6 +6804,7 @@ export class DatabaseStorage implements IStorage {
     const emailVerified = user.emailVerified || false;
 
     const isComplete = isAccountProfileComplete(user);
+    const readiness = getMemberReadiness(user);
 
     const checks = [isComplete, documentsComplete];
     const completedChecks = checks.filter(Boolean).length;
@@ -6808,12 +6812,13 @@ export class DatabaseStorage implements IStorage {
 
     const flags: string[] = [];
     if (!isComplete) {
-      flags.push(...getAccountProfileIncompleteReasons(user));
+      flags.push(...getAccountProfileIncompleteReasons(user, { requireHealth: false }));
     }
     if (!documentsComplete) flags.push("No health materials shared");
 
     return {
       isComplete,
+      readiness,
       healthUpdateComplete,
       documentsComplete,
       emailVerified,

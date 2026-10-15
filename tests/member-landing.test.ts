@@ -101,12 +101,12 @@ describe("applyPostLoginLandingIfNeeded", () => {
     assert.equal(target, "");
   });
 
-  it("sends incomplete members without booking intent to My Account", async () => {
+  it("sends members who still owe contact details to the dashboard when nothing is booked", async () => {
     let target = "";
     await applyPostLoginLandingIfNeeded("/dashboard", (path) => {
       target = path;
     }, incompleteUser);
-    assert.equal(target, MY_ACCOUNT_PROFILE_URL);
+    assert.equal(target, "");
   });
 });
 
@@ -115,7 +115,14 @@ describe("resolveMemberLandingPath", () => {
     assert.equal(resolveMemberLandingPath(completeUser), MEMBER_DASHBOARD_URL);
   });
 
-  it("returns profile onboarding for incomplete profiles", () => {
-    assert.equal(resolveMemberLandingPath(incompleteUser), MY_ACCOUNT_PROFILE_URL);
+  it("returns the dashboard when contact details are missing and consent is done", () => {
+    assert.equal(resolveMemberLandingPath(incompleteUser), MEMBER_DASHBOARD_URL);
+  });
+
+  it("returns privacy when consent is still pending", () => {
+    assert.equal(
+      resolveMemberLandingPath(incompleteUser, { requiresConsent: true }),
+      "/my-account#privacy",
+    );
   });
 });

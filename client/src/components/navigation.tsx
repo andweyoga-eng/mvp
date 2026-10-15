@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Sparkles, Menu, X } from "lucide-react";
 import { usePaymentVerifiedCelebrations } from "@/components/payment-verified-provider";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,8 @@ import {
 import { useAuth } from "@/lib/auth";
 import { AuthChoiceDialog } from "@/components/auth-hover-popup";
 import { AccountDrawer } from "@/components/account-drawer";
-import {
-  getIncompleteAccountHref,
-  isAuthUserProfileComplete,
-} from "@/lib/account-profile-complete";
+import { fetchMyConsentStatus } from "@/lib/consent-api";
+import { myAccountHref } from "@/lib/account-routes";
 import { navigateToHomeSection } from "@/lib/home-navigation";
 import { BrandLogo } from "@/components/brand-logo";
 import { AccountMenuDrawerButton } from "@/components/account-menu-controls";
@@ -26,9 +24,12 @@ import { clearMemberLandingCheck } from "@/lib/member-landing";
 
 interface NavigationProps {
   onBookingClick: () => void;
-  /** Lets the home page open the same Book/Signup dialog from other buttons. */
+  /** Header Sign in dialog. Booking entry points use bookingAuthOpen. */
   signInOpen?: boolean;
   onSignInOpenChange?: (open: boolean) => void;
+  /** Book Now on the hero and class cards keeps the booking dialog, including guest checkout. */
+  bookingAuthOpen?: boolean;
+  onBookingAuthOpenChange?: (open: boolean) => void;
 }
 
 const DRAWER_LINKS = [
@@ -44,20 +45,57 @@ export default function Navigation({
   onBookingClick,
   signInOpen: signInOpenProp,
   onSignInOpenChange,
+  bookingAuthOpen: bookingAuthOpenProp,
+  onBookingAuthOpenChange,
 }: NavigationProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [accountDrawerOpen, setAccountDrawerOpen] = useState(false);
   const [signInOpenInternal, setSignInOpenInternal] = useState(false);
   const signInOpen = onSignInOpenChange ? Boolean(signInOpenProp) : signInOpenInternal;
   const setSignInOpen = onSignInOpenChange ?? setSignInOpenInternal;
+  const [bookingAuthOpenInternal, setBookingAuthOpenInternal] = useState(false);
+  const bookingAuthOpen = onBookingAuthOpenChange
+    ? Boolean(bookingAuthOpenProp)
+    : bookingAuthOpenInternal;
+  const setBookingAuthOpen = onBookingAuthOpenChange ?? setBookingAuthOpenInternal;
   const [quitOpen, setQuitOpen] = useState(false);
   const [quitSaving, setQuitSaving] = useState(false);
   const { user, isLoading: authLoading, logout, updateProfile } = useAuth();
   const { celebrationCount, openCelebrationFromMenu } = usePaymentVerifiedCelebrations();
   const { toast } = useToast();
+  const [consentPending, setConsentPending] = useState(false);
 
-  const isProfileComplete = isAuthUserProfileComplete(user);
-  const incompleteHref = user ? getIncompleteAccountHref(user) : null;
+  useEffect(() => {
+    if (!user) {
+      setConsentPending(false);
+      return;
+    }
+    let cancelled = false;
+    fetchMyConsentStatus()
+      .then((status) => {
+        if (!cancelled) setConsentPending(Boolean(status.requirement?.requiresConsent));
+      })
+      .catch(() => {
+        if (!cancelled) setConsentPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const showSetupWarning = Boolean(user) && consentPending;
+  const incompleteHref = showSetupWarning ? myAccountHref("privacy") : null;
+
+  const openSignIn = () => {
+    setBookingAuthOpen(false);
+    setSignInOpen(true);
+  };
+
+  const closeAuthDialog = (open: boolean) => {
+    if (open) return;
+    setSignInOpen(false);
+    setBookingAuthOpen(false);
+  };
 
   const goToHomeSection = (sectionId: string) => {
     if (user) {
@@ -156,7 +194,7 @@ export default function Navigation({
                 data-testid="nav-auth-loading"
               />
             ) : user ? (
-              !isProfileComplete ? (
+              showSetupWarning ? (
                 <>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -205,15 +243,16 @@ export default function Navigation({
               <>
                 <Button
                   className="rounded-full bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground shadow-dz-primary hover:bg-primary/90 sm:px-3.5 sm:py-2 sm:text-sm"
-                  data-testid="nav-book-session"
-                  onClick={() => setSignInOpen(true)}
+                  data-testid="nav-sign-in"
+                  onClick={openSignIn}
                 >
-                  Book/Signup
+                  Sign in
                 </Button>
                 <AuthChoiceDialog
-                  open={signInOpen}
-                  onOpenChange={setSignInOpen}
-                  onContinueAsGuest={onBookingClick}
+                  intent={bookingAuthOpen ? "booking" : "signin"}
+                  open={signInOpen || bookingAuthOpen}
+                  onOpenChange={closeAuthDialog}
+                  onContinueAsGuest={bookingAuthOpen ? onBookingClick : undefined}
                 />
               </>
             )}
@@ -265,12 +304,12 @@ export default function Navigation({
             <Button
               className="w-full rounded-full bg-primary font-bold text-primary-foreground"
               onClick={() => {
-                setSignInOpen(true);
+                openSignIn();
                 setIsDrawerOpen(false);
               }}
-              data-testid="mobile-nav-book-signup"
+              data-testid="mobile-nav-sign-in"
             >
-              Book / Sign up
+              Sign in
             </Button>
           </div>
         )}

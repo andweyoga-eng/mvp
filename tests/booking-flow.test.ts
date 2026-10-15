@@ -334,7 +334,7 @@ describe("pending booking (login redirect restore)", () => {
 describe("entry point checklist (manual QA map)", () => {
   it("documents testids for your manual pass", () => {
     const entryPoints = [
-      { source: "Nav desktop", testId: "nav-book-session" },
+      { source: "Nav desktop", testId: "nav-sign-in" },
       { source: "Schedule row", testId: "book-class-<sessionId>" },
       { source: "and We Workout card", testId: "book-button-<classTypeId>" },
       { source: "Booking modal confirm", testId: "booking-confirm" },

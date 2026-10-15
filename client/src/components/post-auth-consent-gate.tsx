@@ -10,7 +10,6 @@ import {
 } from "@/lib/consent-api";
 import { OnboardingConsentPanel } from "@/components/onboarding-consent-modal";
 import { LEGAL_CONFIG } from "@shared/legal-config";
-import { myAccountHref } from "@/lib/account-routes";
 import { useToast } from "@/hooks/use-toast";
 
 const DEFER_LOGIN_TOAST_KEY = "awy_defer_login_toast";
@@ -160,16 +159,6 @@ export function PostAuthConsentGate({ children }: { children: ReactNode }) {
           requireDateOfBirth={requirement.requireDateOfBirth}
           initialLanguage={initialLanguage}
         />
-        <p className="mt-4 text-center text-sm text-dz-muted">
-          New here?{" "}
-          <button
-            type="button"
-            className="font-semibold text-primary underline"
-            onClick={() => setLocation(myAccountHref("privacy"))}
-          >
-            Finish setup in My Account
-          </button>
-        </p>
       </div>
     </ConsentBlockingScreen>
   );

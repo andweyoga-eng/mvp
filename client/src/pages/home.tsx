@@ -26,7 +26,11 @@ import {
 } from "@/lib/member-landing";
 import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
 import { applyHomeHashScroll } from "@/lib/home-navigation";
-import { isAuthUserProfileComplete, getIncompleteAccountHref } from "@/lib/account-profile-complete";
+import {
+  getIncompleteAccountHref,
+  getIncompleteBookingHref,
+  isAuthUserProfileComplete,
+} from "@/lib/account-profile-complete";
 import { fetchMyConsentStatus } from "@/lib/consent-api";
 import { setGuestCheckoutToken } from "@/lib/guest-checkout";
 import { useState, useEffect, useRef } from "react";
@@ -60,6 +64,7 @@ export default function Home() {
   const [resumeBookingId, setResumeBookingId] = useState<string | null>(null);
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
+  const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
   // null = consent status not yet known; enforced as a first-class Home gate.
   const [consentPending, setConsentPending] = useState<boolean | null>(null);
   const resumedBookingRef = useRef(false);
@@ -205,6 +210,7 @@ export default function Home() {
     if (!pending.sessionId && !pending.classTypeId && !pending.scrollTo) return;
 
     if (user) {
+      if (consentPending === null || consentPending) return;
       resumedBookingRef.current = true;
       const href = reserveHrefFromIntent(pending, "home");
       if (href && isAuthUserProfileComplete(user)) {
@@ -212,7 +218,7 @@ export default function Home() {
         return;
       }
       if (href && !isAuthUserProfileComplete(user)) {
-        setLocation(resolveMemberLandingPath(user));
+        setLocation(getIncompleteBookingHref(user, { requireHealth: false }) ?? href);
         return;
       }
       setBookingIntent(pending);
@@ -233,7 +239,7 @@ export default function Home() {
         150,
       );
     }
-  }, [user, authLoading, setLocation]);
+  }, [user, authLoading, consentPending, setLocation]);
 
   // While the redirect above is in flight (or we're still confirming consent),
   // don't flash the carousel/home content.
@@ -247,12 +253,14 @@ export default function Home() {
         onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })}
         signInOpen={signInOpen}
         onSignInOpenChange={setSignInOpen}
+        bookingAuthOpen={bookingAuthOpen}
+        onBookingAuthOpenChange={setBookingAuthOpen}
       />
-      <HeroCarousel onScheduleSignIn={() => setSignInOpen(true)} />
+      <HeroCarousel onScheduleSignIn={() => setBookingAuthOpen(true)} />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
       <ClassesSection
         onBookingClick={(intent) => handleBookingOpen(intent)}
-        onSignInRequest={() => setSignInOpen(true)}
+        onSignInRequest={() => setBookingAuthOpen(true)}
       />
       <CareSection />
       <VibeSection />

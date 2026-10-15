@@ -46,7 +46,7 @@ describe("guest gate client enforcement", () => {
       "utf8",
     );
     assert.match(source, /usePlatformConfig/);
-    assert.match(source, /guestCheckoutEnabled \?/);
+    assert.match(source, /intent === "booking" && guestCheckoutEnabled/);
     assert.match(source, /guest-popup-button/);
   });
 
