@@ -35,7 +35,7 @@ interface NavigationProps {
 const DRAWER_LINKS = [
   { id: "care", label: "and We", accent: "Care" },
   { id: "vibe", label: "and We", accent: "Vibe" },
-  { id: "teach", label: "and We", accent: "Workout" },
+  { id: "teach", label: "and We", accent: "Flow" },
   { id: "story", label: "and Our", accent: "Story" },
   { id: "believe", label: "and We", accent: "Believe" },
   { id: "ally", label: "and We Meet", accent: "Coach" },

@@ -2,6 +2,7 @@ import {
   getPendingBooking,
   type BookingIntent,
 } from "@/lib/pending-booking";
+import { getWaitlistPhoneChoice } from "@/lib/pending-waitlist";
 import { consumeAccountReturnIntent } from "@/lib/account-return-intent";
 import { MY_SESSIONS_UPCOMING_URL, myAccountHref } from "@/lib/account-routes";
 import type { User } from "@/lib/auth";
@@ -151,6 +152,12 @@ export async function applyPostLoginLandingIfNeeded(
 ): Promise<void> {
   if (!POST_LOGIN_LANDING_PATHS.has(pathname)) return;
   if (hasMemberLandingBeenChecked()) return;
+
+  if (getWaitlistPhoneChoice()) {
+    markMemberLandingChecked();
+    if (pathname !== MEMBER_DASHBOARD_URL) setLocation(MEMBER_DASHBOARD_URL);
+    return;
+  }
 
   const pending = getPendingBooking();
   const reserveHref = pending ? reserveHrefFromIntent(pending, "login") : null;

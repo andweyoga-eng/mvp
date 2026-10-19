@@ -106,7 +106,7 @@ export function AvailableTodaySessionCard({
         />
         <Button
           className={cn(
-            "mt-auto rounded-xl font-semibold",
+            "pointer-events-auto relative z-10 mt-auto rounded-xl font-semibold",
             feature ? "w-full md:w-fit md:min-w-[10rem] md:px-8" : "w-full",
             soldOut
               ? "cursor-not-allowed bg-muted text-muted-foreground shadow-none hover:bg-muted"

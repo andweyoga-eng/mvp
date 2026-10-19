@@ -99,7 +99,7 @@ import { consentVersion, scheduledErasureDate, type ConsentLogInput } from "./co
 import type { ConsentType } from "@shared/consent";
 import { applyCancelEntitlementsForClass } from "./session-cancel-entitlement";
 import { db } from "./db";
-import { eq, and, gte, lte, sql, or, isNull, desc, inArray, notInArray, gt, count, lt, not, like, ne } from "drizzle-orm";
+import { eq, and, gte, lte, sql, or, isNull, desc, asc, inArray, notInArray, gt, count, lt, not, like, ne } from "drizzle-orm";
 import {
   QA_AGENT_CLASS_TYPE_PREFIX,
   QA_FIXTURE_CLASS_TYPE_PREFIX,
@@ -376,6 +376,7 @@ export interface AdminWaitlistRow {
   classTypeName: string;
   userId: string | null;
   userName: string | null;
+  guestName: string | null;
   email: string;
   whatsapp: string | null;
   source: string;
@@ -537,7 +538,9 @@ export interface IStorage {
     updatedBy: string | null,
   ): Promise<PlatformSetting>;
 
-  createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest>;
+  createNotifyRequest(
+    data: InsertNotifyRequest,
+  ): Promise<{ request: ClassTypeNotifyRequest; alreadyListed: boolean }>;
   getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]>;
   updateNotifyRequestEmailStatus(
     id: string,
@@ -2081,7 +2084,9 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async createNotifyRequest(data: InsertNotifyRequest): Promise<ClassTypeNotifyRequest> {
+  async createNotifyRequest(
+    data: InsertNotifyRequest,
+  ): Promise<{ request: ClassTypeNotifyRequest; alreadyListed: boolean }> {
     const normalizedEmail = data.email.trim().toLowerCase();
     const existing = await db
       .select()
@@ -2094,12 +2099,25 @@ export class DatabaseStorage implements IStorage {
         ),
       )
       .limit(1);
-    if (existing[0]) return existing[0];
+    if (existing[0]) {
+      const current = existing[0];
+      const patch: Partial<typeof classTypeNotifyRequests.$inferInsert> = {};
+      if (!current.userId && data.userId) patch.userId = data.userId;
+      if (!current.guestName && data.guestName) patch.guestName = data.guestName;
+      if (data.whatsapp && data.whatsapp !== current.whatsapp) patch.whatsapp = data.whatsapp;
+      if (Object.keys(patch).length === 0) return { request: current, alreadyListed: true };
+      const [updated] = await db
+        .update(classTypeNotifyRequests)
+        .set(patch)
+        .where(eq(classTypeNotifyRequests.id, current.id))
+        .returning();
+      return { request: updated ?? current, alreadyListed: true };
+    }
     const [row] = await db
       .insert(classTypeNotifyRequests)
       .values({ ...data, email: normalizedEmail })
       .returning();
-    return row;
+    return { request: row, alreadyListed: false };
   }
 
   async getActiveNotifyRequestsByClassTypeId(classTypeId: string): Promise<ClassTypeNotifyRequest[]> {
@@ -2113,7 +2131,7 @@ export class DatabaseStorage implements IStorage {
             isNull(classTypeNotifyRequests.unsubscribedAt),
           ),
         )
-        .orderBy(desc(classTypeNotifyRequests.createdAt));
+        .orderBy(asc(classTypeNotifyRequests.createdAt));
     } catch (error) {
       console.error("[DB] Error loading notify requests:", error);
       return [];
@@ -2146,6 +2164,7 @@ export class DatabaseStorage implements IStorage {
         classTypeName: classTypes.name,
         userId: classTypeNotifyRequests.userId,
         userName: users.name,
+        guestName: classTypeNotifyRequests.guestName,
         email: classTypeNotifyRequests.email,
         whatsapp: classTypeNotifyRequests.whatsapp,
         source: classTypeNotifyRequests.source,
@@ -2159,7 +2178,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(classTypes, eq(classTypeNotifyRequests.classTypeId, classTypes.id))
       .leftJoin(users, eq(classTypeNotifyRequests.userId, users.id))
       .where(isNull(classTypeNotifyRequests.unsubscribedAt))
-      .orderBy(desc(classTypeNotifyRequests.createdAt));
+      .orderBy(asc(classTypeNotifyRequests.createdAt));
 
     return rows.map((row) => ({
       ...row,

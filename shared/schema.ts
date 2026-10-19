@@ -532,6 +532,8 @@ export const classTypeNotifyRequests = pgTable("class_type_notify_requests", {
   classTypeId: varchar("class_type_id").notNull().references(() => classTypes.id),
   userId: varchar("user_id").references(() => users.id),
   email: text("email").notNull(),
+  /** Name captured when a guest joins without an account. Signed-in members use users.name. */
+  guestName: text("guest_name"),
   whatsapp: text("whatsapp"),
   source: varchar("source", { length: 20 }).notNull().default("WL-G"),
   emailSendStatus: varchar("email_send_status", { length: 20 }).default("pending"),

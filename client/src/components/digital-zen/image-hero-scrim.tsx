@@ -23,12 +23,12 @@ export function ImageHeroScrim({ variant, className, ...props }: ImageHeroScrimP
     return (
       <>
         <div
-          className={cn("dz-scrim-light-side-mobile absolute inset-0 z-[2] lg:hidden", className)}
+          className={cn("pointer-events-none dz-scrim-light-side-mobile absolute inset-0 z-[2] lg:hidden", className)}
           aria-hidden
           {...props}
         />
         <div
-          className={cn("dz-scrim-light-side-desktop absolute inset-0 z-[2] hidden lg:block", className)}
+          className={cn("pointer-events-none dz-scrim-light-side-desktop absolute inset-0 z-[2] hidden lg:block", className)}
           aria-hidden
         />
       </>
@@ -39,12 +39,12 @@ export function ImageHeroScrim({ variant, className, ...props }: ImageHeroScrimP
     return (
       <>
         <div
-          className={cn("dz-scrim-brand-mobile absolute inset-0 z-[2] lg:hidden", className)}
+          className={cn("pointer-events-none dz-scrim-brand-mobile absolute inset-0 z-[2] lg:hidden", className)}
           aria-hidden
           {...props}
         />
         <div
-          className={cn("dz-scrim-brand-desktop absolute inset-0 z-[2] hidden lg:block", className)}
+          className={cn("pointer-events-none dz-scrim-brand-desktop absolute inset-0 z-[2] hidden lg:block", className)}
           aria-hidden
         />
       </>
@@ -54,7 +54,7 @@ export function ImageHeroScrim({ variant, className, ...props }: ImageHeroScrimP
   if (variant === "brand-bottom") {
     return (
       <div
-        className={cn("dz-scrim-brand-bottom absolute inset-0 z-[2]", className)}
+        className={cn("pointer-events-none dz-scrim-brand-bottom absolute inset-0 z-[2]", className)}
         aria-hidden
         {...props}
       />
@@ -63,7 +63,7 @@ export function ImageHeroScrim({ variant, className, ...props }: ImageHeroScrimP
 
   return (
     <div
-      className={cn("dz-scrim-dark-bottom absolute inset-0 z-[2]", className)}
+      className={cn("pointer-events-none dz-scrim-dark-bottom absolute inset-0 z-[2]", className)}
       aria-hidden
       {...props}
     />

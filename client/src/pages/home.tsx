@@ -25,7 +25,8 @@ import {
   resolveMemberLandingPath,
 } from "@/lib/member-landing";
 import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
-import { applyHomeHashScroll } from "@/lib/home-navigation";
+import { applyHomeHashScroll, scrollToHomeSection } from "@/lib/home-navigation";
+import { collectBookableClassTypeIds } from "@/lib/class-type-availability";
 import {
   getIncompleteAccountHref,
   getIncompleteBookingHref,
@@ -65,6 +66,7 @@ export default function Home() {
   const [moodCapture, setMoodCapture] = useState<{ phase: MoodPhase; classId: string } | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
   const [bookingAuthOpen, setBookingAuthOpen] = useState(false);
+  const [waitlistClassTypeId, setWaitlistClassTypeId] = useState<string | null>(null);
   // null = consent status not yet known; enforced as a first-class Home gate.
   const [consentPending, setConsentPending] = useState<boolean | null>(null);
   const resumedBookingRef = useRef(false);
@@ -92,6 +94,44 @@ export default function Home() {
       clearPendingBooking();
     }
   };
+
+  async function openFlowCard(classTypeId: string) {
+    try {
+      const [classTypes, availability, upcomingClasses] = await Promise.all([
+        queryClient.ensureQueryData<Array<{ id: string }>>({ queryKey: ["/api/class-types"] }),
+        queryClient.ensureQueryData<{ classTypeIds: string[] }>({
+          queryKey: ["/api/class-types-availability/upcoming"],
+        }),
+        queryClient.ensureQueryData<
+          Array<{
+            classTypeId: string;
+            status?: string | null;
+            publishedAt?: string | null;
+            pausedAt?: string | null;
+            cancelledAt?: string | null;
+          }>
+        >({ queryKey: ["/api/classes"] }),
+      ]);
+      if (!classTypes.some((classType) => classType.id === classTypeId)) {
+        scrollToHomeSection("teach");
+        return;
+      }
+      const bookable = collectBookableClassTypeIds(upcomingClasses, availability.classTypeIds);
+      if (!bookable.has(classTypeId)) {
+        setWaitlistClassTypeId(classTypeId);
+        return;
+      }
+      const intent: BookingIntent = { classTypeId, scrollTo: "schedule" };
+      if (!user) {
+        setPendingBooking(intent);
+        setBookingAuthOpen(true);
+        return;
+      }
+      handleBookingOpen(intent);
+    } catch {
+      scrollToHomeSection("teach");
+    }
+  }
 
   // Consent is the first gate: no one reaches the marketing home until it's done.
   // Fetch it for every signed-in member so a completed profile with pending
@@ -250,17 +290,35 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-dz-surface pb-24 md:pb-0">
       <Navigation
-        onBookingClick={() => handleBookingOpen({ scrollTo: "schedule" })}
+        onBookingClick={() => {
+          const pending = getPendingBooking();
+          if (pending?.classTypeId || pending?.sessionId) {
+            handleBookingOpen(pending);
+            return;
+          }
+          handleBookingOpen({ scrollTo: "schedule" });
+        }}
         signInOpen={signInOpen}
         onSignInOpenChange={setSignInOpen}
         bookingAuthOpen={bookingAuthOpen}
         onBookingAuthOpenChange={setBookingAuthOpen}
       />
-      <HeroCarousel onScheduleSignIn={() => setBookingAuthOpen(true)} />
+      <HeroCarousel
+        onScheduleSignIn={() => {
+          const pending = getPendingBooking();
+          if (pending?.classTypeId && !pending.sessionId) clearPendingBooking();
+          setBookingAuthOpen(true);
+        }}
+        onFlowCard={(classTypeId) => {
+          void openFlowCard(classTypeId);
+        }}
+      />
       <ScheduleSection onBookingClick={(sessionId) => handleBookingOpen(sessionId)} />
       <ClassesSection
         onBookingClick={(intent) => handleBookingOpen(intent)}
         onSignInRequest={() => setBookingAuthOpen(true)}
+        waitlistClassTypeId={waitlistClassTypeId}
+        onWaitlistClosed={() => setWaitlistClassTypeId(null)}
       />
       <CareSection />
       <VibeSection />

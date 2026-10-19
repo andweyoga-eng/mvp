@@ -1,15 +1,21 @@
 /** Max dimension for admin image uploads (session types, QR codes, etc.). */
 export const ADMIN_IMAGE_MAX_DIM = 1200;
+/** Full-bleed hero photos can start larger, then compress to the same payload cap. */
+export const HERO_IMAGE_MAX_DIM = 1920;
+export const HERO_IMAGE_MAX_FILE_BYTES = 8 * 1024 * 1024;
 /** Max base64 payload before server JSON limit (~1 MB raw). */
 export const ADMIN_IMAGE_MAX_BASE64 = 900_000;
 export const ADMIN_IMAGE_MAX_FILE_BYTES = 2 * 1024 * 1024;
 
-export function validateAdminImageFile(file: File): string | null {
+export function validateAdminImageFile(
+  file: File,
+  maxBytes = ADMIN_IMAGE_MAX_FILE_BYTES,
+): string | null {
   if (!file.type.startsWith("image/")) {
     return "Please choose an image file (JPEG, PNG, or WebP).";
   }
-  if (file.size > ADMIN_IMAGE_MAX_FILE_BYTES) {
-    const maxMb = ADMIN_IMAGE_MAX_FILE_BYTES / (1024 * 1024);
+  if (file.size > maxBytes) {
+    const maxMb = maxBytes / (1024 * 1024);
     const actualMb = (file.size / (1024 * 1024)).toFixed(1);
     return `This file is ${actualMb} MB. The maximum allowed size is ${maxMb} MB. Choose a smaller image or resize it before uploading.`;
   }

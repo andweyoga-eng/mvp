@@ -36,3 +36,30 @@ export function formatProfileWhatsapp(user: {
   const countryCode = (user.primaryMobileCountryCode ?? "+91").trim();
   return `${countryCode} ${mobile}`;
 }
+
+/** Digits used to compare a waitlist number with the account mobile. */
+export function waitlistPhoneDigits(value: string | null | undefined): string {
+  let digits = (value ?? "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits;
+}
+
+/**
+ * True when there is no account mobile yet, or both numbers are the same.
+ * A different account mobile is the case that needs a choice.
+ */
+export function waitlistPhoneMatchesProfile(
+  entered: string | null | undefined,
+  profileMobile: string | null | undefined,
+): boolean {
+  const saved = waitlistPhoneDigits(profileMobile);
+  if (!saved) return true;
+  return waitlistPhoneDigits(entered) === saved;
+}
+
+export function formatWaitlistPhoneDisplay(value: string | null | undefined): string {
+  const digits = waitlistPhoneDigits(value);
+  if (!digits) return "";
+  return `+91 ${digits}`;
+}

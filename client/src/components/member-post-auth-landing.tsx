@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { applyPostLoginLandingIfNeeded } from "@/lib/member-landing";
+import { joinPendingWaitlistIfNeeded } from "@/lib/pending-waitlist";
 
 /** After login, send members with upcoming sessions to My Sessions; otherwise to schedule. */
 export function MemberPostAuthLanding() {
@@ -10,7 +11,10 @@ export function MemberPostAuthLanding() {
 
   useEffect(() => {
     if (isLoading || !user) return;
-    void applyPostLoginLandingIfNeeded(pathname, setLocation, user);
+    void (async () => {
+      await joinPendingWaitlistIfNeeded(user);
+      await applyPostLoginLandingIfNeeded(pathname, setLocation, user);
+    })();
   }, [user, isLoading, pathname, setLocation]);
 
   return null;

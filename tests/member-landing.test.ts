@@ -16,6 +16,7 @@ import {
   clearPendingBooking,
   getPendingBooking,
 } from "../client/src/lib/pending-booking.ts";
+import { setWaitlistPhoneChoice } from "../client/src/lib/pending-waitlist.ts";
 
 function createSessionStorageMock() {
   const store = new Map<string, string>();
@@ -91,6 +92,22 @@ describe("applyPostLoginLandingIfNeeded", () => {
     }, incompleteUser);
     assert.equal(target, MY_ACCOUNT_PROFILE_URL);
     assert.equal(getPendingBooking()?.sessionId, "sess-42");
+  });
+
+  it("sends a waitlist number choice to the dashboard instead of checkout", async () => {
+    setPendingBooking({ classTypeId: "just-be-one", scrollTo: "schedule" });
+    setWaitlistPhoneChoice({
+      classTypeId: "retreat",
+      className: "Retreat",
+      whatsapp: "9000000000",
+      profileMobile: "9513022331",
+      alreadyConsented: true,
+    });
+    let target = "";
+    await applyPostLoginLandingIfNeeded("/my-account", (path) => {
+      target = path;
+    }, completeUser);
+    assert.equal(target, MEMBER_DASHBOARD_URL);
   });
 
   it("sends members without booking intent to the dashboard when complete", async () => {

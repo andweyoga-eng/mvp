@@ -49,8 +49,17 @@ export function heroCtaTargetsSchedule(cta: HeroSlideCta): boolean {
   return cta.mode === "section" && (cta.sectionId || DEFAULT_HERO_CTA_SECTION) === "schedule";
 }
 
+/** True when the hero button is set to a specific and We Flow card. */
+export function heroCtaTargetsFlowCard(cta: Pick<HeroSlideCta, "mode" | "classTypeId">): boolean {
+  return cta.mode === "flow" && Boolean(cta.classTypeId.trim());
+}
+
 /** Activate a hero CTA (home section or custom URL/path). */
 export function activateHeroCta(cta: HeroSlideCta): void {
+  if (cta.mode === "flow") {
+    navigateToHomeSection("teach");
+    return;
+  }
   if (cta.mode === "section") {
     navigateToHomeSection(cta.sectionId || DEFAULT_HERO_CTA_SECTION);
     return;

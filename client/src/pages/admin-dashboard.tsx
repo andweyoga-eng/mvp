@@ -153,6 +153,7 @@ interface AdminWaitlistUser {
   classTypeName: string;
   userId: string | null;
   userName: string | null;
+  guestName: string | null;
   email: string;
   whatsapp: string | null;
   source: string;
@@ -1243,7 +1244,7 @@ export default function AdminDashboard() {
                             return (
                             <tr key={row.id} className="border-b">
                               <td className="py-2 px-3">{row.classTypeName}</td>
-                              <td className="py-2 px-3">{row.userName ?? "Guest"}</td>
+                              <td className="py-2 px-3">{row.userName ?? row.guestName ?? "Guest"}</td>
                               <td className="py-2 px-3">
                                 <Badge variant={marketingTag === "WL-R" ? "default" : "secondary"}>
                                   {marketingTag}

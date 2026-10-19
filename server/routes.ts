@@ -1038,6 +1038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .object({
           email: z.string().email().optional(),
           whatsapp: z.string().trim().optional(),
+          name: z.string().trim().max(80).optional(),
         })
         .parse(req.body ?? {});
       const user = req.user?.id ? await storage.getUser(req.user.id) : undefined;
@@ -1045,14 +1046,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!email) {
         return res.status(400).json({ message: "Email is required to join the waitlist." });
       }
+      const guestName = (body.name ?? "").trim();
+      if (!user && !guestName) {
+        return res.status(400).json({ message: "Name is required to join the waitlist." });
+      }
 
-      let whatsapp = user ? formatProfileWhatsapp(user) : null;
-      if (!whatsapp && body.whatsapp) {
+      let whatsapp: string | null = null;
+      if (body.whatsapp) {
         const phoneCheck = validateRequiredGuestPhone(body.whatsapp);
         if (!phoneCheck.ok) {
           return res.status(400).json({ message: phoneCheck.message });
         }
         whatsapp = `+91 ${phoneCheck.normalized}`;
+      } else if (user) {
+        whatsapp = formatProfileWhatsapp(user);
       }
       if (!whatsapp) {
         return res.status(400).json({
@@ -1060,16 +1067,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const request = await storage.createNotifyRequest({
+      const { request, alreadyListed } = await storage.createNotifyRequest({
         classTypeId: classType.id,
         userId: user?.id ?? null,
         email,
+        guestName: user ? null : guestName,
         whatsapp,
         source: user ? WAITLIST_SOURCE_REGULAR : WAITLIST_SOURCE_GUEST,
       });
       res.status(201).json({
         id: request.id,
-        message: "Thanks! You're on the waitlist. We'll keep you posted when sessions open.",
+        createdAt: request.createdAt,
+        alreadyListed,
+        message: alreadyListed
+          ? "You were already on this waitlist."
+          : "Thanks! You're on the waitlist. We'll keep you posted when sessions open.",
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2346,23 +2358,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const classType = await storage.getClassType(validatedData.classTypeId);
           const first = created[0];
           const bookingLink = `${process.env.ALLOWED_ORIGIN || "http://localhost:5000"}/?openBooking=true&sessionId=${first.id}`;
-          const sendResults = await Promise.all(
-            notifyList.map(async (row) => {
-              const result = await sendEmailDetailed({
-                to: row.email,
-                subject: `New ${classType?.name ?? "session"} now open for booking`,
-                html: `<p>Hi there,</p>
+          const sendResults: boolean[] = [];
+          for (const row of notifyList) {
+            const result = await sendEmailDetailed({
+              to: row.email,
+              subject: `New ${classType?.name ?? "session"} now open for booking`,
+              html: `<p>Hi there,</p>
 <p>A new <strong>${classType?.name ?? "session"}</strong> is available now.</p>
 <p><a href="${bookingLink}">Book this session</a></p>
 <p>If you don't have an account yet, please sign up before booking recurring sessions.</p>`,
-              });
-              await storage.updateNotifyRequestEmailStatus(row.id, result.ok ? "sent" : "failed", {
-                error: result.ok ? null : result.error,
-                sentAt: result.ok ? new Date() : null,
-              });
-              return result.ok;
-            }),
-          );
+            });
+            await storage.updateNotifyRequestEmailStatus(row.id, result.ok ? "sent" : "failed", {
+              error: result.ok ? null : result.error,
+              sentAt: result.ok ? new Date() : null,
+            });
+            sendResults.push(result.ok);
+          }
           const sent = sendResults.filter(Boolean).length;
           notifySummary = {
             queued: notifyList.length,

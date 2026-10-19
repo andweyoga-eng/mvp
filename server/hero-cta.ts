@@ -1,10 +1,14 @@
 import { storage } from "./storage";
 import {
   HERO_CTA_SETTING_KEY,
+  HERO_SLIDE_WORDS,
   defaultHeroCtaConfig,
   parseHeroCtaConfig,
   heroCtaConfigSchema,
+  shareHeroCta,
+  shareHeroDisclaimer,
   type HeroCtaConfig,
+  type HeroSlideCta,
 } from "@shared/hero-cta";
 
 const CACHE_TTL_MS = 30_000;
@@ -33,15 +37,21 @@ export async function setHeroCtaConfig(
   meta?: { ipAddress?: string | null; userAgent?: string | null },
 ): Promise<HeroCtaConfig> {
   const parsed = heroCtaConfigSchema.parse(input);
-  const normalized: HeroCtaConfig = parsed.applySameLinkToAll
-    ? {
-        applySameLinkToAll: true,
-        slides: parsed.slides.map(() => ({ ...parsed.slides[0]! })),
-      }
-    : {
-        applySameLinkToAll: false,
-        slides: parsed.slides.map((s) => ({ ...s })),
-      };
+  const byWord = new Map(parsed.slides.map((slide) => [slide.word, slide]));
+  const ordered = HERO_SLIDE_WORDS.flatMap((word) => {
+    const slide = byWord.get(word);
+    return slide ? [cloneSlide(slide)] : [];
+  });
+  let slides = ordered;
+  if (parsed.applySameLinkToAll && slides[0]) slides = shareHeroCta(slides, slides[0]);
+  if (parsed.applySameDisclaimerToAll && slides[0]) {
+    slides = shareHeroDisclaimer(slides, slides[0].disclaimer);
+  }
+  const normalized: HeroCtaConfig = {
+    applySameLinkToAll: parsed.applySameLinkToAll,
+    applySameDisclaimerToAll: parsed.applySameDisclaimerToAll,
+    slides,
+  };
 
   const previous = await getHeroCtaConfig();
   await storage.upsertPlatformSetting(HERO_CTA_SETTING_KEY, normalized, adminId);
@@ -54,8 +64,8 @@ export async function setHeroCtaConfig(
     resourceId: HERO_CTA_SETTING_KEY,
     metadata: JSON.stringify({
       key: HERO_CTA_SETTING_KEY,
-      oldValue: previous,
-      newValue: normalized,
+      oldValue: redactHeroImages(previous),
+      newValue: redactHeroImages(normalized),
       adminId,
     }),
     ipAddress: meta?.ipAddress ?? null,
@@ -63,6 +73,24 @@ export async function setHeroCtaConfig(
   });
 
   return normalized;
+}
+
+function cloneSlide(slide: HeroSlideCta): HeroSlideCta {
+  return {
+    ...slide,
+    phrases: slide.phrases.map((phrase) => ({ ...phrase })),
+  };
+}
+
+function redactHeroImages(config: HeroCtaConfig): HeroCtaConfig {
+  return {
+    applySameLinkToAll: config.applySameLinkToAll,
+    applySameDisclaimerToAll: config.applySameDisclaimerToAll,
+    slides: config.slides.map((slide) => ({
+      ...slide,
+      imageUrl: slide.imageUrl ? `[image ${slide.imageUrl.length} chars]` : null,
+    })),
+  };
 }
 
 /** Seed missing hero CTA row (idempotent). */

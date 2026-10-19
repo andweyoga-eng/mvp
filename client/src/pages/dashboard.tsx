@@ -47,8 +47,22 @@ import { WeeklySchedulePanel } from "@/components/sessions/weekly-schedule-panel
 import { PracticeCalendarPanel } from "@/components/sessions/practice-calendar-panel";
 import { CalendarDaySessionsPanel } from "@/components/sessions/calendar-day-sessions";
 import { YourMentorsSection } from "@/components/sessions/your-mentors-section";
-import { filterUpcomingScheduleDays, type ScheduleDayLike } from "@/lib/booking-flow";
+import { collectBookableClassTypeIds } from "@/lib/class-type-availability";
+import {
+  clearWaitlistPhoneChoice,
+  completeWaitlistPhoneChoice,
+  consumeWaitlistWelcome,
+  formatWaitlistJoinedLabel,
+  getWaitlistPhoneChoice,
+  type WaitlistPhoneChoice,
+  type WaitlistWelcome,
+} from "@/lib/pending-waitlist";
+import { formatWaitlistPhoneDisplay } from "@shared/waitlist";
+import { useToast } from "@/hooks/use-toast";
+import { WaitlistJoinDialog } from "@/components/waitlist-join-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS, fetchScheduleMonth } from "@/lib/public-session-catalog";
+import { filterUpcomingScheduleDays, type ScheduleDayLike } from "@/lib/booking-flow";
 import {
   practiceClassImage,
   samePracticeCalendarDay,
@@ -57,21 +71,8 @@ import {
 } from "@/lib/practice-schedule";
 import type { SessionsSearchCatalog } from "@/lib/sessions-search/types";
 import type { ClassType, Instructor } from "@shared/schema";
-import embraceImage from "@assets/embrace-carousel.png";
-import experienceImage from "@assets/experience_1756460037530.jpg";
-import expressImage from "@assets/express_1756460037530.jpg";
-import evolveImage from "@assets/evolve-carousel.png";
-import elevateImage from "@assets/elevate-carousel.png";
-import becomeImage from "@assets/become-carousel.png";
-
-const HERO_IMAGES = [
-  embraceImage,
-  experienceImage,
-  expressImage,
-  evolveImage,
-  elevateImage,
-  becomeImage,
-];
+import type { HeroCtaConfig } from "@shared/hero-cta";
+import { heroSlideImageSrc } from "@/lib/hero-slide-images";
 
 /** Rotates once a day so the greeting stays fresh but stable within a session. */
 const YOGA_QUOTES: { text: string; author: string }[] = [
@@ -145,10 +146,14 @@ type ListingClassType = ClassType & {
 
 function ClassTypeCard({
   classType,
+  canBook,
   onBook,
+  onWaitlist,
 }: {
   classType: ListingClassType;
+  canBook: boolean;
   onBook: (classTypeId: string) => void;
+  onWaitlist: (classType: ListingClassType) => void;
 }) {
   const price = formatProgramListingPriceLabel(classType.listingPrice);
 
@@ -185,11 +190,16 @@ function ClassTypeCard({
         <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-3 border-none pt-0" />
         <button
           type="button"
-          onClick={() => onBook(classType.id)}
-          className="mt-auto w-full rounded-xl border-[1.5px] border-primary/25 py-2.5 text-sm font-bold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
-          data-testid={`workout-book-${classType.id}`}
+          onClick={() => (canBook ? onBook(classType.id) : onWaitlist(classType))}
+          className={cn(
+            "pointer-events-auto relative z-10 mt-auto w-full rounded-xl py-2.5 text-sm font-bold transition-colors",
+            canBook
+              ? "border-[1.5px] border-primary/25 text-primary hover:border-primary hover:bg-primary hover:text-primary-foreground"
+              : "border-0 bg-dz-secondary text-white shadow-sm hover:bg-dz-secondary/90",
+          )}
+          data-testid={canBook ? `workout-book-${classType.id}` : `workout-waitlist-${classType.id}`}
         >
-          Book Now
+          {canBook ? "Book Now" : "Join Waitlist"}
         </button>
       </div>
     </article>
@@ -197,13 +207,27 @@ function ClassTypeCard({
 }
 
 export default function Dashboard() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, updateProfile } = useAuth();
+  const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const workoutCarouselRef = useRef<HTMLDivElement>(null);
   const weeklyHeaderRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const mentorsSectionRef = useRef<HTMLDivElement>(null);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
+  const { data: heroConfig } = useQuery<HeroCtaConfig>({
+    queryKey: ["/api/hero-cta"],
+    queryFn: async () => {
+      const res = await fetch("/api/hero-cta");
+      if (!res.ok) throw new Error("Failed to load hero");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const heroSlides = useMemo(
+    () => (heroConfig?.slides ?? []).filter((slide) => slide.published),
+    [heroConfig],
+  );
   const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
   const [now, setNow] = useState(() => new Date());
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -212,6 +236,10 @@ export default function Dashboard() {
   });
   const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
   const [calendarFocusKey, setCalendarFocusKey] = useState<string | null>(null);
+  const [waitlistType, setWaitlistType] = useState<ListingClassType | null>(null);
+  const [waitlistWelcome, setWaitlistWelcome] = useState<WaitlistWelcome | null>(null);
+  const [phoneChoice, setPhoneChoice] = useState<WaitlistPhoneChoice | null>(null);
+  const [phoneChoiceBusy, setPhoneChoiceBusy] = useState(false);
   const [bookableNudgeDismissed, setBookableNudgeDismissed] = useState(() => {
     try {
       return localStorage.getItem("awy_ready_to_book_nudge_dismissed_v1") === "1";
@@ -257,12 +285,17 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
+    setHeroImageIdx(0);
+  }, [heroSlides.length]);
+
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
     const id = window.setInterval(
-      () => setHeroImageIdx((i) => (i + 1) % HERO_IMAGES.length),
+      () => setHeroImageIdx((i) => (i + 1) % heroSlides.length),
       4500,
     );
     return () => window.clearInterval(id);
-  }, []);
+  }, [heroSlides.length]);
 
   // Re-evaluate join windows on a live clock so a session that ends while the
   // page is open stops showing the "Enter Session" LIVE control.
@@ -277,9 +310,74 @@ export default function Dashboard() {
     enabled: !!user?.id,
   });
 
+  useEffect(() => {
+    setWaitlistWelcome(consumeWaitlistWelcome());
+    setPhoneChoice(getWaitlistPhoneChoice());
+  }, []);
+
+  const confirmPhoneChoice = async (mode: "account" | "class") => {
+    if (!phoneChoice || phoneChoiceBusy) return;
+    setPhoneChoiceBusy(true);
+    try {
+      if (mode === "account") {
+        await updateProfile(
+          {
+            primaryMobile: phoneChoice.whatsapp,
+            primaryMobileCountryCode: "+91",
+          },
+          { silent: true },
+        );
+      }
+      const saved = await completeWaitlistPhoneChoice(phoneChoice);
+      if (!saved) {
+        toast({
+          title: "Could not join waitlist",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      clearWaitlistPhoneChoice();
+      setPhoneChoice(null);
+      setWaitlistWelcome(consumeWaitlistWelcome());
+    } catch (error) {
+      toast({
+        title: "Could not update your number",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPhoneChoiceBusy(false);
+    }
+  };
+
   const { data: classTypes = [] } = useQuery<ListingClassType[]>({
     queryKey: ["/api/class-types"],
   });
+
+  const { data: availability } = useQuery<{ classTypeIds: string[] }>({
+    queryKey: ["/api/class-types-availability/upcoming"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+  const { data: upcomingClasses = [] } = useQuery<
+    Array<{
+      classTypeId: string;
+      date?: string | null;
+      duration?: number | null;
+      classType?: { duration?: number | null } | null;
+      status?: string | null;
+      publishedAt?: string | null;
+      pausedAt?: string | null;
+      cancelledAt?: string | null;
+    }>
+  >({
+    queryKey: ["/api/classes"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+  const bookableClassTypeIds = useMemo(
+    () => collectBookableClassTypeIds(upcomingClasses, availability?.classTypeIds),
+    [availability?.classTypeIds, upcomingClasses],
+  );
 
   const { data: instructors = [] } = useQuery<PublicInstructor[]>({
     queryKey: ["/api/instructors"],
@@ -541,25 +639,87 @@ export default function Dashboard() {
 
   return (
     <DashboardShell active="sessions">
+      <Dialog open={!!phoneChoice} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-md"
+          showClose={false}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Which number should we use?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The WhatsApp number you entered ({formatWaitlistPhoneDisplay(phoneChoice?.whatsapp)}) is
+            different from the mobile saved on your account (
+            {formatWaitlistPhoneDisplay(phoneChoice?.profileMobile)}).
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={phoneChoiceBusy}
+              onClick={() => void confirmPhoneChoice("account")}
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              Update my number for future messages
+            </button>
+            <button
+              type="button"
+              disabled={phoneChoiceBusy}
+              onClick={() => void confirmPhoneChoice("class")}
+              className="rounded-xl border border-primary/25 px-4 py-2.5 text-sm font-bold text-primary hover:bg-primary/5 disabled:opacity-60"
+            >
+              Use this number only for this class
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!waitlistWelcome} onOpenChange={(open) => !open && setWaitlistWelcome(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {waitlistWelcome?.kind === "already"
+                ? `Hey ${user?.name?.trim().split(/\s+/)[0] || "there"}`
+                : waitlistWelcome?.kind === "joined"
+                  ? "You're on the waitlist"
+                  : "Welcome to andWeYoga"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {waitlistWelcome?.kind === "already"
+              ? `You had already applied for the ${waitlistWelcome.className} waitlist on ${formatWaitlistJoinedLabel(waitlistWelcome.joinedAt) ?? "an earlier visit"}. Your spot is saved, right where you left it. We will let you know by email and WhatsApp when sessions open.`
+              : `You are on the waitlist for ${waitlistWelcome?.className}. We will let you know by email and WhatsApp when sessions open.`}
+          </p>
+        </DialogContent>
+      </Dialog>
+      <WaitlistJoinDialog
+        open={!!waitlistType}
+        classType={waitlistType}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistType(null);
+        }}
+      />
       <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
         {/* ===== HERO ===== */}
         <section className="mb-6">
           <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-end overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient lg:items-center">
             <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#e6dff1] via-[#d9d2ea] to-[#e7d8cd]" />
-            <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
-              {HERO_IMAGES.map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt=""
-                  aria-hidden
-                  className={cn(
-                    "absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out",
-                    i === heroImageIdx ? "opacity-100" : "opacity-0",
-                  )}
-                />
-              ))}
-            </div>
+            {heroSlides.length > 0 ? (
+              <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
+                {heroSlides.map((slide, i) => (
+                  <img
+                    key={slide.word}
+                    src={heroSlideImageSrc(slide)}
+                    alt=""
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out",
+                      i === heroImageIdx % heroSlides.length ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                ))}
+              </div>
+            ) : null}
             <ImageHeroScrim variant="light-side" />
 
             <ImageHeroContent
@@ -619,7 +779,7 @@ export default function Dashboard() {
                           href={heroSession.googleMeetLink ?? "#"}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
+                          className="pointer-events-auto relative z-10 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
                           data-testid="enter-session"
                         >
                           <span>Enter Session</span>
@@ -771,7 +931,7 @@ export default function Dashboard() {
           <div className="mb-5">
             <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
               and We{" "}
-              <span className="font-accent italic font-normal text-dz-secondary">Workout</span>
+              <span className="font-accent italic font-normal text-dz-secondary">Flow</span>
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Discover the perfect class for your practice level and goals
@@ -805,7 +965,13 @@ export default function Dashboard() {
                 className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               >
                 {classTypes.map((classType) => (
-                  <ClassTypeCard key={classType.id} classType={classType} onBook={bookClassType} />
+                  <ClassTypeCard
+                    key={classType.id}
+                    classType={classType}
+                    canBook={bookableClassTypeIds.has(classType.id)}
+                    onBook={bookClassType}
+                    onWaitlist={setWaitlistType}
+                  />
                 ))}
               </div>
             </div>

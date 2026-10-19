@@ -187,7 +187,7 @@ async function seedClassFixtures(label: string) {
   const { storage } = await import("../server/storage.ts");
 
   const classType = await storage.createClassType({
-    name: `Erasure Fixture ${label}`,
+    name: `Erasure Fixture ${label} ${Date.now()}`,
     description: "Fixture for erasure lifecycle tests",
     price: "500.00",
     duration: 60,
@@ -855,6 +855,16 @@ describe("erasure enforcement and completion", { skip: !hasDb }, () => {
 
 after(async () => {
   if (!hasDb) return;
-  const { purgeQaFixturesFromDb } = await import("../scripts/db/purge-qa-fixtures-core.ts");
-  await purgeQaFixturesFromDb();
+  if (process.env.SKIP_SEED_PURGE === "1") return;
+  try {
+    const { purgeQaFixturesFromDb } = await import("../scripts/db/purge-qa-fixtures-core.ts");
+    await purgeQaFixturesFromDb();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.startsWith("purge refused:")) {
+      console.warn(`[erasure-lifecycle] ${message}`);
+      return;
+    }
+    throw error;
+  }
 });
