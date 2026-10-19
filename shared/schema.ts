@@ -146,7 +146,7 @@ export const classTypes = pgTable("class_types", {
   /** Set when a super admin retires the type; hidden from catalogue pickers. */
   retiredAt: timestamp("retired_at"),
   retirementReason: text("retirement_reason"),
-  /** Comma-separated contraindications shown as "Not Suitable" tags (E-01). */
+  /** Comma-separated contraindications shown as "Not Suitable If You" tags (E-01). */
   strictNoTo: text("strict_no_to"),
   /** Booking terms shown at checkout; defaults applied in app when empty. */
   termsAndConditions: text("terms_and_conditions"),

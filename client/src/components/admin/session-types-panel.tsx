@@ -197,8 +197,8 @@ function StrictNoToAdminField({
   return (
     <div className="rounded-2xl border border-primary/12 bg-white/65 p-4">
       <div className="mb-1.5 flex items-center gap-2">
-        <Label className="text-xs font-extrabold uppercase tracking-wide text-primary">
-          Not Suitable
+        <Label className="text-xs font-extrabold tracking-wide text-primary">
+          Not Suitable If You
         </Label>
         <Badge variant="outline" className="border-red-200 bg-red-50 text-[10px] text-red-900">
           New field

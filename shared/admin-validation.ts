@@ -157,7 +157,7 @@ export const adminCreateClassTypeSchema = z.object({
   strictNoTo: z
     .string()
     .trim()
-    .max(120, `Not Suitable must be ${120} characters or fewer`)
+    .max(120, `Not Suitable If You must be ${120} characters or fewer`)
     .optional()
     .nullable()
     .transform((v) => (v === "" || v == null ? null : v)),

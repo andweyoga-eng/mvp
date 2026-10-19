@@ -56,8 +56,8 @@ export function StrictNoToBlock({
             data-testid="strict-no-to-toggle"
           >
             <span className="flex min-w-0 items-baseline gap-1.5">
-              <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-[0.09em] text-muted-foreground">
-                Not suitable
+              <span className="shrink-0 text-[10px] font-extrabold tracking-wide text-muted-foreground">
+                Not Suitable If You
               </span>
               {!expanded ? (
                 <span
