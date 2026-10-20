@@ -117,6 +117,8 @@ export function validateSessionForm(form: {
   occurrenceCount: string;
   recurrenceWeekdays: number[];
   flexiEnabled?: boolean;
+  inclusions?: string;
+  exclusions?: string;
 }) {
   const result = adminCreateClassSessionSchema.safeParse({
     classTypeId: form.classTypeId.trim(),
@@ -153,6 +155,8 @@ export function validateSessionForm(form: {
         : [],
     flexiEnabled:
       (form.recurrenceKind ?? "once") === "weekly" ? !!form.flexiEnabled : false,
+    inclusions: (form.inclusions ?? "").trim() || null,
+    exclusions: (form.exclusions ?? "").trim() || null,
   });
   if (result.success) return { ok: true as const, data: result.data, errors: {} };
   return { ok: false as const, data: null, errors: zodErrorsToFieldMap(result.error.issues) };

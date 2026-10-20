@@ -6,6 +6,7 @@ import { SESSION_TERMS_MAX_LENGTH } from "./session-terms";
 import { parseIstDatetimeLocal } from "./ist-datetime";
 import { normalizeClassTypeName } from "./class-type-name";
 import { PROGRAM_KINDS, PROGRAM_STATUSES, validateProgramShape } from "./programs";
+import { normalizeSessionCoverageText } from "./session-inclusions";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -315,6 +316,18 @@ export const adminCreateClassSessionSchema = z
         return [...new Set(days)].sort((a, b) => a - b);
       }),
     flexiEnabled: z.boolean().optional().default(false),
+    inclusions: z
+      .string()
+      .trim()
+      .max(2000, "Inclusions must be 2000 characters or fewer")
+      .optional()
+      .nullable(),
+    exclusions: z
+      .string()
+      .trim()
+      .max(2000, "Exclusions must be 2000 characters or fewer")
+      .optional()
+      .nullable(),
   })
   .superRefine((data, ctx) => {
     if (data.recurrenceKind === "weekly" && data.occurrenceCount < 2) {
@@ -499,6 +512,8 @@ export const adminCreateClassSessionSchema = z
       recurrenceWeekdays:
         data.recurrenceKind === "weekly" ? data.recurrenceWeekdays : [],
       flexiEnabled: data.recurrenceKind === "weekly" ? data.flexiEnabled : false,
+      inclusions: normalizeSessionCoverageText(data.inclusions),
+      exclusions: normalizeSessionCoverageText(data.exclusions),
       scheduleSource: "manual" as const,
     };
   });

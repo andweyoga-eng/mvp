@@ -4,6 +4,7 @@ import { Plus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
@@ -100,6 +101,8 @@ const INITIAL_FORM = {
   occurrenceCount: "4",
   recurrenceWeekdays: [] as number[],
   flexiEnabled: false,
+  inclusions: "",
+  exclusions: "",
 };
 
 const MAX_QR_LOCAL_PHONE_DIGITS = 10;
@@ -166,6 +169,8 @@ export interface AdminClassSessionForEdit {
   seriesId?: string | null;
   seriesWeekCount?: number | null;
   flexiEnabled?: boolean | null;
+  inclusions?: string | null;
+  exclusions?: string | null;
 }
 
 function toDatetimeLocalValue(iso: string): string {
@@ -214,6 +219,8 @@ function sessionToForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
         : (sess.occurrenceCount ?? "4"),
     recurrenceWeekdays: sess.recurrenceWeekdays ?? [],
     flexiEnabled: !!sess.flexiEnabled,
+    inclusions: sess.inclusions ?? "",
+    exclusions: sess.exclusions ?? "",
   };
 }
 
@@ -1043,6 +1050,60 @@ export function CreateSessionModal({
                     </div>
                   </div>
                 ) : null}
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 rounded-lg border bg-muted/20 p-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="session-inclusions" className="text-sm font-semibold">
+                    Inclusions
+                  </Label>
+                  <p className="mb-2 mt-1 text-xs text-muted-foreground">
+                    What this session includes. One item per line. Members see this on checkout
+                    {form.recurrenceKind === "weekly" && !isEdit
+                      ? ", on every session in this series."
+                      : "."}
+                  </p>
+                  <Textarea
+                    id="session-inclusions"
+                    rows={5}
+                    maxLength={2000}
+                    value={form.inclusions}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, inclusions: e.target.value }));
+                      clearFieldError("inclusions");
+                    }}
+                    onBlur={() => runValidation()}
+                    placeholder={"Mat and props\nLive guidance"}
+                    className={errors.inclusions ? "border-red-500" : ""}
+                  />
+                  <FieldError message={errors.inclusions} />
+                </div>
+                <div>
+                  <Label htmlFor="session-exclusions" className="text-sm font-semibold">
+                    Exclusions
+                  </Label>
+                  <p className="mb-2 mt-1 text-xs text-muted-foreground">
+                    What is left out of this session. One item per line. Members see this on
+                    checkout
+                    {form.recurrenceKind === "weekly" && !isEdit
+                      ? ", on every session in this series."
+                      : "."}
+                  </p>
+                  <Textarea
+                    id="session-exclusions"
+                    rows={5}
+                    maxLength={2000}
+                    value={form.exclusions}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, exclusions: e.target.value }));
+                      clearFieldError("exclusions");
+                    }}
+                    onBlur={() => runValidation()}
+                    placeholder={"Personal therapy\nRecorded replay"}
+                    className={errors.exclusions ? "border-red-500" : ""}
+                  />
+                  <FieldError message={errors.exclusions} />
+                </div>
               </div>
 
               {/* Publication — horizontal */}

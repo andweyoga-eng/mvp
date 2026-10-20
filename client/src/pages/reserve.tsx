@@ -57,6 +57,7 @@ import { CancellationPolicyClickwrap } from "@/components/cancellation-policy-cl
 import { CheckoutProcessingOverlay } from "@/components/checkout-processing-overlay";
 import { CANCELLATION_POLICY_CLICKWRAP_COPY } from "@shared/cancellation-policy";
 import { SessionDeliveryInfo } from "@/components/session-delivery-info";
+import { SessionInclusionsExclusions } from "@/components/session-inclusions-exclusions";
 import { formatSessionDeliverySummary, normalizeDeliveryMode } from "@/lib/session-delivery-display";
 import { RecurringSeriesScheduleCard } from "@/components/recurring-series-schedule-card";
 import {
@@ -591,6 +592,10 @@ export default function Reserve() {
                     <SessionDeliveryInfo
                       session={selected}
                       paymentLocked={mapInteractionLocked}
+                    />
+                    <SessionInclusionsExclusions
+                      inclusions={selected.inclusions}
+                      exclusions={selected.exclusions}
                     />
                     <StrictNoToBlock
                       strictNoTo={selected.classType.strictNoTo}

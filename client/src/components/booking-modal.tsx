@@ -64,6 +64,7 @@ import { usePaymentHoldCountdown } from "@/hooks/use-payment-hold-countdown";
 import { PaymentHoldCountdownChip } from "@/components/payment-hold-countdown-chip";
 import { CheckoutHoldExpiredState } from "@/components/checkout-hold-expired-state";
 import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { SessionInclusionsExclusions } from "@/components/session-inclusions-exclusions";
 import { CheckoutProcessingOverlay } from "@/components/checkout-processing-overlay";
 import { openRazorpayCheckout } from "@/lib/razorpay-checkout";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1988,6 +1989,11 @@ export default function BookingModal({
                       {formatSessionDateLabel(displayClass.date)} at{" "}
                       {formatSessionTimeLabel(displayClass.date)}
                     </p>
+                    <SessionInclusionsExclusions
+                      inclusions={displayClass.inclusions}
+                      exclusions={displayClass.exclusions}
+                      className="border-border/60"
+                    />
                   </div>
                 </div>
                 <Alert className="border-green-200 bg-green-50">
@@ -2264,6 +2270,11 @@ export default function BookingModal({
                         <p className="text-sm text-muted-foreground">
                           {displayClass.currentBookings}/{displayClass.maxCapacity} spots filled
                         </p>
+                        <SessionInclusionsExclusions
+                          inclusions={displayClass.inclusions}
+                          exclusions={displayClass.exclusions}
+                          className="border-border/60"
+                        />
                         <StrictNoToBlock
                           strictNoTo={displayClass.classType.strictNoTo}
                           compact

@@ -29,6 +29,8 @@ function toEditPayload(s: {
   seriesId?: string | null;
   seriesWeekCount?: number | null;
   flexiEnabled?: boolean | null;
+  inclusions?: string | null;
+  exclusions?: string | null;
 }) {
   return {
     id: s.id,
@@ -53,6 +55,8 @@ function toEditPayload(s: {
     seriesId: s.seriesId,
     seriesWeekCount: s.seriesWeekCount,
     flexiEnabled: !!s.flexiEnabled,
+    inclusions: s.inclusions,
+    exclusions: s.exclusions,
   };
 }
 
@@ -70,5 +74,18 @@ describe("admin session edit payload", () => {
     assert.equal(payload.sessionFrequency, "drop_in");
     assert.equal(payload.deliveryMode, "online");
     assert.equal(payload.venueAddress, "Studio A");
+  });
+
+  it("keeps inclusions and exclusions on the edit payload", () => {
+    const payload = toEditPayload({
+      id: "sess-2",
+      classTypeId: "type-1",
+      instructorId: "inst-1",
+      date: "2026-06-01T10:00:00.000Z",
+      inclusions: "Mat and props\nLive guidance",
+      exclusions: "Personal therapy",
+    });
+    assert.equal(payload.inclusions, "Mat and props\nLive guidance");
+    assert.equal(payload.exclusions, "Personal therapy");
   });
 });

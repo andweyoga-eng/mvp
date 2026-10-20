@@ -2346,6 +2346,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             validatedData.recurrenceKind === "weekly" ? validatedData.occurrenceCount : null,
           flexiEnabled:
             validatedData.recurrenceKind === "weekly" ? validatedData.flexiEnabled : false,
+          inclusions: validatedData.inclusions,
+          exclusions: validatedData.exclusions,
           seriesId,
         });
         created.push(cls);
@@ -4296,10 +4298,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/purge-qa-fixtures", requireAdminAuth, async (req: AdminAuthRequest, res) => {
+  app.post("/api/admin/purge-qa-fixtures", requireSuperAdminAuth, async (req: AdminAuthRequest, res) => {
     try {
+      const body = z.object({ confirm: z.literal(true) }).safeParse(req.body);
+      if (!body.success) {
+        return res.status(400).json({ message: "Confirm the test-data purge before it runs." });
+      }
       const { purgeQaFixturesFromDb } = await import("../scripts/db/purge-qa-fixtures-core.ts");
-      const summary = await purgeQaFixturesFromDb();
+      const summary = await purgeQaFixturesFromDb({ confirmedByAdmin: true });
       await storage.insertAuditLog({
         userId: req.admin?.id ?? null,
         action: "qa_fixtures_purged",
@@ -4313,8 +4319,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Test fixture data removed.",
         ...summary,
       });
-    } catch {
-      res.status(500).json({ message: "Failed to purge test fixtures" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to purge test fixtures";
+      res.status(400).json({ message });
     }
   });
 
@@ -4450,6 +4457,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           validated.recurrenceKind === "weekly" ? validated.occurrenceCount : null,
         flexiEnabled:
           validated.recurrenceKind === "weekly" ? validated.flexiEnabled : false,
+        inclusions: validated.inclusions,
+        exclusions: validated.exclusions,
       });
       if (!updated) return res.status(404).json({ message: "Session not found" });
       res.json(updated);

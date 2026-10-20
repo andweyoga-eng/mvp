@@ -280,6 +280,10 @@ export const classes = pgTable("classes", {
   venueAddress: text("venue_address"),
   venueMapLink: text("venue_map_link"),
   venueContactPhone: text("venue_contact_phone"),
+  /** Newline-separated items shown on checkout as Inclusions. */
+  inclusions: text("inclusions"),
+  /** Newline-separated items shown on checkout as Exclusions. */
+  exclusions: text("exclusions"),
   /** Flexi Mode lets registered members mix eligible recurring schedule days/times. */
   flexiEnabled: boolean("flexi_enabled").notNull().default(false),
   seriesId: varchar("series_id"),

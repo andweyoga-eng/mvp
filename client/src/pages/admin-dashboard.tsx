@@ -57,6 +57,7 @@ import {
   EditInstructorModal,
   InstructorStatusActions,
 } from "@/components/admin/create-instructor-modal";
+import { PurgeTestDataButton } from "@/components/admin/purge-test-data-button";
 import type { Instructor } from "@shared/schema";
 import type { PaginatedResponse } from "@shared/admin-pagination";
 import { AdminPagination } from "@/components/admin/admin-pagination";
@@ -928,7 +929,10 @@ export default function AdminDashboard() {
                   </CardTitle>
                   <CardDescription>Certified practitioners ({instructorsData?.total ?? instructors.length} total)</CardDescription>
                 </div>
+                <div className="flex items-center gap-2">
+                  {isSuperAdmin ? <PurgeTestDataButton onPurged={() => void refetchIns()} /> : null}
                   <CreateInstructorModal onCreated={() => refetchIns()} />
+                </div>
               </CardHeader>
               <CardContent>
                 {insLoading ? (

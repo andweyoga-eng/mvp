@@ -20,6 +20,11 @@ import {
   classTypes,
   classes,
   consentAuditLogs,
+  couponCodes,
+  couponRedemptions,
+  flexiBookingOccurrences,
+  flexiBookingSelections,
+  flexiBookings,
   instructors,
   paymentQrCodes,
   payments,
@@ -94,8 +99,36 @@ async function deleteClassesAndDependents(classIds: string[]) {
       .update(consentAuditLogs)
       .set({ bookingId: null })
       .where(inArray(consentAuditLogs.bookingId, bookingIds));
+    await db
+      .update(couponRedemptions)
+      .set({ bookingId: null })
+      .where(inArray(couponRedemptions.bookingId, bookingIds));
+    await db
+      .update(subscriptions)
+      .set({ bookingId: null, updatedAt: new Date() })
+      .where(inArray(subscriptions.bookingId, bookingIds));
+    await db
+      .update(flexiBookings)
+      .set({ bookingId: null, updatedAt: new Date() })
+      .where(inArray(flexiBookings.bookingId, bookingIds));
     await db.delete(bookings).where(inArray(bookings.id, bookingIds));
   }
+
+  await db
+    .update(couponCodes)
+    .set({ classId: null })
+    .where(inArray(couponCodes.classId, classIds));
+  await db
+    .update(couponRedemptions)
+    .set({ classId: null })
+    .where(inArray(couponRedemptions.classId, classIds));
+  await db
+    .delete(flexiBookingOccurrences)
+    .where(inArray(flexiBookingOccurrences.classId, classIds));
+  await db
+    .delete(flexiBookingSelections)
+    .where(inArray(flexiBookingSelections.sourceClassId, classIds));
+  await db.delete(flexiBookings).where(inArray(flexiBookings.anchorClassId, classIds));
 
   await db
     .update(payments)
@@ -110,9 +143,17 @@ async function deleteClassesAndDependents(classIds: string[]) {
   return classIds.length;
 }
 
-/** Remove demo seed + integration-test fixture rows. Safe to call from tests (does not close the pool). */
-export async function purgeQaFixturesFromDb(): Promise<PurgeQaFixturesSummary> {
-  assertPurgeAllowed(process.env as import("../../shared/purge-safety.ts").PurgeEnv);
+/**
+ * Remove demo seed + integration-test fixture rows. Safe to call from tests (does not close the pool).
+ * `confirmedByAdmin` is the super-admin purge control: the click is the opt-in, so the remote-host
+ * guard does not block that request. Unattended callers still go through assertPurgeAllowed.
+ */
+export async function purgeQaFixturesFromDb(options?: {
+  confirmedByAdmin?: boolean;
+}): Promise<PurgeQaFixturesSummary> {
+  if (!options?.confirmedByAdmin) {
+    assertPurgeAllowed(process.env as import("../../shared/purge-safety.ts").PurgeEnv);
+  }
 
   const summary: PurgeQaFixturesSummary = {
     sessionTypes: 0,
