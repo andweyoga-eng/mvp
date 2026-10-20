@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Onest:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#fbf9f7;font-family:'Onest',system-ui,sans-serif;color:#1b1c1b;-webkit-font-smoothing:antialiased;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.2;}}
+[data-scroll]::-webkit-scrollbar{display:none;}
+[data-scroll]{scrollbar-width:none;-ms-overflow-style:none;}
+@media (max-width:980px){
+ [data-r="desktop-nav"]{display:none!important;}
+ [data-r="mobile-tabs"]{display:flex!important;}
+ [data-r="acct-text"]{display:none!important;}
+}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#fbf9f7;color:#1b1c1b;overflow-x:hidden;position:relative;">
+
+  <!-- ====== HEADER ====== -->
+  <header style="position:sticky;top:0;z-index:50;background:rgba(251,249,247,0.82);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(75,50,130,0.08);">
+    <div style="max-width:1280px;margin:0 auto;padding:0 clamp(16px,4vw,24px);height:76px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <a href="andWeYOGa%20Hub.dc.html" style="display:flex;align-items:center;text-decoration:none;white-space:nowrap;">
+        <img src="assets/awy-logo.png" alt="andWeYoga" style="height:48px;width:auto;display:block;">
+      </a>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button style="width:40px;height:40px;border:none;background:transparent;border-radius:12px;color:#494550;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-variation-settings:'wght' 400;font-size:20px;">search</span>
+        </button>
+        <button style="width:40px;height:40px;border:none;background:transparent;border-radius:12px;color:#494550;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;transition:background .2s,color .2s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-variation-settings:'wght' 400;font-size:20px;">notifications</span>
+          <span style="position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:#9a4612;border:1.5px solid #fbf9f7;"></span>
+        </button>
+        <button onClick="{{ toggleNav }}" style="display:flex;align-items:center;gap:8px;background:#34196a;color:#fff;border:none;padding:9px 16px;border-radius:12px;font-family:'Onest';font-weight:600;font-size:13px;cursor:pointer;transition:transform .15s,box-shadow .2s;box-shadow:0 4px 14px rgba(52,25,106,0.22);" style-hover="box-shadow:0 6px 20px rgba(52,25,106,0.3);" style-active="transform:scale(0.96);">
+          <span data-r="acct-text">My Account</span>
+          <span style="font-family:'Material Symbols Outlined';font-variation-settings:'wght' 500;font-size:17px;">menu</span>
+        </button>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid rgba(75,50,130,0.06);background:rgba(251,249,247,0.55);">
+      <nav style="max-width:1280px;margin:0 auto;padding:12px clamp(16px,4vw,24px) 16px;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;"><a href="#" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;transform:translateY(-2px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 16px 30px rgba(52,25,106,0.5),0 6px 12px rgba(52,25,106,0.35),0 0 0 5px rgba(52,25,106,0.12),inset 0 1.5px 1px rgba(255,255,255,0.55),inset 0 -3px 7px rgba(35,12,72,0.5);"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">self_improvement</span></span><span style="font-size:13px;font-weight:700;color:#34196a;">Sessions</span></a><a href="andWeYOGa%20Calendar.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;" style-hover="transform:translateY(-3px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 14px 26px rgba(52,25,106,0.4),0 5px 10px rgba(52,25,106,0.28),inset 0 1.5px 1px rgba(255,255,255,0.5),inset 0 -3px 7px rgba(35,12,72,0.5);transition:transform .18s,box-shadow .2s;"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">calendar_month</span></span><span style="font-size:13px;font-weight:600;color:#494550;">Calendar</span></a><a href="andWeYOGa%20Emojou.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;" style-hover="transform:translateY(-3px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 14px 26px rgba(52,25,106,0.4),0 5px 10px rgba(52,25,106,0.28),inset 0 1.5px 1px rgba(255,255,255,0.5),inset 0 -3px 7px rgba(35,12,72,0.5);transition:transform .18s,box-shadow .2s;"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">mood</span></span><span style="font-size:13px;font-weight:600;color:#494550;">Emojou</span></a><a href="andWeYOGa%20Workshops.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;" style-hover="transform:translateY(-3px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 14px 26px rgba(52,25,106,0.4),0 5px 10px rgba(52,25,106,0.28),inset 0 1.5px 1px rgba(255,255,255,0.5),inset 0 -3px 7px rgba(35,12,72,0.5);transition:transform .18s,box-shadow .2s;"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">school</span></span><span style="font-size:13px;font-weight:600;color:#494550;">Workshops</span></a><a href="andWeYOGa%20Trips.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;" style-hover="transform:translateY(-3px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 14px 26px rgba(52,25,106,0.4),0 5px 10px rgba(52,25,106,0.28),inset 0 1.5px 1px rgba(255,255,255,0.5),inset 0 -3px 7px rgba(35,12,72,0.5);transition:transform .18s,box-shadow .2s;"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">hiking</span></span><span style="font-size:13px;font-weight:600;color:#494550;">Trips</span></a><a href="andWeYOGa%20Explore.dc.html" style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:6px 4px;text-decoration:none;" style-hover="transform:translateY(-3px);"><span style="display:inline-flex;width:46px;height:46px;border-radius:14px;align-items:center;justify-content:center;background:linear-gradient(145deg,#8159c4 0%,#4b3282 48%,#9a4612 100%);box-shadow:0 14px 26px rgba(52,25,106,0.4),0 5px 10px rgba(52,25,106,0.28),inset 0 1.5px 1px rgba(255,255,255,0.5),inset 0 -3px 7px rgba(35,12,72,0.5);transition:transform .18s,box-shadow .2s;"><span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:25px;color:#fff;text-shadow:0 1px 2px rgba(35,12,72,0.4);">explore</span></span><span style="font-size:13px;font-weight:600;color:#494550;">Explore</span></a></nav>
+    </div>
+  </header>
+
+  <!-- ====== SIDE NAV OVERLAY ====== -->
+  <div onClick="{{ closeNav }}" style="position:fixed;inset:0;z-index:55;background:rgba(27,28,27,0.28);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);transition:opacity .3s;opacity:{{ overlayOpacity }};pointer-events:{{ overlayPointer }};"></div>
+
+  <aside style="position:fixed;top:0;right:0;height:100vh;width:min(360px,88vw);z-index:60;background:rgba(251,249,247,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-left:1px solid rgba(75,50,130,0.1);box-shadow:-12px 0 40px rgba(27,28,27,0.12);padding:16px;display:flex;flex-direction:column;justify-content:space-between;transition:transform .32s cubic-bezier(.4,0,.2,1);transform:{{ drawerTransform }};overflow-y:auto;">
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid rgba(75,50,130,0.1);">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#4b3282,#34196a);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;">P</div>
+          <div>
+            <h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;color:#34196a;">My Account</h3>
+            <p style="margin:2px 0 0;font-size:12px;color:#494550;">Manage your wellness journey</p>
+          </div>
+        </div>
+        <button onClick="{{ closeNav }}" style="border:none;background:transparent;color:#494550;cursor:pointer;display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:10px;" style-hover="background:rgba(52,25,106,0.06);">
+          <span style="font-family:'Material Symbols Outlined';font-size:22px;">arrow_forward</span>
+        </button>
+      </div>
+
+      <nav style="display:flex;flex-direction:column;gap:4px;">
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;background:#34196a;color:#fff;font-weight:600;font-size:15px;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">calendar_add_on</span><span>Book Sessions</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">person</span><span>Profile</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">monitor_heart</span><span>Health Updates</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">card_membership</span><span>My Subscriptions</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">payments</span><span>Payment History</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">devices</span><span>Link Devices</span>
+          <span style="margin-left:auto;font-size:10px;font-weight:700;letter-spacing:0.08em;color:#9a4612;background:rgba(154,70,18,0.1);padding:3px 8px;border-radius:99px;">SOON</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:14px;padding:13px 14px;border-radius:12px;text-decoration:none;color:#494550;font-size:15px;transition:background .18s,color .18s;" style-hover="background:rgba(52,25,106,0.06);color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;">history</span><span>Session History</span>
+        </a>
+      </nav>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:14px;padding-top:18px;border-top:1px solid rgba(75,50,130,0.1);">
+      <button style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#9a4612;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;transition:background .2s,box-shadow .2s;box-shadow:0 4px 14px rgba(154,70,18,0.22);" style-hover="background:#793000;box-shadow:0 6px 20px rgba(154,70,18,0.3);">
+        <span style="font-family:'Material Symbols Outlined';font-size:20px;">school</span><span>Switch to Instructor</span>
+      </button>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="#" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#494550;text-decoration:none;font-size:13px;transition:color .18s;" style-hover="color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">help</span><span>Help Center</span>
+        </a>
+        <a href="#" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#494550;text-decoration:none;font-size:13px;transition:color .18s;" style-hover="color:#34196a;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">security</span><span>Privacy</span>
+        </a>
+        <a href="andWeYOGa%20Home.dc.html" onClick="{{ signOut }}" style="display:flex;align-items:center;gap:10px;padding:8px 6px;color:#ba1a1a;text-decoration:none;font-size:13px;transition:opacity .18s;margin-top:4px;" style-hover="opacity:0.75;">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">logout</span><span>Sign Out</span>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ====== MAIN ====== -->
+  <main style="max-width:1280px;margin:0 auto;padding:clamp(20px,4vw,40px) clamp(16px,4vw,24px) 80px;">
+
+    <!-- HERO -->
+    <section style="margin-bottom:24px;">
+      <div style="position:relative;overflow:hidden;border-radius:24px;min-height:clamp(360px,46vw,440px);display:flex;align-items:center;border:1px solid rgba(75,50,130,0.1);box-shadow:0 8px 30px rgba(27,28,27,0.05);">
+        <div style="position:absolute;inset:0;z-index:0;background:linear-gradient(120deg,#e6dff1 0%,#d9d2ea 38%,#cfc6df 64%,#e7d8cd 100%);"></div>
+        <div style="position:absolute;inset:0;z-index:0;opacity:0.5;background-image:repeating-linear-gradient(115deg,rgba(52,25,106,0.05) 0 2px,transparent 2px 16px);"></div>
+        <div style="position:absolute;right:0;top:0;bottom:0;width:62%;z-index:1;display:flex;align-items:center;justify-content:center;color:rgba(52,25,106,0.16);">
+          <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:clamp(180px,30vw,320px);">self_improvement</span>
+        </div>
+        <div style="position:absolute;inset:0;z-index:2;background:linear-gradient(90deg,#fbf9f7 0%,rgba(251,249,247,0.86) 34%,rgba(251,249,247,0.3) 62%,transparent 100%);"></div>
+
+        <div style="position:relative;z-index:3;padding:clamp(24px,4vw,44px);max-width:640px;width:100%;">
+          <span style="display:inline-block;padding:7px 16px;background:rgba(52,25,106,0.1);color:#34196a;border-radius:99px;font-size:13px;font-weight:600;margin-bottom:18px;">Good Morning, <span style="font-family:'Instrument Serif';font-style:italic;font-size:1.15em;">Priya</span></span>
+          <h1 style="margin:0 0 14px;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(30px,5.4vw,48px);line-height:1.12;letter-spacing:-0.02em;color:#34196a;">Your sanctuary for<br><span style="font-family:'Instrument Serif';font-style:italic;font-weight:400;letter-spacing:normal;font-size:1.06em;">mindful</span> movement.</h1>
+          <p style="margin:0 0 24px;font-size:clamp(15px,1.4vw,18px);line-height:1.6;color:#494550;max-width:420px;">Continue your path to inner balance with your scheduled Hatha session today at 10:00 AM.</p>
+
+          <div style="background:rgba(255,255,255,0.72);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;padding:16px;box-shadow:0 6px 22px rgba(27,28,27,0.05);display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:440px;">
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 4px;">
+              <span style="font-family:'Material Symbols Outlined';color:#34196a;font-size:20px;">timer</span>
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:#494550;">TIME</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">10:00 AM</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 4px;">
+              <span style="font-family:'Material Symbols Outlined';color:#34196a;font-size:20px;">person</span>
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:#494550;">INSTRUCTOR</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">Arjun Patel</span></div>
+            </div>
+            <button style="display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;background:#34196a;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap;transition:transform .15s,box-shadow .2s;box-shadow:0 6px 18px rgba(52,25,106,0.26);" style-hover="transform:translateY(-2px);box-shadow:0 10px 26px rgba(52,25,106,0.34);">
+              <span>Enter Session</span>
+              <span style="width:7px;height:7px;border-radius:50%;background:#ff6b6b;animation:blink 1.5s ease-in-out infinite;"></span>
+              <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;">LIVE</span>
+            </button>
+            <div style="display:flex;align-items:center;gap:9px;padding:6px 4px;">
+              <span style="font-family:'Material Symbols Outlined';color:#34196a;font-size:20px;">self_improvement</span>
+              <div style="display:flex;flex-direction:column;"><span style="font-size:10px;font-weight:700;letter-spacing:0.06em;color:#494550;">TYPE</span><span style="font-size:14px;font-weight:600;color:#1b1c1b;">Hatha · 60 min</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATS -->
+    <section style="margin-bottom:56px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:20px;">
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-left:4px solid #34196a;border-radius:18px;padding:22px;display:flex;align-items:center;gap:18px;transition:box-shadow .25s,transform .25s;" style-hover="box-shadow:0 10px 30px rgba(27,28,27,0.06);transform:translateY(-3px);">
+          <div style="width:48px;height:48px;border-radius:50%;background:rgba(52,25,106,0.1);display:flex;align-items:center;justify-content:center;color:#34196a;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:26px;">local_fire_department</span></div>
+          <div><p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.07em;color:#494550;">CALORIES BURNT</p><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;color:#34196a;">1,240 <span style="font-size:14px;font-weight:400;color:#494550;">kcal</span></h3></div>
+        </div>
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-left:4px solid #9a4612;border-radius:18px;padding:22px;display:flex;align-items:center;gap:18px;transition:box-shadow .25s,transform .25s;" style-hover="box-shadow:0 10px 30px rgba(27,28,27,0.06);transform:translateY(-3px);">
+          <div style="width:48px;height:48px;border-radius:50%;background:rgba(154,70,18,0.1);display:flex;align-items:center;justify-content:center;color:#9a4612;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:26px;">calendar_month</span></div>
+          <div><p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.07em;color:#494550;">SESSIONS ATTENDED</p><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;color:#34196a;">18 <span style="font-size:14px;font-weight:400;color:#494550;">this month</span></h3></div>
+        </div>
+        <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-left:4px solid #354c3a;border-radius:18px;padding:22px;display:flex;align-items:center;gap:18px;transition:box-shadow .25s,transform .25s;" style-hover="box-shadow:0 10px 30px rgba(27,28,27,0.06);transform:translateY(-3px);">
+          <div style="width:48px;height:48px;border-radius:50%;background:#cfe9d1;display:flex;align-items:center;justify-content:center;color:#354c3a;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:26px;">stars</span></div>
+          <div><p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.07em;color:#494550;">WELLNESS STREAK</p><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:24px;color:#34196a;">4 <span style="font-size:14px;font-weight:400;color:#494550;">days</span></h3></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BENTO -->
+    <section style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;margin-bottom:56px;">
+
+      <!-- MAIN COLUMN -->
+      <div style="flex:1 1 100%;min-width:0;display:flex;flex-direction:column;gap:22px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px;">
+          <div>
+            <h2 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(24px,3vw,32px);color:#34196a;">Upcoming Sessions</h2>
+            <p style="margin:4px 0 0;font-size:14px;color:#494550;">Handpicked sessions to match your progress</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+            <a href="#" style="display:flex;align-items:center;gap:7px;color:#34196a;font-weight:600;font-size:14px;text-decoration:none;" style-hover="text-decoration:underline;"><span style="font-family:'Material Symbols Outlined';font-size:18px;">event_available</span><span>View Booked</span></a>
+          </div>
+        </div>
+
+        <div style="position:relative;">
+          <button onClick="{{ scrollPrev }}" aria-label="Previous sessions" style="position:absolute;left:-10px;top:92px;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(52,25,106,0.12);background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(27,28,27,0.12);transition:background .2s,transform .15s;" style-hover="background:#34196a;color:#fff;" style-active="transform:translateY(-50%) scale(0.92);">
+            <span style="font-family:'Material Symbols Outlined';font-size:24px;">chevron_left</span>
+          </button>
+          <button onClick="{{ scrollNext }}" aria-label="Next sessions" style="position:absolute;right:-10px;top:92px;transform:translateY(-50%);z-index:5;width:44px;height:44px;border-radius:50%;border:1px solid rgba(52,25,106,0.12);background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);color:#34196a;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(27,28,27,0.12);transition:background .2s,transform .15s;" style-hover="background:#34196a;color:#fff;" style-active="transform:translateY(-50%) scale(0.92);">
+            <span style="font-family:'Material Symbols Outlined';font-size:24px;">chevron_right</span>
+          </button>
+
+          <div data-carousel="sessions" data-scroll style="display:flex;gap:18px;overflow-x:auto;scroll-behavior:smooth;padding:4px 2px 8px;scroll-snap-type:x mandatory;">
+          <!-- Card 1 -->
+          <div style="flex:0 0 288px;scroll-snap-align:start;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;overflow:hidden;transition:box-shadow .35s,transform .35s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="position:relative;height:184px;background:linear-gradient(135deg,#d7cfe6,#c8bdd9);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(52,25,106,0.22);">self_improvement</span>
+              <span style="position:absolute;left:12px;top:12px;background:#cfe9d1;color:#354c3a;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">Beginner Friendly</span>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(52,25,106,0.45);letter-spacing:0.04em;">/ photo: hatha flow</span>
+            </div>
+            <div style="padding:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#34196a;">Morning Hatha Flow</h3><span style="color:#34196a;font-weight:700;font-size:16px;white-space:nowrap;">$15</span></div>
+              <div style="display:flex;gap:16px;color:#494550;margin-bottom:18px;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">schedule</span>60 min</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">person</span>Arjun P.</span>
+              </div>
+              <a href="andWeYOGa%20Reserve.dc.html" style="display:block;text-align:center;width:100%;padding:11px;border:1.5px solid rgba(52,25,106,0.25);background:transparent;color:#34196a;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;box-sizing:border-box;transition:background .2s,color .2s;" style-hover="background:#34196a;color:#fff;border-color:#34196a;">Reserve Spot</a>
+            </div>
+          </div>
+          <!-- Card 2 -->
+          <div style="flex:0 0 288px;scroll-snap-align:start;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;overflow:hidden;transition:box-shadow .35s,transform .35s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="position:relative;height:184px;background:linear-gradient(135deg,#e3d3c8,#d6c2b4);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(154,70,18,0.24);">fitness_center</span>
+              <span style="position:absolute;left:12px;top:12px;background:#ffdbcb;color:#793000;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">High Intensity</span>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(154,70,18,0.5);letter-spacing:0.04em;">/ photo: hydro core</span>
+            </div>
+            <div style="padding:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#34196a;">Deep Core Hydro</h3><span style="color:#34196a;font-weight:700;font-size:16px;white-space:nowrap;">$22</span></div>
+              <div style="display:flex;gap:16px;color:#494550;margin-bottom:18px;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">schedule</span>45 min</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">person</span>Alice K.</span>
+              </div>
+              <a href="andWeYOGa%20Reserve.dc.html" style="display:block;text-align:center;width:100%;padding:11px;border:1.5px solid rgba(52,25,106,0.25);background:transparent;color:#34196a;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;box-sizing:border-box;transition:background .2s,color .2s;" style-hover="background:#34196a;color:#fff;border-color:#34196a;">Reserve Spot</a>
+            </div>
+          </div>
+          <!-- Card 3 -->
+          <div style="flex:0 0 288px;scroll-snap-align:start;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;overflow:hidden;transition:box-shadow .35s,transform .35s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="position:relative;height:184px;background:linear-gradient(135deg,#cdd9d0,#bcc9be);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(53,76,58,0.28);">spa</span>
+              <span style="position:absolute;left:12px;top:12px;background:#ffdbcb;color:#793000;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">Popular</span>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(53,76,58,0.55);letter-spacing:0.04em;">/ photo: sound bath</span>
+            </div>
+            <div style="padding:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#34196a;">Tibetan Sound Bath</h3><span style="color:#34196a;font-weight:700;font-size:16px;white-space:nowrap;">$28</span></div>
+              <div style="display:flex;gap:16px;color:#494550;margin-bottom:18px;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">schedule</span>90 min</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">person</span>Sarah J.</span>
+              </div>
+              <a href="andWeYOGa%20Reserve.dc.html" style="display:block;text-align:center;width:100%;padding:11px;border:1.5px solid rgba(52,25,106,0.25);background:transparent;color:#34196a;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;box-sizing:border-box;transition:background .2s,color .2s;" style-hover="background:#34196a;color:#fff;border-color:#34196a;">Reserve Spot</a>
+            </div>
+          </div>
+          <!-- Card 4 -->
+          <div style="flex:0 0 288px;scroll-snap-align:start;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;overflow:hidden;transition:box-shadow .35s,transform .35s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="position:relative;height:184px;background:linear-gradient(135deg,#d2c7e0,#bcaed6);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(52,25,106,0.22);">air</span>
+              <span style="position:absolute;left:12px;top:12px;background:#cfe9d1;color:#354c3a;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">All Levels</span>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(52,25,106,0.45);letter-spacing:0.04em;">/ photo: pranayama</span>
+            </div>
+            <div style="padding:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#34196a;">Breathwork &amp; Calm</h3><span style="color:#34196a;font-weight:700;font-size:16px;white-space:nowrap;">$18</span></div>
+              <div style="display:flex;gap:16px;color:#494550;margin-bottom:18px;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">schedule</span>50 min</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">person</span>Arjun P.</span>
+              </div>
+              <a href="andWeYOGa%20Reserve.dc.html" style="display:block;text-align:center;width:100%;padding:11px;border:1.5px solid rgba(52,25,106,0.25);background:transparent;color:#34196a;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;box-sizing:border-box;transition:background .2s,color .2s;" style-hover="background:#34196a;color:#fff;border-color:#34196a;">Reserve Spot</a>
+            </div>
+          </div>
+          <!-- Card 5 -->
+          <div style="flex:0 0 288px;scroll-snap-align:start;background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:18px;overflow:hidden;transition:box-shadow .35s,transform .35s;" style-hover="box-shadow:0 16px 40px rgba(27,28,27,0.1);transform:translateY(-4px);">
+            <div style="position:relative;height:184px;background:linear-gradient(135deg,#e0d2c5,#d3bdad);display:flex;align-items:center;justify-content:center;">
+              <span style="font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:64px;color:rgba(154,70,18,0.24);">sports_gymnastics</span>
+              <span style="position:absolute;left:12px;top:12px;background:#ffdbcb;color:#793000;padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;">Dynamic</span>
+              <span style="position:absolute;right:12px;bottom:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:rgba(154,70,18,0.5);letter-spacing:0.04em;">/ photo: power flow</span>
+            </div>
+            <div style="padding:20px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;gap:8px;"><h3 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:19px;color:#34196a;">Power Vinyasa</h3><span style="color:#34196a;font-weight:700;font-size:16px;white-space:nowrap;">$24</span></div>
+              <div style="display:flex;gap:16px;color:#494550;margin-bottom:18px;">
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">schedule</span>75 min</span>
+                <span style="display:flex;align-items:center;gap:5px;font-size:13px;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">person</span>Priya S.</span>
+              </div>
+              <a href="andWeYOGa%20Reserve.dc.html" style="display:block;text-align:center;width:100%;padding:11px;border:1.5px solid rgba(52,25,106,0.25);background:transparent;color:#34196a;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;text-decoration:none;box-sizing:border-box;transition:background .2s,color .2s;" style-hover="background:#34196a;color:#fff;border-color:#34196a;">Reserve Spot</a>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+
+      <!-- MENTORS + BOOKED ROW -->
+      <div style="flex:1 1 100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;align-items:start;">
+        <div style="display:flex;flex-direction:column;gap:18px;">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(24px,3vw,32px);color:#34196a;">Your Mentors</h2>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:16px;padding:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:transform .25s,box-shadow .25s;" style-hover="transform:translateX(6px);box-shadow:0 10px 26px rgba(27,28,27,0.07);">
+            <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(115deg,#34196a 0%,#4b3282 58%,#8a4f63 80%,#d98a4e 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;flex-shrink:0;">PS</div>
+            <div style="flex:1;min-width:0;"><h4 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:16px;color:#34196a;">Priya Sharma</h4><p style="margin:2px 0 0;font-size:12px;color:#494550;">Advanced Vinyasa Specialist</p></div>
+            <span style="background:rgba(52,25,106,0.08);color:#34196a;font-size:11px;font-weight:700;padding:5px 9px;border-radius:99px;white-space:nowrap;">4.9 ★</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:16px;padding:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:transform .25s,box-shadow .25s;" style-hover="transform:translateX(6px);box-shadow:0 10px 26px rgba(27,28,27,0.07);">
+            <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(300deg,#d98a4e 0%,#8a4f63 21%,#5a3f86 48%,#34196a 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;flex-shrink:0;">AP</div>
+            <div style="flex:1;min-width:0;"><h4 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:16px;color:#34196a;">Arjun Patel</h4><p style="margin:2px 0 0;font-size:12px;color:#494550;">Breathwork &amp; Meditation</p></div>
+            <span style="background:rgba(52,25,106,0.08);color:#34196a;font-size:11px;font-weight:700;padding:5px 9px;border-radius:99px;white-space:nowrap;">5.0 ★</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:16px;padding:14px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:transform .25s,box-shadow .25s;" style-hover="transform:translateX(6px);box-shadow:0 10px 26px rgba(27,28,27,0.07);">
+            <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(150deg,#6850a1 0%,#4b3282 60%,#8a5266 80%,#dd8a52 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Bricolage Grotesque';font-weight:700;font-size:18px;flex-shrink:0;">AK</div>
+            <div style="flex:1;min-width:0;"><h4 style="margin:0;font-family:'Bricolage Grotesque';font-weight:600;font-size:16px;color:#34196a;">Allice Kumari</h4><p style="margin:2px 0 0;font-size:12px;color:#494550;">Hatha &amp; Wellness Coach</p></div>
+            <span style="background:rgba(52,25,106,0.08);color:#34196a;font-size:11px;font-weight:700;padding:5px 9px;border-radius:99px;white-space:nowrap;">4.8 ★</span>
+          </div>
+        </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:18px;">
+        <h2 style="margin:0;font-family:'Bricolage Grotesque';font-weight:700;font-size:clamp(24px,3vw,32px);color:#34196a;">Your Schedule</h2>
+        <div style="position:relative;overflow:hidden;border-radius:22px;padding:26px;background:linear-gradient(150deg,#4b3282,#34196a);color:#baa0f8;">
+          <div style="position:relative;z-index:1;">
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:rgba(255,255,255,0.78);">You have 2 sessions scheduled for later this week.</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12);border-radius:12px;cursor:pointer;transition:background .2s;" style-hover="background:rgba(255,255,255,0.18);">
+                <div><div style="font-size:14px;font-weight:700;color:#fff;">Vinyasa Flow</div><div style="font-size:11px;color:rgba(255,255,255,0.7);">Thu, 6:00 PM</div></div>
+                <span style="font-family:'Material Symbols Outlined';font-size:20px;color:#fff;">arrow_forward</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12);border-radius:12px;cursor:pointer;transition:background .2s;" style-hover="background:rgba(255,255,255,0.18);">
+                <div><div style="font-size:14px;font-weight:700;color:#fff;">Kundalini Awakening</div><div style="font-size:11px;color:rgba(255,255,255,0.7);">Sat, 11:30 AM</div></div>
+                <span style="font-family:'Material Symbols Outlined';font-size:20px;color:#fff;">arrow_forward</span>
+              </div>
+            </div>
+          </div>
+          <span style="position:absolute;right:-30px;bottom:-30px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:170px;color:rgba(255,255,255,0.08);transform:rotate(12deg);">calendar_today</span>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMING SOON -->
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;">
+      <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:30px;display:flex;flex-direction:column;justify-content:space-between;transition:box-shadow .3s;" style-hover="box-shadow:0 14px 36px rgba(27,28,27,0.07);">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+            <div style="width:48px;height:48px;background:rgba(154,70,18,0.1);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#9a4612;"><span style="font-family:'Material Symbols Outlined';font-size:25px;">explore</span></div>
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#9a4612;background:rgba(154,70,18,0.1);padding:5px 11px;border-radius:8px;">COMING SOON</span>
+          </div>
+          <h3 style="margin:0 0 12px;font-family:'Bricolage Grotesque';font-weight:700;font-size:26px;color:#34196a;">Workshops &amp; Events</h3>
+          <p style="margin:0;color:#494550;font-size:15px;line-height:1.6;">Curated intensive sessions for deep technical mastery and spiritual growth. Stay tuned for our inaugural schedule.</p>
+        </div>
+        <a href="#" style="margin-top:28px;display:flex;align-items:center;gap:8px;color:#34196a;font-weight:700;font-size:15px;text-decoration:none;" style-hover="gap:12px;"><span>Get Notified</span><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_right</span></a>
+      </div>
+      <div style="background:rgba(255,255,255,0.7);backdrop-filter:blur(20px);border:1px solid rgba(75,50,130,0.1);border-radius:22px;padding:30px;display:flex;flex-direction:column;justify-content:space-between;transition:box-shadow .3s;" style-hover="box-shadow:0 14px 36px rgba(27,28,27,0.07);">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;">
+            <div style="width:48px;height:48px;background:rgba(52,25,106,0.1);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#34196a;"><span style="font-family:'Material Symbols Outlined';font-size:25px;">hiking</span></div>
+            <span style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#34196a;background:rgba(52,25,106,0.1);padding:5px 11px;border-radius:8px;">COMING SOON</span>
+          </div>
+          <h3 style="margin:0 0 12px;font-family:'Bricolage Grotesque';font-weight:700;font-size:26px;color:#34196a;">Trips &amp; Treks</h3>
+          <p style="margin:0;color:#494550;font-size:15px;line-height:1.6;">Immersive wellness retreats in the world's most serene natural landscapes. Launching this summer.</p>
+        </div>
+        <a href="#" style="margin-top:28px;display:flex;align-items:center;gap:8px;color:#34196a;font-weight:700;font-size:15px;text-decoration:none;" style-hover="gap:12px;"><span>Early Access</span><span style="font-family:'Material Symbols Outlined';font-size:20px;">chevron_right</span></a>
+      </div>
+    </section>
+  </main>
+
+  <!-- FAB -->
+  <button onClick="{{ toggleNav }}" style="position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:#34196a;color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(52,25,106,0.4);transition:transform .18s;z-index:40;" style-hover="transform:scale(1.08);" style-active="transform:scale(0.94);">
+    <span style="font-family:'Material Symbols Outlined';font-size:30px;">add</span>
+  </button>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { navOpen: false };
+  renderVals() {
+    const open = this.state.navOpen;
+    const scrollBy = (dir) => {
+      const el = document.querySelector('[data-carousel="sessions"]');
+      if (!el) return;
+      const amount = Math.max(el.clientWidth * 0.85, 306);
+      el.scrollBy({ left: dir * amount, behavior: 'smooth' });
+    };
+    return {
+      toggleNav: () => this.setState(s => ({ navOpen: !s.navOpen })),
+      closeNav: () => this.setState({ navOpen: false }),
+      drawerTransform: open ? 'translateX(0)' : 'translateX(100%)',
+      overlayOpacity: open ? '1' : '0',
+      overlayPointer: open ? 'auto' : 'none',
+      scrollPrev: () => scrollBy(-1),
+      scrollNext: () => scrollBy(1),
+      signOut: () => { try { localStorage.removeItem('awy_auth'); } catch(e){} window.location.href = 'andWeYOGa Home.dc.html'; },
+    };
+  }
+}
+</script>
+</body>
+</html>

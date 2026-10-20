@@ -1,0 +1,1018 @@
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Timer,
+  User as UserIcon,
+  Flower2,
+  CalendarCheck,
+  CalendarClock,
+  CalendarDays,
+  ArrowRight,
+} from "lucide-react";
+import { ClampedDescription } from "@/components/clamped-description";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
+import { GlassCard } from "@/components/digital-zen/glass-card";
+import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
+import { PageContainer } from "@/components/digital-zen/page-container";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  getMeetJoinMessage,
+  getMeetJoinState,
+  getSessionEndTime,
+} from "@shared/session-meet-access";
+import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+import {
+  formatProgramListingPriceLabel,
+  type ProgramListingPrice,
+} from "@shared/program-listing-price";
+import {
+  fetchMemberSessions,
+  memberSessionsQueryKey,
+  type MemberSession,
+} from "@/lib/member-sessions";
+import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
+import { profileCheckFromUser } from "@/lib/account-profile-complete";
+import { getMemberReadiness } from "@shared/profileCompleteness";
+import { navigateToMemberReserve } from "@/lib/member-reserve-navigation";
+import { consumeSpotReleasedFlag } from "@/lib/spot-release-navigation";
+import { ReleaseSpotToast } from "@/components/release-spot-toast";
+import { StrictNoToBlock } from "@/components/strict-no-to-block";
+import { SessionsSearchBar } from "@/components/sessions/sessions-search-bar";
+import { WeeklySchedulePanel } from "@/components/sessions/weekly-schedule-panel";
+import { PracticeCalendarPanel } from "@/components/sessions/practice-calendar-panel";
+import { CalendarDaySessionsPanel } from "@/components/sessions/calendar-day-sessions";
+import { YourMentorsSection } from "@/components/sessions/your-mentors-section";
+import { collectBookableClassTypeIds } from "@/lib/class-type-availability";
+import {
+  clearWaitlistPhoneChoice,
+  completeWaitlistPhoneChoice,
+  consumeWaitlistWelcome,
+  formatWaitlistJoinedLabel,
+  getWaitlistPhoneChoice,
+  type WaitlistPhoneChoice,
+  type WaitlistWelcome,
+} from "@/lib/pending-waitlist";
+import { formatWaitlistPhoneDisplay } from "@shared/waitlist";
+import { useToast } from "@/hooks/use-toast";
+import { WaitlistJoinDialog } from "@/components/waitlist-join-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS, fetchScheduleMonth } from "@/lib/public-session-catalog";
+import { filterUpcomingScheduleDays, type ScheduleDayLike } from "@/lib/booking-flow";
+import {
+  practiceClassImage,
+  samePracticeCalendarDay,
+  type PracticeScheduleDay,
+  type PracticeSession,
+} from "@/lib/practice-schedule";
+import type { SessionsSearchCatalog } from "@/lib/sessions-search/types";
+import type { ClassType, Instructor } from "@shared/schema";
+import type { HeroCtaConfig } from "@shared/hero-cta";
+import { heroSlideImageSrc } from "@/lib/hero-slide-images";
+
+/** Rotates once a day so the greeting stays fresh but stable within a session. */
+const YOGA_QUOTES: { text: string; author: string }[] = [
+  {
+    text: "Yoga is the journey of the self, through the self, to the self.",
+    author: "The Bhagavad Gita",
+  },
+  {
+    text: "Yoga does not just change the way we see things, it transforms the person who sees.",
+    author: "B.K.S. Iyengar",
+  },
+  { text: "Practice and all is coming.", author: "Sri K. Pattabhi Jois" },
+  {
+    text: "Yoga is not about touching your toes. It is about what you learn on the way down.",
+    author: "Jigar Gor",
+  },
+  {
+    text: "The body benefits from movement, and the mind benefits from stillness.",
+    author: "Sakyong Mipham",
+  },
+  {
+    text: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
+    author: "Will Durant",
+  },
+  {
+    text: "Discipline is the bridge between goals and accomplishment.",
+    author: "Jim Rohn",
+  },
+  { text: "Inhale the future, exhale the past.", author: "Yoga proverb" },
+  {
+    text: "A little progress each day adds up to big results.",
+    author: "Satya Nani",
+  },
+  {
+    text: "When you own your breath, nobody can steal your peace.",
+    author: "Yoga proverb",
+  },
+];
+
+type PublicInstructor = Pick<Instructor, "id" | "name" | "bio" | "imageUrl" | "specialties">;
+
+function greeting(now = new Date()): string {
+  const h = now.getHours();
+  if (h < 12) return "Good Morning";
+  if (h < 17) return "Good Afternoon";
+  return "Good Evening";
+}
+
+function formatTime(date: string | Date): string {
+  return new Date(date).toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function formatDayTime(date: string | Date): string {
+  const d = new Date(date);
+  return `${d.toLocaleDateString("en-IN", { weekday: "short", timeZone: "Asia/Kolkata" })}, ${formatTime(d)}`;
+}
+
+function scrollCarouselEl(el: HTMLDivElement | null, dir: number) {
+  if (!el) return;
+  el.scrollBy({ left: dir * Math.max(el.clientWidth * 0.85, 306), behavior: "smooth" });
+}
+
+type ListingClassType = ClassType & {
+  listingPrice?: ProgramListingPrice | null;
+};
+
+function ClassTypeCard({
+  classType,
+  canBook,
+  onBook,
+  onWaitlist,
+}: {
+  classType: ListingClassType;
+  canBook: boolean;
+  onBook: (classTypeId: string) => void;
+  onWaitlist: (classType: ListingClassType) => void;
+}) {
+  const price = formatProgramListingPriceLabel(classType.listingPrice);
+
+  return (
+    <article
+      className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
+      aria-label={classType.name}
+      data-testid={`hub-workout-card-${classType.id}`}
+    >
+      <div className="relative overflow-hidden">
+        <ClassTypeCoverImage imageUrl={classType.imageUrl} alt="" />
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        <div className="mb-2.5 flex items-start justify-between gap-2">
+          <h3 className="font-display text-[19px] font-semibold text-primary">{classType.name}</h3>
+          {price ? (
+            <span className="whitespace-nowrap text-base font-bold text-primary">{price}</span>
+          ) : null}
+        </div>
+        <div className="mb-3 flex gap-4 text-[13px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <Timer className="h-[17px] w-[17px]" />
+            {classType.duration} min
+          </span>
+        </div>
+        <ClampedDescription
+          text={classType.description ?? ""}
+          className="mb-3"
+          clampClassName="line-clamp-2"
+          moreLabel="...more"
+          lessLabel="less"
+          testId={`hub-workout-description-${classType.id}`}
+        />
+        <StrictNoToBlock strictNoTo={classType.strictNoTo} compact className="mb-3 border-none pt-0" />
+        <button
+          type="button"
+          onClick={() => (canBook ? onBook(classType.id) : onWaitlist(classType))}
+          className={cn(
+            "pointer-events-auto relative z-10 mt-auto w-full rounded-xl py-2.5 text-sm font-bold transition-colors",
+            canBook
+              ? "border-[1.5px] border-primary/25 text-primary hover:border-primary hover:bg-primary hover:text-primary-foreground"
+              : "border-0 bg-dz-secondary text-white shadow-sm hover:bg-dz-secondary/90",
+          )}
+          data-testid={canBook ? `workout-book-${classType.id}` : `workout-waitlist-${classType.id}`}
+        >
+          {canBook ? "Book Now" : "Join Waitlist"}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export default function Dashboard() {
+  const { user, isLoading: authLoading, updateProfile } = useAuth();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const workoutCarouselRef = useRef<HTMLDivElement>(null);
+  const weeklyHeaderRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const mentorsSectionRef = useRef<HTMLDivElement>(null);
+  const [heroImageIdx, setHeroImageIdx] = useState(0);
+  const { data: heroConfig } = useQuery<HeroCtaConfig>({
+    queryKey: ["/api/hero-cta"],
+    queryFn: async () => {
+      const res = await fetch("/api/hero-cta");
+      if (!res.ok) throw new Error("Failed to load hero");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const heroSlides = useMemo(
+    () => (heroConfig?.slides ?? []).filter((slide) => slide.published),
+    [heroConfig],
+  );
+  const [showReleaseToast, setShowReleaseToast] = useState(() => consumeSpotReleasedFlag());
+  const [now, setNow] = useState(() => new Date());
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [highlightedDayKey, setHighlightedDayKey] = useState<string | null>(null);
+  const [calendarFocusKey, setCalendarFocusKey] = useState<string | null>(null);
+  const [waitlistType, setWaitlistType] = useState<ListingClassType | null>(null);
+  const [waitlistWelcome, setWaitlistWelcome] = useState<WaitlistWelcome | null>(null);
+  const [phoneChoice, setPhoneChoice] = useState<WaitlistPhoneChoice | null>(null);
+  const [phoneChoiceBusy, setPhoneChoiceBusy] = useState(false);
+  const [bookableNudgeDismissed, setBookableNudgeDismissed] = useState(() => {
+    try {
+      return localStorage.getItem("awy_ready_to_book_nudge_dismissed_v1") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const dailyQuote = useMemo(() => {
+    const dayIndex = Math.floor(Date.now() / 86_400_000);
+    return YOGA_QUOTES[dayIndex % YOGA_QUOTES.length];
+  }, []);
+
+  useEffect(() => {
+    if (!showReleaseToast) return;
+    const id = window.setTimeout(() => setShowReleaseToast(false), 2500);
+    return () => window.clearTimeout(id);
+  }, [showReleaseToast]);
+
+  useEffect(() => {
+    if (!authLoading && !user) setLocation("/");
+  }, [authLoading, user, setLocation]);
+
+  // Consent can leave the window scrolled into the hero. Open the dashboard at
+  // the top so the header is the first thing on screen.
+  useLayoutEffect(() => {
+    const previous = window.history.scrollRestoration;
+    try {
+      window.history.scrollRestoration = "manual";
+    } catch {
+      /* ignore */
+    }
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    return () => {
+      try {
+        window.history.scrollRestoration = previous;
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setHeroImageIdx(0);
+  }, [heroSlides.length]);
+
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
+    const id = window.setInterval(
+      () => setHeroImageIdx((i) => (i + 1) % heroSlides.length),
+      4500,
+    );
+    return () => window.clearInterval(id);
+  }, [heroSlides.length]);
+
+  // Re-evaluate join windows on a live clock so a session that ends while the
+  // page is open stops showing the "Enter Session" LIVE control.
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const { data: memberSessions = [], isLoading: sessionsLoading } = useQuery({
+    queryKey: memberSessionsQueryKey(user?.id ?? ""),
+    queryFn: fetchMemberSessions,
+    enabled: !!user?.id,
+  });
+
+  useEffect(() => {
+    setWaitlistWelcome(consumeWaitlistWelcome());
+    setPhoneChoice(getWaitlistPhoneChoice());
+  }, []);
+
+  const confirmPhoneChoice = async (mode: "account" | "class") => {
+    if (!phoneChoice || phoneChoiceBusy) return;
+    setPhoneChoiceBusy(true);
+    try {
+      if (mode === "account") {
+        await updateProfile(
+          {
+            primaryMobile: phoneChoice.whatsapp,
+            primaryMobileCountryCode: "+91",
+          },
+          { silent: true },
+        );
+      }
+      const saved = await completeWaitlistPhoneChoice(phoneChoice);
+      if (!saved) {
+        toast({
+          title: "Could not join waitlist",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      clearWaitlistPhoneChoice();
+      setPhoneChoice(null);
+      setWaitlistWelcome(consumeWaitlistWelcome());
+    } catch (error) {
+      toast({
+        title: "Could not update your number",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPhoneChoiceBusy(false);
+    }
+  };
+
+  const { data: classTypes = [] } = useQuery<ListingClassType[]>({
+    queryKey: ["/api/class-types"],
+  });
+
+  const { data: availability } = useQuery<{ classTypeIds: string[] }>({
+    queryKey: ["/api/class-types-availability/upcoming"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+  const { data: upcomingClasses = [] } = useQuery<
+    Array<{
+      classTypeId: string;
+      date?: string | null;
+      duration?: number | null;
+      classType?: { duration?: number | null } | null;
+      status?: string | null;
+      publishedAt?: string | null;
+      pausedAt?: string | null;
+      cancelledAt?: string | null;
+    }>
+  >({
+    queryKey: ["/api/classes"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+  const bookableClassTypeIds = useMemo(
+    () => collectBookableClassTypeIds(upcomingClasses, availability?.classTypeIds),
+    [availability?.classTypeIds, upcomingClasses],
+  );
+
+  const { data: instructors = [] } = useQuery<PublicInstructor[]>({
+    queryKey: ["/api/instructors"],
+  });
+
+  const { data: weeklySchedule = [], isLoading: scheduleLoading } = useQuery<
+    ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]
+  >({
+    queryKey: ["/api/schedule/week"],
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+
+  const monthYear = calendarMonth.getFullYear();
+  const monthIndex = calendarMonth.getMonth() + 1;
+  const { data: monthSchedule = [] } = useQuery<
+    ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]
+  >({
+    queryKey: ["/api/schedule/month", monthYear, monthIndex],
+    queryFn: () =>
+      fetchScheduleMonth<ScheduleDayLike<PracticeScheduleDay["classes"][number]>[]>(
+        monthYear,
+        monthIndex,
+      ),
+    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
+  });
+
+  const { data: promotions } = useQuery<
+    Array<{ promotionId: string; position: number; session: PracticeSession }>
+  >({
+    queryKey: ["/api/carousel/promotions"],
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const upcomingBooked = useMemo(
+    () =>
+      memberSessions
+        .filter(
+          (s) =>
+            s.status === "upcoming" &&
+            (s.paymentStatus === "paid" || s.paymentStatus === "waived"),
+        )
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [memberSessions],
+  );
+
+  const heroSession = useMemo(() => {
+    const isActiveNow = (s: MemberSession) =>
+      getMeetJoinState({
+        sessionStart: new Date(s.date),
+        sessionDurationMinutes: s.sessionDurationMinutes ?? 60,
+        isPaid: s.paymentStatus === "paid" || s.paymentStatus === "waived",
+        hasMeetLink: !!s.googleMeetLink,
+        now,
+      }) === "active";
+
+    // A session that is live right now takes priority.
+    const live = upcomingBooked.find(isActiveNow);
+    if (live) return live;
+
+    // Otherwise show the soonest booked session that has not ended yet, so an
+    // ended session never lingers in the hero as if it were still joinable.
+    return upcomingBooked.find(
+      (s) =>
+        getSessionEndTime(new Date(s.date), s.sessionDurationMinutes ?? 60).getTime() >
+        now.getTime(),
+    );
+  }, [upcomingBooked, now]);
+
+  const bookClassType = (classTypeId: string) => {
+    // classTypeId-only: anchor session is unknown until reserve resolves the
+    // pool, so this falls back to reserve's on-mount fetch by design.
+    navigateToMemberReserve(setLocation, queryClient, { classTypeId }, "dashboard");
+  };
+
+  const reserveSession = (sessionId: string) => {
+    navigateToMemberReserve(setLocation, queryClient, { sessionId }, "dashboard");
+  };
+
+  const upcomingSchedule = useMemo(
+    () => (weeklySchedule ? filterUpcomingScheduleDays(weeklySchedule) : []),
+    [weeklySchedule],
+  );
+
+  const todaySessions = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = upcomingSchedule.find((d) => {
+      const first = d.classes[0];
+      return first ? samePracticeCalendarDay(new Date(first.date), today) : false;
+    });
+    return day?.classes ?? [];
+  }, [upcomingSchedule]);
+
+  const carouselSessions = useMemo(() => {
+    const active = promotions ?? [];
+    if (active.length === 0) return todaySessions;
+    const sorted = [...active].sort((a, b) => a.position - b.position);
+    const promotedIds = new Set(sorted.map((p) => p.session.id));
+    const base = todaySessions.filter((s) => !promotedIds.has(s.id));
+    for (const p of sorted) {
+      const idx = Math.min(Math.max(p.position, 0), base.length);
+      base.splice(idx, 0, p.session);
+    }
+    return base;
+  }, [promotions, todaySessions]);
+
+  const scheduleDays = useMemo(
+    () => upcomingSchedule.filter((d) => d.classes.length > 0),
+    [upcomingSchedule],
+  );
+
+  const sessionsByDateKey = useMemo(() => {
+    const map = new Map<string, PracticeSession[]>();
+    for (const day of monthSchedule) {
+      const first = day.classes[0];
+      if (!first) continue;
+      map.set(new Date(first.date).toDateString(), day.classes);
+    }
+    return map;
+  }, [monthSchedule]);
+
+  const calendarCells = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const startPad = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: Array<{
+      day: number | null;
+      dateKey?: string;
+      hasSessions?: boolean;
+      soldOut?: boolean;
+      isToday?: boolean;
+      thumbnailUrl?: string;
+    }> = [];
+    for (let i = 0; i < startPad; i++) cells.push({ day: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(year, month, d);
+      const key = date.toDateString();
+      const sessions = sessionsByDateKey.get(key) ?? [];
+      const hasSessions = sessions.length > 0;
+      cells.push({
+        day: d,
+        dateKey: key,
+        hasSessions,
+        soldOut: hasSessions && sessions.every((s) => s.currentBookings >= s.maxCapacity),
+        isToday: samePracticeCalendarDay(date, new Date()),
+        thumbnailUrl: hasSessions ? practiceClassImage(sessions[0].classType) : undefined,
+      });
+    }
+    return cells;
+  }, [calendarMonth, sessionsByDateKey]);
+
+  const monthLabel = calendarMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+
+  const bookingMentors = useMemo(() => {
+    const names = new Set<string>();
+    const ordered: string[] = [];
+    for (const s of memberSessions) {
+      if (!s.instructorName || names.has(s.instructorName)) continue;
+      names.add(s.instructorName);
+      ordered.push(s.instructorName);
+    }
+    const instructorByName = new Map(instructors.map((i) => [i.name, i]));
+    return ordered.map((name) => {
+      const profile = instructorByName.get(name);
+      return {
+        name,
+        specialty: profile?.specialties?.[0] ?? profile?.bio ?? undefined,
+        imageUrl: profile?.imageUrl,
+      };
+    });
+  }, [memberSessions, instructors]);
+
+  const searchCatalog = useMemo((): SessionsSearchCatalog => {
+    const classTypeById = new Map(classTypes.map((ct) => [ct.id, ct]));
+    const scheduleSessions = upcomingSchedule.flatMap((d) =>
+      d.classes.map((cls) => ({
+        id: cls.id,
+        className: cls.classType.name,
+        classDescription: cls.classType.description ?? classTypeById.get(cls.classType.id)?.description,
+        instructorName: cls.instructor.name,
+        date: cls.date,
+        soldOut: cls.currentBookings >= cls.maxCapacity,
+      })),
+    );
+    return {
+      bookedSessions: memberSessions.map((s) => ({
+        bookingId: s.bookingId,
+        className: s.className,
+        instructorName: s.instructorName,
+        date: s.date,
+        status: s.status,
+      })),
+      scheduleSessions,
+      todaySessions: carouselSessions.map((cls) => ({
+        id: cls.id,
+        className: cls.classType.name,
+        classDescription: cls.classType.description ?? classTypeById.get(cls.classType.id)?.description,
+        instructorName: cls.instructor.name,
+        date: cls.date,
+        soldOut: cls.currentBookings >= cls.maxCapacity,
+      })),
+      classTypes: classTypes.map((ct) => ({
+        id: ct.id,
+        name: ct.name,
+        description: ct.description,
+        intensity: ct.intensity,
+        duration: ct.duration,
+        strictNoTo: ct.strictNoTo,
+      })),
+      mentors: bookingMentors.map((m) => ({
+        name: m.name,
+        specialty: m.specialty,
+        bio: instructors.find((i) => i.name === m.name)?.bio ?? undefined,
+      })),
+      publicCoaches: instructors.map((i) => ({
+        id: i.id,
+        name: i.name,
+        bio: i.bio,
+        specialties: i.specialties,
+      })),
+    };
+  }, [memberSessions, upcomingSchedule, carouselSessions, classTypes, bookingMentors, instructors]);
+
+  const jumpToWeeklyDay = (dateKey: string) => {
+    const header = weeklyHeaderRefs.current.get(dateKey);
+    if (header) {
+      setCalendarFocusKey(null);
+      window.setTimeout(() => {
+        header.scrollIntoView({ behavior: "smooth", block: "start" });
+        setHighlightedDayKey(dateKey);
+        window.setTimeout(() => setHighlightedDayKey((k) => (k === dateKey ? null : k)), 1600);
+      }, 60);
+      return;
+    }
+    setCalendarFocusKey(dateKey);
+  };
+
+  const focusedCalendarSessions = calendarFocusKey
+    ? (sessionsByDateKey.get(calendarFocusKey) ?? [])
+    : [];
+
+  const scrollToMentors = () => {
+    mentorsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const isLive =
+    !!heroSession &&
+    getMeetJoinState({
+      sessionStart: new Date(heroSession.date),
+      sessionDurationMinutes: heroSession.sessionDurationMinutes ?? 60,
+      isPaid:
+        heroSession.paymentStatus === "paid" || heroSession.paymentStatus === "waived",
+      hasMeetLink: !!heroSession.googleMeetLink,
+      now,
+    }) === "active";
+
+  return (
+    <DashboardShell active="sessions">
+      <Dialog open={!!phoneChoice} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-md"
+          showClose={false}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Which number should we use?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            The WhatsApp number you entered ({formatWaitlistPhoneDisplay(phoneChoice?.whatsapp)}) is
+            different from the mobile saved on your account (
+            {formatWaitlistPhoneDisplay(phoneChoice?.profileMobile)}).
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={phoneChoiceBusy}
+              onClick={() => void confirmPhoneChoice("account")}
+              className="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              Update my number for future messages
+            </button>
+            <button
+              type="button"
+              disabled={phoneChoiceBusy}
+              onClick={() => void confirmPhoneChoice("class")}
+              className="rounded-xl border border-primary/25 px-4 py-2.5 text-sm font-bold text-primary hover:bg-primary/5 disabled:opacity-60"
+            >
+              Use this number only for this class
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!waitlistWelcome} onOpenChange={(open) => !open && setWaitlistWelcome(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {waitlistWelcome?.kind === "already"
+                ? `Hey ${user?.name?.trim().split(/\s+/)[0] || "there"}`
+                : waitlistWelcome?.kind === "joined"
+                  ? "You're on the waitlist"
+                  : "Welcome to andWeYoga"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {waitlistWelcome?.kind === "already"
+              ? `You had already applied for the ${waitlistWelcome.className} waitlist on ${formatWaitlistJoinedLabel(waitlistWelcome.joinedAt) ?? "an earlier visit"}. Your spot is saved, right where you left it. We will let you know by email and WhatsApp when sessions open.`
+              : `You are on the waitlist for ${waitlistWelcome?.className}. We will let you know by email and WhatsApp when sessions open.`}
+          </p>
+        </DialogContent>
+      </Dialog>
+      <WaitlistJoinDialog
+        open={!!waitlistType}
+        classType={waitlistType}
+        onOpenChange={(open) => {
+          if (!open) setWaitlistType(null);
+        }}
+      />
+      <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
+        {/* ===== HERO ===== */}
+        <section className="mb-6">
+          <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-end overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient lg:items-center">
+            <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#e6dff1] via-[#d9d2ea] to-[#e7d8cd]" />
+            {heroSlides.length > 0 ? (
+              <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
+                {heroSlides.map((slide, i) => (
+                  <img
+                    key={slide.word}
+                    src={heroSlideImageSrc(slide)}
+                    alt=""
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out",
+                      i === heroImageIdx % heroSlides.length ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                ))}
+              </div>
+            ) : null}
+            <ImageHeroScrim variant="light-side" />
+
+            <ImageHeroContent
+              glassOnMobile
+              className="flex w-full max-w-[640px] flex-col items-start justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:max-w-[min(480px,42vw)] lg:justify-center"
+            >
+              <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
+                {greeting()},{" "}
+                <span className="font-accent text-[1.15em] italic">
+                  {user?.name?.split(" ")[0] ?? "there"}
+                </span>
+              </span>
+              <h1 className="mb-3.5 font-display text-[clamp(30px,5.4vw,46px)] font-bold leading-[1.12] tracking-tight text-primary">
+                {dailyQuote.text}
+              </h1>
+              <p className="mb-4 text-[clamp(13px,1.3vw,15px)] font-semibold text-muted-foreground">
+                <span className="font-accent text-[1.2em] italic">{dailyQuote.author}</span>
+              </p>
+              <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
+                {heroSession
+                  ? isLive
+                    ? `Your ${heroSession.className} session is live now. Tap Enter Session to join.`
+                    : new Date(heroSession.date).toDateString() === now.toDateString()
+                      ? `Your ${heroSession.className} session is scheduled today at ${formatTime(heroSession.date)}.`
+                      : `Your next ${heroSession.className} session is ${formatDayTime(heroSession.date)}.`
+                  : "No sessions scheduled for today. Explore our sessions below and reserve your spot."}
+              </p>
+
+              {heroSession ? (
+                <div className="grid max-w-[440px] grid-cols-2 gap-3 rounded-[18px] border border-dz-glass-border bg-dz-surface/70 p-4 shadow-dz-ambient backdrop-blur-[16px]">
+                  <div className="flex items-center gap-2.5 px-1 py-1.5">
+                    <Timer className="h-5 w-5 text-primary" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold tracking-[0.06em] text-muted-foreground">
+                        TIME
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {formatTime(heroSession.date)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 px-1 py-1.5">
+                    <UserIcon className="h-5 w-5 text-primary" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold tracking-[0.06em] text-muted-foreground">
+                        INSTRUCTOR
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {heroSession.instructorName}
+                      </span>
+                    </div>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {isLive ? (
+                        <a
+                          href={heroSession.googleMeetLink ?? "#"}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="pointer-events-auto relative z-10 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
+                          data-testid="enter-session"
+                        >
+                          <span>Enter Session</span>
+                          <span className="h-[7px] w-[7px] animate-pulse rounded-full bg-[#ff6b6b]" />
+                          <span className="text-[10px] font-bold tracking-wider">LIVE</span>
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-disabled="true"
+                          onClick={(e) => e.preventDefault()}
+                          className="flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm font-bold text-muted-foreground opacity-70"
+                          data-testid="upcoming-session"
+                        >
+                          <CalendarClock className="h-4 w-4" />
+                          <span>Upcoming Session</span>
+                        </button>
+                      )}
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-[260px] text-center">
+                      {getMeetJoinMessage({
+                        sessionStart: new Date(heroSession.date),
+                        sessionDurationMinutes: heroSession.sessionDurationMinutes ?? 60,
+                        isPaid:
+                          heroSession.paymentStatus === "paid" ||
+                          heroSession.paymentStatus === "waived",
+                        hasMeetLink: !!heroSession.googleMeetLink,
+                        now,
+                      })}
+                    </TooltipContent>
+                  </Tooltip>
+                  <div className="flex items-center gap-2.5 px-1 py-1.5">
+                    <Flower2 className="h-5 w-5 text-primary" />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold tracking-[0.06em] text-muted-foreground">
+                        TYPE
+                      </span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {heroSession.className}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => (window.location.href = "/#schedule")}
+                  className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
+                >
+                  Browse Schedule
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              )}
+            </ImageHeroContent>
+          </div>
+        </section>
+
+        <SessionsSearchBar
+          catalog={searchCatalog}
+          onReserveSession={reserveSession}
+          onBookClassType={bookClassType}
+          onScrollToMentors={scrollToMentors}
+        />
+
+        {/* Your Schedule only after the member has a booked class. */}
+        {!sessionsLoading && upcomingBooked.length > 0 ? (
+          <section className="mb-14" data-testid="your-schedule">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3.5">
+              <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+                Your Schedule
+              </h2>
+              <button
+                type="button"
+                onClick={() => setLocation("/my-account#sessions")}
+                className="flex items-center gap-1.5 text-sm font-semibold text-primary transition-colors hover:underline"
+              >
+                <CalendarCheck className="h-[18px] w-[18px]" />
+                View All bookings
+              </button>
+            </div>
+            <div className="relative overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-primary p-[26px]">
+              <div className="relative z-[1]">
+                <p className="mb-5 text-sm leading-relaxed text-white/80">
+                  {`You have ${upcomingBooked.length} session${upcomingBooked.length === 1 ? "" : "s"} scheduled.`}
+                </p>
+                <div className="flex flex-col gap-2.5">
+                  {upcomingBooked.slice(0, 4).map((s) => (
+                    <button
+                      key={s.bookingId}
+                      type="button"
+                      onClick={() => setLocation("/my-account#sessions")}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-white/10 px-3.5 py-3 text-left transition-colors hover:bg-white/[0.18]"
+                    >
+                      <div>
+                        <div className="text-sm font-bold text-white">{s.className}</div>
+                        <div className="text-[11px] text-white/70">{formatDayTime(s.date)}</div>
+                      </div>
+                      <ArrowRight className="h-5 w-5 text-white" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <CalendarDays className="absolute -bottom-8 -right-8 h-[170px] w-[170px] rotate-12 text-white/[0.08]" />
+            </div>
+          </section>
+        ) : null}
+
+        {user &&
+        !sessionsLoading &&
+        upcomingBooked.length === 0 &&
+        !bookableNudgeDismissed &&
+        getMemberReadiness(profileCheckFromUser(user)) === "account" ? (
+          <GlassCard
+            className="mb-8 flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="ready-to-book-nudge"
+          >
+            <p className="text-sm text-foreground">
+              Ready for your first class? Add your mobile and an emergency contact so your
+              instructor can reach you.
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+                onClick={() => setLocation(MY_ACCOUNT_PROFILE_URL)}
+              >
+                Add contact details
+              </button>
+              <button
+                type="button"
+                className="rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  try {
+                    localStorage.setItem("awy_ready_to_book_nudge_dismissed_v1", "1");
+                  } catch {
+                    /* ignore */
+                  }
+                  setBookableNudgeDismissed(true);
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </GlassCard>
+        ) : null}
+
+        {/* ===== AND WE WORKOUT CAROUSEL ===== */}
+        <section className="mb-14">
+          <div className="mb-5">
+            <h2 className="font-display text-[clamp(24px,3vw,32px)] font-bold text-primary">
+              and We{" "}
+              <span className="font-accent italic font-normal text-dz-secondary">Flow</span>
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Discover the perfect class for your practice level and goals
+            </p>
+          </div>
+
+          {classTypes.length === 0 ? (
+            <GlassCard className="p-10 text-center text-muted-foreground">
+              Class offerings are on the way. Please check back soon.
+            </GlassCard>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, -1)}
+                aria-label="Previous workout classes"
+                className="absolute -left-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCarouselEl(workoutCarouselRef.current, 1)}
+                aria-label="Next workout classes"
+                className="absolute -right-2.5 top-[92px] z-[5] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-primary/10 bg-dz-surface/90 text-primary shadow-dz-ambient backdrop-blur transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+              <div
+                ref={workoutCarouselRef}
+                className="flex snap-x snap-mandatory gap-[18px] overflow-x-auto scroll-smooth px-0.5 pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {classTypes.map((classType) => (
+                  <ClassTypeCard
+                    key={classType.id}
+                    classType={classType}
+                    canBook={bookableClassTypeIds.has(classType.id)}
+                    onBook={bookClassType}
+                    onWaitlist={setWaitlistType}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ===== WEEKLY SCHEDULE + CALENDAR ===== */}
+        <section className="mb-14 flex flex-col gap-6">
+          <WeeklySchedulePanel
+            days={scheduleDays}
+            isLoading={scheduleLoading}
+            highlightedDayKey={highlightedDayKey}
+            onHighlightDayKey={setHighlightedDayKey}
+            onReserve={reserveSession}
+            weeklyHeaderRefs={weeklyHeaderRefs}
+          />
+          <PracticeCalendarPanel
+            monthLabel={monthLabel}
+            cells={calendarCells}
+            calendarMonth={calendarMonth}
+            onMonthChange={(month) => {
+              setCalendarFocusKey(null);
+              setCalendarMonth(month);
+            }}
+            onJumpToDay={jumpToWeeklyDay}
+          />
+          {calendarFocusKey ? (
+            <CalendarDaySessionsPanel
+              dateKey={calendarFocusKey}
+              sessions={focusedCalendarSessions}
+              onReserve={reserveSession}
+              onDismiss={() => setCalendarFocusKey(null)}
+            />
+          ) : null}
+        </section>
+
+        <div ref={mentorsSectionRef}>
+          <YourMentorsSection mentors={bookingMentors} />
+        </div>
+      </PageContainer>
+      <ReleaseSpotToast visible={showReleaseToast} />
+    </DashboardShell>
+  );
+}

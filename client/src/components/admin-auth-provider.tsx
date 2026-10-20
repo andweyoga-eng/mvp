@@ -33,35 +33,23 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
   const [admin, setAdmin] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing admin token on mount
+  // Check for existing admin session on mount.
   useEffect(() => {
-    const token = localStorage.getItem("adminToken");
-    if (token) {
-      verifyAdminToken(token);
-    } else {
-      setIsLoading(false);
-    }
+    void verifyAdminSession();
   }, []);
 
-  const verifyAdminToken = async (token: string) => {
+  const verifyAdminSession = async () => {
     try {
-      const response = await fetch("/api/admin/auth/verify", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch("/api/admin/auth/verify", { credentials: "include" });
 
       if (response.ok) {
         const data = await response.json();
         setAdmin(data.admin);
-        localStorage.setItem("adminToken", token);
       } else {
-        localStorage.removeItem("adminToken");
         setAdmin(null);
       }
     } catch (error) {
-      console.error("Admin token verification failed:", error);
-      localStorage.removeItem("adminToken");
+      console.error("Admin session verification failed:", error);
       setAdmin(null);
     } finally {
       setIsLoading(false);
@@ -72,6 +60,7 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
     try {
       const response = await fetch("/api/admin/auth/login", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -79,13 +68,21 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Login failed");
+        let message = "Login failed";
+        try {
+          const error = await response.json();
+          message = error.message || message;
+        } catch {
+          if (response.status === 503) {
+            message =
+              "Database is unavailable. Refresh DATABASE_URL from Railway and restart the server.";
+          }
+        }
+        throw new Error(message);
       }
 
       const data = await response.json();
       setAdmin(data.admin);
-      localStorage.setItem("adminToken", data.token);
     } catch (error) {
       console.error("Admin login error:", error);
       throw error;
@@ -93,9 +90,10 @@ export function AdminAuthProvider({ children }: AdminAuthProviderProps) {
   };
 
   const logout = () => {
-    localStorage.removeItem("adminToken");
-    setAdmin(null);
-    queryClient.clear(); // Clear any cached admin data
+    void fetch("/api/admin/auth/logout", { method: "POST", credentials: "include" }).finally(() => {
+      setAdmin(null);
+      queryClient.clear(); // Clear any cached admin data
+    });
   };
 
   return (

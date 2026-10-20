@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>andWeYOGa | Wellness Workshops</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Plus+Jakarta+Sans:wght@100..900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-primary": "#ffffff",
+            "on-background": "#1b1c1b",
+            "surface-variant": "#e4e2e0",
+            "surface-container": "#efedec",
+            "on-primary-fixed-variant": "#503787",
+            "secondary-fixed": "#ffdbcb",
+            "surface-container-low": "#f5f3f1",
+            "tertiary-fixed-dim": "#b3cdb6",
+            "inverse-surface": "#30302f",
+            "background": "#fbf9f7",
+            "secondary-fixed-dim": "#ffb692",
+            "secondary": "#9a4612",
+            "tertiary-container": "#314736",
+            "on-primary-fixed": "#24015a",
+            "on-error": "#ffffff",
+            "primary-container": "#4b3282",
+            "secondary-container": "#fd9259",
+            "on-secondary-fixed": "#341100",
+            "on-tertiary-fixed-variant": "#354c3a",
+            "on-secondary-fixed-variant": "#793000",
+            "outline": "#7a7581",
+            "on-secondary": "#ffffff",
+            "outline-variant": "#cbc4d2",
+            "surface-container-high": "#eae8e6",
+            "surface-bright": "#fbf9f7",
+            "surface-container-lowest": "#ffffff",
+            "inverse-primary": "#d1bcff",
+            "surface-tint": "#6850a1",
+            "surface": "#fbf9f7",
+            "on-tertiary-container": "#9cb59e",
+            "surface-container-highest": "#e4e2e0",
+            "error-container": "#ffdad6",
+            "error": "#ba1a1a",
+            "on-surface": "#1b1c1b",
+            "surface-dim": "#dbdad8",
+            "on-secondary-container": "#712d00",
+            "on-surface-variant": "#494550",
+            "primary-fixed-dim": "#d1bcff",
+            "on-primary-container": "#baa0f8",
+            "tertiary": "#1b3120",
+            "primary-fixed": "#eaddff",
+            "on-error-container": "#93000a",
+            "tertiary-fixed": "#cfe9d1",
+            "on-tertiary": "#ffffff",
+            "primary": "#34196a",
+            "on-tertiary-fixed": "#0a2011",
+            "inverse-on-surface": "#f2f0ee"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "xxl": "64px",
+            "md": "16px",
+            "xl": "40px",
+            "gutter": "24px",
+            "sm": "8px",
+            "unit": "4px",
+            "lg": "24px",
+            "xs": "4px",
+            "container-max": "1280px"
+          },
+          "fontFamily": {
+            "body-md": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "label-sm": ["Inter"],
+            "headline-lg-mobile": ["Plus Jakarta Sans"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "display-lg": ["Plus Jakarta Sans"],
+            "label-md": ["Inter"],
+            "body-lg": ["Inter"]
+          },
+          "fontSize": {
+            "body-md": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+            "headline-md": ["24px", { "lineHeight": "1.4", "fontWeight": "600" }],
+            "label-sm": ["12px", { "lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600" }],
+            "headline-lg-mobile": ["28px", { "lineHeight": "1.3", "fontWeight": "600" }],
+            "headline-lg": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+            "display-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+            "label-md": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500" }],
+            "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }]
+          }
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(75, 50, 130, 0.1);
+    }
+    .hover-lift {
+      transition: all 0.3s ease;
+    }
+    .hover-lift:hover {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbc4d2;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- Shared Component: TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface/70 backdrop-blur-xl border-b border-primary/10 shadow-sm transition-all duration-300 ease-in-out">
+<div class="flex justify-between items-center px-gutter py-md max-w-container-max mx-auto">
+<div class="flex items-center gap-xl">
+<h1 class="font-display-lg text-[32px] md:text-display-lg text-primary tracking-tighter cursor-pointer">andWeYOGa</h1>
+<nav class="hidden md:flex gap-lg font-body-md text-body-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Sessions</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Calendar</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Emojou</a>
+<a class="text-primary border-b-2 border-primary pb-1 font-semibold" href="#">Workshops</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Trips</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors" href="#">Explore</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<input class="bg-surface-container-low border-none rounded-full px-lg py-sm text-label-md w-64 focus:ring-2 focus:ring-primary/20" placeholder="Search experiences..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1.5 text-outline">search</span>
+</div>
+<button class="p-xs rounded-full hover:bg-surface-container-high/50 transition-colors">
+<span class="material-symbols-outlined text-primary text-[32px]" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<main class="pt-xxl mt-xl px-gutter max-w-container-max mx-auto pb-xxl">
+<!-- Hero Section -->
+<section class="relative mb-xxl rounded-3xl overflow-hidden min-h-[400px] flex items-center p-xl">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center transition-transform duration-700 hover:scale-105" data-alt="A wide-angle professional photograph of a sun-drenched, high-end yoga studio with floor-to-ceiling windows. Several practitioners are in focused meditation, surrounded by lush green indoor plants and soft wooden textures. The lighting is ethereal and golden, reflecting the calm Zen atmosphere of a premium wellness brand using a soft beige and white color palette." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA-bRHGH8kojcSZgR-hwjEAK3QulmpYjQokprfQxm0gWLYrjvMD58OI1-TByplP7a0IuJSg27gRZ06VRSNt5qF7WeR2nGl7ltMBnT5FXvxRwq9psDKV2yzxjIKAyDANRMYLTyUJXDEpGKXj8fzQg625aQeka72T6-Cey_U8PX5cbarlzAj9YneWGlvaOmPk-SYwo3PKXpyxOskiIZPHt3Qg6jb2dYjCfE1tE9WaKF15uGhEq3JjtVE9v8_B8Hfxnuw2JgraqI8')">
+</div>
+<div class="absolute inset-0 bg-gradient-to-r from-primary/40 to-transparent"></div>
+</div>
+<div class="relative z-10 max-w-2xl text-on-primary">
+<span class="inline-block px-md py-xs bg-secondary/90 backdrop-blur-md rounded-full font-label-md text-label-md mb-md">Season Finale</span>
+<h2 class="font-display-lg text-headline-lg md:text-[56px] leading-none mb-md">Elevate Your Practice.</h2>
+<p class="font-body-lg text-body-lg mb-lg opacity-90">Deepen your knowledge with our curated masterclasses led by world-renowned instructors. Transformative experiences designed for every level.</p>
+<div class="flex gap-md">
+<button class="bg-on-primary text-primary px-xl py-md rounded-lg font-label-md hover:shadow-lg transition-all">Explore Categories</button>
+<button class="bg-primary-container text-on-primary-container px-xl py-md rounded-lg font-label-md border border-on-primary-container/20 hover:bg-primary-container/90 transition-all">My Registrations</button>
+</div>
+</div>
+</section>
+<!-- Filters & Tabs -->
+<div class="flex flex-col md:flex-row justify-between items-center gap-lg mb-xl border-b border-outline-variant/30 pb-md">
+<div class="flex gap-lg overflow-x-auto pb-xs w-full md:w-auto custom-scrollbar whitespace-nowrap">
+<button class="text-primary font-semibold border-b-2 border-primary pb-sm transition-all">All Workshops</button>
+<button class="text-on-surface-variant hover:text-primary pb-sm transition-all">Asana</button>
+<button class="text-on-surface-variant hover:text-primary pb-sm transition-all">Meditation</button>
+<button class="text-on-surface-variant hover:text-primary pb-sm transition-all">Pranayama</button>
+<button class="text-on-surface-variant hover:text-primary pb-sm transition-all">Philosophy</button>
+<button class="text-on-surface-variant hover:text-primary pb-sm transition-all">Teacher Training</button>
+</div>
+<div class="flex items-center gap-sm">
+<span class="text-label-md text-on-surface-variant">Sort by:</span>
+<select class="bg-transparent border-none text-label-md font-semibold text-primary focus:ring-0 cursor-pointer">
+<option>Upcoming Date</option>
+<option>Price: Low to High</option>
+<option>Popularity</option>
+</select>
+</div>
+</div>
+<!-- Workshop Cards Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-xl">
+<!-- Card 1: Advanced Asana Intensive -->
+<article class="group glass-card rounded-2xl overflow-hidden hover-lift">
+<div class="relative h-64 overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A focused close-up of a yoga instructor performing a complex inversion pose in a minimalist studio. The lighting is soft and diffused, highlighting muscle definition and form. The aesthetic is clean and high-performance, featuring subtle purple and sage green accents consistent with a premium wellness app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlMmbtXSxFyg26j0mw-SWrY5ly4NGnv7Lqk7kmFb0eGhe-J_1Y1LdxV2dQ96A5UkdtMqwYBd-s38Az-pY2KE4j5EbV_EIvRMwyCXhVwx9coTGXUqXmUVO_n08TaMw3n0XiwNCy4Nu8QcFRKcphCqkB_JOWwAHNmk_Eav0wN1ssaf_rlKcntpzz8NUVTO0fWJ3T_AlRAXZsBh18omDJue9gJpLc-Cq0D4esS_3tXr_0ncsqiOajrNqzghxRknC-ZH3xBRWvFVo"/>
+<div class="absolute top-4 right-4 bg-primary/90 text-on-primary px-md py-xs rounded-full text-label-sm font-semibold backdrop-blur-md">INTERMEDIATE+</div>
+</div>
+<div class="p-lg">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary leading-tight">Advanced Asana Intensive</h3>
+<span class="text-secondary font-bold text-headline-md">$149</span>
+</div>
+<p class="text-on-surface-variant text-body-md mb-lg line-clamp-2">Master the mechanics of complex transitions and inversions with personalized adjustments from Senior Teachers.</p>
+<div class="space-y-sm border-t border-outline-variant/30 pt-lg mb-lg">
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+<span class="text-label-md">Sat, Oct 24 • 10:00 AM — 4:00 PM</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="text-label-md">Lotus Sky Studio, NYC (Hybrid)</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span class="text-label-md">Limited to 15 Practitioners</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-md rounded-lg font-label-md transition-all hover:bg-primary-container group-hover:shadow-lg">Register Now</button>
+</div>
+</article>
+<!-- Card 2: Mindfulness for Beginners -->
+<article class="group glass-card rounded-2xl overflow-hidden hover-lift">
+<div class="relative h-64 overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A serene scene showing a diverse group of people sitting in a circle on organic jute mats, eyes closed in gentle meditation. The environment is a tranquil garden pavilion at sunrise with warm, soft-focus light. The overall mood is welcoming, accessible, and deeply peaceful, using a soft terracotta and beige palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBhmy4qwmL4LZhZ-TX0zs0tTQ18K9YMKeNaZIVeyCFpu9sX4jgcS6tKB0mU37xeEfCjKWCp5bIr3m_Q_Svx-RAKPbzpDzvHG4uaDoIx3zIIftwT3ncIwuKJYxeRNqCY4wxV3wZQTAtaKalzgBf41VHHwI57vpie_14sqWadVkONm-OwmHeQG3sl7TGo95t77k9JeCq-tqzm469Zi9alGRIRHv3OWU6MKT0oQCOUi2jXHNqTDn8UO5zkEEckrbNTDmgoB9YphY"/>
+<div class="absolute top-4 right-4 bg-tertiary-container text-on-tertiary-container px-md py-xs rounded-full text-label-sm font-semibold backdrop-blur-md">BEGINNER FRIENDLY</div>
+</div>
+<div class="p-lg">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary leading-tight">Mindfulness for Beginners</h3>
+<span class="text-secondary font-bold text-headline-md">$85</span>
+</div>
+<p class="text-on-surface-variant text-body-md mb-lg line-clamp-2">An approachable 4-hour introduction to formal meditation, mindful movement, and everyday presence techniques.</p>
+<div class="space-y-sm border-t border-outline-variant/30 pt-lg mb-lg">
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+<span class="text-label-md">Sun, Oct 25 • 2:00 PM — 6:00 PM</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">videocam</span>
+<span class="text-label-md">Live Stream + On-Demand Access</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">star</span>
+<span class="text-label-md">Certificate of Completion Included</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-md rounded-lg font-label-md transition-all hover:bg-primary-container group-hover:shadow-lg">Book Spot</button>
+</div>
+</article>
+<!-- Card 3: Breathwork & Pranayama Masterclass -->
+<article class="group glass-card rounded-2xl overflow-hidden hover-lift">
+<div class="relative h-64 overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" data-alt="A macro artistic shot focusing on the serene expression of a person's face during breathwork, with soft morning light catching dust motes in the air. The image emphasizes the concept of Prana or breath as vital energy. High-key lighting, soft textures, and a minimalist digital sanctuary vibe using deep purple and soft lavender tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAd-KJ5rlF46mhn37sgBpenafiRhSVFpelHliKZPe8R5dfs8W8hSjGpn7BWXD_XDirRzvY8QQQgKFqYc9cv4NTnr_VT08hU6mWxN2UUc430SVPq0mrlbTIiji3pIB4IBEWaVwAThReYC_qHgRJ91Um5n8oevObPAL2GCo2tNfgjD15mcfkVUT3ppa9OPikZFF_OASs0ui8i1ttD7hPxkavGHtTdg79_pYdWRqm0QV2o1HO5iR6vM9_Dk-dX62s5p6Mes38Ehoo"/>
+<div class="absolute top-4 right-4 bg-secondary-container text-on-secondary-fixed px-md py-xs rounded-full text-label-sm font-semibold backdrop-blur-md">POPULAR</div>
+</div>
+<div class="p-lg">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary leading-tight">Breathwork & Pranayama Masterclass</h3>
+<span class="text-secondary font-bold text-headline-md">$110</span>
+</div>
+<p class="text-on-surface-variant text-body-md mb-lg line-clamp-2">Explore the science and spirit of the breath. Learn advanced Pranayama techniques to regulate the nervous system.</p>
+<div class="space-y-sm border-t border-outline-variant/30 pt-lg mb-lg">
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+<span class="text-label-md">Wed, Oct 28 • 6:30 PM — 9:00 PM</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">person</span>
+<span class="text-label-md">Led by Dr. Elena Vasquez</span>
+</div>
+<div class="flex items-center gap-sm text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">auto_awesome</span>
+<span class="text-label-md">Bonus: Digital Pranayama Guide</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-md rounded-lg font-label-md transition-all hover:bg-primary-container group-hover:shadow-lg">Join Workshop</button>
+</div>
+</article>
+</div>
+<!-- CTA Section: Newsletter -->
+<section class="mt-xxl bg-surface-container-high rounded-3xl p-xl flex flex-col md:flex-row items-center gap-xl justify-between overflow-hidden relative">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -mr-32 -mt-32"></div>
+<div class="max-w-xl relative z-10">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-sm">Don't Miss Out on Future Workshops</h2>
+<p class="text-on-surface-variant text-body-md">Subscribe to our newsletter to receive early access to registrations and exclusive wellness tips from our expert community.</p>
+</div>
+<div class="flex flex-col sm:flex-row gap-sm w-full md:w-auto relative z-10">
+<input class="bg-surface-container-lowest border border-outline-variant rounded-lg px-lg py-md text-label-md w-full sm:w-80 focus:ring-2 focus:ring-primary/20 outline-none" placeholder="your@email.com" type="email"/>
+<button class="bg-primary text-on-primary px-xl py-md rounded-lg font-label-md whitespace-nowrap hover:bg-primary-container transition-all">Subscribe</button>
+</div>
+</section>
+</main>
+<!-- Mobile Navigation Bar -->
+<nav class="md:hidden fixed bottom-0 w-full bg-surface-container-lowest/80 backdrop-blur-2xl px-gutter py-md flex justify-around items-center z-50 border-t border-primary/5">
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="text-[10px] font-semibold uppercase tracking-widest">Home</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-[24px]">calendar_month</span>
+<span class="text-[10px] font-semibold uppercase tracking-widest">Classes</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-primary" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Workshops</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-[24px]">explore</span>
+<span class="text-[10px] font-semibold uppercase tracking-widest">Explore</span>
+</a>
+<a class="flex flex-col items-center gap-xs text-on-surface-variant" href="#">
+<span class="material-symbols-outlined text-[24px]">account_circle</span>
+<span class="text-[10px] font-semibold uppercase tracking-widest">Profile</span>
+</a>
+</nav>
+<!-- Floating Action Button (Contextual) -->
+<button class="fixed bottom-24 right-8 md:bottom-12 md:right-12 bg-secondary text-on-secondary w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 group">
+<span class="material-symbols-outlined text-[28px]">help_center</span>
+<span class="absolute right-16 bg-primary text-on-primary px-md py-sm rounded-lg text-label-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">Talk to a Coach</span>
+</button>
+<script>
+    // Subtle header interaction on scroll
+    window.addEventListener('scroll', () => {
+      const header = document.querySelector('header');
+      if (window.scrollY > 20) {
+        header.classList.add('py-sm', 'shadow-md');
+        header.classList.remove('py-md', 'shadow-sm');
+      } else {
+        header.classList.add('py-md', 'shadow-sm');
+        header.classList.remove('py-sm', 'shadow-md');
+      }
+    });
+
+    // Micro-interaction for cards
+    document.querySelectorAll('.hover-lift').forEach(card => {
+      card.addEventListener('mouseenter', () => {
+        const img = card.querySelector('img');
+        if(img) img.style.transform = 'scale(1.08)';
+      });
+      card.addEventListener('mouseleave', () => {
+        const img = card.querySelector('img');
+        if(img) img.style.transform = 'scale(1)';
+      });
+    });
+  </script>
+</body></html>
