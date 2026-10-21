@@ -458,11 +458,19 @@ export default function AdminDashboard() {
 
   const openCreateSession = () => {
     setSessionToEdit(null);
+    setSessionToDuplicate(null);
     setSessionEditorOpen(true);
   };
 
   const openEditSession = (session: AdminClassSessionForEdit) => {
+    setSessionToDuplicate(null);
     setSessionToEdit(session);
+    setSessionEditorOpen(true);
+  };
+
+  const openDuplicateSession = (session: AdminClassSessionForEdit) => {
+    setSessionToEdit(null);
+    setSessionToDuplicate(session);
     setSessionEditorOpen(true);
   };
 
@@ -595,6 +603,9 @@ export default function AdminDashboard() {
   });
   const [sessionEditorOpen, setSessionEditorOpen] = useState(false);
   const [sessionToEdit, setSessionToEdit] = useState<AdminClassSessionForEdit | null>(null);
+  const [sessionToDuplicate, setSessionToDuplicate] = useState<AdminClassSessionForEdit | null>(
+    null,
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<{
     id: string;
@@ -1120,6 +1131,7 @@ export default function AdminDashboard() {
                             weekStart={scheduleWeekAnchor}
                             onWeekStartChange={setScheduleWeekAnchor}
                             onEditSession={openEditSession}
+                            onDuplicateSession={openDuplicateSession}
                             onPauseSession={(s) => void handlePauseSession(s.id)}
                             onResumeSession={(s) => void handleResumeSession(s.id)}
                             onDeleteSession={openDeleteSession}
@@ -1155,13 +1167,21 @@ export default function AdminDashboard() {
                       paymentQrCodes={paymentQrCodes}
                       adminDefaultPhone={adminProfileData?.profile?.phone ?? ""}
                       open={sessionEditorOpen}
-                      onOpenChange={setSessionEditorOpen}
+                      onOpenChange={(next) => {
+                        setSessionEditorOpen(next);
+                        if (!next) {
+                          setSessionToEdit(null);
+                          setSessionToDuplicate(null);
+                        }
+                      }}
                       sessionToEdit={sessionToEdit}
+                      sessionToDuplicate={sessionToDuplicate}
                       showTrigger={false}
                       onCreated={(result) => {
                         void refetchSess();
                         refreshClassTypes();
                         setSessionToEdit(null);
+                        setSessionToDuplicate(null);
                         const first = result?.sessions?.[0]?.date;
                         if (first) {
                           setScheduleWeekAnchor(startOfWeek(new Date(first)));

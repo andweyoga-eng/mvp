@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Pencil, Pause, Play, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Pencil, Pause, Play, Trash2 } from "lucide-react";
 import type { AdminClassSessionForEdit } from "@/components/admin/create-session-modal";
 import { isAdminSessionPaused } from "@shared/admin-session-actions";
 import { parseRecurrenceWeekdays } from "@shared/session-schedule";
@@ -80,6 +80,7 @@ export function WeekScheduleGrid({
   weekStart: controlledWeekStart,
   onWeekStartChange,
   onEditSession,
+  onDuplicateSession,
   onPauseSession,
   onResumeSession,
   onDeleteSession,
@@ -91,6 +92,7 @@ export function WeekScheduleGrid({
   weekStart?: Date;
   onWeekStartChange?: (start: Date) => void;
   onEditSession?: (session: AdminClassSessionForEdit) => void;
+  onDuplicateSession?: (session: AdminClassSessionForEdit) => void;
   onPauseSession?: (session: SessionRow) => void;
   onResumeSession?: (session: SessionRow) => void;
   onDeleteSession?: (session: SessionRow) => void;
@@ -181,7 +183,12 @@ export function WeekScheduleGrid({
   });
 
   const showSessionActions =
-    onEditSession || onPauseSession || onResumeSession || onDeleteSession || onCancelSession;
+    onEditSession ||
+    onDuplicateSession ||
+    onPauseSession ||
+    onResumeSession ||
+    onDeleteSession ||
+    onCancelSession;
 
   return (
     <div className="space-y-4">
@@ -277,6 +284,18 @@ export function WeekScheduleGrid({
                             onClick={() => onEditSession(toEditPayload(s))}
                           >
                             <Pencil className="h-3 w-3 mr-0.5" /> Edit
+                          </Button>
+                        )}
+                        {onDuplicateSession && s.classTypeId && s.instructorId && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px]"
+                            onClick={() => onDuplicateSession(toEditPayload(s))}
+                            data-testid="duplicate-session-button"
+                          >
+                            <Copy className="h-3 w-3 mr-0.5" /> Duplicate
                           </Button>
                         )}
                         {!paused && onPauseSession && (

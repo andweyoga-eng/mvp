@@ -23,10 +23,12 @@ import { FLEXI_BOOKING_ENABLED, flexiTooltipCopy } from "@shared/flexi-mode";
 import { formatClassTypeOptionLabel } from "@shared/class-type-name";
 import { useToast } from "@/hooks/use-toast";
 import { adminHeaders, parseAdminApiError, validateSessionForm } from "@/lib/admin-api";
+import { withDuplicateSessionDefaults } from "@/lib/admin-session-duplicate";
 import { clampIndianPhoneDigits } from "@/lib/admin-phone-input";
 import { FieldError, FormErrorSummary } from "@/components/admin/field-error";
 import { SessionDateTimePicker } from "@/components/admin/session-datetime-picker";
 import { formatIstDatetimeLocal } from "@shared/ist-datetime";
+import { extractHttpsUrl } from "@shared/map-link";
 import type { PaymentQrCode } from "@/components/admin/payment-qr-codes-panel";
 
 export interface SessionFormClassType {
@@ -224,6 +226,11 @@ function sessionToForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
   };
 }
 
+/** Prefill for Duplicate: copy details + recurrence; clear date; publish now. */
+export function sessionToDuplicateForm(sess: AdminClassSessionForEdit): typeof INITIAL_FORM {
+  return withDuplicateSessionDefaults(sessionToForm(sess));
+}
+
 export function CreateSessionModal({
   classTypes,
   instructors,
@@ -232,6 +239,7 @@ export function CreateSessionModal({
   open: controlledOpen,
   onOpenChange,
   sessionToEdit = null,
+  sessionToDuplicate = null,
   showTrigger = true,
   adminDefaultPhone = "",
 }: {
@@ -242,6 +250,8 @@ export function CreateSessionModal({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   sessionToEdit?: AdminClassSessionForEdit | null;
+  /** Prefill create form from an existing session; always POSTs a new session. */
+  sessionToDuplicate?: AdminClassSessionForEdit | null;
   showTrigger?: boolean;
   adminDefaultPhone?: string;
 }) {
@@ -249,6 +259,7 @@ export function CreateSessionModal({
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const isEdit = !!sessionToEdit;
+  const isDuplicate = !isEdit && !!sessionToDuplicate;
   const [form, setForm] = useState(INITIAL_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [qrContactNotice, setQrContactNotice] = useState<string | null>(null);
@@ -259,12 +270,17 @@ export function CreateSessionModal({
     if (open && sessionToEdit) {
       setForm(sessionToForm(sessionToEdit));
       setErrors({});
-    } else if (open && !sessionToEdit) {
+      setQrContactNotice(null);
+    } else if (open && sessionToDuplicate) {
+      setForm(sessionToDuplicateForm(sessionToDuplicate));
+      setErrors({});
+      setQrContactNotice(null);
+    } else if (open) {
       setForm({ ...INITIAL_FORM, venueContactPhone: clampIndianPhoneDigits(adminDefaultPhone) });
       setErrors({});
       setQrContactNotice(null);
     }
-  }, [open, sessionToEdit, adminDefaultPhone]);
+  }, [open, sessionToEdit, sessionToDuplicate, adminDefaultPhone]);
 
   const mutation = useMutation({
     mutationFn: async (payload: ReturnType<typeof validateSessionForm>["data"]) => {
@@ -384,11 +400,15 @@ export function CreateSessionModal({
       )}
       <DialogContent className="max-w-4xl w-[95vw] p-0 gap-0 flex flex-col max-h-[min(90vh,680px)] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-2 shrink-0 border-b">
-          <DialogTitle>{isEdit ? "Edit Session" : "Schedule a Session"}</DialogTitle>
+          <DialogTitle>
+            {isEdit ? "Edit Session" : isDuplicate ? "Duplicate Session" : "Schedule a Session"}
+          </DialogTitle>
           <DialogDescription className="text-left">
             {isEdit
               ? "Update this session. Date/time cannot change if members have already booked."
-              : "Like a calendar event: one-time or weekly series. Manual entry today. Google Calendar sync later."}
+              : isDuplicate
+                ? "Details and recurrence are copied. Choose a new date/time, adjust anything else, then schedule."
+                : "Like a calendar event: one-time or weekly series. Manual entry today. Google Calendar sync later."}
           </DialogDescription>
         </DialogHeader>
 
@@ -836,8 +856,23 @@ export function CreateSessionModal({
                       setForm((f) => ({ ...f, venueMapLink: e.target.value }));
                       clearFieldError("venueMapLink");
                     }}
-                    onBlur={(e) => runValidation({ venueMapLink: e.target.value })}
-                    placeholder="https://maps..."
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      const extracted = extractHttpsUrl(pasted);
+                      if (!extracted || extracted === pasted) return;
+                      e.preventDefault();
+                      setForm((f) => ({ ...f, venueMapLink: extracted }));
+                      clearFieldError("venueMapLink");
+                    }}
+                    onBlur={(e) => {
+                      const extracted = extractHttpsUrl(e.target.value);
+                      const next = extracted ?? e.target.value;
+                      if (next !== e.target.value) {
+                        setForm((f) => ({ ...f, venueMapLink: next }));
+                      }
+                      runValidation({ venueMapLink: next });
+                    }}
+                    placeholder="https://maps... or paste the embed snippet"
                     className={errors.venueMapLink ? "border-red-500" : ""}
                   />
                   <FieldError message={errors.venueMapLink} />
