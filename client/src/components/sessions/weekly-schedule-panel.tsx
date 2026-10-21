@@ -70,7 +70,19 @@ export function WeeklySchedulePanel({
                   const soldOut = cls.currentBookings >= cls.maxCapacity;
                   const badge = getSessionBadgeLabel(cls.sessionFrequency, cls.deliveryMode);
                   return (
-                    <div key={cls.id} className="border-b border-primary/5 py-2.5 last:border-0">
+                    <div
+                      key={cls.id}
+                      className={cn(
+                        "border-b border-primary/5 py-2.5 last:border-0",
+                        !soldOut && "cursor-pointer",
+                      )}
+                      onClick={(event) => {
+                        if (soldOut) return;
+                        const target = event.target;
+                        if (target instanceof Element && target.closest("button, a")) return;
+                        onReserve(cls.id);
+                      }}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-dz-secondary text-xs font-bold text-white">
                           {instructorInitials(cls.instructor.name)}
