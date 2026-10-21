@@ -28,7 +28,6 @@ import { PageContainer } from "@/components/digital-zen/page-container";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { formatSessionPrice, isValidPaymentUrl } from "@/lib/booking-payment";
 import { filterBookableSessions, sessionDurationMinutes } from "@/lib/booking-flow";
-import { PUBLIC_SESSION_CATALOG_QUERY_OPTIONS } from "@/lib/public-session-catalog";
 import {
   getIncompleteBookingHref,
   isAuthUserProfileComplete,
@@ -100,16 +99,39 @@ function persistReserveIntent(sessionId: string | null, classTypeId: string | nu
   });
 }
 
+function kolkataDateParts(date: string | Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).formatToParts(new Date(date));
+  const read = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    weekday: read("weekday").toUpperCase(),
+    month: read("month").toUpperCase(),
+    day: read("day"),
+    year: read("year"),
+  };
+}
+
 function dayKey(date: string | Date): string {
-  return new Date(date).toDateString();
+  const parts = kolkataDateParts(date);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function formatMonth(date: string | Date): string {
+  return kolkataDateParts(date).month;
 }
 
 function formatDow(date: string | Date): string {
-  return new Date(date).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  return kolkataDateParts(date).weekday;
 }
 
 function formatDayNum(date: string | Date): string {
-  return String(new Date(date).getDate());
+  return kolkataDateParts(date).day;
 }
 
 function formatTime(date: string | Date): string {
@@ -126,6 +148,7 @@ function formatLongDate(date: string | Date): string {
     weekday: "short",
     month: "short",
     day: "numeric",
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -145,7 +168,7 @@ export default function Reserve() {
   const fromHome = params.get("from") === "home";
   const exitPath = fromLogin ? MY_SESSIONS_URL : CALENDAR_URL;
   const backLabel =
-    fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Calendar";
+    fromProfile || fromHome ? "Back to Schedule" : fromLogin ? "Back to My Sessions" : "Back to Dashboard";
 
   const [armHoldOnProgramPick, setArmHoldOnProgramPick] = useState(false);
   const [leaveIntent, setLeaveIntent] = useState<"back" | "home" | null>(null);
@@ -173,18 +196,27 @@ export default function Reserve() {
     }
   }, [user, authLoading, sessionId, classTypeId, setLocation]);
 
-  const { data: allClasses = [], isLoading: classesLoading } = useQuery<EnrichedClass[]>({
-    queryKey: ["/api/classes"],
-    ...PUBLIC_SESSION_CATALOG_QUERY_OPTIONS,
-  });
-
-  const { data: singleClass } = useQuery<EnrichedClass>({
+  const { data: singleClass, isLoading: singleLoading } = useQuery<EnrichedClass>({
     queryKey: ["/api/classes", sessionId],
     enabled: !!sessionId,
     retry: 1,
-    staleTime: 0,
+    staleTime: 15_000,
     refetchOnWindowFocus: true,
   });
+
+  const catalogTypeId =
+    classTypeId || singleClass?.classType?.id || singleClass?.classTypeId || "";
+
+  const { data: catalogClasses = [], isLoading: catalogLoading } = useQuery<EnrichedClass[]>({
+    queryKey: [`/api/classes?classTypeId=${encodeURIComponent(catalogTypeId)}`],
+    enabled: catalogTypeId.length > 0,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const classesLoading = catalogTypeId
+    ? catalogLoading && !singleClass
+    : !!sessionId && singleLoading;
 
   const { data: memberSessions = [] } = useQuery({
     queryKey: memberSessionsQueryKey(user?.id ?? ""),
@@ -194,7 +226,7 @@ export default function Reserve() {
 
   // Pool of sessions the member can pick a date/time from.
   const pool = useMemo<EnrichedClass[]>(() => {
-    const bookable = filterBookableSessions(allClasses);
+    const bookable = filterBookableSessions(catalogClasses);
     if (classTypeId) {
       const filtered = bookable.filter(
         (c) => c.classType?.id === classTypeId || c.classTypeId === classTypeId,
@@ -232,7 +264,7 @@ export default function Reserve() {
       return merged.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }
     return bookable;
-  }, [allClasses, classTypeId, sessionId, singleClass]);
+  }, [catalogClasses, classTypeId, sessionId, singleClass]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -279,14 +311,14 @@ export default function Reserve() {
 
   const seriesMeta = useMemo(() => {
     if (!selected?.seriesId || !isFixedRecurring) return null;
-    const occurrences = allClasses
+    const occurrences = catalogClasses
       .filter((c) => c.seriesId === selected.seriesId)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return {
       startDate: occurrences[0]?.date ?? selected.date,
       occurrenceCount: occurrences.length,
     };
-  }, [allClasses, selected, isFixedRecurring]);
+  }, [catalogClasses, selected, isFixedRecurring]);
 
   const recurringScheduleLine = selected && isFixedRecurring
     ? formatRecurringScheduleLine(selected)
@@ -502,24 +534,29 @@ export default function Reserve() {
 
       {/* HEADER */}
       <header className="z-50 border-b border-dz-glass-border bg-dz-surface/80 backdrop-blur-[20px] max-lg:relative lg:sticky lg:top-0">
-        <PageContainer className="flex h-[76px] items-center justify-between gap-4">
-          <BrandLogo testId="reserve-logo" onNavigate={() => requestLeave("home")} />
-          <div className="flex items-center gap-3">
-            <AccountMenuControls
-              showHeaderButton
-              showFloatingMenuWhenScrolled
-              headerTestId="reserve-account-toggle"
-              fabTestId="reserve-account-fab"
-            />
+        <PageContainer className="flex h-[76px] items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <button
               type="button"
               onClick={() => requestLeave("back")}
-              className="flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-primary"
+              className="flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:text-primary sm:gap-2 sm:text-sm"
             >
-              <ArrowLeft className="h-5 w-5" />
-              <span className="hidden sm:inline">{backLabel}</span>
+              <ArrowLeft className="h-5 w-5 shrink-0" />
+              <span className="whitespace-nowrap">{backLabel}</span>
             </button>
+            <BrandLogo
+              testId="reserve-logo"
+              onNavigate={() => requestLeave("home")}
+              className="min-w-0 max-w-[64px] shrink sm:max-w-[140px]"
+              imgClassName="h-9 w-auto sm:h-11"
+            />
           </div>
+          <AccountMenuControls
+            showHeaderButton
+            showFloatingMenuWhenScrolled
+            headerTestId="reserve-account-toggle"
+            fabTestId="reserve-account-fab"
+          />
         </PageContainer>
       </header>
 
@@ -612,8 +649,9 @@ export default function Reserve() {
                     occurrenceCount={seriesMeta.occurrenceCount}
                   />
                 ) : null}
+              </div>
 
-                {/* date */}
+              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-6">
                 {showDatePicker && (
                   <GlassCard className="rounded-[22px] p-6">
                     <h3 className="mb-4 font-display text-lg font-semibold">Select a date</h3>
@@ -634,14 +672,22 @@ export default function Reserve() {
                           >
                             <div
                               className={cn(
+                                "text-[11px] font-semibold tracking-wide",
+                                active ? "opacity-85" : "text-muted-foreground",
+                              )}
+                            >
+                              {formatMonth(g.date)}
+                            </div>
+                            <div className="mt-0.5 font-display text-xl font-bold">
+                              {formatDayNum(g.date)}
+                            </div>
+                            <div
+                              className={cn(
                                 "text-[11px] font-semibold",
                                 active ? "opacity-85" : "text-muted-foreground",
                               )}
                             >
                               {formatDow(g.date)}
-                            </div>
-                            <div className="mt-0.5 font-display text-xl font-bold">
-                              {formatDayNum(g.date)}
                             </div>
                           </button>
                         );
@@ -650,7 +696,6 @@ export default function Reserve() {
                   </GlassCard>
                 )}
 
-                {/* time */}
                 {showTimePicker && (
                   <GlassCard className="rounded-[22px] p-6">
                     <h3 className="mb-4 font-display text-lg font-semibold">Choose a time</h3>
@@ -676,10 +721,8 @@ export default function Reserve() {
                     </div>
                   </GlassCard>
                 )}
-              </div>
 
-              {/* RIGHT */}
-              <div className="flex-[1_1_300px] lg:sticky lg:top-[96px]">
+                <div className="lg:sticky lg:top-[96px]">
                 <GlassCard className="relative overflow-hidden rounded-[22px] p-6">
                   {checkout.isReserving || checkout.isPaying || checkout.paymentPhase ? (
                     <CheckoutProcessingOverlay
@@ -937,6 +980,7 @@ export default function Reserve() {
                     </>
                   )}
                 </GlassCard>
+                </div>
               </div>
             </div>
           )}

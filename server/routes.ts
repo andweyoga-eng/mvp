@@ -2122,7 +2122,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/classes", async (req, res) => {
     try {
       setPublicCatalogNoStore(res);
-      const { date } = req.query;
+      const { date, classTypeId } = req.query;
+
+      if (classTypeId && typeof classTypeId === "string") {
+        const rows = await storage.getBookableClassesForClassType(classTypeId);
+        const classType = await storage.getClassType(classTypeId);
+        if (!classType) return res.json([]);
+        const instructorIds = [...new Set(rows.map((cls) => cls.instructorId))];
+        const instructors = await Promise.all(
+          instructorIds.map((id) => storage.getInstructor(id)),
+        );
+        const instructorById = new Map(
+          instructors
+            .filter((instructor): instructor is NonNullable<typeof instructor> => !!instructor)
+            .map((instructor) => [instructor.id, instructor]),
+        );
+        const enrichedClasses = rows.flatMap((cls) => {
+          if (!isClassVisibleForBooking(cls)) return [];
+          const instructor = instructorById.get(cls.instructorId);
+          if (
+            !instructor ||
+            !isInstructorSessionPoolEligible(instructor) ||
+            !isSessionAllowedInPublicCatalog(classType, instructor, req)
+          ) {
+            return [];
+          }
+          return [
+            sanitizePublicClass(cls, {
+              classType,
+              instructor: toPublicInstructorProfile(instructor) as typeof instructor,
+            }),
+          ];
+        });
+        return res.json(enrichedClasses);
+      }
 
       if (date && typeof date === 'string') {
         const filterDate = new Date(date);

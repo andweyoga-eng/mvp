@@ -7,6 +7,7 @@ import { parseIstDatetimeLocal } from "./ist-datetime";
 import { normalizeClassTypeName } from "./class-type-name";
 import { PROGRAM_KINDS, PROGRAM_STATUSES, validateProgramShape } from "./programs";
 import { normalizeSessionCoverageText } from "./session-inclusions";
+import { extractHttpsUrl } from "./map-link";
 
 const licenseStatusValues = INSTRUCTOR_LICENSE_STATUSES.map((s) => s.value) as [
   string,
@@ -62,6 +63,16 @@ const optionalHttpsUrl = z
   .optional()
   .nullable()
   .transform((v) => (v === "" || v == null ? null : v))
+  .refine((v) => v === null || /^https:\/\/.+/i.test(v), {
+    message: "URL must start with https://",
+  });
+
+/** Map link: a bare https URL, or a pasted embed snippet reduced to its src. */
+const optionalMapLink = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((v) => extractHttpsUrl(v))
   .refine((v) => v === null || /^https:\/\/.+/i.test(v), {
     message: "URL must start with https://",
   });
@@ -279,7 +290,7 @@ export const adminCreateClassSessionSchema = z
     deliveryMode: z.enum(["online", "offline", "hybrid"]).default("online"),
     sessionFrequency: z.enum(["recurring", "drop_in", "trial"]).default("recurring"),
     venueAddress: z.string().trim().optional().nullable(),
-    venueMapLink: optionalHttpsUrl,
+    venueMapLink: optionalMapLink,
     venueContactPhone: z.string().trim().optional().nullable(),
     paymentMethod: z.enum(["razorpay_link", "razorpay_gateway", "qr"], {
       required_error: "Select a payment method",
@@ -389,7 +400,7 @@ export const adminCreateClassSessionSchema = z
           path: ["venueAddress"],
         });
       }
-      const mapRes = optionalHttpsUrl.safeParse(data.venueMapLink ?? null);
+      const mapRes = optionalMapLink.safeParse(data.venueMapLink ?? null);
       if (!mapRes.success || !mapRes.data) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -420,7 +431,7 @@ export const adminCreateClassSessionSchema = z
           path: ["venueAddress"],
         });
       }
-      const mapRes = optionalHttpsUrl.safeParse(data.venueMapLink ?? null);
+      const mapRes = optionalMapLink.safeParse(data.venueMapLink ?? null);
       if (!mapRes.success || !mapRes.data) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

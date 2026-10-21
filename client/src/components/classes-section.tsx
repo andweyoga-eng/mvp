@@ -142,7 +142,13 @@ export default function ClassesSection({
             {classTypes?.map((classType) => (
               <Card
                 key={classType.id}
-                className="overflow-hidden rounded-[22px] border border-dz-glass-border bg-white shadow-dz-ambient transition hover:-translate-y-1 hover:shadow-lg"
+                className="cursor-pointer overflow-hidden rounded-[22px] border border-dz-glass-border bg-white shadow-dz-ambient transition hover:-translate-y-1 hover:shadow-lg"
+                onClick={(event) => {
+                  const target = event.target;
+                  if (target instanceof Element && target.closest("button, a")) return;
+                  if (hasUpcomingSession(classType.id)) handleClassBooking(classType.id);
+                  else setWaitlistType(classType);
+                }}
               >
                 <div className="relative overflow-hidden">
                   <ClassTypeCoverImage

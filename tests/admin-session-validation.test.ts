@@ -103,6 +103,51 @@ describe("adminCreateClassSessionSchema — required fields", () => {
       assert.equal(r.data.sessionFrequency, "drop_in");
     }
   });
+
+  it("saves only the https address from a pasted Google embed iframe", () => {
+    const embed =
+      "https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3887.907778851295!2d77.64216669999999!3d12.977749999999999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2s!5e0!3m2!1sen!2sin!4v1792576611904!5m2!1sen!2sin";
+    const iframe = `<iframe src="${embed}" width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    const r = parseSession({
+      classTypeId: "ct-1",
+      instructorId: "ins-1",
+      date: futureDate,
+      maxCapacity: "10",
+      googleMeetLink: "",
+      deliveryMode: "offline",
+      sessionFrequency: "drop_in",
+      venueAddress: "12 Residency Road, Bengaluru",
+      venueMapLink: iframe,
+      venueContactPhone: "9876543210",
+      paymentMethod: "razorpay_link",
+      razorpayLink: "https://rzp.io/i/x",
+      publishMode: "now",
+    });
+    assert.equal(r.success, true);
+    if (r.success) assert.equal(r.data.venueMapLink, embed);
+  });
+
+  it("keeps a plain embed URL unchanged", () => {
+    const embed =
+      "https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d3887.907778851295!2d77.64216669999999!3d12.977749999999999!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2s!5e0!3m2!1sen!2sin!4v1792576611904!5m2!1sen!2sin";
+    const r = parseSession({
+      classTypeId: "ct-1",
+      instructorId: "ins-1",
+      date: futureDate,
+      maxCapacity: "10",
+      googleMeetLink: "",
+      deliveryMode: "offline",
+      sessionFrequency: "drop_in",
+      venueAddress: "12 Residency Road, Bengaluru",
+      venueMapLink: embed,
+      venueContactPhone: "9876543210",
+      paymentMethod: "razorpay_link",
+      razorpayLink: "https://rzp.io/i/x",
+      publishMode: "now",
+    });
+    assert.equal(r.success, true);
+    if (r.success) assert.equal(r.data.venueMapLink, embed);
+  });
 });
 
 describe("adminCreateClassSessionSchema — field length", () => {

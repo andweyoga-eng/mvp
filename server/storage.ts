@@ -611,6 +611,8 @@ export interface IStorage {
   // Classes
   getAllClasses(): Promise<Class[]>;
   getPublishedClasses(): Promise<Class[]>;
+  /** Bookable sessions for one class type, including earlier dates in an open batch. */
+  getBookableClassesForClassType(classTypeId: string): Promise<Class[]>;
   getClass(id: string): Promise<Class | undefined>;
   getClassesByDate(date: Date): Promise<Class[]>;
   getBookableClassesByDate(date: Date): Promise<Class[]>;
@@ -2831,6 +2833,19 @@ export class DatabaseStorage implements IStorage {
         .orderBy(classes.date);
     } catch (error) {
       console.error("[DB] Error getting published classes:", error);
+      return [];
+    }
+  }
+
+  async getBookableClassesForClassType(classTypeId: string): Promise<Class[]> {
+    try {
+      return await db
+        .select()
+        .from(classes)
+        .where(and(eq(classes.classTypeId, classTypeId), bookableClassSqlConditions()))
+        .orderBy(classes.date);
+    } catch (error) {
+      console.error("[DB] Error getting bookable classes for class type:", error);
       return [];
     }
   }

@@ -35,6 +35,10 @@ import {
   memberSessionsQueryKey,
   type MemberSession,
 } from "@/lib/member-sessions";
+import {
+  fetchMemberSubscriptions,
+  memberSubscriptionsQueryKey,
+} from "@/lib/member-subscriptions";
 import { MY_ACCOUNT_PROFILE_URL } from "@/lib/member-landing";
 import { profileCheckFromUser } from "@/lib/account-profile-complete";
 import { getMemberReadiness } from "@shared/profileCompleteness";
@@ -159,9 +163,15 @@ function ClassTypeCard({
 
   return (
     <article
-      className="flex w-[288px] flex-shrink-0 snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
+      className="flex w-[288px] flex-shrink-0 cursor-pointer snap-start flex-col overflow-hidden rounded-[18px] border border-dz-glass-border bg-dz-glass/70 backdrop-blur-[20px] transition-transform hover:-translate-y-1 hover:shadow-dz-ambient"
       aria-label={classType.name}
       data-testid={`hub-workout-card-${classType.id}`}
+      onClick={(event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest("button, a")) return;
+        if (canBook) onBook(classType.id);
+        else onWaitlist(classType);
+      }}
     >
       <div className="relative overflow-hidden">
         <ClassTypeCoverImage imageUrl={classType.imageUrl} alt="" />
@@ -307,6 +317,12 @@ export default function Dashboard() {
   const { data: memberSessions = [], isLoading: sessionsLoading } = useQuery({
     queryKey: memberSessionsQueryKey(user?.id ?? ""),
     queryFn: fetchMemberSessions,
+    enabled: !!user?.id,
+  });
+
+  const { data: subscriptions = [], isLoading: subscriptionsLoading } = useQuery({
+    queryKey: memberSubscriptionsQueryKey(user?.id ?? ""),
+    queryFn: fetchMemberSubscriptions,
     enabled: !!user?.id,
   });
 
@@ -637,6 +653,15 @@ export default function Dashboard() {
       now,
     }) === "active";
 
+  const hasActiveSubscription = subscriptions.some((s) => s.status === "active");
+  // Image banner only for members with an active program/subscription and a
+  // live or upcoming paid session (incl. trial/drop-in). Otherwise quote-only.
+  const showHeroBanner =
+    !sessionsLoading &&
+    !subscriptionsLoading &&
+    hasActiveSubscription &&
+    !!heroSession;
+
   return (
     <DashboardShell active="sessions">
       <Dialog open={!!phoneChoice} onOpenChange={() => {}}>
@@ -702,53 +727,51 @@ export default function Dashboard() {
       <PageContainer className="py-[clamp(20px,4vw,40px)] pb-24">
         {/* ===== HERO ===== */}
         <section className="mb-6">
-          <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-end overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient lg:items-center">
-            <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#e6dff1] via-[#d9d2ea] to-[#e7d8cd]" />
-            {heroSlides.length > 0 ? (
-              <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
-                {heroSlides.map((slide, i) => (
-                  <img
-                    key={slide.word}
-                    src={heroSlideImageSrc(slide)}
-                    alt=""
-                    aria-hidden
-                    className={cn(
-                      "pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out",
-                      i === heroImageIdx % heroSlides.length ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                ))}
-              </div>
-            ) : null}
-            <ImageHeroScrim variant="light-side" />
+          {showHeroBanner && heroSession ? (
+            <div className="relative flex min-h-[clamp(320px,42vw,420px)] items-end overflow-hidden rounded-3xl border border-dz-glass-border shadow-dz-ambient lg:items-center">
+              <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#e6dff1] via-[#d9d2ea] to-[#e7d8cd]" />
+              {heroSlides.length > 0 ? (
+                <div className="absolute inset-0 z-[1] overflow-hidden lg:inset-y-0 lg:left-auto lg:w-[62%]">
+                  {heroSlides.map((slide, i) => (
+                    <img
+                      key={slide.word}
+                      src={heroSlideImageSrc(slide)}
+                      alt=""
+                      aria-hidden
+                      className={cn(
+                        "pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out",
+                        i === heroImageIdx % heroSlides.length ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : null}
+              <ImageHeroScrim variant="light-side" />
 
-            <ImageHeroContent
-              glassOnMobile
-              className="flex w-full max-w-[640px] flex-col items-start justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:max-w-[min(480px,42vw)] lg:justify-center"
-            >
-              <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
-                {greeting()},{" "}
-                <span className="font-accent text-[1.15em] italic">
-                  {user?.name?.split(" ")[0] ?? "there"}
+              <ImageHeroContent
+                glassOnMobile
+                className="flex w-full max-w-[640px] flex-col items-start justify-end p-[clamp(24px,4vw,44px)] max-lg:min-h-[inherit] lg:max-w-[min(480px,42vw)] lg:justify-center"
+              >
+                <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
+                  {greeting()},{" "}
+                  <span className="font-accent text-[1.15em] italic">
+                    {user?.name?.split(" ")[0] ?? "there"}
+                  </span>
                 </span>
-              </span>
-              <h1 className="mb-3.5 font-display text-[clamp(30px,5.4vw,46px)] font-bold leading-[1.12] tracking-tight text-primary">
-                {dailyQuote.text}
-              </h1>
-              <p className="mb-4 text-[clamp(13px,1.3vw,15px)] font-semibold text-muted-foreground">
-                <span className="font-accent text-[1.2em] italic">{dailyQuote.author}</span>
-              </p>
-              <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
-                {heroSession
-                  ? isLive
+                <h1 className="mb-3.5 font-display text-[clamp(30px,5.4vw,46px)] font-bold leading-[1.12] tracking-tight text-primary">
+                  {dailyQuote.text}
+                </h1>
+                <p className="mb-4 text-[clamp(13px,1.3vw,15px)] font-semibold text-muted-foreground">
+                  <span className="font-accent text-[1.2em] italic">{dailyQuote.author}</span>
+                </p>
+                <p className="mb-6 max-w-[420px] text-[clamp(15px,1.4vw,18px)] leading-relaxed text-muted-foreground">
+                  {isLive
                     ? `Your ${heroSession.className} session is live now. Tap Enter Session to join.`
                     : new Date(heroSession.date).toDateString() === now.toDateString()
                       ? `Your ${heroSession.className} session is scheduled today at ${formatTime(heroSession.date)}.`
-                      : `Your next ${heroSession.className} session is ${formatDayTime(heroSession.date)}.`
-                  : "No sessions scheduled for today. Explore our sessions below and reserve your spot."}
-              </p>
+                      : `Your next ${heroSession.className} session is ${formatDayTime(heroSession.date)}.`}
+                </p>
 
-              {heroSession ? (
                 <div className="grid max-w-[440px] grid-cols-2 gap-3 rounded-[18px] border border-dz-glass-border bg-dz-surface/70 p-4 shadow-dz-ambient backdrop-blur-[16px]">
                   <div className="flex items-center gap-2.5 px-1 py-1.5">
                     <Timer className="h-5 w-5 text-primary" />
@@ -823,18 +846,24 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => (window.location.href = "/#schedule")}
-                  className="inline-flex w-fit shrink-0 items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-dz-primary transition-transform hover:-translate-y-0.5"
-                >
-                  Browse Schedule
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
-            </ImageHeroContent>
-          </div>
+              </ImageHeroContent>
+            </div>
+          ) : (
+            <div className="max-w-[640px]" data-testid="dashboard-quote-only">
+              <span className="mb-[18px] inline-block rounded-full bg-primary/10 px-4 py-[7px] text-[13px] font-semibold text-primary">
+                {greeting()},{" "}
+                <span className="font-accent text-[1.15em] italic">
+                  {user?.name?.split(" ")[0] ?? "there"}
+                </span>
+              </span>
+              <h1 className="mb-3.5 font-display text-[clamp(30px,5.4vw,46px)] font-bold leading-[1.12] tracking-tight text-primary">
+                {dailyQuote.text}
+              </h1>
+              <p className="text-[clamp(13px,1.3vw,15px)] font-semibold text-muted-foreground">
+                <span className="font-accent text-[1.2em] italic">{dailyQuote.author}</span>
+              </p>
+            </div>
+          )}
         </section>
 
         <SessionsSearchBar
