@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Trips &amp; Treks | andWeYOGa</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&amp;family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary": "#ffffff",
+                        "on-background": "#1b1c1b",
+                        "surface-variant": "#e4e2e0",
+                        "surface-container": "#efedec",
+                        "on-primary-fixed-variant": "#503787",
+                        "secondary-fixed": "#ffdbcb",
+                        "surface-container-low": "#f5f3f1",
+                        "tertiary-fixed-dim": "#b3cdb6",
+                        "inverse-surface": "#30302f",
+                        "background": "#fbf9f7",
+                        "secondary-fixed-dim": "#ffb692",
+                        "secondary": "#9a4612",
+                        "tertiary-container": "#314736",
+                        "on-primary-fixed": "#24015a",
+                        "on-error": "#ffffff",
+                        "primary-container": "#4b3282",
+                        "secondary-container": "#fd9259",
+                        "on-secondary-fixed": "#341100",
+                        "on-tertiary-fixed-variant": "#354c3a",
+                        "on-secondary-fixed-variant": "#793000",
+                        "outline": "#7a7581",
+                        "on-secondary": "#ffffff",
+                        "outline-variant": "#cbc4d2",
+                        "surface-container-high": "#eae8e6",
+                        "surface-bright": "#fbf9f7",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-primary": "#d1bcff",
+                        "surface-tint": "#6850a1",
+                        "surface": "#fbf9f7",
+                        "on-tertiary-container": "#9cb59e",
+                        "surface-container-highest": "#e4e2e0",
+                        "error-container": "#ffdad6",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1b1c1b",
+                        "surface-dim": "#dbdad8",
+                        "on-secondary-container": "#712d00",
+                        "on-surface-variant": "#494550",
+                        "primary-fixed-dim": "#d1bcff",
+                        "on-primary-container": "#baa0f8",
+                        "tertiary": "#1b3120",
+                        "primary-fixed": "#eaddff",
+                        "on-error-container": "#93000a",
+                        "tertiary-fixed": "#cfe9d1",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#34196a",
+                        "on-tertiary-fixed": "#0a2011",
+                        "inverse-on-surface": "#f2f0ee"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "64px",
+                        "md": "16px",
+                        "xl": "40px",
+                        "gutter": "24px",
+                        "sm": "8px",
+                        "unit": "4px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "container-max": "1280px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Inter"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "label-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "600"}],
+                        "display-lg": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(75, 50, 130, 0.1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #fbf9f7;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbc4d2;
+            border-radius: 10px;
+        }
+        .organic-shape {
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen overflow-x-hidden">
+<!-- TopAppBar Navigation -->
+<header class="fixed top-0 w-full z-50 bg-surface/70 dark:bg-surface-dim/70 backdrop-blur-xl border-b border-primary/10 transition-all duration-300 ease-in-out shadow-sm">
+<div class="flex justify-between items-center px-gutter py-md max-w-container-max mx-auto">
+<div class="flex items-center gap-xl">
+<a class="font-display-lg text-display-lg text-primary tracking-tighter" href="#">andWeYOGa</a>
+<nav class="hidden md:flex gap-lg">
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Sessions</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Calendar</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Emojou</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Workshops</a>
+<a class="font-body-md text-body-md text-primary border-b-2 border-primary pb-1 font-semibold" href="#">Trips</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-primary transition-colors" href="#">Explore</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<button class="p-sm rounded-full hover:bg-surface-container-high/50 transition-all">
+<span class="material-symbols-outlined text-primary">search</span>
+</button>
+<button class="p-sm rounded-full hover:bg-surface-container-high/50 transition-all">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-xxl pb-xxl px-gutter max-w-container-max mx-auto relative">
+<!-- Floating Ambient Elements -->
+<div class="absolute -top-20 -right-20 w-96 h-96 bg-primary-fixed-dim/20 organic-shape blur-3xl -z-10 animate-pulse"></div>
+<div class="absolute top-1/2 -left-40 w-80 h-80 bg-secondary-fixed/30 organic-shape blur-3xl -z-10"></div>
+<!-- Hero Section -->
+<section class="py-xl text-center">
+<span class="font-label-sm text-label-sm text-secondary bg-secondary-fixed px-lg py-unit rounded-full uppercase tracking-widest inline-block mb-md">Soulful Journeys</span>
+<h1 class="font-display-lg text-display-lg text-primary mb-md">Beyond the Mat: Trips &amp; Treks</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">Discover transformative retreats in the world's most sacred spaces. Join our global community as we explore internal stillness through external exploration.</p>
+</section>
+<!-- Bento Grid: Featured Retreats -->
+<section class="grid grid-cols-1 md:grid-cols-12 gap-lg mb-xxl">
+<!-- Himalayan Zen Retreat (Large Tile) -->
+<div class="md:col-span-8 group relative overflow-hidden rounded-xl glass-card transition-all duration-500 hover:shadow-xl">
+<div class="grid grid-cols-1 md:grid-cols-2 h-full">
+<div class="relative h-80 md:h-full overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A breathtaking view of the mist-covered Himalayan peaks at sunrise, with a small, minimalist wooden yoga shala perched on a cliff edge. The lighting is ethereal and soft, dominated by cool blues and warm golden hues. The atmosphere is quiet, serene, and deeply meditative, capturing the essence of 'Digital Zen' and luxury wellness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLHwjdGEO5qDMubuUFr7ZRx0gQfUJ9EmWAKM-wMWlIltsyVK71Gh9L7x1fyL18VMGO_67uJbw3fC_8Oa6XP7aXRrqX_YkhFUZt1hxL05I0mkd0fqsuMOiogW_FKqWuo2PcV3yyt_5TA54pY8kjXLk9KV_8-BK3LF-Me7kK60HqTgrn-Vn96g7G5dL3HHc2bptjA25l93-1riRzbVy4NCUBWgI0ON_tvc_FWIN3auisjbSulF7uiibGYTOIOS09HVA0C2kL_0E"/>
+<div class="absolute top-md left-md bg-primary text-on-primary font-label-sm text-label-sm px-md py-xs rounded-full">Most Popular</div>
+</div>
+<div class="p-xl flex flex-col justify-center">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-sm">Himalayan Zen Retreat</h2>
+<div class="flex items-center gap-xs text-secondary mb-md">
+<span class="material-symbols-outlined text-[18px]">location_on</span>
+<span class="font-label-md text-label-md">Rishikesh, India</span>
+</div>
+<ul class="space-y-sm mb-lg">
+<li class="flex items-center gap-sm text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                10 days of guided meditation
+                            </li>
+<li class="flex items-center gap-sm text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                High-altitude trekking trails
+                            </li>
+<li class="flex items-center gap-sm text-on-surface-variant font-body-md text-body-md">
+<span class="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+                                Ayurvedic plant-based dining
+                            </li>
+</ul>
+<div class="mt-auto">
+<button class="bg-primary text-on-primary font-label-md text-label-md px-xl py-md rounded-lg hover:bg-primary-container transition-all flex items-center gap-sm w-full md:w-fit group">
+                                Explore Journey
+                                <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Coastal Yoga & Surf Camp (Side Tile) -->
+<div class="md:col-span-4 group relative overflow-hidden rounded-xl glass-card transition-all duration-500 hover:shadow-xl flex flex-col">
+<div class="h-64 relative overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" data-alt="A vibrant coastal scene featuring a pristine white sand beach with turquoise waves rolling in. On the beach, a group of people are practicing yoga on mats next to their surfboards. The lighting is bright and summery, with high-key whites and deep ocean blues. The aesthetic is modern, clean, and energetic, perfectly blending surfing and wellness." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPgHfDo8KoP3J_aD6hm2aMhbRgQJ_DO-CFEbSTrlMYIaJrKD6Q6dz48Je611CZIzZ7QTQzbFnF-OUhX7zffsD8K6KiQczqFJddunFWfk3T2Iv7IdKXePu28RvbiMsJShyAo3bqVYq1IsbNUyrErACqd0oQR_XfLkJ4tD9nXhYQapSNcVYVktAY9KQrDzQh4P5RHLXseCmTlbttPcLgLwJvohh9T7MTcr2o108JZ5NHTaRZYw9mKjSFLaI3Flprfhzde7ovugM"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+</div>
+<div class="p-lg flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-sm">
+<h3 class="font-headline-md text-headline-md text-primary">Coastal Yoga &amp; Surf Camp</h3>
+<span class="text-secondary font-label-sm text-label-sm bg-secondary-fixed/50 px-sm py-xs rounded">7 Days</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-lg flex-1">Find your flow on the waves and the mat. A perfect balance of adventure and mindfulness in Portugal's hidden gems.</p>
+<button class="border-2 border-primary text-primary font-label-md text-label-md px-lg py-sm rounded-lg hover:bg-primary hover:text-on-primary transition-all flex items-center justify-center gap-sm w-full">
+                        View Itinerary
+                        <span class="material-symbols-outlined text-[20px]">surfing</span>
+</button>
+</div>
+</div>
+<!-- Spiritual Forest Trek (Bottom Long Tile) -->
+<div class="md:col-span-12 group relative overflow-hidden rounded-xl glass-card transition-all duration-500 hover:shadow-xl">
+<div class="grid grid-cols-1 md:grid-cols-3">
+<div class="md:col-span-1 p-xl flex flex-col justify-center">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-sm">Spiritual Forest Trek</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-lg">A deep immersion into the ancient forests of Japan. Connect with nature through Shinrin-yoku (forest bathing) and sunrise yoga.</p>
+<div class="flex gap-md mb-lg">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary uppercase">Next Date</span>
+<span class="font-headline-md text-headline-md text-secondary">Oct 12</span>
+</div>
+<div class="w-px h-full bg-outline-variant/30 mx-md"></div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-primary uppercase">Spaces Left</span>
+<span class="font-headline-md text-headline-md text-secondary">4 Only</span>
+</div>
+</div>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-xl py-md rounded-lg hover:bg-primary-container transition-all flex items-center gap-sm w-full md:w-fit">
+                            Reserve My Spot
+                            <span class="material-symbols-outlined">nature_people</span>
+</button>
+</div>
+<div class="md:col-span-2 relative h-96 overflow-hidden">
+<img class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" data-alt="A lush, emerald-green bamboo forest in Japan with sunbeams piercing through the canopy. A narrow stone path winds through the trees, leading to a small Shinto shrine in the distance. The lighting is moody and atmospheric, with deep greens, rich browns, and soft golden light. The style is expansive and professional, capturing a sense of spiritual wonder." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaGtjRJZI22WwJBZaYIxBCb1UFinNs35NwwIkpIPsxxHPbq0EWlkROYo4_fLvdjGyNnGecX98czvNJmKeAo0kas75KJXJoyZ83bhqKwOEekoyqgeaL_RWPTC7kTpOXleriB8eQwpJ0VTZXx64JBsmKWk9FDREYAD1otG8NrqSdNrAnQZWmvjJmDG-cgM8EtV6eL5RFUZw6-FwxUsccIUFOQ8Lkb5sJ6d7xOY77CbSm8J7L_OXlIrsQ7MDYv1Z6KsZw5a2Y34w"/>
+<!-- Itinerary highlights overlay -->
+<div class="absolute bottom-md right-md flex gap-sm">
+<div class="glass-card p-sm rounded-lg flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary">hiking</span>
+<span class="font-label-sm text-label-sm">Daily Treks</span>
+</div>
+<div class="glass-card p-sm rounded-lg flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary">spa</span>
+<span class="font-label-sm text-label-sm">Forest Meds</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Secondary CTA Section -->
+<section class="mb-xxl text-center p-xl rounded-xxl glass-card relative overflow-hidden">
+
+<div class="relative z-10">
+<h3 class="font-headline-lg text-headline-lg text-primary mb-md">Can't decide on a destination?</h3>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl mx-auto mb-xl">Take our wellness quiz to find the trip that aligns with your current energy and goals.</p>
+<button class="bg-secondary text-on-primary font-label-md text-label-md px-xxl py-md rounded-full shadow-lg hover:scale-105 transition-transform">
+                    Start Wellness Quiz
+                </button>
+</div>
+</section>
+</main>
+<!-- SideNavBar (Hidden by default, used as Mobile Menu) -->
+<aside class="fixed right-0 h-full w-80 z-[60] bg-surface-container-lowest/80 backdrop-blur-2xl border-l border-primary/5 shadow-xl flex flex-col p-lg gap-md translate-x-full transition-transform duration-500 ease-out md:hidden" id="mobileMenu">
+<div class="flex items-center justify-between mb-lg">
+<div>
+<h4 class="font-headline-md text-headline-md text-primary">Menu</h4>
+<p class="font-label-md text-label-md text-on-surface-variant">Explore andWeYOGa</p>
+</div>
+<button class="p-sm" onclick="toggleMenu()">
+<span class="material-symbols-outlined text-primary">close</span>
+</button>
+</div>
+<nav class="flex flex-col gap-sm">
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-label-md">Explore Trips</span>
+</a>
+<a class="flex items-center gap-md p-md bg-primary-container text-on-primary-container rounded-lg font-bold" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">landscape</span>
+<span class="font-label-md">Current Journeys</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">event_available</span>
+<span class="font-label-md">Booking History</span>
+</a>
+<a class="flex items-center gap-md p-md text-on-surface-variant hover:bg-surface-variant/30 rounded-lg transition-transform hover:translate-x-1" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-md">Trip Help Center</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-primary/5 pt-lg">
+<button class="w-full text-secondary font-label-md text-label-md py-md rounded-lg border border-secondary hover:bg-secondary-fixed transition-colors">
+                Sign Out
+            </button>
+</div>
+</aside>
+<footer class="bg-surface-container-low py-xxl">
+<div class="max-w-container-max mx-auto px-gutter grid grid-cols-1 md:grid-cols-4 gap-xl">
+<div class="md:col-span-2">
+<span class="font-display-lg text-display-lg text-primary tracking-tighter block mb-md">andWeYOGa</span>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-sm mb-lg">Bridging the gap between high-performance wellness and soft, approachable minimalism. Your digital sanctuary for mindful movement.</p>
+<div class="flex gap-md">
+<a class="text-primary hover:text-secondary transition-colors" href="#"><span class="material-symbols-outlined">share</span></a>
+<a class="text-primary hover:text-secondary transition-colors" href="#"><span class="material-symbols-outlined">mail</span></a>
+<a class="text-primary hover:text-secondary transition-colors" href="#"><span class="material-symbols-outlined">podcasts</span></a>
+</div>
+</div>
+<div>
+<h5 class="font-label-sm text-label-sm text-primary uppercase mb-lg tracking-widest">Destinations</h5>
+<ul class="space-y-sm">
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Himalayas, IN</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Ericeira, PT</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Kyoto, JP</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Bali, ID</a></li>
+</ul>
+</div>
+<div>
+<h5 class="font-label-sm text-label-sm text-primary uppercase mb-lg tracking-widest">Legal</h5>
+<ul class="space-y-sm">
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Privacy Policy</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Terms of Service</a></li>
+<li><a class="font-label-md text-label-md text-on-surface-variant hover:text-primary" href="#">Cancellation Policy</a></li>
+</ul>
+</div>
+</div>
+<div class="max-w-container-max mx-auto px-gutter mt-xxl pt-lg border-t border-primary/5 flex justify-between items-center text-label-sm text-on-surface-variant">
+<span>© 2024 andWeYOGa Inc.</span>
+<div class="flex gap-lg">
+<span class="material-symbols-outlined text-[16px]">public</span>
+<span>English (US)</span>
+</div>
+</div>
+</footer>
+<!-- Mobile Navigation Bar -->
+<div class="md:hidden fixed bottom-0 w-full z-50 bg-surface/70 backdrop-blur-xl border-t border-primary/5 shadow-2xl">
+<div class="flex justify-around items-center py-sm">
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">home</span>
+<span class="text-[10px] uppercase font-bold">Home</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-primary font-bold">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="text-[10px] uppercase">Trips</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined">event</span>
+<span class="text-[10px] uppercase">Calendar</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant" onclick="toggleMenu()">
+<span class="material-symbols-outlined">menu</span>
+<span class="text-[10px] uppercase">More</span>
+</button>
+</div>
+</div>
+<script>
+        function toggleMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('translate-x-full');
+        }
+
+        // Simple scroll effect for Header
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('header');
+            if (window.scrollY > 20) {
+                header.classList.add('shadow-md', 'py-sm');
+                header.classList.remove('shadow-sm', 'py-md');
+            } else {
+                header.classList.remove('shadow-md', 'py-sm');
+                header.classList.add('shadow-sm', 'py-md');
+            }
+        });
+    </script>
+</body></html>
