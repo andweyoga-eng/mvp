@@ -64,10 +64,12 @@ Cancel is always allowed (no confirm dialog). Items already added stay as a **sa
 
 - Weight field always visible on confirm (all capture methods).  
 - Canonical store: **grams**. Oz is display-only (`1 oz = 28.3495 g`).  
-- Density model: first calorie value on screen when weight is entered = cal/100g density (default reference 100 g).  
+- Density model applies to hand-typed calories and to calories that already came from a weight estimate. The first such value when weight is entered is cal/100g.  
   `calories = density × weight / 100`  
-- Recalc live on weight keystrokes.  
-- Editing calories after weight is set recomputes density from `(new cal) / (weight/100)`; weight unchanged.  
+- Recalc live on weight keystrokes for that density path.  
+- A photo estimate is not a density seed. Entering a weight after a scan clears that photo calorie count and macros, then re-estimates from **name + weightGrams** (same ~700ms path).  
+- A new photo after a weight estimate clears that weight calorie count and macros and replaces them with the photo estimate. A weight still on screen is not applied to the new photo calories until the member edits it, which clears the photo estimate and re-estimates from weight.  
+- Editing calories by hand recomputes density from `(new cal) / (weight/100)`; weight unchanged.  
 - If calories cleared while weight present → call estimate with **name + weightGrams** (no photo), after ~700ms debounce.  
 - Badge: distinct **“Estimated from weight”** (not the photo high/low confidence banner).
 

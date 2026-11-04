@@ -28,11 +28,13 @@ import {
   FUEL_ESTIMATE_SUCCESS_COPY,
   FUEL_OUTSIDE_SLOTS_TITLE,
   fuelEstimatePhotoFileError,
+  applyWeightEntryToCalories,
   gramsToOz,
   isLocalTimeInSlot,
   midpointHhmm,
   ozToGrams,
   resolveFuelMealPlanForTracking,
+  type FuelCalorieSource,
   type FuelCaptureMethod,
   type FuelEstimateReviewState,
   type FuelMacros,
@@ -144,6 +146,9 @@ export function TrackDietModal({
   const streamRef = useRef<MediaStream | null>(null);
   const weightAbortRef = useRef<AbortController | null>(null);
   const densityRef = useRef<number | null>(null);
+  const calorieSourceRef = useRef<FuelCalorieSource | null>(null);
+  /** Bumped when a photo estimate is applied so an in-flight weight result cannot overwrite it. */
+  const estimateGenerationRef = useRef(0);
   const suggestTimerRef = useRef<number | undefined>(undefined);
 
   const [step, setStep] = useState<Step>("select");
@@ -219,6 +224,7 @@ export function TrackDietModal({
   };
 
   const resetConfirmFields = () => {
+    weightAbortRef.current?.abort();
     setName("");
     setCalories("");
     setWeightInput("");
@@ -228,6 +234,7 @@ export function TrackDietModal({
     setLastFile(null);
     clearPhotoPreview();
     densityRef.current = null;
+    calorieSourceRef.current = null;
     setWeightEstimateError(null);
     setWeightEstimating(false);
   };
@@ -306,12 +313,10 @@ export function TrackDietModal({
   useEffect(() => {
     if (step !== "confirm") return;
     if (weightGrams == null) return;
+    if (calorieSourceRef.current === "photo") return;
     const cal = Number(calories);
     if (Number.isFinite(cal) && cal > 0 && densityRef.current == null) {
       densityRef.current = cal / (weightGrams / 100);
-    }
-    if (densityRef.current != null && Number.isFinite(cal)) {
-      // when weight changes and density known, recompute calories from density
     }
   }, [weightGrams, calories, step]);
 
@@ -319,20 +324,32 @@ export function TrackDietModal({
     setWeightInput(raw);
     setWeightEstimateError(null);
     const n = Number(raw);
-    if (!Number.isFinite(n) || n <= 0) return;
-    const g = Math.round(weightUnit === "oz" ? ozToGrams(n) : n);
-    const cal = Number(calories);
-    if (densityRef.current == null && Number.isFinite(cal) && cal > 0) {
-      densityRef.current = cal / (g / 100);
+    const grams =
+      Number.isFinite(n) && n > 0
+        ? Math.round(weightUnit === "oz" ? ozToGrams(n) : n)
+        : null;
+    const next = applyWeightEntryToCalories({
+      source: calorieSourceRef.current,
+      calories,
+      weightGrams: grams,
+      density: densityRef.current,
+    });
+    calorieSourceRef.current = next.source;
+    densityRef.current = next.density;
+    if (next.reestimateFromWeight) {
+      setCalories("");
+      setMacros(null);
+      setConfidence(null);
+      setReviewState(null);
       return;
     }
-    if (densityRef.current != null) {
-      const nextCal = Math.round(densityRef.current * (g / 100));
-      setCalories(String(Math.max(0, nextCal)));
-    }
+    if (next.calories !== calories) setCalories(next.calories);
   };
 
   const onCaloriesChange = (raw: string) => {
+    calorieSourceRef.current = "hand";
+    weightAbortRef.current?.abort();
+    setWeightEstimating(false);
     setCalories(raw);
     setWeightEstimateError(null);
     const cal = Number(raw);
@@ -353,6 +370,7 @@ export function TrackDietModal({
       return;
     }
 
+    const generation = estimateGenerationRef.current;
     const t = window.setTimeout(() => {
       weightAbortRef.current?.abort();
       const ac = new AbortController();
@@ -364,7 +382,8 @@ export function TrackDietModal({
         { signal: ac.signal },
       )
         .then((est) => {
-          if (ac.signal.aborted) return;
+          if (ac.signal.aborted || generation !== estimateGenerationRef.current) return;
+          calorieSourceRef.current = "weight";
           setCalories(String(est.calories));
           setMacros(est.macros ?? null);
           setConfidence(est.confidence);
@@ -440,6 +459,9 @@ export function TrackDietModal({
       toast({ title: "Photo not supported", description: fileErr, variant: "destructive" });
       return;
     }
+    weightAbortRef.current?.abort();
+    estimateGenerationRef.current += 1;
+    setWeightEstimating(false);
     clearPhotoPreview();
     setLastFile(file);
     setPhotoPreviewUrl(URL.createObjectURL(file));
@@ -449,12 +471,15 @@ export function TrackDietModal({
     setErrorCode(null);
     try {
       const est = await estimateFuelMeal(file);
+      weightAbortRef.current?.abort();
+      calorieSourceRef.current = "photo";
+      densityRef.current = null;
       setName(est.name);
       setCalories(est.calories ? String(est.calories) : "");
       setMacros(est.macros ?? null);
       setConfidence(est.confidence);
       setReviewState(est.reviewState);
-      densityRef.current = null;
+      setWeightEstimateError(null);
       setStep("confirm");
     } catch (err) {
       if (err instanceof FuelEstimateRequestError) {
@@ -512,8 +537,11 @@ export function TrackDietModal({
     setMacros(item.macros);
     setConfidence(item.confidence);
     setReviewState(item.fromWeight ? "weight" : item.confidence == null ? "manual" : "success");
+    calorieSourceRef.current = item.fromWeight ? "weight" : item.confidence == null ? "hand" : "photo";
     densityRef.current =
-      item.weightG != null && item.weightG > 0 ? item.calories / (item.weightG / 100) : null;
+      item.fromWeight && item.weightG != null && item.weightG > 0
+        ? item.calories / (item.weightG / 100)
+        : null;
     setStep("confirm");
   };
 

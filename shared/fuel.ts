@@ -416,6 +416,52 @@ export const FUEL_ESTIMATE_NAME_MAX = 60;
 
 export type FuelEstimateReviewState = "success" | "low" | "failure";
 
+/** Where the calories currently on the confirm step came from. */
+export type FuelCalorieSource = "photo" | "weight" | "hand";
+
+/**
+ * Entering a weight after a photo scan drops that photo calorie count so the
+ * caller can estimate again from name + grams. Hand-typed calories and an
+ * existing weight estimate keep the density model.
+ */
+export function applyWeightEntryToCalories(input: {
+  source: FuelCalorieSource | null;
+  calories: string;
+  weightGrams: number | null;
+  density: number | null;
+}): {
+  source: FuelCalorieSource | null;
+  calories: string;
+  density: number | null;
+  reestimateFromWeight: boolean;
+} {
+  if (input.source === "photo" && input.weightGrams != null && input.weightGrams > 0) {
+    return {
+      source: null,
+      calories: "",
+      density: null,
+      reestimateFromWeight: true,
+    };
+  }
+
+  const cal = Number(input.calories);
+  let density = input.density;
+  let calories = input.calories;
+  if (input.weightGrams != null && input.weightGrams > 0) {
+    if (density == null && Number.isFinite(cal) && cal > 0) {
+      density = cal / (input.weightGrams / 100);
+    } else if (density != null && Number.isFinite(cal)) {
+      calories = String(Math.max(0, Math.round(density * (input.weightGrams / 100))));
+    }
+  }
+  return {
+    source: input.source,
+    calories,
+    density,
+    reestimateFromWeight: false,
+  };
+}
+
 export function roundFuelCalories(kcal: number): number {
   const rounded = Math.round(kcal / FUEL_ESTIMATE_KCAL_ROUND) * FUEL_ESTIMATE_KCAL_ROUND;
   return Math.max(FUEL_ESTIMATE_KCAL_MIN, Math.min(FUEL_ESTIMATE_KCAL_MAX, rounded));

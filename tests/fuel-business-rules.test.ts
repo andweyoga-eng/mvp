@@ -16,6 +16,7 @@ import {
   fuelEstimatePhotoFileError,
   FUEL_ESTIMATE_MAX_BYTES,
   roundFuelCalories,
+  applyWeightEntryToCalories,
 } from "../shared/fuel.ts";
 
 describe("andWeDiet business rules", () => {
@@ -84,6 +85,51 @@ describe("andWeDiet business rules", () => {
       adminFuelRecipeSchema.safeParse({ ...base, imageUrl: "www.example.com/a.jpg" }).success,
       false,
     );
+  });
+
+  it("drops a photo calorie count when weight is entered", () => {
+    const cleared = applyWeightEntryToCalories({
+      source: "photo",
+      calories: "420",
+      weightGrams: 180,
+      density: 420,
+    });
+    assert.equal(cleared.reestimateFromWeight, true);
+    assert.equal(cleared.calories, "");
+    assert.equal(cleared.density, null);
+    assert.equal(cleared.source, null);
+
+    const untouched = applyWeightEntryToCalories({
+      source: "photo",
+      calories: "420",
+      weightGrams: null,
+      density: null,
+    });
+    assert.equal(untouched.reestimateFromWeight, false);
+    assert.equal(untouched.calories, "420");
+    assert.equal(untouched.source, "photo");
+  });
+
+  it("scales hand and weight calories by density", () => {
+    const seeded = applyWeightEntryToCalories({
+      source: "hand",
+      calories: "250",
+      weightGrams: 150,
+      density: null,
+    });
+    assert.equal(seeded.reestimateFromWeight, false);
+    assert.equal(seeded.calories, "250");
+    assert.equal(seeded.density, 250 / 1.5);
+
+    const scaled = applyWeightEntryToCalories({
+      source: "weight",
+      calories: "180",
+      weightGrams: 250,
+      density: 90,
+    });
+    assert.equal(scaled.reestimateFromWeight, false);
+    assert.equal(scaled.calories, "225");
+    assert.equal(scaled.source, "weight");
   });
 
   it("rounds and clamps photo estimate calories", () => {
