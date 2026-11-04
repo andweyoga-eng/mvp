@@ -24,7 +24,6 @@ describe("ClassTypeCoverImage — checkout UX consistency", () => {
     assert.match(source, /max-h-48/);
     assert.match(source, /md:h-56 md:max-h-56/);
     assert.match(source, /object-cover object-center/);
-    assert.match(source, /AiImageDisclaimer/);
     assert.match(source, /ClassTypeCoverFrame/);
     assert.match(source, /lg:w-\[40%\]/);
   });

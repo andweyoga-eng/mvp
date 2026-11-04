@@ -1,6 +1,5 @@
 import { Flower2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { cn } from "@/lib/utils";
 
 export const COVER_GRADIENT = "bg-gradient-to-br from-[#d7cfe6] to-[#c8bdd9]";
@@ -80,23 +79,16 @@ export function ClassTypeCoverImage({
   }
 
   return (
-    <div
+    <img
+      src={imageUrl}
+      alt={alt}
+      data-testid={testId}
       className={cn(
-        "relative w-full",
-        fillColumn && "lg:absolute lg:inset-0 lg:h-full lg:min-h-[180px]",
+        CLASS_TYPE_COVER_IMG_CLASS,
+        fillColumn &&
+          "lg:absolute lg:inset-0 lg:h-full lg:max-h-none lg:min-h-[180px]",
+        className,
       )}
-    >
-      <img
-        src={imageUrl}
-        alt={alt}
-        data-testid={testId}
-        className={cn(
-          CLASS_TYPE_COVER_IMG_CLASS,
-          fillColumn && "lg:h-full lg:max-h-none lg:min-h-[180px]",
-          className,
-        )}
-      />
-      <AiImageDisclaimer />
-    </div>
+    />
   );
 }

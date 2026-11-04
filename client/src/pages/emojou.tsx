@@ -10,7 +10,6 @@ import {
   Heart,
   ArrowRight,
 } from "lucide-react";
-import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { FeatureInteractionFreeze } from "@/components/feature-interaction-freeze";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -145,7 +144,6 @@ export default function Emojou() {
               alt="Sound healing session"
               className="h-full w-full scale-105 object-cover transition-transform duration-1000 group-hover:scale-100"
             />
-            <AiImageDisclaimer placement="corner" className="top-3 bottom-auto" />
             <ImageHeroScrim variant="dark-bottom" />
             <ImageHeroContent className="absolute inset-0 flex flex-col justify-end p-7 sm:p-12">
               <div className="max-w-3xl">
@@ -281,7 +279,6 @@ export default function Emojou() {
                     alt={`Moment ${i + 1}`}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
-                  <AiImageDisclaimer className="px-1.5 pb-1 pt-4 text-[8px]" />
                   <div className="absolute inset-0 flex items-center justify-center bg-primary/25 opacity-0 transition-opacity group-hover:opacity-100">
                     <Heart className="h-7 w-7 text-white" />
                   </div>

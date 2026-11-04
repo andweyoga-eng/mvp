@@ -9,7 +9,6 @@ import {
   Sparkles,
   User as UserIcon,
 } from "lucide-react";
-import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { FeatureInteractionFreeze } from "@/components/feature-interaction-freeze";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -143,7 +142,6 @@ export default function Workshops() {
             style={{ backgroundImage: `url(${elevateImg})` }}
             aria-hidden
           />
-          <AiImageDisclaimer placement="corner" className="top-3 bottom-auto" />
           <ImageHeroScrim variant="brand-horizontal" />
           <ImageHeroContent className="relative z-10 max-w-xl p-8 text-white sm:p-12">
             <span className="mb-3 inline-block rounded-full bg-dz-secondary/90 px-3.5 py-1 text-xs font-semibold uppercase tracking-wide backdrop-blur">
@@ -221,7 +219,6 @@ export default function Workshops() {
                   alt={w.title}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
-                <AiImageDisclaimer />
                 <span
                   className={cn(
                     "absolute right-3 top-3 rounded-full px-3 py-1 text-[11px] font-semibold backdrop-blur",

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { ClampedDescription } from "@/components/clamped-description";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
-import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { ClassTypeCoverImage } from "@/components/class-type-cover-image";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { ImageHeroContent, ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
@@ -745,10 +744,6 @@ export default function Dashboard() {
                       )}
                     />
                   ))}
-                  <AiImageDisclaimer
-                    placement="corner"
-                    className="top-3 bottom-auto max-w-[min(70%,16rem)] text-[9px] lg:bottom-3 lg:top-auto lg:max-w-[min(92%,22rem)] lg:text-[10px]"
-                  />
                 </div>
               ) : null}
               <ImageHeroScrim variant="light-side" />

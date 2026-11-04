@@ -349,7 +349,7 @@ function DisclaimerField({
         data-testid={testId}
       />
       <p className="text-xs text-muted-foreground">
-        {value.trim().length}/{HERO_DISCLAIMER_MAX} characters. Public photos use the studio image disclaimer. This box is stored with the slide and is not drawn on the photo.
+        {value.trim().length}/{HERO_DISCLAIMER_MAX} characters. Leave blank to show nothing. It sits in one line at the bottom-right corner of the photo.
       </p>
     </div>
   );
