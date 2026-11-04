@@ -181,14 +181,14 @@
 | **Rationale** | Lawful processing after policy updates |
 | **Shapes product** | Every legal change needs version bump and member re-acceptance |
 
-### 2.6 Interim US hosting disclosure
+### 2.6 Interim Singapore hosting disclosure
 
 | | |
 |---|---|
 | **Feature** | Data localisation messaging |
 | **Type** | New (legal product) |
 | **Decided by** | You / Legal (`shared/legal-config.ts`) |
-| **Decision** | Disclose Railway US hosting interim. Commit to India migration in privacy notice |
+| **Decision** | Disclose Railway Singapore hosting interim. Commit to India migration in privacy notice |
 | **Rationale** | Honest DPDP subprocessor disclosure |
 | **Shapes product** | Migration to India infra is a stated milestone |
 
@@ -601,7 +601,7 @@
 | Commerce / merchandise | On hold | Phase 3 | Out of MVP |
 | Community feed | On hold | Phase 2 | Out of MVP |
 | Native mobile app | On hold | Responsive web | Long term |
-| India data hosting | Planned | Disclosed interim US | Legal commitment |
+| India data hosting | Planned | Disclosed interim Singapore | Legal commitment |
 | Health document in-app upload | On hold | Email path for now | Infra and scale |
 | Admin test data tab | On hold | Requested Jul 2026 | Not fully built |
 | Credits and subscriptions | On hold | UI placeholder | Future phase |

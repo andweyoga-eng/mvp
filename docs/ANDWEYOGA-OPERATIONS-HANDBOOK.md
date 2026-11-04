@@ -469,7 +469,7 @@ docs/           Internal notes and this handbook
 
 | Name | Role | Location |
 |------|------|----------|
-| Railway Corp. | App and database hosting | United States (interim) |
+| Railway Corp. | App and database hosting | Singapore (interim) |
 | Razorpay | Payment processing | India |
 | Google LLC | OAuth sign in and email | US and global |
 
@@ -838,7 +838,7 @@ These appear to be ongoing My Account UI fold and section work.
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| India data hosting migration | High | Legal disclosure already mentions interim US hosting |
+| India data hosting migration | High | Legal disclosure already mentions interim Singapore hosting |
 | Google Meet automation | Medium | Manual links today |
 | Full waitlist auto notify | Medium | Schema exists |
 | SMS OTP verification | Low | Deferred by product |

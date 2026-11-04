@@ -113,7 +113,7 @@ export default function TermsOfServicePage() {
               {lang === "kn" ? (
                 <>
                   {LEGAL_CONFIG.brandName} ನಿಮ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ಡಿಪಿಡಿಪಿ ಕಾಯಿದೆ, 2023 ಅಡಿಯಲ್ಲಿ ಸಂಸ್ಕರಿಸುತ್ತದೆ. ಇಂಟರಿಮ್
-                  ಅವಧಿಯಲ್ಲಿ ಅಪ್ಲಿಕೇಶನ್ ಮತ್ತು ಪ್ರಾಥಮಿಕ ಡೇಟಾಬೇಸ್ Railway Corp. ನ ಅಮೆರಿಕಾದ ಕ್ಲೌಡ್ ಮೂಲಸೌಕರ್ಯದಲ್ಲಿ ಹೋಸ್ಟ್
+                  ಅವಧಿಯಲ್ಲಿ ಅಪ್ಲಿಕೇಶನ್ ಮತ್ತು ಪ್ರಾಥಮಿಕ ಡೇಟಾಬೇಸ್ Railway Corp. ನ ಸಿಂಗಾಪುರದ ಕ್ಲೌಡ್ ಮೂಲಸೌಕರ್ಯದಲ್ಲಿ ಹೋಸ್ಟ್
                   ಆಗಿರಬಹುದು. ಉಪಪ್ರಕ್ರಿಯೆದಾರರ ಪೂರ್ಣ ಪಟ್ಟಿ, ಪಾತ್ರಗಳು ಮತ್ತು ಸ್ಥಳಗಳಿಗಾಗಿ ನಮ್ಮ{" "}
                   <Link href="/privacy#subprocessors" className="text-primary underline">
                     ಗೌಪ್ಯತಾ ಸೂಚನೆಯ ಉಪಪ್ರಕ್ರಿಯೆದಾರ ವಿಭಾಗ
@@ -128,7 +128,7 @@ export default function TermsOfServicePage() {
                 <>
                   {LEGAL_CONFIG.brandName} processes your personal data under the DPDP Act, 2023. During an interim
                   period, the application and primary database may be hosted on Railway Corp.&apos;s cloud
-                  infrastructure in the United States. For the full subprocessor schedule, including Railway Corp.,
+                  infrastructure in Singapore. For the full subprocessor schedule, including Railway Corp.,
                   Razorpay, and Google, and our data localisation commitments, see the{" "}
                   <Link href="/privacy#subprocessors" className="text-primary underline">
                     Subprocessors
