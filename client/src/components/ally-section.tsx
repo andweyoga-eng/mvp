@@ -1,6 +1,7 @@
 import arjunPatelImg from "@assets/arjunpatel_1756814809753.jpg";
 import priyaSharmaImg from "@assets/priya sharma_1756814809753.jpg";
 import aliceKumariImg from "@assets/allice kumari_1756814809753.jpg";
+import { AI_IMAGE_DISCLAIMER } from "@/components/ai-image-disclaimer";
 
 interface Instructor {
   name: string;
@@ -61,6 +62,9 @@ export default function AllySection() {
             </div>
           ))}
         </div>
+        <p className="mx-auto mt-8 max-w-3xl text-center text-[11px] leading-snug text-dz-muted">
+          {AI_IMAGE_DISCLAIMER}
+        </p>
       </div>
     </section>
   );

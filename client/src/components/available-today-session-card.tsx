@@ -1,3 +1,4 @@
+import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,7 @@ export function AvailableTodaySessionCard({
             {intensityLabel}
           </span>
         ) : null}
+        {imageUrl ? <AiImageDisclaimer /> : null}
       </div>
       <div className="flex min-h-[188px] flex-1 flex-col p-4">
         <div className="mb-2.5 flex items-start justify-between gap-2">

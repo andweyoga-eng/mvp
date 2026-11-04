@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useRef, type MouseEvent, type PointerEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { activateHeroCta, heroCtaTargetsFlowCard, heroCtaTargetsSchedule } from "@/lib/home-navigation";
+import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { heroSlideImageSrc } from "@/lib/hero-slide-images";
 import { cn } from "@/lib/utils";
 import {
   defaultHeroCtaConfig,
   publishedHeroSlides,
   resolveHeroSlideCta,
-  resolveHeroSlideDisclaimer,
   type HeroCtaConfig,
   type HeroSlideCta,
 } from "@shared/hero-cta";
@@ -46,7 +46,6 @@ export default function HeroCarousel({ onScheduleSignIn, onFlowCard }: HeroCarou
     slides.length === 0 ? 0 : Math.min(currentSlide, slides.length - 1);
   const slide: HeroSlideCta = slides[activeIndex] ?? slides[0]!;
   const activeCta = resolveHeroSlideCta(config, slide);
-  const disclaimer = resolveHeroSlideDisclaimer(config, slide);
   const phraseKey = slide.phrases.map((phrase) => phrase.durationMs).join(",");
 
   useEffect(() => {
@@ -223,16 +222,12 @@ export default function HeroCarousel({ onScheduleSignIn, onFlowCard }: HeroCarou
         </div>
       </div>
 
-      {disclaimer ? (
-        <p
-          data-hero-no-navigate
-          data-testid="hero-slide-disclaimer"
-          title={disclaimer}
-          onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-3 right-4 z-20 max-w-[min(70%,28rem)] truncate text-right text-[11px] font-medium leading-none text-white/90 drop-shadow"
-        >
-          {disclaimer}
-        </p>
+      {!isPlaceholderData ? (
+        <AiImageDisclaimer
+          placement="corner"
+          testId="hero-slide-disclaimer"
+          blockParentClick
+        />
       ) : null}
     </section>
   );

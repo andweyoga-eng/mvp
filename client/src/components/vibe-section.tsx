@@ -9,6 +9,7 @@ import instaProfile7 from "@assets/insta-profile-7_1756815967899.jpg";
 import instaProfile8 from "@assets/insta-profile-8_1756815967899.jpg";
 import instaProfile9 from "@assets/insta-profile-9_1756815967899.jpg";
 import instaProfile10 from "@assets/insta-profile-10_1756815967899.jpg";
+import { AI_IMAGE_DISCLAIMER } from "@/components/ai-image-disclaimer";
 
 // Import generated Instagram profile images
 import generatedProfile1 from "@assets/generated_images/Indian_woman_yoga_profile_8dd25b53.png";
@@ -76,12 +77,15 @@ export default function VibeSection() {
           {instagramProfiles.map((profile, index) => (
             <div key={index} className="group text-center">
               <div className="relative mx-auto mb-2 h-14 w-14 overflow-hidden rounded-full border-[3px] border-dz-surface ring-2 ring-primary/20 sm:h-16 sm:w-16 md:h-20 md:w-20">
-                <img src={profile.image} alt={profile.handle} className="h-full w-full object-cover" />
+                <img src={profile.image} alt={profile.handle} title={AI_IMAGE_DISCLAIMER} className="h-full w-full object-cover" />
               </div>
               <p className="truncate text-xs font-medium text-primary">{profile.handle}</p>
             </div>
           ))}
         </div>
+        <p className="mx-auto mt-6 max-w-3xl text-center text-[11px] leading-snug text-dz-muted">
+          {AI_IMAGE_DISCLAIMER}
+        </p>
       </div>
     </section>
   );

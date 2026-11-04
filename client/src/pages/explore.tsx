@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ArrowRight,
 } from "lucide-react";
+import { AiImageDisclaimer, AI_IMAGE_DISCLAIMER } from "@/components/ai-image-disclaimer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ImageHeroScrim } from "@/components/digital-zen/image-hero-scrim";
 import { PageContainer } from "@/components/digital-zen/page-container";
@@ -113,6 +114,7 @@ export default function Explore() {
                 alt="Lunar Awakening Flow"
                 className="h-72 w-full object-cover transition-transform duration-700 group-hover:scale-105 md:h-[480px]"
               />
+              <AiImageDisclaimer placement="corner" className="top-3 bottom-auto" />
               <ImageHeroScrim variant="brand-bottom" />
               <div className="absolute bottom-0 left-0 z-[3] p-6 text-white">
                 <span className="mb-3 inline-block rounded-md bg-dz-secondary px-2.5 py-1 text-xs font-bold uppercase tracking-wide">
@@ -147,6 +149,7 @@ export default function Explore() {
                     alt={t.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
+                  <AiImageDisclaimer />
                   <span className="absolute right-2 top-2 rounded bg-white/85 px-2 py-1 text-[10px] font-bold text-primary backdrop-blur">
                     {t.badge}
                   </span>
@@ -207,7 +210,7 @@ export default function Explore() {
                 className="flex w-72 shrink-0 flex-col items-center rounded-3xl border border-dz-glass-border bg-white/70 p-6 text-center shadow-dz-ambient backdrop-blur-[20px] transition hover:-translate-y-2"
               >
                 <div className={cn("mb-4 h-28 w-28 overflow-hidden rounded-full ring-4", ins.ring)}>
-                  <img src={ins.image} alt={ins.name} className="h-full w-full object-cover" />
+                  <img src={ins.image} alt={ins.name} title={AI_IMAGE_DISCLAIMER} className="h-full w-full object-cover" />
                 </div>
                 <h5 className="font-display text-lg font-semibold text-primary">{ins.name}</h5>
                 <p className="mb-4 text-sm font-medium text-dz-secondary">{ins.focus}</p>
@@ -232,6 +235,7 @@ export default function Explore() {
               </div>
             ))}
           </div>
+          <p className="mt-4 text-center text-[11px] leading-snug text-dz-muted">{AI_IMAGE_DISCLAIMER}</p>
         </section>
 
         {/* ===== JOURNAL ===== */}
@@ -245,12 +249,13 @@ export default function Explore() {
                 onClick={() => toast({ title: a.title, description: "The journal launches soon." })}
                 className="group flex flex-col gap-4 text-left md:flex-row"
               >
-                <div className="aspect-[4/3] overflow-hidden rounded-2xl md:w-1/2">
+                <div className="relative aspect-[4/3] overflow-hidden rounded-2xl md:w-1/2">
                   <img
                     src={a.image}
                     alt={a.title}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
+                  <AiImageDisclaimer />
                 </div>
                 <div className="flex flex-col justify-center md:w-1/2">
                   <span className="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-dz-secondary">
@@ -278,12 +283,13 @@ export default function Explore() {
                 onClick={() => toast({ title: p.title, description: "Recommendations are coming soon." })}
                 className="group rounded-2xl border border-dz-glass-border bg-white/70 p-3 text-left shadow-dz-ambient backdrop-blur-[20px] transition hover:-translate-y-1"
               >
-                <div className="mb-3 aspect-square overflow-hidden rounded-xl">
+                <div className="relative mb-3 aspect-square overflow-hidden rounded-xl">
                   <img
                     src={p.image}
                     alt={p.title}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
+                  <AiImageDisclaimer className="px-1.5 pb-1 pt-4 text-[8px]" />
                 </div>
                 <h6 className="line-clamp-1 text-sm font-semibold text-primary">{p.title}</h6>
                 <p className="flex items-center gap-1 text-[11px] text-dz-muted">

@@ -1,4 +1,5 @@
 import { Star } from "lucide-react";
+import { AI_IMAGE_DISCLAIMER } from "@/components/ai-image-disclaimer";
 import { Card, CardContent } from "@/components/ui/card";
 
 const testimonials = [
@@ -66,6 +67,9 @@ export default function TestimonialsSection() {
                     </h4>
                     <p className="text-sm text-purple-500" data-testid={`testimonial-role-${testimonial.id}`}>
                       {testimonial.role}
+                    </p>
+                    <p className="mt-1 max-w-xs text-[10px] leading-snug text-muted-foreground">
+                      {AI_IMAGE_DISCLAIMER}
                     </p>
                   </div>
                 </div>

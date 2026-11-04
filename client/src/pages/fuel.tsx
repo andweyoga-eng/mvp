@@ -13,6 +13,7 @@ import {
   Trash2,
   Utensils,
 } from "lucide-react";
+import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { FeatureInteractionFreeze } from "@/components/feature-interaction-freeze";
 import { GlassCard } from "@/components/digital-zen/glass-card";
@@ -172,7 +173,10 @@ function DailyInspirationCards({
     <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]">
       <GlassCard className="overflow-hidden p-0">
         {recipe?.imageUrl ? (
-          <img src={recipe.imageUrl} alt="" className="h-[190px] w-full object-cover" />
+          <div className="relative">
+            <img src={recipe.imageUrl} alt="" className="h-[190px] w-full object-cover" />
+            <AiImageDisclaimer />
+          </div>
         ) : (
           <div className="flex h-[190px] items-center justify-center bg-primary/5 text-primary/40">
             <Apple className="h-10 w-10" />

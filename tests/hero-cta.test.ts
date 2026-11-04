@@ -276,7 +276,7 @@ describe("hero CTA wiring", () => {
     assert.match(source, /data-hero-no-navigate/);
     assert.match(source, /publishedHeroSlides/);
     assert.match(source, /hero-slide-disclaimer/);
-    assert.match(source, /resolveHeroSlideDisclaimer/);
+    assert.match(source, /AiImageDisclaimer/);
     assert.match(source, /heroCtaTargetsFlowCard/);
     assert.match(source, /onFlowCard/);
     assert.match(source, /isPlaceholderData/);

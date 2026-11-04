@@ -1,4 +1,5 @@
 import { Mail, MessageCircle, Phone } from "lucide-react";
+import { AI_IMAGE_DISCLAIMER } from "@/components/ai-image-disclaimer";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { CUSTOMER_SUPPORT } from "@shared/support";
 
@@ -54,6 +55,9 @@ export function YourMentorsSection({ mentors }: YourMentorsSectionProps) {
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   {mentor.specialty ?? "andWeYoga Instructor"}
                 </p>
+                {mentor.imageUrl ? (
+                  <p className="mt-1 text-[10px] leading-snug text-muted-foreground">{AI_IMAGE_DISCLAIMER}</p>
+                ) : null}
               </div>
             </div>
 

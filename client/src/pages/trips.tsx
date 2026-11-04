@@ -9,6 +9,7 @@ import {
   Sparkles,
   Trees,
 } from "lucide-react";
+import { AiImageDisclaimer } from "@/components/ai-image-disclaimer";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { GlassCard } from "@/components/digital-zen/glass-card";
 import { PageContainer } from "@/components/digital-zen/page-container";
@@ -69,6 +70,7 @@ export default function Trips() {
                   alt="Himalayan Zen Retreat"
                   className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
+                <AiImageDisclaimer />
                 <span className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">
                   Most Popular
                 </span>
@@ -109,6 +111,7 @@ export default function Trips() {
                 alt="Coastal Yoga & Surf Camp"
                 className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
+              <AiImageDisclaimer />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
             </div>
             <div className="flex flex-1 flex-col p-6">
@@ -168,6 +171,7 @@ export default function Trips() {
                   alt="Spiritual Forest Trek"
                   className="h-full w-full object-cover transition-transform duration-1000 group-hover:scale-105"
                 />
+                <AiImageDisclaimer placement="corner" className="top-3 bottom-auto left-3 right-auto text-left" />
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   <div className="flex items-center gap-1.5 rounded-lg border border-dz-glass-border bg-white/80 px-2.5 py-1.5 backdrop-blur">
                     <Mountain className="h-4 w-4 text-dz-secondary" />
