@@ -58,11 +58,15 @@ describe("reserveHrefFromIntent", () => {
   it("builds session checkout URLs with source", () => {
     assert.equal(
       reserveHrefFromIntent({ sessionId: "sess-1" }, "home"),
-      "/reserve?sessionId=sess-1&from=home",
+      "/reserve?from=home&sessionId=sess-1",
     );
     assert.equal(
       reserveHrefFromIntent({ classTypeId: "type-yin" }, "profile"),
-      "/reserve?classTypeId=type-yin&from=profile",
+      "/reserve?from=profile&classTypeId=type-yin",
+    );
+    assert.equal(
+      reserveHrefFromIntent({ sessionId: "sess-1", classTypeId: "type-yin" }, "dashboard"),
+      "/reserve?from=dashboard&sessionId=sess-1&classTypeId=type-yin",
     );
   });
 });
@@ -80,7 +84,7 @@ describe("applyPostLoginLandingIfNeeded", () => {
     await applyPostLoginLandingIfNeeded("/dashboard", (path) => {
       target = path;
     }, completeUser);
-    assert.equal(target, "/reserve?sessionId=sess-42&from=login");
+    assert.equal(target, "/reserve?from=login&sessionId=sess-42");
     assert.ok(getPendingBooking()?.sessionId === "sess-42");
   });
 

@@ -18,7 +18,7 @@ interface WeeklySchedulePanelProps {
   isLoading: boolean;
   highlightedDayKey: string | null;
   onHighlightDayKey: (key: string | null) => void;
-  onReserve: (sessionId: string) => void;
+  onReserve: (sessionId: string, classTypeId?: string) => void;
   weeklyHeaderRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
 }
 
@@ -80,7 +80,7 @@ export function WeeklySchedulePanel({
                         if (soldOut) return;
                         const target = event.target;
                         if (target instanceof Element && target.closest("button, a")) return;
-                        onReserve(cls.id);
+                        onReserve(cls.id, cls.classType.id);
                       }}
                     >
                       <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export function WeeklySchedulePanel({
                           size="sm"
                           className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
                           disabled={soldOut}
-                          onClick={() => onReserve(cls.id)}
+                          onClick={() => onReserve(cls.id, cls.classType.id)}
                           data-testid={`book-class-${cls.id}`}
                         >
                           {soldOut ? "Full" : "Book"}

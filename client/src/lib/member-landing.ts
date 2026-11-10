@@ -41,13 +41,11 @@ export function reserveHrefFromIntent(
   intent: BookingIntent,
   from: ReserveCheckoutSource = "login",
 ): string | null {
-  if (intent.sessionId) {
-    return `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=${from}`;
-  }
-  if (intent.classTypeId) {
-    return `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=${from}`;
-  }
-  return null;
+  if (!intent.sessionId && !intent.classTypeId) return null;
+  const params = new URLSearchParams({ from });
+  if (intent.sessionId) params.set("sessionId", intent.sessionId);
+  if (intent.classTypeId) params.set("classTypeId", intent.classTypeId);
+  return `/reserve?${params.toString()}`;
 }
 
 /** Full navigation so dashboard sees fresh profile completion from the server. */

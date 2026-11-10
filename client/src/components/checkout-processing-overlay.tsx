@@ -3,9 +3,12 @@ import { Loader2 } from "lucide-react";
 export function CheckoutProcessingOverlay({
   title,
   description,
+  prominent = false,
 }: {
   title: string;
   description?: string | null;
+  /** Larger ring for the session-details wait, before date and instructor are known. */
+  prominent?: boolean;
 }) {
   return (
     <div
@@ -14,7 +17,10 @@ export function CheckoutProcessingOverlay({
       role="status"
       aria-live="polite"
     >
-      <Loader2 className="h-14 w-14 animate-spin text-primary" aria-hidden />
+      <Loader2
+        className={prominent ? "h-20 w-20 animate-spin text-primary" : "h-14 w-14 animate-spin text-primary"}
+        aria-hidden
+      />
       <p className="mt-4 px-6 text-center font-display text-lg font-semibold text-primary">{title}</p>
       {description ? (
         <p className="mt-1.5 max-w-[280px] px-6 text-center text-sm text-muted-foreground">

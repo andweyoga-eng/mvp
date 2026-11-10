@@ -29,6 +29,10 @@ import { GlassCard } from "@/components/digital-zen/glass-card";
 import { formatSessionPrice, isValidPaymentUrl } from "@/lib/booking-payment";
 import { filterBookableSessions, sessionDurationMinutes } from "@/lib/booking-flow";
 import {
+  formatProgramListingPriceLabel,
+  type ProgramListingPrice,
+} from "@shared/program-listing-price";
+import {
   getIncompleteBookingHref,
   isAuthUserProfileComplete,
   isAuthUserReadyForPaidHealthBooking,
@@ -87,6 +91,10 @@ interface EnrichedClass extends Class {
   instructor: { id: string; name: string };
   hasPaymentConfigured?: boolean;
 }
+
+type ListingClassType = ClassType & {
+  listingPrice?: ProgramListingPrice | null;
+};
 
 const MY_SESSIONS_URL = "/my-account#sessions";
 const CALENDAR_URL = "/dashboard";
@@ -207,6 +215,11 @@ export default function Reserve() {
   const catalogTypeId =
     classTypeId || singleClass?.classType?.id || singleClass?.classTypeId || "";
 
+  const { data: listingClassTypes = [] } = useQuery<ListingClassType[]>({
+    queryKey: ["/api/class-types"],
+    staleTime: 60_000,
+  });
+
   const { data: catalogClasses = [], isLoading: catalogLoading } = useQuery<EnrichedClass[]>({
     queryKey: [`/api/classes?classTypeId=${encodeURIComponent(catalogTypeId)}`],
     enabled: catalogTypeId.length > 0,
@@ -283,6 +296,24 @@ export default function Reserve() {
     [pool, selectedId],
   );
 
+  const previewClassType = useMemo(() => {
+    if (selected?.classType) return selected.classType as ListingClassType;
+    if (classTypeId) {
+      const fromList = listingClassTypes.find((ct) => ct.id === classTypeId);
+      if (fromList) return fromList;
+    }
+    if (singleClass?.classType) return singleClass.classType as ListingClassType;
+    if (catalogTypeId) {
+      return listingClassTypes.find((ct) => ct.id === catalogTypeId) ?? null;
+    }
+    return null;
+  }, [selected, classTypeId, catalogTypeId, listingClassTypes, singleClass]);
+
+  const displayClassType = previewClassType;
+  const sessionLive = !!selected;
+  const sessionsSettled = !classesLoading;
+  const sessionUnavailable = sessionsSettled && !selected;
+
   const dayGroups = useMemo(() => {
     const map = new Map<string, EnrichedClass[]>();
     for (const c of pool) {
@@ -340,13 +371,17 @@ export default function Reserve() {
     sessionFrequency: selected?.sessionFrequency,
     enabled: !!selected,
   });
-  const displayPrice = checkoutPrograms.selected
+  const programPrice = checkoutPrograms.selected
     ? formatSessionPrice(checkoutPrograms.selected.priceRupees)
     : checkoutPrograms.programs.length === 1
       ? formatSessionPrice(checkoutPrograms.programs[0]!.priceRupees)
       : null;
+  const listingPriceLabel = formatProgramListingPriceLabel(displayClassType?.listingPrice);
+  const displayPrice = programPrice ?? (!sessionLive ? listingPriceLabel : null);
   const showCheckoutTotal =
-    checkoutPrograms.programs.length <= 1 || !!checkoutPrograms.programId;
+    !sessionLive ||
+    checkoutPrograms.programs.length <= 1 ||
+    !!checkoutPrograms.programId;
   const hasMultiplePrograms = checkoutPrograms.programs.length > 1;
   const {
     data: flexiOptions,
@@ -575,7 +610,16 @@ export default function Reserve() {
             </p>
           </div>
 
-          {classesLoading && !selected ? (
+          {sessionUnavailable && !displayClassType ? (
+            <GlassCard className="p-10 text-center">
+              <p className="text-muted-foreground">
+                This session is no longer open for booking.
+              </p>
+              <Button className="mt-5" onClick={() => (window.location.href = "/#schedule")}>
+                Browse the schedule
+              </Button>
+            </GlassCard>
+          ) : !displayClassType ? (
             <div className="flex flex-wrap items-start gap-6">
               <div className="flex-[3_1_480px] space-y-6">
                 <Skeleton className="h-[180px] w-full rounded-[22px]" />
@@ -583,7 +627,7 @@ export default function Reserve() {
               </div>
               <Skeleton className="h-[320px] flex-[1_1_300px] rounded-[22px]" />
             </div>
-          ) : !selected ? (
+          ) : sessionUnavailable ? (
             <GlassCard className="p-10 text-center">
               <p className="text-muted-foreground">
                 This session is no longer open for booking.
@@ -600,48 +644,68 @@ export default function Reserve() {
                 <GlassCard className="flex flex-col overflow-hidden rounded-[22px] lg:flex-row lg:items-stretch">
                   <ClassTypeCoverFrame variant="checkout-sidebar">
                     <ClassTypeCoverImage
-                      imageUrl={selected.classType.imageUrl}
-                      alt={selected.classType.name}
+                      imageUrl={displayClassType.imageUrl}
+                      alt={displayClassType.name}
                       fillColumn
                     />
                   </ClassTypeCoverFrame>
                   <div className="flex min-w-0 flex-1 flex-col justify-center gap-4 p-6">
                     <div>
                       <h2 className="font-display text-2xl font-semibold text-primary">
-                        {selected.classType.name}
+                        {displayClassType.name}
                       </h2>
-                      {selected.classType.description ? (
+                      {displayClassType.description ? (
                         <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                          {selected.classType.description}
+                          {displayClassType.description}
                         </p>
                       ) : null}
                     </div>
                     <div className="flex flex-wrap gap-x-6 gap-y-3.5">
                       <span className="flex items-center gap-2 text-[13px] font-medium">
                         <Clock className="h-[18px] w-[18px] text-primary" />
-                        {sessionDurationMinutes(selected)} min
+                        {selected
+                          ? sessionDurationMinutes(selected)
+                          : displayClassType.duration}{" "}
+                        min
                       </span>
-                      <span className="flex items-center gap-2 text-[13px] font-medium">
-                        <UserIcon className="h-[18px] w-[18px] text-primary" />
-                        {selected.instructor.name}
-                      </span>
+                      {selected ? (
+                        <span className="flex items-center gap-2 text-[13px] font-medium">
+                          <UserIcon className="h-[18px] w-[18px] text-primary" />
+                          {selected.instructor.name}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 text-[13px] font-medium">
+                          <UserIcon className="h-[18px] w-[18px] text-primary" />
+                          <Skeleton className="h-4 w-28" />
+                        </span>
+                      )}
                     </div>
-                    <SessionDeliveryInfo
-                      session={selected}
-                      paymentLocked={mapInteractionLocked}
-                    />
-                    <SessionInclusionsExclusions
-                      inclusions={selected.inclusions}
-                      exclusions={selected.exclusions}
-                    />
+                    {selected ? (
+                      <>
+                        <SessionDeliveryInfo
+                          session={selected}
+                          paymentLocked={mapInteractionLocked}
+                        />
+                        <SessionInclusionsExclusions
+                          inclusions={selected.inclusions}
+                          exclusions={selected.exclusions}
+                        />
+                      </>
+                    ) : (
+                      <div className="space-y-3 border-t border-primary/10 pt-4">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-4 w-56" />
+                        <Skeleton className="h-16 w-full rounded-xl" />
+                      </div>
+                    )}
                     <StrictNoToBlock
-                      strictNoTo={selected.classType.strictNoTo}
+                      strictNoTo={displayClassType.strictNoTo}
                       defaultExpanded
                     />
                   </div>
                 </GlassCard>
 
-                {isFixedRecurring && seriesMeta ? (
+                {selected && isFixedRecurring && seriesMeta ? (
                   <RecurringSeriesScheduleCard
                     session={selected}
                     instructorName={selected.instructor.name}
@@ -651,7 +715,30 @@ export default function Reserve() {
                 ) : null}
               </div>
 
-              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-6">
+              <div
+                className={cn(
+                  "relative flex min-w-0 flex-[1_1_300px] flex-col gap-6",
+                  !selected && "min-h-[520px]",
+                )}
+              >
+                {!selected ? (
+                  <CheckoutProcessingOverlay
+                    prominent
+                    title="Checking this session…"
+                    description="Date, instructor, and price will appear in a moment."
+                  />
+                ) : null}
+                {!sessionLive ? (
+                  <GlassCard className="rounded-[22px] p-6">
+                    <h3 className="mb-4 font-display text-lg font-semibold">Select a date</h3>
+                    <div className="flex gap-2.5">
+                      <Skeleton className="h-[72px] w-16 rounded-[14px]" />
+                      <Skeleton className="h-[72px] w-16 rounded-[14px]" />
+                      <Skeleton className="h-[72px] w-16 rounded-[14px]" />
+                    </div>
+                  </GlassCard>
+                ) : null}
+
                 {showDatePicker && (
                   <GlassCard className="rounded-[22px] p-6">
                     <h3 className="mb-4 font-display text-lg font-semibold">Select a date</h3>
@@ -734,38 +821,61 @@ export default function Reserve() {
                     <>
                       <h3 className="mb-[18px] font-display text-lg font-semibold">Booking summary</h3>
                       <div className="flex flex-col gap-3 border-b border-primary/10 pb-[18px]">
-                        <SummaryRow label="Session" value={selected.classType.name} />
-                        {isFixedRecurring && recurringScheduleLine ? (
+                        <SummaryRow label="Session" value={displayClassType.name} />
+                        {selected && isFixedRecurring && recurringScheduleLine ? (
                           <SummaryRow label="Schedule" value={recurringScheduleLine} />
-                        ) : (
+                        ) : selected ? (
                           <>
                             <SummaryRow label="Date" value={formatLongDate(selected.date)} />
                             <SummaryRow label="Time" value={formatTime(selected.date)} />
                           </>
+                        ) : (
+                          <>
+                            <SummaryRowLoading label="Date" />
+                            <SummaryRowLoading label="Time" />
+                          </>
                         )}
-                        <SummaryRow label="Instructor" value={selected.instructor.name} />
-                        <SummaryRow
-                          label={
-                            normalizeDeliveryMode(selected.deliveryMode) === "online"
-                              ? "Mode"
-                              : "Location"
-                          }
-                          value={formatSessionDeliverySummary(selected)}
-                        />
+                        {selected ? (
+                          <SummaryRow label="Instructor" value={selected.instructor.name} />
+                        ) : (
+                          <SummaryRowLoading label="Instructor" />
+                        )}
+                        {selected ? (
+                          <SummaryRow
+                            label={
+                              normalizeDeliveryMode(selected.deliveryMode) === "online"
+                                ? "Mode"
+                                : "Location"
+                            }
+                            value={formatSessionDeliverySummary(selected)}
+                          />
+                        ) : (
+                          <SummaryRowLoading label="Location" />
+                        )}
                       </div>
                       {showCheckoutTotal ? (
                         <div className="flex items-baseline justify-between py-[18px]">
                           <span className="text-[15px] font-semibold">Total</span>
-                          <span className="font-display text-[26px] font-bold text-primary">
-                            {displayPrice ?? "N/A"}
-                          </span>
+                          {displayPrice || selected ? (
+                            <span className="font-display text-[26px] font-bold text-primary">
+                              {displayPrice ?? "N/A"}
+                            </span>
+                          ) : (
+                            <Skeleton className="h-8 w-24" />
+                          )}
                         </div>
                       ) : null}
                     </>
                   ) : null}
 
                   {/* ===== CHECKOUT STATE MACHINE ===== */}
-                  {existingBooking && checkout.step === "idle" ? (
+                  {!selected ? (
+                    <div className="space-y-3 pt-1">
+                      <Skeleton className="h-10 w-full rounded-xl" />
+                      <Skeleton className="h-12 w-full rounded-[14px]" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </div>
+                  ) : existingBooking && checkout.step === "idle" ? (
                     <AlreadyBookedSessionContent
                       className={existingBooking.className}
                       instructorName={existingBooking.instructorName}
@@ -783,7 +893,9 @@ export default function Reserve() {
                         instructorName: checkout.paymentOutcome.instructorName,
                         sessionDate: checkout.paymentOutcome.sessionDate,
                         googleMeetLink: checkout.paymentOutcome.googleMeetLink,
-                        sessionDurationMinutes: sessionDurationMinutes(selected),
+                        sessionDurationMinutes: selected
+                          ? sessionDurationMinutes(selected)
+                          : displayClassType.duration,
                       }}
                       onViewSessions={goToSessions}
                       onGoToDashboard={goToDashboard}
@@ -1013,6 +1125,15 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-2.5">
       <span className="text-sm text-muted-foreground">{label}</span>
       <span className="text-right text-sm font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function SummaryRowLoading({ label }: { label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2.5">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <Skeleton className="h-4 w-28" />
     </div>
   );
 }

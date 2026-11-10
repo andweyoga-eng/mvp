@@ -470,8 +470,13 @@ export default function Dashboard() {
     navigateToMemberReserve(setLocation, queryClient, { classTypeId }, "dashboard");
   };
 
-  const reserveSession = (sessionId: string) => {
-    navigateToMemberReserve(setLocation, queryClient, { sessionId }, "dashboard");
+  const reserveSession = (sessionId: string, classTypeId?: string) => {
+    navigateToMemberReserve(
+      setLocation,
+      queryClient,
+      { sessionId, classTypeId },
+      "dashboard",
+    );
   };
 
   const upcomingSchedule = useMemo(

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 interface CalendarDaySessionsPanelProps {
   dateKey: string;
   sessions: PracticeSession[];
-  onReserve: (sessionId: string) => void;
+  onReserve: (sessionId: string, classTypeId?: string) => void;
   onDismiss?: () => void;
 }
 
@@ -84,7 +84,7 @@ export function CalendarDaySessionsPanel({
                   size="sm"
                   className="shrink-0 rounded-lg bg-primary text-xs font-semibold"
                   disabled={soldOut}
-                  onClick={() => onReserve(cls.id)}
+                  onClick={() => onReserve(cls.id, cls.classType.id)}
                   data-testid={`calendar-day-book-${cls.id}`}
                 >
                   {soldOut ? "Full" : "Book"}

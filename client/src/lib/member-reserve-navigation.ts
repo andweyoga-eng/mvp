@@ -23,13 +23,12 @@ export function navigateToMemberReserve(
     classes?: FlexiEligibleScheduleLike[];
   },
 ): boolean {
-  const href = intent.sessionId
-    ? `/reserve?sessionId=${encodeURIComponent(intent.sessionId)}&from=${from}`
-    : intent.classTypeId
-      ? `/reserve?classTypeId=${encodeURIComponent(intent.classTypeId)}&from=${from}`
-      : null;
+  if (!intent.sessionId && !intent.classTypeId) return false;
 
-  if (!href) return false;
+  const params = new URLSearchParams({ from });
+  if (intent.sessionId) params.set("sessionId", intent.sessionId);
+  if (intent.classTypeId) params.set("classTypeId", intent.classTypeId);
+  const href = `/reserve?${params.toString()}`;
 
   void prefetchFlexiOptionsForIntent(queryClient, intent, options);
   setLocation(href);
