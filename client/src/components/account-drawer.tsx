@@ -73,7 +73,7 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
 
       <aside
         className={cn(
-          "fixed right-0 top-0 z-[60] flex h-screen w-[min(360px,88vw)] flex-col justify-between overflow-y-auto border-l border-dz-glass-border bg-white p-4 shadow-2xl transition-transform duration-300 ease-out",
+          "fixed right-0 top-0 z-[60] flex h-auto max-h-screen w-[min(360px,88vw)] flex-col justify-start gap-4 overflow-y-auto border-l border-dz-glass-border bg-white p-4 shadow-2xl transition-transform duration-300 ease-out",
           open ? "translate-x-0" : "translate-x-full",
         )}
         data-testid="account-drawer"
@@ -134,7 +134,7 @@ export function AccountDrawer({ open, onOpenChange }: AccountDrawerProps) {
               onOpenChange(false);
               logout();
             }}
-            className="flex items-center gap-2.5 px-1.5 py-2 text-[13px] text-destructive transition-opacity hover:opacity-75"
+            className="flex items-center gap-2.5 px-1.5 py-2 text-[13px] font-semibold text-destructive transition-opacity hover:opacity-75"
             data-testid="account-drawer-sign-out"
           >
             <LogOut className="h-[18px] w-[18px]" />
