@@ -1,0 +1,176 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ExternalLink } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { getCheckoutAuthHeaders } from "@/lib/guest-checkout";
+import { readResponseJson } from "@/lib/queryClient";
+import { openRazorpayPayment } from "@/lib/booking-payment";
+import {
+  MANUAL_PAYMENT_REF_HINT,
+  MANUAL_PAYMENT_REF_LABEL,
+  MANUAL_PAYMENT_REF_LENGTH,
+  normalizeManualPaymentRefInput,
+  isValidManualPaymentRef,
+} from "@shared/manual-payment-ack";
+import { GUEST_QR_SIGNIN_PROMPT } from "@shared/guest-booking-conflict";
+import { ManualPaymentReceivedNotice } from "@/components/manual-payment-received-notice";
+
+export function ManualPaymentReferenceBlock({
+  bookingId,
+  variant,
+  qrPayment,
+  paymentLink,
+  onSubmitted,
+  preferGuestCheckout = false,
+}: {
+  bookingId: string;
+  variant: "qr" | "payment_link";
+  qrPayment?: {
+    qrCodeName: string;
+    qrImageUrl: string;
+    contactPhone: string;
+    contactEmail: string;
+  };
+  paymentLink?: string | null;
+  onSubmitted: () => void;
+  preferGuestCheckout?: boolean;
+}) {
+  const { toast } = useToast();
+  const [refInput, setRefInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const refValue = normalizeManualPaymentRefInput(refInput);
+  const refValid = isValidManualPaymentRef(refInput);
+
+  async function submitReference() {
+    if (!refValid) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/bookings/${bookingId}/payment-ack`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getCheckoutAuthHeaders({ preferGuest: preferGuestCheckout }),
+        },
+        credentials: "include",
+        body: JSON.stringify({ transactionAckNumber: refValue }),
+      });
+      const body = await readResponseJson<{ message?: string }>(res);
+      if (!res.ok) throw new Error(body.message || "Could not submit reference");
+      onSubmitted();
+    } catch (err) {
+      toast({
+        title: "Submission failed",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4 bg-white">
+      {variant === "qr" && qrPayment ? (
+        <>
+          <p className="text-sm font-semibold text-purple-600">Pay via {qrPayment.qrCodeName}</p>
+          <img
+            src={qrPayment.qrImageUrl}
+            alt="Payment QR"
+            className="mx-auto max-h-56 object-contain"
+          />
+          {(qrPayment.contactPhone || qrPayment.contactEmail) && (
+            <div className="text-sm text-muted-foreground space-y-1">
+              {qrPayment.contactPhone && <p>Phone: {qrPayment.contactPhone}</p>}
+              {qrPayment.contactEmail && <p>Email: {qrPayment.contactEmail}</p>}
+            </div>
+          )}
+        </>
+      ) : null}
+
+      {variant === "payment_link" && paymentLink ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-purple-200 text-purple-700 font-semibold"
+          onClick={() => openRazorpayPayment(paymentLink)}
+        >
+          <ExternalLink className="w-4 h-4 mr-2" />
+          Open payment link
+        </Button>
+      ) : null}
+
+      <div>
+        <Label htmlFor="manual-payment-ref" className="text-sm font-bold text-purple-600">
+          {MANUAL_PAYMENT_REF_LABEL} <span className="text-red-500">*</span>
+        </Label>
+        <p className="text-xs text-muted-foreground mt-1 mb-2">{MANUAL_PAYMENT_REF_HINT}</p>
+        <Input
+          id="manual-payment-ref"
+          value={refInput}
+          onChange={(e) => setRefInput(normalizeManualPaymentRefInput(e.target.value))}
+          placeholder="e.g. A1b2"
+          maxLength={MANUAL_PAYMENT_REF_LENGTH}
+          className="font-mono tracking-widest"
+          autoComplete="off"
+          inputMode="text"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          {refValue.length}/{MANUAL_PAYMENT_REF_LENGTH} characters
+          {refInput.length > 0 && !refValid ? ". Use letters or numbers only" : ""}
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        className="w-full bg-green-600 hover:bg-green-700 !text-white font-bold"
+        disabled={isSubmitting || !refValid}
+        onClick={() => void submitReference()}
+      >
+        {isSubmitting ? "Submitting…" : "Submit payment reference"}
+      </Button>
+    </div>
+  );
+}
+
+export function ManualPaymentSubmittedMessage({
+  onViewSessions,
+  isGuestCheckout = false,
+  onSignUp,
+  onCancel,
+}: {
+  onViewSessions: () => void;
+  isGuestCheckout?: boolean;
+  onSignUp?: () => void;
+  onCancel?: () => void;
+}) {
+  if (isGuestCheckout) {
+    return (
+      <div className="space-y-4">
+        <ManualPaymentReceivedNotice />
+        <p className="text-sm text-muted-foreground text-center">{GUEST_QR_SIGNIN_PROMPT}</p>
+        <Button
+          type="button"
+          className="w-full bg-primary hover:bg-primary/90 !text-white font-bold"
+          onClick={onSignUp}
+        >
+          Sign up / Sign in
+        </Button>
+        <Button type="button" variant="outline" className="w-full font-bold" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ManualPaymentReceivedNotice />
+      <Button type="button" className="w-full font-bold" onClick={onViewSessions}>
+        View My Sessions
+      </Button>
+    </div>
+  );
+}

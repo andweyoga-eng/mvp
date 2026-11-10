@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import type { AdminUser } from "@shared/schema";
+import { ADMIN_AUTH_COOKIE_NAME } from "./auth-cookie";
 
 export interface AdminAuthRequest extends Request {
   admin?: AdminUser;
@@ -26,7 +27,7 @@ export function generateAdminToken(adminId: string): string {
 export function verifyAdminToken(token: string): { adminId: string; type: string } | null {
   try {
     const secret = getJwtSecret();
-    const decoded = jwt.verify(token, secret) as any;
+    const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] }) as any;
     // CRITICAL: Always check the type claim to prevent user tokens 
     // being used to access admin endpoints
     if (decoded.type !== 'admin') {
@@ -40,13 +41,15 @@ export function verifyAdminToken(token: string): { adminId: string; type: string
 
 export async function requireAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
+    const cookieToken = (req as any).cookies?.[ADMIN_AUTH_COOKIE_NAME];
     const authHeader = req.headers.authorization;
+    const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const token = cookieToken || headerToken;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!token) {
       return res.status(401).json({ message: "Admin access required. Please login." });
     }
 
-    const token = authHeader.substring(7);
     const decoded = verifyAdminToken(token);
 
     if (!decoded) {
@@ -67,11 +70,34 @@ export async function requireAdminAuth(req: AdminAuthRequest, res: Response, nex
   }
 }
 
+/**
+ * Middleware that requires the admin to have the 'super_admin' role.
+ * Used for destructive or compliance-sensitive actions:
+ *   - Re-activating suspended / blacklisted instructors
+ *   - Changing instructor operational status (suspend / blacklist)
+ * Any valid admin token that is NOT super_admin receives 403.
+ */
+export async function requireSuperAdminAuth(
+  req: AdminAuthRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  await requireAdminAuth(req, res, () => {
+    if (req.admin?.role !== "super_admin") {
+      return res
+        .status(403)
+        .json({ message: "Super admin access required for this action." });
+    }
+    next();
+  });
+}
 export async function optionalAdminAuth(req: AdminAuthRequest, res: Response, next: NextFunction) {
   try {
+    const cookieToken = (req as any).cookies?.[ADMIN_AUTH_COOKIE_NAME];
     const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
+    const headerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const token = cookieToken || headerToken;
+    if (token) {
       const decoded = verifyAdminToken(token);
       if (decoded) {
         const admin = await storage.getAdminById(decoded.adminId);

@@ -7,7 +7,7 @@
 | **Document version** | 1.0 |
 | **Last updated** | 2026-05-14 |
 | **Repository** | `github.com/andweyoga-eng/mvp` (branch: `awy-main` typical) |
-| **Related docs** | `awy.md` (change log), `replit.md` (internal notes), `.env.example`, `PRODUCT_BIBLE.md` |
+| **Related docs** | `awy.md` (change log), `.env.example`, `PRODUCT_BIBLE.md` |
 
 > **Privacy:** This document uses placeholders (`<…>`, `***`) for secrets, connection strings, and personal emails. Never paste real passwords, API keys, or full `DATABASE_URL` values into tickets or commits.
 
@@ -105,7 +105,7 @@ Copy `.env.example` → `.env` locally. On Railway, set the same keys in the **w
 Optional (health document uploads — **currently disabled in product**):
 
 - `ENABLE_HEALTH_DOCUMENT_OBJECT_ROUTES` is a **code flag** in `server/routes.ts` (default `false`), not an env var.
-- S3/Replit object storage vars — see `.env.example` when uploads are re-enabled.
+- S3 object storage vars — see `.env.example` when uploads are re-enabled.
 
 ### 4.3 `ALLOWED_ORIGIN` rules (critical)
 
@@ -189,6 +189,8 @@ Work through in order. Check each box before pushing to GitHub.
 - [ ] `GET /api/class-types` returns data (or empty array, not 500)
 - [ ] Schedule/week endpoint loads
 - [ ] Server log: `Environment validation passed` (no missing `JWT_SECRET` / DB vars)
+- [ ] **Schema push:** `npm run db:push` (applies migrations + purges demo seed — see §6.9)
+- [ ] **Epic smoke (A-01 hold + E-01 strictNoTo):** `npm run qa:smoke-a01-e01` — must end with *slate clean*
 
 ### 6.2 Email / password auth
 
@@ -208,7 +210,7 @@ Work through in order. Check each box before pushing to GitHub.
 
 - [ ] Name, primary mobile, emergency mobile required; secondary optional
 - [ ] Invalid mobile shows validation errors (10 digits, spam patterns)
-- [ ] **SMS “Verify” buttons are not shown** (intentionally disabled — see `my-account.tsx` dev comments / `replit.md`)
+- [ ] **SMS “Verify” buttons are not shown** (intentionally disabled — see `my-account.tsx` dev comments / `awy.md`)
 - [ ] **Profile status** shows **Incomplete** until all mandatory fields + health + verified email
 - [ ] Button label: **Complete Profile** vs **Update Profile** matches completion state
 
@@ -238,6 +240,29 @@ Work through in order. Check each box before pushing to GitHub.
 ```bash
 npm run check
 ```
+
+### 6.9 Clean-slate testing (mandatory for agents & QA)
+
+**Rule:** Any script or manual test that creates DB rows must remove them before you sign off. Tagged fixtures use the `Smoke QA …` prefix (`shared/seed-catalog.ts`).
+
+| Step | Command | Purpose |
+|------|---------|---------|
+| 1 | `npm run db:push` | Apply schema; auto-run `db:purge-seed` unless `SKIP_SEED_PURGE=1` |
+| 2 | `npm run dev` | Local server for API + browser |
+| 3 | `npm run qa:smoke-a01-e01` | API smoke: payment hold (`heldUntil`), cancel-checkout, `strictNoTo` |
+| 4 | Browser (optional) | Use URLs printed by step 3; or home → booking modal, admin Session Types |
+| 5 | `npm run qa:smoke-cleanup` | Only if step 3 was run with `QA_SMOKE_SKIP_CLEANUP=1` |
+| 6 | `npm run db:purge-seed` | Nuclear option: all seed + QA fixture prefixes |
+
+**Browser-only pass with fixtures kept briefly:**
+
+```bash
+QA_SMOKE_SKIP_CLEANUP=1 npm run qa:smoke-a01-e01
+# … manual browser checks …
+npm run qa:smoke-cleanup
+```
+
+**Never leave behind:** guest bookings from smoke runs, `Smoke QA …` session types/instructors, or `@example.com` QA emails from ad-hoc scripts. Deprecated `scripts/qa-p1-api-pass.ts` does not clean up — do not use for new work.
 
 ---
 
