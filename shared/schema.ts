@@ -55,11 +55,11 @@ export const users = pgTable("users", {
   addressCountry: text("address_country").default("IN"),
   addressState: text("address_state"),
   addressPincode: text("address_pincode"),
-  /** andWeDiet: admin-set daily calorie target. Null = WeDiet not configured. */
+  /** andWeEat: admin-set daily calorie target. Null = WeEat not configured. */
   dailyCalorieTargetCal: integer("daily_calorie_target_cal"),
-  /** andWeDiet: admin-set deficit tolerance. On-track band = [target − deficit, target]. */
+  /** andWeEat: admin-set deficit tolerance. On-track band = [target − deficit, target]. */
   dailyDeficitCal: integer("daily_deficit_cal"),
-  /** andWeDiet: ordered meal slots with local time bands. */
+  /** andWeEat: ordered meal slots with local time bands. */
   fuelMealPlan: jsonb("fuel_meal_plan").$type<import("./fuel").FuelMealPlan>(),
   calorieTargetSetBy: varchar("calorie_target_set_by"),
   calorieTargetSetAt: timestamp("calorie_target_set_at"),
@@ -75,7 +75,7 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-/** andWeDiet meal ledger — photo bytes are never stored. One row = one item; items share meal_group_id. */
+/** andWeEat meal ledger — photo bytes are never stored. One row = one item; items share meal_group_id. */
 export const fuelMeals = pgTable("fuel_meals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id")
@@ -187,7 +187,7 @@ export const programs = pgTable(
     /** Whether this program may be composed via Flexi (mix-and-match slots across batches). */
     flexiAllowed: boolean("flexi_allowed").notNull().default(false),
     /** Hub feature tabs this program unlocks (store-only until entitlement — SPEC-PLATFORM-FEATURE-GATES-01). */
-    featureWediet: boolean("feature_wediet").notNull().default(false),
+    featureWeeat: boolean("feature_weeat").notNull().default(false),
     featureWeemo: boolean("feature_weemo").notNull().default(false),
     featureWebuild: boolean("feature_webuild").notNull().default(false),
     /** Always implied / greyed when platform andWeYOGa-always-available is on. */
@@ -723,6 +723,33 @@ export const couponShareLogs = pgTable("coupon_share_logs", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Site assistant chat threads (FAQ + course matcher). */
+export const assistantConversations = pgTable("assistant_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  /** Opaque client id for guests (not PII). */
+  guestKey: varchar("guest_key", { length: 64 }),
+  /** First name snapshot for personalization; cleared on anonymize. */
+  displayName: varchar("display_name", { length: 120 }),
+  adultConfirmed: boolean("adult_confirmed").notNull().default(false),
+  retainUntil: timestamp("retain_until").notNull(),
+  anonymizedAt: timestamp("anonymized_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const assistantMessages = pgTable("assistant_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  conversationId: varchar("conversation_id")
+    .notNull()
+    .references(() => assistantConversations.id, { onDelete: "cascade" }),
+  role: varchar("role", { length: 16 }).notNull(), // user | assistant | system
+  content: text("content").notNull(),
+  /** Optional structured meta: handoff, matched session ids, etc. */
+  meta: jsonb("meta").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   emailVerified: true,
@@ -1066,3 +1093,5 @@ export type FuelMeal = typeof fuelMeals.$inferSelect;
 export type FuelRecipe = typeof fuelRecipes.$inferSelect;
 export type FuelDailyMedia = typeof fuelDailyMedia.$inferSelect;
 export type ProgressSectionComment = typeof progressSectionComments.$inferSelect;
+export type AssistantConversation = typeof assistantConversations.$inferSelect;
+export type AssistantMessage = typeof assistantMessages.$inferSelect;

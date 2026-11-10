@@ -56,7 +56,7 @@ export function redirectToMemberDashboardAfterProfileComplete(): void {
 
 /**
  * After onboarding / health consent, resume paid booking on Reserve when intent
- * was saved; otherwise return to WeDiet / weEmo if that tab sent them here;
+ * was saved; otherwise return to WeEat / weEmo if that tab sent them here;
  * otherwise land on the member dashboard.
  */
 export function redirectAfterProfileComplete(): void {

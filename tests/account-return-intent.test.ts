@@ -36,7 +36,7 @@ describe("account return intent", () => {
     clearAccountReturnIntent();
   });
 
-  it("stores only allowed WeDiet / weEmo paths", () => {
+  it("stores only allowed WeEat / weEmo paths", () => {
     setAccountReturnIntent("/fuel");
     assert.equal(peekAccountReturnIntent(), "/fuel");
     setAccountReturnIntent("/emojou?x=1#y");

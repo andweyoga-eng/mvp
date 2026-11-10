@@ -1,12 +1,12 @@
 ---
-description: Locked weDiet Track Diet v2 product/API decisions — follow SPEC-WEDIET-TRACK-DIET-V2
-globs: "{client/src/pages/fuel.tsx,client/src/lib/fuel-api.ts,server/fuel-*.ts,shared/fuel.ts,shared/schema.ts,docs/**/*FUEL*,docs/**/*WEDIET*,docs/**/*Diet*}"
+description: Locked weEat Track Diet v2 product/API decisions — follow SPEC-WEEAT-TRACK-DIET-V2
+globs: "{client/src/pages/fuel.tsx,client/src/lib/fuel-api.ts,server/fuel-*.ts,shared/fuel.ts,shared/schema.ts,docs/**/*FUEL*,docs/**/*WEEAT*,docs/**/*Diet*}"
 alwaysApply: false
 ---
 
-# weDiet Track Diet v2 — locked decisions
+# weEat Track Diet v2 — locked decisions
 
-When changing Track your Diet / fuel estimate / fuel meals, treat **`docs/SPEC-WEDIET-TRACK-DIET-V2.md`** as the source of truth. Do not reopen D1–D9 / F1–F9 without an explicit product change.
+When changing Track weEat / fuel estimate / fuel meals, treat **`docs/SPEC-WEEAT-TRACK-DIET-V2.md`** as the source of truth. Do not reopen D1–D9 / F1–F9 without an explicit product change.
 
 ## Must follow
 
@@ -23,4 +23,4 @@ When changing Track your Diet / fuel estimate / fuel meals, treat **`docs/SPEC-W
 
 ## Read first
 
-`docs/SPEC-WEDIET-TRACK-DIET-V2.md`
+`docs/SPEC-WEEAT-TRACK-DIET-V2.md`

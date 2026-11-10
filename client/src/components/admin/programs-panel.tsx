@@ -46,7 +46,7 @@ type ProgramRow = {
   totalSessions: number;
   pricePaise: number;
   flexiAllowed: boolean;
-  featureWediet?: boolean;
+  featureWeeat?: boolean;
   featureWeemo?: boolean;
   featureWebuild?: boolean;
   featureAndweyoga?: boolean;
@@ -61,7 +61,7 @@ type ProgramForm = {
   durationWeeks: string;
   priceRupees: string;
   flexiAllowed: boolean;
-  featureWediet: boolean;
+  featureWeeat: boolean;
   featureWeemo: boolean;
   featureWebuild: boolean;
   featureAndweyoga: boolean;
@@ -75,7 +75,7 @@ const EMPTY_FORM: ProgramForm = {
   durationWeeks: "12",
   priceRupees: "",
   flexiAllowed: false,
-  featureWediet: false,
+  featureWeeat: false,
   featureWeemo: false,
   featureWebuild: false,
   featureAndweyoga: true,
@@ -90,7 +90,7 @@ function programToForm(p: ProgramRow): ProgramForm {
     durationWeeks: String(p.durationWeeks),
     priceRupees: String(p.pricePaise / 100),
     flexiAllowed: p.flexiAllowed,
-    featureWediet: !!p.featureWediet,
+    featureWeeat: !!p.featureWeeat,
     featureWeemo: !!p.featureWeemo,
     featureWebuild: !!p.featureWebuild,
     featureAndweyoga: p.featureAndweyoga !== false,
@@ -236,7 +236,7 @@ function ProgramFormFields({
         <div className="flex flex-col gap-2">
           {(
             [
-              { id: "feature-wediet", key: "featureWediet" as const, label: "weDiet" },
+              { id: "feature-weeat", key: "featureWeeat" as const, label: "weEat" },
               { id: "feature-weemo", key: "featureWeemo" as const, label: "weEmo" },
               { id: "feature-webuild", key: "featureWebuild" as const, label: "weBuild" },
             ] as const
@@ -320,7 +320,7 @@ function CreateProgramButton({
           durationWeeks: Number(form.durationWeeks),
           priceRupees: Number(form.priceRupees),
           flexiAllowed: form.flexiAllowed,
-          featureWediet: form.featureWediet,
+          featureWeeat: form.featureWeeat,
           featureWeemo: form.featureWeemo,
           featureWebuild: form.featureWebuild,
           featureAndweyoga: form.featureAndweyoga,
@@ -398,7 +398,7 @@ function EditProgramButton({
           durationWeeks: Number(form.durationWeeks),
           priceRupees: Number(form.priceRupees),
           flexiAllowed: form.flexiAllowed,
-          featureWediet: form.featureWediet,
+          featureWeeat: form.featureWeeat,
           featureWeemo: form.featureWeemo,
           featureWebuild: form.featureWebuild,
           featureAndweyoga: form.featureAndweyoga,
@@ -572,7 +572,7 @@ export function ProgramsPanel({ classTypes }: { classTypes: ClassTypeOption[] })
                       {p.status}
                     </Badge>
                     {p.flexiAllowed ? <Badge variant="outline">flexi</Badge> : null}
-                    {p.featureWediet ? <Badge variant="outline">weDiet</Badge> : null}
+                    {p.featureWeeat ? <Badge variant="outline">weEat</Badge> : null}
                     {p.featureWeemo ? <Badge variant="outline">weEmo</Badge> : null}
                     {p.featureWebuild ? <Badge variant="outline">weBuild</Badge> : null}
                     {p.featureAndweyoga !== false ? (

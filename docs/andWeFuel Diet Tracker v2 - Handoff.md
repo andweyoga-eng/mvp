@@ -1,9 +1,9 @@
-# weDiet — Multi-item meal capture + weight-based nutrition
+# weEat — Multi-item meal capture + weight-based nutrition
 ### Engineering handoff
 
-Covers the redesigned "Track your Diet" flow in `andWeFuel Diet Tracker v2.dc.html` — replaces the single-item modal described in the original weDiet designer handoff. All decisions below were confirmed with product during this build; nothing here is assumed.
+Covers the redesigned "Track weEat" flow in `andWeFuel Diet Tracker v2.dc.html` — replaces the single-item modal described in the original weEat designer handoff. All decisions below were confirmed with product during this build; nothing here is assumed.
 
-> **Canonical locked decisions (D1–D9, F1–F9, API, schema, drafts):** [`SPEC-WEDIET-TRACK-DIET-V2.md`](./SPEC-WEDIET-TRACK-DIET-V2.md). Prefer that spec if this prototype handoff conflicts.
+> **Canonical locked decisions (D1–D9, F1–F9, API, schema, drafts):** [`SPEC-WEEAT-TRACK-DIET-V2.md`](./SPEC-WEEAT-TRACK-DIET-V2.md). Prefer that spec if this prototype handoff conflicts.
 
 ---
 

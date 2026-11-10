@@ -1,5 +1,5 @@
--- weDiet Track Diet v2: multi-item meal group fields on fuel_meals
--- SPEC-WEDIET-TRACK-DIET-V2
+-- weEat Track Diet v2: multi-item meal group fields on fuel_meals
+-- SPEC-WEEAT-TRACK-DIET-V2
 
 ALTER TABLE fuel_meals
   ADD COLUMN IF NOT EXISTS meal_group_id varchar,

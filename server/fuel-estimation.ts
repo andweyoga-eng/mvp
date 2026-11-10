@@ -1,5 +1,5 @@
 /**
- * Swappable calorie estimation provider (SPEC-FUEL / SPEC-WEDIET-TRACK-DIET-V2).
+ * Swappable calorie estimation provider (SPEC-FUEL / SPEC-WEEAT-TRACK-DIET-V2).
  * Photos transit only — never persisted by callers.
  * Supports photo → name+kcal+macros and weight-only name+weightGrams → kcal+macros.
  */

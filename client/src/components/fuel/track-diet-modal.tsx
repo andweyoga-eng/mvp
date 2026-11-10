@@ -1,5 +1,5 @@
 /**
- * Track Diet v2 multi-item modal (SPEC-WEDIET-TRACK-DIET-V2).
+ * Track Diet v2 multi-item modal (SPEC-WEEAT-TRACK-DIET-V2).
  */
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -70,7 +70,7 @@ type DraftPayload = {
 };
 
 function draftStorageKey(localDate: string, slotIndex: number | null) {
-  return `wediet-draft:${localDate}:${slotIndex ?? "outside"}`;
+  return `weeat-draft:${localDate}:${slotIndex ?? "outside"}`;
 }
 
 function todayLocalDate(): string {
@@ -710,7 +710,7 @@ export function TrackDietModal({
 
         {step === "select" && (
           <>
-            <h3 className="font-display text-xl font-bold text-primary">Track your Diet</h3>
+            <h3 className="font-display text-xl font-bold text-primary">Track weEat</h3>
             <p className="mt-1 text-xs text-muted-foreground">Pick a meal slot, then add one or more items.</p>
             <div className="mt-4 space-y-2">
               {slots.map((s) => (

@@ -705,7 +705,7 @@ Deferred: instructor UI, force-ack before session join, per-line comments, inact
 
 Full spec: [`docs/SPEC-PLATFORM-FEATURE-GATES-01.md`](./SPEC-PLATFORM-FEATURE-GATES-01.md).
 
-### 15.1 Platform Controls for weDiet / weEmo / weBuild
+### 15.1 Platform Controls for weEat / weEmo / weBuild
 
 | | |
 |---|---|
@@ -734,7 +734,7 @@ Full spec: [`docs/SPEC-PLATFORM-FEATURE-GATES-01.md`](./SPEC-PLATFORM-FEATURE-GA
 | **Feature** | Which hub tabs a program unlocks |
 | **Type** | Partial (UI + persist; no gate yet) |
 | **Decided by** | You (21 Sep 2026) |
-| **Decision** | On create/edit: multi-select weDiet / weEmo / weBuild. Persist only in v1 — **no** member entitlement, freeze, or upsell. Mid-program change later: **Super admin only**, OTP + written reason; default locked for Admin/Instructor |
+| **Decision** | On create/edit: multi-select weEat / weEmo / weBuild. Persist only in v1 — **no** member entitlement, freeze, or upsell. Mid-program change later: **Super admin only**, OTP + written reason; default locked for Admin/Instructor |
 | **Rationale** | Capture commercial intent on the program now; enforce when subscription entitlement is ready |
 | **Shapes product** | Later: trial/drop-in/recurring with checked tab → Visible+Live; multi-program = **union (OR)** of tabs |
 

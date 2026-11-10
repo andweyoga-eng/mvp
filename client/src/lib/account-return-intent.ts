@@ -1,6 +1,6 @@
 /**
  * Remembers where a member came from when My Account interrupts them for
- * Health History + health-data consent (WeDiet, weEmo, etc.).
+ * Health History + health-data consent (WeEat, weEmo, etc.).
  * Paid booking still uses pending-booking → Reserve; this is for tab intents.
  */
 

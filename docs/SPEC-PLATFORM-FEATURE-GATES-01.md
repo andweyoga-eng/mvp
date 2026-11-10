@@ -16,7 +16,7 @@ Site-wide and program-scoped controls for member hub features:
 
 | Launcher label | Route / id | Role in this spec |
 |----------------|------------|-------------------|
-| **weDiet** | `/fuel` (`fuel`) | Gated feature |
+| **weEat** | `/fuel` (`fuel`) | Gated feature |
 | **weBuild** | `/workshops` (`workshops`) | Gated feature |
 | **weEmo** | `/emojou` (`emojou`) | Gated feature |
 | **andWeYOGa** | `/dashboard` (`sessions`) | Always available by default |
@@ -36,7 +36,7 @@ Site-wide and program-scoped controls for member hub features:
 | A1 | andWeYOGa | Always available for members; not gated by program checkboxes |
 | A2 | Program UI | andWeYOGa checkbox **greyed / always on** (implied) |
 | A3 | Policy escape hatch | Platform Controls atomic toggle to change “andWeYOGa always available” later |
-| B1 | Two levers | **Visible** and **Interactive** are **independent** per weDiet / weEmo / weBuild |
+| B1 | Two levers | **Visible** and **Interactive** are **independent** per weEat / weEmo / weBuild |
 | B2 | Platform Hidden | Non-entitled: tab hidden. **Active entitled** members still open the feature |
 | B3 | Platform Interactive off | Non-entitled: CTAs/inputs frozen; page stays open. **Active entitled** stay Live |
 | B4 | Entitlement wins | Subscribing to a program that checks a tab → that tab is **Visible + Live** for the member |
@@ -64,8 +64,8 @@ Each key is exclusive; value is a strict boolean (`true` / `false` only after pa
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `feature_wediet_visible` | `true` | Show weDiet in launcher |
-| `feature_wediet_interactive` | `true` | weDiet CTAs/inputs live (when not overridden by future entitlement rules) |
+| `feature_weeat_visible` | `true` | Show weEat in launcher |
+| `feature_weeat_interactive` | `true` | weEat CTAs/inputs live (when not overridden by future entitlement rules) |
 | `feature_weemo_visible` | `true` | Show weEmo in launcher |
 | `feature_weemo_interactive` | `true` | weEmo CTAs/inputs live |
 | `feature_webuild_visible` | `true` | Show weBuild in launcher |
@@ -101,7 +101,7 @@ if membership completed / expired:
   → gated tabs off; andWeYOGa + My Account remain
 ```
 
-Multi-program: **union** of checked tabs (OR). Example: We Run checks weDiet; We Lift checks weBuild → member gets both.
+Multi-program: **union** of checked tabs (OR). Example: We Run checks weEat; We Lift checks weBuild → member gets both.
 
 ---
 
@@ -109,7 +109,7 @@ Multi-program: **union** of checked tabs (OR). Example: We Run checks weDiet; We
 
 ### 4.1 Create / edit UI
 
-- Checkboxes: **weDiet**, **weEmo**, **weBuild** (one or many).
+- Checkboxes: **weEat**, **weEmo**, **weBuild** (one or many).
 - **andWeYOGa** greyed, always checked (implied).
 - Persist with the program row (boolean columns or typed `featureTabs` array — implementation choice; must stay exclusive per tab flag).
 
@@ -131,7 +131,7 @@ Multi-program: **union** of checked tabs (OR). Example: We Run checks weDiet; We
 
 ### Build now
 
-- [x] Platform Controls UI: visible + interactive toggles for weDiet / weEmo / weBuild
+- [x] Platform Controls UI: visible + interactive toggles for weEat / weEmo / weBuild
 - [x] Platform Controls: `feature_andweyoga_always_available`
 - [x] Wire keys into `platform_settings` + `/api/platform/config` + launcher hide/reflow + freeze CTAs (platform-level only)
 - [x] Programs admin: checkboxes (store only); andWeYOGa greyed
@@ -168,7 +168,7 @@ Safe candidates already discussed elsewhere: `flexi_booking_enabled`, `fuel_esti
 2. Turning visibility off removes the tab from the launcher and reflows layout; one tab → no strip.
 3. Turning interactive off disables CTAs/inputs on that page while the route remains reachable (platform-level).
 4. `feature_andweyoga_always_available` default true; program form shows andWeYOGa greyed.
-5. Creating a program can check weDiet / weEmo / weBuild in any combination; values round-trip on save/load.
+5. Creating a program can check weEat / weEmo / weBuild in any combination; values round-trip on save/load.
 6. Member entitlement, upsell, and mid-program OTP are **not** required to pass v1.
 
 ---

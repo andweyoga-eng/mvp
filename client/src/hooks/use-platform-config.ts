@@ -5,8 +5,8 @@ export const PLATFORM_CONFIG_QUERY_KEY = ["/api/platform/config"] as const;
 export interface PlatformConfig {
   guestCheckoutEnabled: boolean;
   maintenanceWindowEnabled: boolean;
-  featureWedietVisible: boolean;
-  featureWedietInteractive: boolean;
+  featureWeeatVisible: boolean;
+  featureWeeatInteractive: boolean;
   featureWeemoVisible: boolean;
   featureWeemoInteractive: boolean;
   featureWebuildVisible: boolean;
@@ -17,8 +17,8 @@ export interface PlatformConfig {
 const DEFAULT_CONFIG: PlatformConfig = {
   guestCheckoutEnabled: false,
   maintenanceWindowEnabled: false,
-  featureWedietVisible: true,
-  featureWedietInteractive: true,
+  featureWeeatVisible: true,
+  featureWeeatInteractive: true,
   featureWeemoVisible: true,
   featureWeemoInteractive: true,
   featureWebuildVisible: true,
@@ -33,8 +33,8 @@ async function fetchPlatformConfig(): Promise<PlatformConfig> {
   return {
     guestCheckoutEnabled: data.guestCheckoutEnabled !== false,
     maintenanceWindowEnabled: data.maintenanceWindowEnabled === true,
-    featureWedietVisible: data.featureWedietVisible !== false,
-    featureWedietInteractive: data.featureWedietInteractive !== false,
+    featureWeeatVisible: data.featureWeeatVisible !== false,
+    featureWeeatInteractive: data.featureWeeatInteractive !== false,
     featureWeemoVisible: data.featureWeemoVisible !== false,
     featureWeemoInteractive: data.featureWeemoInteractive !== false,
     featureWebuildVisible: data.featureWebuildVisible !== false,
@@ -59,8 +59,8 @@ export function usePlatformConfig() {
     ...query,
     guestCheckoutEnabled: data.guestCheckoutEnabled,
     maintenanceWindowEnabled: data.maintenanceWindowEnabled,
-    featureWedietVisible: data.featureWedietVisible,
-    featureWedietInteractive: data.featureWedietInteractive,
+    featureWeeatVisible: data.featureWeeatVisible,
+    featureWeeatInteractive: data.featureWeeatInteractive,
     featureWeemoVisible: data.featureWeemoVisible,
     featureWeemoInteractive: data.featureWeemoInteractive,
     featureWebuildVisible: data.featureWebuildVisible,
@@ -69,21 +69,21 @@ export function usePlatformConfig() {
   };
 }
 
-export type FeatureTabId = "wediet" | "weemo" | "webuild" | "andweyoga";
+export type FeatureTabId = "weeat" | "weemo" | "webuild" | "andweyoga";
 
 export function isFeatureTabVisible(
   tab: FeatureTabId,
   config: Pick<
     PlatformConfig,
-    | "featureWedietVisible"
+    | "featureWeeatVisible"
     | "featureWeemoVisible"
     | "featureWebuildVisible"
     | "featureAndweyogaAlwaysAvailable"
   >,
 ): boolean {
   switch (tab) {
-    case "wediet":
-      return config.featureWedietVisible;
+    case "weeat":
+      return config.featureWeeatVisible;
     case "weemo":
       return config.featureWeemoVisible;
     case "webuild":
@@ -97,14 +97,14 @@ export function isFeatureTabInteractive(
   tab: FeatureTabId,
   config: Pick<
     PlatformConfig,
-    | "featureWedietInteractive"
+    | "featureWeeatInteractive"
     | "featureWeemoInteractive"
     | "featureWebuildInteractive"
   >,
 ): boolean {
   switch (tab) {
-    case "wediet":
-      return config.featureWedietInteractive;
+    case "weeat":
+      return config.featureWeeatInteractive;
     case "weemo":
       return config.featureWeemoInteractive;
     case "webuild":

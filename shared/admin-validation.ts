@@ -554,7 +554,7 @@ export const adminCreateProgramSchema = z
       .max(1_000_000, "Price is too large"),
     flexiAllowed: z.boolean().optional().default(false),
     /** Hub feature tabs (store-only — SPEC-PLATFORM-FEATURE-GATES-01). */
-    featureWediet: z.boolean().optional().default(false),
+    featureWeeat: z.boolean().optional().default(false),
     featureWeemo: z.boolean().optional().default(false),
     featureWebuild: z.boolean().optional().default(false),
     featureAndweyoga: z.boolean().optional().default(true),

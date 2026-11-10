@@ -52,7 +52,7 @@ export function AdminCalorieStatementView({
       );
       if (res.status === 400) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Diet is not configured for this member yet.");
+        throw new Error(body.message || "weEat is not configured for this member yet.");
       }
       if (!res.ok) throw new Error("Failed to load calorie statement");
       return res.json() as Promise<AdminFuelStatement>;

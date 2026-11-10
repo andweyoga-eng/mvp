@@ -2,8 +2,8 @@
 
 INSERT INTO platform_settings (key, value)
 VALUES
-  ('feature_wediet_visible', 'true'::jsonb),
-  ('feature_wediet_interactive', 'true'::jsonb),
+  ('feature_weeat_visible', 'true'::jsonb),
+  ('feature_weeat_interactive', 'true'::jsonb),
   ('feature_weemo_visible', 'true'::jsonb),
   ('feature_weemo_interactive', 'true'::jsonb),
   ('feature_webuild_visible', 'true'::jsonb),
@@ -12,7 +12,7 @@ VALUES
 ON CONFLICT (key) DO NOTHING;
 
 ALTER TABLE programs
-  ADD COLUMN IF NOT EXISTS feature_wediet boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS feature_weeat boolean NOT NULL DEFAULT false;
 
 ALTER TABLE programs
   ADD COLUMN IF NOT EXISTS feature_weemo boolean NOT NULL DEFAULT false;

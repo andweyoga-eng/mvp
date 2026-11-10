@@ -596,7 +596,7 @@ export default function MyAccount() {
   /**
    * Exit gate. Consent still pending stays on Privacy. A saved booking asks for
    * contact details before Reserve (Health History is checked again there).
-   * A WeDiet / weEmo return asks for Health History. With neither, consent
+   * A WeEat / weEmo return asks for Health History. With neither, consent
    * alone is enough to open the dashboard.
    * Returns true only when it redirected away.
    */
@@ -860,7 +860,7 @@ export default function MyAccount() {
       setConsentStatusRevision((n) => n + 1);
 
       // After first grant (or re-consent), finish remaining platform consent or
-      // return to WeDiet / weEmo / paid booking when nothing else is pending.
+      // return to WeEat / weEmo / paid booking when nothing else is pending.
       if (grantedNow || user?.profileCompletionStatus !== "complete" || peekAccountReturnIntent() || getPendingBooking()) {
         await resolveNextStepAndRoute();
         return;
@@ -885,7 +885,7 @@ export default function MyAccount() {
       // be silently saved; name/DOB/emergency/address would otherwise be dropped).
       await updateProfile(buildContactPayload(), { silent: true });
 
-      // Fail-closed gate: privacy done → return to booking / WeDiet / weEmo / dashboard.
+      // Fail-closed gate: privacy done → return to booking / WeEat / weEmo / dashboard.
       await resolveNextStepAndRoute();
     } catch (err) {
       toast({

@@ -179,7 +179,7 @@ export const CONSENT_COPY = {
     invalidDob: "Please enter a valid date of birth.",
     genericError: "Something went wrong. Please try again.",
     healthConsent:
-      "I consent to andWeYoga collecting and processing the health information I share here, including health notes, documents, and optional WeDiet calorie logs, to ensure my practice and wellbeing tools are adapted safely. I understand this is sensitive personal data and will only be shared with instructors and staff directly involved in delivering my sessions.",
+      "I consent to andWeYoga collecting and processing the health information I share here, including health notes, documents, and optional WeEat calorie logs, to ensure my practice and wellbeing tools are adapted safely. I understand this is sensitive personal data and will only be shared with instructors and staff directly involved in delivering my sessions.",
     healthConsentDriveNote:
       "Uploaded files are stored securely; Google links are opened read-only and we never copy file contents from Drive.",
     whatsappConsent:
@@ -200,7 +200,7 @@ export const CONSENT_COPY = {
     guestConsentHeading: "Consent before booking",
     healthBannerTitle: "Health data consent",
     healthBannerBody:
-      "Withdraw separately without closing your account. Stored Health History, documents, and andWeDiet calorie logs will be deleted or logging disabled.",
+      "Withdraw separately without closing your account. Stored Health History, documents, and andWeEat calorie logs will be deleted or logging disabled.",
     healthPromptTitle: "A quick health check-in",
     healthPromptBody:
       "Before we go further, share a short Health History and consent so we can keep your practice safe and personal. Takes a minute - viney, calm, and only used for your sessions and wellbeing tools.",
@@ -242,7 +242,7 @@ export const CONSENT_COPY = {
     invalidDob: "ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ.",
     genericError: "ಏನೋ ತಪ್ಪಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
     healthConsent:
-      "ನನ್ನ ಅಭ್ಯಾಸ ಮತ್ತು ಕ್ಷೇಮ ಸಾಧನಗಳನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ನಾನು ಇಲ್ಲಿ ಹಂಚಿಕೊಳ್ಳುವ ಆರೋಗ್ಯ ಮಾಹಿತಿ, ದಾಖಲೆಗಳು ಮತ್ತು ಐಚ್ಛಿಕ WeDiet ಕ್ಯಾಲೋರಿ ಲಾಗ್‌ಗಳನ್ನು ಸಂಗ್ರಹಿಸಿ ಸಂಸ್ಕರಿಸಲು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ಈ ಸೂಕ್ಷ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ನನ್ನ ಸೆಷನ್‌ಗಳನ್ನು ನಡೆಸುವ ಸಂಬಂಧಿತ ಶಿಕ್ಷಕರು ಮತ್ತು ಸಿಬ್ಬಂದಿಯವರೊಂದಿಗೆ ಮಾತ್ರ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆ ಎಂಬುದು ನನಗೆ ತಿಳಿದಿದೆ.",
+      "ನನ್ನ ಅಭ್ಯಾಸ ಮತ್ತು ಕ್ಷೇಮ ಸಾಧನಗಳನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಹೊಂದಿಸಲು ನಾನು ಇಲ್ಲಿ ಹಂಚಿಕೊಳ್ಳುವ ಆರೋಗ್ಯ ಮಾಹಿತಿ, ದಾಖಲೆಗಳು ಮತ್ತು ಐಚ್ಛಿಕ WeEat ಕ್ಯಾಲೋರಿ ಲಾಗ್‌ಗಳನ್ನು ಸಂಗ್ರಹಿಸಿ ಸಂಸ್ಕರಿಸಲು ಆಂಡ್‌ವೀಯೋಗಕ್ಕೆ ಸಮ್ಮತಿ ನೀಡುತ್ತೇನೆ. ಈ ಸೂಕ್ಷ್ಮ ವೈಯಕ್ತಿಕ ಮಾಹಿತಿಯನ್ನು ನನ್ನ ಸೆಷನ್‌ಗಳನ್ನು ನಡೆಸುವ ಸಂಬಂಧಿತ ಶಿಕ್ಷಕರು ಮತ್ತು ಸಿಬ್ಬಂದಿಯವರೊಂದಿಗೆ ಮಾತ್ರ ಹಂಚಿಕೊಳ್ಳಲಾಗುತ್ತದೆ ಎಂಬುದು ನನಗೆ ತಿಳಿದಿದೆ.",
     healthConsentDriveNote:
       "ಅಪ್‌ಲೋಡ್ ಮಾಡಿದ ಫೈಲ್‌ಗಳನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಸಂಗ್ರಹಿಸಲಾಗುತ್ತದೆ; Google ಲಿಂಕ್‌ಗಳನ್ನು ಓದಲು ಮಾತ್ರ ತೆರೆಯಲಾಗುತ್ತದೆ ಮತ್ತು ನಾವು Drive ನಿಂದ ಫೈಲ್ ವಿಷಯವನ್ನು ನಕಲಿಸುವುದಿಲ್ಲ.",
     whatsappConsent:
@@ -263,7 +263,7 @@ export const CONSENT_COPY = {
     guestConsentHeading: "ಬುಕ್ಕಿಂಗ್ ಮೊದಲು ಸಮ್ಮತಿ",
     healthBannerTitle: "ಆರೋಗ್ಯ ಮಾಹಿತಿ ಸಮ್ಮತಿ",
     healthBannerBody:
-      "ಖಾತೆಯನ್ನು ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ಸಂಗ್ರಹಿಸಿದ ಆರೋಗ್ಯ ಇತಿಹಾಸ, ದಾಖಲೆಗಳು ಮತ್ತು andWeDiet ಕ್ಯಾಲೋರಿ ಲಾಗ್‌ಗಳನ್ನು ಅಳಿಸಲಾಗುತ್ತದೆ ಅಥವಾ ಲಾಗಿಂಗ್ ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಲಾಗುತ್ತದೆ.",
+      "ಖಾತೆಯನ್ನು ಮುಚ್ಚದೆ ಪ್ರತ್ಯೇಕವಾಗಿ ಹಿಂತೆಗೆದುಕೊಳ್ಳಬಹುದು. ಸಂಗ್ರಹಿಸಿದ ಆರೋಗ್ಯ ಇತಿಹಾಸ, ದಾಖಲೆಗಳು ಮತ್ತು andWeEat ಕ್ಯಾಲೋರಿ ಲಾಗ್‌ಗಳನ್ನು ಅಳಿಸಲಾಗುತ್ತದೆ ಅಥವಾ ಲಾಗಿಂಗ್ ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಲಾಗುತ್ತದೆ.",
     healthPromptTitle: "ಸಣ್ಣ ಆರೋಗ್ಯ ಚೆಕ್-ಇನ್",
     healthPromptBody:
       "ಮುಂದುವರಿಯುವ ಮೊದಲು, ನಿಮ್ಮ ಅಭ್ಯಾಸವನ್ನು ಸುರಕ್ಷಿತವಾಗಿ ಇರಿಸಲು ಸಂಕ್ಷಿಪ್ತ ಆರೋಗ್ಯ ಇತಿಹಾಸ ಮತ್ತು ಸಮ್ಮತಿ ಹಂಚಿಕೊಳ್ಳಿ. ಒಂದು ನಿಮಿಷ - ಶಾಂತ, ಸ್ನೇಹಪರ, ಮತ್ತು ನಿಮ್ಮ ಸೆಷನ್‌ಗಳು ಹಾಗೂ ಕ್ಷೇಮ ಸಾಧನಗಳಿಗೆ ಮಾತ್ರ.",

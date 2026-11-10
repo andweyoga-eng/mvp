@@ -1,4 +1,4 @@
-# weDiet — Designer handoff
+# weEat — Designer handoff
 
 **Product surface:** Member calorie awareness (formerly WeFuel / andWeFuel)  
 **Live route:** `/fuel`  
@@ -6,7 +6,7 @@
 **Audience:** Product design (UX / UI polish, not engineering implementation)  
 **As of:** Sep 2026
 
-> **Upcoming Track Diet v2 (locked engineering decisions):** [`SPEC-WEDIET-TRACK-DIET-V2.md`](./SPEC-WEDIET-TRACK-DIET-V2.md). This handoff still describes **what is shipped today** (single-item modal).
+> **Upcoming Track Diet v2 (locked engineering decisions):** [`SPEC-WEEAT-TRACK-DIET-V2.md`](./SPEC-WEEAT-TRACK-DIET-V2.md). This handoff still describes **what is shipped today** (single-item modal).
 
 This document describes **what members see today** so design can audit, refine, or restyle without reverse-engineering the app.
 
@@ -20,18 +20,18 @@ Four circular module tabs:
 
 | Label (shipped) | Opens |
 |---|---|
-| **weDiet** | `/fuel` |
+| **weEat** | `/fuel` |
 | **weBuild** | workshops |
 | **weEmo** | emojou |
 | **andWeYOGa** | sessions dashboard |
 
-Naming rule: module names that start with “We…” use lowercase **w** (`weDiet`, `weBuild`, `weEmo`). Exception: **andWeYOGa** stays as branded.
+Naming rule: module names that start with “We…” use lowercase **w** (`weEat`, `weBuild`, `weEmo`). Exception: **andWeYOGa** stays as branded.
 
 ### In-page tabs (inside `/fuel`)
 
 Pill toggle under the launcher:
 
-1. **Diet Control** (default)
+1. **weEat** (default)
 2. **Calorie Statement**
 
 ---
@@ -39,9 +39,9 @@ Pill toggle under the launcher:
 ## 2. Information architecture
 
 ```
-weDiet (/fuel)
-├── Diet Control
-│   ├── Header + “Track your Diet” CTA
+weEat (/fuel)
+├── weEat
+│   ├── Header + “Track weEat” CTA
 │   ├── Today summary card (consumed / target / band status)
 │   ├── Today’s meals list (delete)
 │   ├── Daily inspiration (recipe + practice-along)
@@ -55,7 +55,7 @@ weDiet (/fuel)
 Secondary flow (modal, portaled above header):
 
 ```
-Track your Diet
+Track weEat
 ├── Capture (if photo estimation enabled)
 │   ├── Take photo (live camera)
 │   ├── Choose from library / drag-drop
@@ -69,7 +69,7 @@ If photo estimation is **off** (no Gemini key / flag), members go straight to **
 
 ---
 
-## 3. Diet Control — screen map
+## 3. weEat — screen map
 
 ### Header
 
@@ -77,7 +77,7 @@ If photo estimation is **off** (no Gemini key / flag), members go straight to **
 |---|---|
 | Title | **Your daily** *diet* (accent italic on “diet”) |
 | Chip | `Target: {N} cal/day · band −{D}` |
-| Primary CTA | Camera icon + **Track your Diet** |
+| Primary CTA | Camera icon + **Track weEat** |
 
 **CTA sizing (mobile-aware):** compact height (`~36–40px`), content-width (not full-bleed). Intentionally smaller than earlier “Log a meal” bar so it does not dominate the phone viewport.
 
@@ -160,7 +160,7 @@ Meal rows are **neutral** (no red/green fill). Status color is **only** on the d
 
 ---
 
-## 5. Track your Diet — modal
+## 5. Track weEat — modal
 
 **Chrome**
 
@@ -208,12 +208,12 @@ Photos are **not stored**; only confirmed name + calories are saved.
 ## 7. Copy deck (member-facing, current)
 
 ### Navigation & tabs
-- weDiet · weBuild · weEmo · andWeYOGa
-- Diet Control · Calorie Statement
+- weEat · weBuild · weEmo · andWeYOGa
+- weEat · Calorie Statement
 
-### Diet Control
+### weEat
 - Your daily *diet*
-- Track your Diet
+- Track weEat
 - Today’s meals
 - No meals logged today yet.
 
@@ -231,14 +231,14 @@ Photos are **not stored**; only confirmed name + calories are saved.
 - Confirm your meal · Add to Calorie Bank · Retake photo
 
 ### Legal / support
-- Disclaimer: *andWeDiet is a self-awareness aid and not medical or nutritional advice.*
+- Disclaimer: *andWeEat is a self-awareness aid and not medical or nutritional advice.*
 - Support off-ramp: *If tracking food feels stressful, here is support* → tel link
 
 ---
 
 ## 8. Gates designers should know about
 
-Members may not always see the full Diet Control experience:
+Members may not always see the full weEat experience:
 
 1. **Health consent required** → consent explainer + link to My Account privacy  
 2. **Not configured** → coach has not set target / deficit / meal plan yet (“Almost ready”)  
@@ -252,12 +252,12 @@ Admin configures member targets under admin WeFuel tooling; photo estimation dep
 
 Non-blocking polish ideas for the next design pass:
 
-1. **Copy consistency** — Modal still says “Log a meal” / “Confirm your meal” while CTA says “Track your Diet”; align voice to Diet.  
+1. **Copy consistency** — Modal still says “Log a meal” / “Confirm your meal” while CTA says “Track weEat”; align voice to weEat.  
 2. **In progress tray** — Confirm black-ring white treatment reads clearly on glass + light backgrounds across devices.  
 3. **Day tray hierarchy** — Typography scale for `dd/mm` vs verdict pill vs metrics line (especially on narrow phones).  
 4. **Empty past days** — Under-eating red trays for zero-log days may feel harsh; explore softer “No log” state vs “Under eating”.  
-5. **CTA placement** — Validate compact **Track your Diet** placement next to title on very small widths.  
-6. **Iconography** — Launcher still uses Apple for weDiet; consider a diet-specific glyph if brand wants clearer differentiation from food-as-fruit.
+5. **CTA placement** — Validate compact **Track weEat** placement next to title on very small widths.  
+6. **Iconography** — Launcher uses the utensils icon for weEat.
 
 ---
 
@@ -275,4 +275,4 @@ Non-blocking polish ideas for the next design pass:
 
 ## 11. One-line summary for design kickoff
 
-**weDiet** is a two-tab member surface: **Diet Control** for today’s tracking + photo/manual log modal, and **Calorie Statement** for week-day trays that roll up to Target Hit / Missed (Over|Under) / In progress — with In progress coded as white + black ring.
+**weEat** is a two-tab member surface: **weEat** for today’s tracking + photo/manual log modal, and **Calorie Statement** for week-day trays that roll up to Target Hit / Missed (Over|Under) / In progress — with In progress coded as white + black ring.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Apple, Camera, Loader2 } from "lucide-react";
+import { Camera, Loader2, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -86,7 +86,7 @@ export function AdminFuelContentPanel() {
       setMediaTitle(data.media?.title ?? "");
     } catch (err) {
       toast({
-        title: "Could not load WeDiet content",
+        title: "Could not load WeEat content",
         description: err instanceof Error ? err.message : "Error",
         variant: "destructive",
       });
@@ -175,8 +175,8 @@ export function AdminFuelContentPanel() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Apple className="h-5 w-5" />
-          WeDiet content
+          <Utensils className="h-5 w-5" />
+          WeEat content
         </CardTitle>
         <CardDescription>
           Curate the recipe of the day and practice-along embed (provider + id only; no raw member URLs).

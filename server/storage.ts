@@ -473,7 +473,7 @@ export interface IStorage {
     priceRupees: number;
     flexiAllowed?: boolean;
     status?: string;
-    featureWediet?: boolean;
+    featureWeeat?: boolean;
     featureWeemo?: boolean;
     featureWebuild?: boolean;
     featureAndweyoga?: boolean;
@@ -488,7 +488,7 @@ export interface IStorage {
       priceRupees: number;
       flexiAllowed?: boolean;
       status?: string;
-      featureWediet?: boolean;
+      featureWeeat?: boolean;
       featureWeemo?: boolean;
       featureWebuild?: boolean;
       featureAndweyoga?: boolean;
@@ -976,7 +976,7 @@ export interface IStorage {
     userAgent?: string | null;
   }): Promise<User | undefined>;
 
-  // andWeDiet
+  // andWeEat
   setUserFuelConfig(
     userId: string,
     config: {
@@ -1595,7 +1595,7 @@ export class DatabaseStorage implements IStorage {
     priceRupees: number;
     flexiAllowed?: boolean;
     status?: string;
-    featureWediet?: boolean;
+    featureWeeat?: boolean;
     featureWeemo?: boolean;
     featureWebuild?: boolean;
     featureAndweyoga?: boolean;
@@ -1620,7 +1620,7 @@ export class DatabaseStorage implements IStorage {
     );
     const pricePaise = programRupeesToPaise(input.priceRupees);
     const flexiAllowed = input.flexiAllowed ?? false;
-    const featureWediet = input.featureWediet ?? false;
+    const featureWeeat = input.featureWeeat ?? false;
     const featureWeemo = input.featureWeemo ?? false;
     const featureWebuild = input.featureWebuild ?? false;
     const featureAndweyoga = input.featureAndweyoga !== false;
@@ -1649,7 +1649,7 @@ export class DatabaseStorage implements IStorage {
         totalSessions,
         pricePaise,
         flexiAllowed,
-        featureWediet,
+        featureWeeat,
         featureWeemo,
         featureWebuild,
         featureAndweyoga,
@@ -1670,7 +1670,7 @@ export class DatabaseStorage implements IStorage {
       priceRupees: number;
       flexiAllowed?: boolean;
       status?: string;
-      featureWediet?: boolean;
+      featureWeeat?: boolean;
       featureWeemo?: boolean;
       featureWebuild?: boolean;
       featureAndweyoga?: boolean;
@@ -1695,7 +1695,7 @@ export class DatabaseStorage implements IStorage {
     );
     const pricePaise = programRupeesToPaise(input.priceRupees);
     const flexiAllowed = input.flexiAllowed ?? false;
-    const featureWediet = input.featureWediet ?? existing.featureWediet ?? false;
+    const featureWeeat = input.featureWeeat ?? existing.featureWeeat ?? false;
     const featureWeemo = input.featureWeemo ?? existing.featureWeemo ?? false;
     const featureWebuild = input.featureWebuild ?? existing.featureWebuild ?? false;
     const featureAndweyoga =
@@ -1737,7 +1737,7 @@ export class DatabaseStorage implements IStorage {
             totalSessions,
             pricePaise,
             flexiAllowed,
-            featureWediet,
+            featureWeeat,
             featureWeemo,
             featureWebuild,
             featureAndweyoga,
@@ -1770,7 +1770,7 @@ export class DatabaseStorage implements IStorage {
         totalSessions,
         pricePaise,
         flexiAllowed,
-        featureWediet,
+        featureWeeat,
         featureWeemo,
         featureWebuild,
         featureAndweyoga,

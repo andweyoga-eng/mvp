@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Apple, Loader2 } from "lucide-react";
+import { Loader2, Utensils } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,7 +66,7 @@ export function AdminFuelMemberDialog({
         setPlanJson(JSON.stringify(data.fuelMealPlan ?? data.defaultMealPlan, null, 2));
       } catch (err) {
         toast({
-          title: "Could not load Diet config",
+          title: "Could not load weEat config",
           description: err instanceof Error ? err.message : "Error",
           variant: "destructive",
         });
@@ -102,7 +102,7 @@ export function AdminFuelMemberDialog({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Save failed");
-      toast({ title: clear ? "Diet config cleared" : "Diet config saved" });
+      toast({ title: clear ? "weEat config cleared" : "weEat config saved" });
       void queryClient.invalidateQueries({
         queryKey: ["admin", "progress", "fuel", userId],
       });
@@ -125,8 +125,8 @@ export function AdminFuelMemberDialog({
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Apple className="h-5 w-5 text-primary" />
-            WeDiet: {userName}
+            <Utensils className="h-5 w-5 text-primary" />
+            WeEat: {userName}
           </DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="statement" className="w-full">

@@ -5,7 +5,7 @@ import {
   Bell,
   Smile,
   Dumbbell,
-  Apple,
+  Utensils,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -60,7 +60,7 @@ interface LauncherItem {
 }
 
 const LAUNCHER_ITEMS: LauncherItem[] = [
-  { id: "fuel", featureTab: "wediet", label: "weDiet", icon: Apple, href: "/fuel" },
+  { id: "fuel", featureTab: "weeat", label: "weEat", icon: Utensils, href: "/fuel" },
   { id: "workshops", featureTab: "webuild", label: "weBuild", icon: Dumbbell, href: "/workshops" },
   { id: "emojou", featureTab: "weemo", label: "weEmo", icon: Smile, href: "/emojou" },
   { id: "sessions", featureTab: "andweyoga", label: "andWeYOGa", icon: AndWeYogaIcon, href: "/dashboard" },
@@ -69,7 +69,7 @@ const LAUNCHER_ITEMS: LauncherItem[] = [
 function sectionToFeatureTab(active: DashboardSection): FeatureTabId | null {
   switch (active) {
     case "fuel":
-      return "wediet";
+      return "weeat";
     case "workshops":
       return "webuild";
     case "emojou":
@@ -95,14 +95,14 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
     () =>
       LAUNCHER_ITEMS.filter((item) =>
         isFeatureTabVisible(item.featureTab, {
-          featureWedietVisible: platform.featureWedietVisible,
+          featureWeeatVisible: platform.featureWeeatVisible,
           featureWeemoVisible: platform.featureWeemoVisible,
           featureWebuildVisible: platform.featureWebuildVisible,
           featureAndweyogaAlwaysAvailable: platform.featureAndweyogaAlwaysAvailable,
         }),
       ),
     [
-      platform.featureWedietVisible,
+      platform.featureWeeatVisible,
       platform.featureWeemoVisible,
       platform.featureWebuildVisible,
       platform.featureAndweyogaAlwaysAvailable,
@@ -118,7 +118,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
     if (!tab) return;
     if (
       !isFeatureTabVisible(tab, {
-        featureWedietVisible: platform.featureWedietVisible,
+        featureWeeatVisible: platform.featureWeeatVisible,
         featureWeemoVisible: platform.featureWeemoVisible,
         featureWebuildVisible: platform.featureWebuildVisible,
         featureAndweyogaAlwaysAvailable: platform.featureAndweyogaAlwaysAvailable,
@@ -129,7 +129,7 @@ export function DashboardShell({ active, children }: DashboardShellProps) {
   }, [
     active,
     platform.isLoading,
-    platform.featureWedietVisible,
+    platform.featureWeeatVisible,
     platform.featureWeemoVisible,
     platform.featureWebuildVisible,
     platform.featureAndweyogaAlwaysAvailable,

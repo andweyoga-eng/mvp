@@ -12,7 +12,7 @@ import {
   Users, UserCheck, UserX, LogOut, BarChart3, AlertCircle,
   CheckCircle, Clock, FileText, Plus, GraduationCap,
   Calendar, X, Settings, History, Layers, QrCode, CreditCard, Shield,
-  GalleryHorizontalEnd, Apple, Package, Activity, Megaphone, IndianRupee, Calculator
+  GalleryHorizontalEnd, Utensils, Package, Activity, Megaphone, IndianRupee, Calculator
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { waitlistMarketingLabel } from "@shared/waitlist";
@@ -701,7 +701,7 @@ export default function AdminDashboard() {
               <CreditCard className="w-4 h-4 mr-2 shrink-0" /> Subscription Management
             </TabsTrigger>
             <TabsTrigger value="fuel-content" className={adminNavTabTrigger}>
-              <Apple className="w-4 h-4 mr-2 shrink-0" /> WeDiet
+              <Utensils className="w-4 h-4 mr-2 shrink-0" /> WeEat
             </TabsTrigger>
             <TabsTrigger value="andwe-progress" className={adminNavTabTrigger}>
               <Activity className="w-4 h-4 mr-2 shrink-0" /> andWeProgress
@@ -881,8 +881,8 @@ export default function AdminDashboard() {
                               className="text-xs h-7"
                               onClick={() => setFuelViewUser(user)}
                             >
-                              <Apple className="w-3 h-3 mr-1" />
-                              Diet
+                              <Utensils className="w-3 h-3 mr-1" />
+                              weEat
                             </Button>
                             <Button size="sm" variant="outline" className="text-xs h-7"
                               onClick={() => toggleUserActive(user.id, !(user.isActive ?? true))}>
@@ -1433,7 +1433,7 @@ export default function AdminDashboard() {
                 <CardTitle>Consent audit log</CardTitle>
                 <CardDescription>
                   DPDPA append-only consent records for profile, terms, age, and health data events
-                  (including WeDiet calorie logs under health data).
+                  (including WeEat calorie logs under health data).
                 </CardDescription>
               </CardHeader>
               <CardContent>

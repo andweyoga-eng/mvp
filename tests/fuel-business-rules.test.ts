@@ -19,7 +19,7 @@ import {
   applyWeightEntryToCalories,
 } from "../shared/fuel.ts";
 
-describe("andWeDiet business rules", () => {
+describe("andWeEat business rules", () => {
   it("matches meal slots by local time band", () => {
     assert.equal(matchMealSlot(DEFAULT_FUEL_MEAL_PLAN, "08:00")?.label, "Breakfast");
     assert.equal(matchMealSlot(DEFAULT_FUEL_MEAL_PLAN, "12:30")?.label, "Lunch");

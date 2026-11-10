@@ -5,8 +5,8 @@ export const GUEST_CHECKOUT_SETTING_KEY = "guest_checkout_enabled";
 export const MAINTENANCE_WINDOW_SETTING_KEY = "maintenance_window_enabled";
 
 /** SPEC-PLATFORM-FEATURE-GATES-01 — exclusive atomic product gates. */
-export const FEATURE_WEDIET_VISIBLE_KEY = "feature_wediet_visible";
-export const FEATURE_WEDIET_INTERACTIVE_KEY = "feature_wediet_interactive";
+export const FEATURE_WEEAT_VISIBLE_KEY = "feature_weeat_visible";
+export const FEATURE_WEEAT_INTERACTIVE_KEY = "feature_weeat_interactive";
 export const FEATURE_WEEMO_VISIBLE_KEY = "feature_weemo_visible";
 export const FEATURE_WEEMO_INTERACTIVE_KEY = "feature_weemo_interactive";
 export const FEATURE_WEBUILD_VISIBLE_KEY = "feature_webuild_visible";
@@ -14,8 +14,8 @@ export const FEATURE_WEBUILD_INTERACTIVE_KEY = "feature_webuild_interactive";
 export const FEATURE_ANDWEYOGA_ALWAYS_AVAILABLE_KEY = "feature_andweyoga_always_available";
 
 export const FEATURE_GATE_SETTING_KEYS = [
-  FEATURE_WEDIET_VISIBLE_KEY,
-  FEATURE_WEDIET_INTERACTIVE_KEY,
+  FEATURE_WEEAT_VISIBLE_KEY,
+  FEATURE_WEEAT_INTERACTIVE_KEY,
   FEATURE_WEEMO_VISIBLE_KEY,
   FEATURE_WEEMO_INTERACTIVE_KEY,
   FEATURE_WEBUILD_VISIBLE_KEY,
@@ -57,8 +57,8 @@ export function parseFeatureGateEnabled(value: unknown): boolean {
 }
 
 export const FEATURE_GATE_DEFAULTS: Record<FeatureGateSettingKey, boolean> = {
-  [FEATURE_WEDIET_VISIBLE_KEY]: true,
-  [FEATURE_WEDIET_INTERACTIVE_KEY]: true,
+  [FEATURE_WEEAT_VISIBLE_KEY]: true,
+  [FEATURE_WEEAT_INTERACTIVE_KEY]: true,
   [FEATURE_WEEMO_VISIBLE_KEY]: true,
   [FEATURE_WEEMO_INTERACTIVE_KEY]: true,
   [FEATURE_WEBUILD_VISIBLE_KEY]: true,
@@ -75,5 +75,5 @@ export function isFeatureGateSettingKey(key: string): key is FeatureGateSettingK
 }
 
 /** Program feature-tab ids (store-only until entitlement ships). */
-export const PROGRAM_FEATURE_TABS = ["wediet", "weemo", "webuild", "andweyoga"] as const;
+export const PROGRAM_FEATURE_TABS = ["weeat", "weemo", "webuild", "andweyoga"] as const;
 export type ProgramFeatureTab = (typeof PROGRAM_FEATURE_TABS)[number];

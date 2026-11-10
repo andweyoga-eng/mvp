@@ -4,7 +4,7 @@
 **Commit:** `62edd6d` — `feat: add andWeFuel calorie bank with member dashboard and admin curation`  
 **Source spec:** SPEC-FUEL-01 v0.5 (product doc) + `design_handoff_andwefuel_calorie_bank/` HTML prototype (not in repo; dashboard handoff lives under `design prototypes/design_handoff_dashboard/`)
 
-> **Track Diet v2 (locked):** Multi-item meal capture, weight, macros, batch save — see **[`SPEC-WEDIET-TRACK-DIET-V2.md`](./SPEC-WEDIET-TRACK-DIET-V2.md)**. That doc supersedes the single-item modal for the upcoming Track your Diet redesign.
+> **Track Diet v2 (locked):** Multi-item meal capture, weight, macros, batch save — see **[`SPEC-WEEAT-TRACK-DIET-V2.md`](./SPEC-WEEAT-TRACK-DIET-V2.md)**. That doc supersedes the single-item modal for the upcoming Track weEat redesign.
 
 ---
 

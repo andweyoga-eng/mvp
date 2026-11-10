@@ -1,8 +1,8 @@
-# SPEC — weDiet Track Diet v2 (locked decisions)
+# SPEC — weEat Track Diet v2 (locked decisions)
 
 **Status:** Product decisions locked (2026-09-21)  
-**Surface:** Member `/fuel` → **Track your Diet** flow  
-**Related:** `docs/andWeFuel Diet Tracker v2 - Handoff.md`, `docs/HANDOFF-WEDIET-DESIGNER.md`, `docs/SPEC-FUEL-01-IMPLEMENTATION.md`  
+**Surface:** Member `/fuel` → **Track weEat** flow  
+**Related:** `docs/andWeFuel Diet Tracker v2 - Handoff.md`, `docs/HANDOFF-WEEAT-DESIGNER.md`, `docs/SPEC-FUEL-01-IMPLEMENTATION.md`  
 **Gemini reference (provider ideas only):** Downloads / `Gemini_Vision_Nutrition_Integration_Guide _21092026.md` — **not** a drop-in API contract
 
 Do not reopen D1–D9 / F1–F9 without an explicit product change. Implement against this document.
@@ -115,7 +115,7 @@ Source workbook + rebuild notes: `data/nutrition/README.md`.
 **Out of scope for this ship (D6)**
 
 - Full FDA/ICMR clinical dossier UI, healthScore, recommendations-as-advice, micronutrient %DV panels.  
-- Do not present estimates as medical advice (keep andWeDiet disclaimer).
+- Do not present estimates as medical advice (keep andWeEat disclaimer).
 
 **HEIC (D7)**
 
@@ -217,7 +217,7 @@ We’ll keep a draft on this device while you build this meal. It clears on its 
 
 | Item | Resolution |
 |---|---|
-| Vibe Check | Above Diet Control / Calorie Statement pills |
+| Vibe Check | Above weEat / Calorie Statement pills |
 | Macros | Bolder card on item confirm |
 | Estimate errors | Soft copy for network/quota; **`model_unavailable`**: soft studio-hint copy (no model IDs). Admin status may show model labels. |
 | Group chevron | Larger, primary, stroke 2.5 |

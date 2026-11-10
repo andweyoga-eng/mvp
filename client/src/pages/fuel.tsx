@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Apple,
   Camera,
   ChevronDown,
   ChevronRight,
@@ -175,7 +174,7 @@ function DailyInspirationCards({
           <img src={recipe.imageUrl} alt="" className="h-[190px] w-full object-cover" />
         ) : (
           <div className="flex h-[190px] items-center justify-center bg-primary/5 text-primary/40">
-            <Apple className="h-10 w-10" />
+            <Utensils className="h-10 w-10" />
           </div>
         )}
         <div className="p-5">
@@ -293,7 +292,7 @@ function FuelDashboardView({
           data-testid="fuel-log-meal"
         >
           <Camera className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
-          Track your Diet
+          Track weEat
         </Button>
       </div>
 
@@ -714,7 +713,7 @@ export default function FuelPage() {
 
   return (
     <DashboardShell active="fuel">
-      <FeatureInteractionFreeze feature="wediet">
+      <FeatureInteractionFreeze feature="weeat">
       <PageContainer className="relative py-[clamp(24px,4vw,40px)] pb-24">
         {data?.gate === "ok" && pep && (
           <div className="relative mb-5 overflow-hidden rounded-[22px] bg-gradient-to-br from-[#4b3282] to-dz-secondary px-7 py-6 text-white">
@@ -741,7 +740,7 @@ export default function FuelPage() {
         <div className="mb-6 inline-flex rounded-full bg-primary/5 p-1">
           {(
             [
-              ["fuel", "Diet Control"],
+              ["fuel", "weEat"],
               ["statement", "Calorie Statement"],
             ] as const
           ).map(([id, label]) => (
@@ -760,7 +759,7 @@ export default function FuelPage() {
           ))}
         </div>
 
-        {isLoading && <p className="text-sm text-muted-foreground">Loading andWeDiet…</p>}
+        {isLoading && <p className="text-sm text-muted-foreground">Loading andWeEat…</p>}
         {error && (
           <GlassCard className="p-5 text-sm text-destructive">
             {error instanceof Error ? error.message : "Failed to load"}
@@ -775,7 +774,7 @@ export default function FuelPage() {
             <GlassCard className="space-y-3 p-6">
               <h2 className="font-display text-2xl font-bold text-primary">A quick health check-in</h2>
               <p className="text-sm text-muted-foreground">
-                andWeDiet uses your health-data consent to store meal names and calorie values. Photos are
+                andWeEat uses your health-data consent to store meal names and calorie values. Photos are
                 never kept. Only the confirmed name and calories. Share a short Health History and tick
                 consent to continue.
               </p>

@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   FEATURE_GATE_SETTING_KEYS,
-  FEATURE_WEDIET_VISIBLE_KEY,
+  FEATURE_WEEAT_VISIBLE_KEY,
   FEATURE_ANDWEYOGA_ALWAYS_AVAILABLE_KEY,
   PLATFORM_SETTING_KEYS,
   parseFeatureGateEnabled,
@@ -15,7 +15,7 @@ const root = join(import.meta.dirname, "..");
 
 describe("SPEC-PLATFORM-FEATURE-GATES-01 shared keys", () => {
   it("exports exclusive feature gate keys", () => {
-    assert.equal(FEATURE_WEDIET_VISIBLE_KEY, "feature_wediet_visible");
+    assert.equal(FEATURE_WEEAT_VISIBLE_KEY, "feature_weeat_visible");
     assert.equal(FEATURE_ANDWEYOGA_ALWAYS_AVAILABLE_KEY, "feature_andweyoga_always_available");
     assert.equal(FEATURE_GATE_SETTING_KEYS.length, 7);
   });
@@ -41,7 +41,7 @@ describe("feature gates wiring", () => {
   it("PATCH allowlist uses PLATFORM_SETTING_KEYS", () => {
     const source = readFileSync(join(root, "server/routes.ts"), "utf8");
     assert.match(source, /z\.enum\(PLATFORM_SETTING_KEYS\)/);
-    assert.match(source, /featureWedietVisible/);
+    assert.match(source, /featureWeeatVisible/);
     assert.match(source, /featureAndweyogaAlwaysAvailable/);
   });
 
@@ -50,9 +50,9 @@ describe("feature gates wiring", () => {
       join(root, "scripts/db/patches/046-platform-feature-gates.sql"),
       "utf8",
     );
-    assert.match(sql, /feature_wediet_visible/);
+    assert.match(sql, /feature_weeat_visible/);
     assert.match(sql, /feature_andweyoga_always_available/);
-    assert.match(sql, /feature_wediet boolean/);
+    assert.match(sql, /feature_weeat boolean/);
     assert.match(sql, /feature_andweyoga boolean/);
   });
 
@@ -61,7 +61,7 @@ describe("feature gates wiring", () => {
       join(root, "client/src/components/admin/platform-controls-panel.tsx"),
       "utf8",
     );
-    assert.match(source, /feature-wediet-visible-toggle/);
+    assert.match(source, /feature-weeat-visible-toggle/);
     assert.match(source, /feature-andweyoga-always-available-toggle/);
     assert.match(source, /feature-gates/);
   });
@@ -71,7 +71,16 @@ describe("feature gates wiring", () => {
       join(root, "client/src/components/dashboard/dashboard-shell.tsx"),
       "utf8",
     );
+    assert.match(source, /label: "weEat", icon: Utensils/);
     assert.match(source, /visibleItems\.length > 1/);
     assert.match(source, /setLocation\("\/dashboard", \{ replace: true \}\)/);
+  });
+
+  it("migrates leftover weDiet names in patch 050", () => {
+    const sql = readFileSync(join(root, "scripts/db/patches/050-weeat-rename.sql"), "utf8");
+    assert.match(sql, /RENAME COLUMN feature_wediet TO feature_weeat/);
+    assert.match(sql, /feature_wediet_visible/);
+    assert.match(sql, /feature_weeat_visible/);
+    assert.match(sql, /DELETE FROM platform_settings/);
   });
 });
