@@ -112,7 +112,7 @@ export function SessionsSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-          placeholder="Search, discover anything at andweyoga, ask a question"
+          placeholder="Hi This is Mudit, how may I help you today ?"
           className="w-full rounded-2xl border border-dz-glass-border bg-dz-surface/80 py-3.5 pl-12 pr-4 text-[15px] text-foreground shadow-dz-ambient backdrop-blur-[16px] placeholder:text-muted-foreground/70 focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/15"
           data-testid="sessions-search-input"
           aria-label="Search sessions, classes, coaches, articles, and help"
