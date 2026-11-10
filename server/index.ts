@@ -47,7 +47,7 @@ app.use((req, res, next) => {
         "default-src 'self'",
         "base-uri 'self'",
         "frame-ancestors 'none'",
-        "img-src 'self' data: https:",
+        "img-src 'self' data: blob: https:",
         "font-src 'self' data: https:",
         "style-src 'self' 'unsafe-inline'",
         "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://checkout.razorpay.com https://*.razorpay.com",
